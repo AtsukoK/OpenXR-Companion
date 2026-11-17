@@ -97,7 +97,7 @@ public class SettingsEditor : EditorBase
         lPitch = aim.AddRow("Turn the laser down by (deg)", Num(-45, 45, 1, 0, ptr.PitchDownDeg, v => ptr.PitchDownDeg = v), "15 matches most people on Quest. Saved changes apply in the headset within a second.");
         lDown = aim.AddRow("Move the laser start down (m)", Num(-0.1m, 0.1m, 0.005m, 3, ptr.DownM, v => ptr.DownM = v), "Toward your index finger. Also moves the poking fingertip.");
         lFwd = aim.AddRow("Move the laser start forward (m)", Num(-0.1m, 0.1m, 0.005m, 3, ptr.ForwardM, v => ptr.ForwardM = v));
-        aim.AddRow("", Check("Show a fingertip near wrist panels (where your poke lands)", ptr.Finger, v => ptr.Finger = v));
+        aim.AddRow("", Check("Show a fingertip near wrist panels (where your poke lands and the laser starts)", ptr.Finger, v => ptr.Finger = v));
         aim.AddRow("", Check("Keep a short laser showing while a wrist panel is up", ptr.GuideLaser, v => ptr.GuideLaser = v),
             "So you can find your pointer before it reaches the panel. It hands over to the touch ring when your fingertip gets close.");
         SyncCorr();

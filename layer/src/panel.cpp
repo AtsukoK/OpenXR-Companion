@@ -351,10 +351,10 @@ void DrawFinger(std::vector<uint32_t>& out, int W, int H, const Style& st) {
     path.AddLine(m + w, top + w / 2, W - m * 0.4f, bot);
     path.AddLine(m * 0.4f, bot, m, top + w / 2);
     path.CloseFigure();
-    LinearGradientBrush fill(PointF(0, top), PointF(0, bot), Color(150, 255, 255, 255), Color(0, 255, 255, 255));
+    LinearGradientBrush fill(PointF(0, top), PointF(0, bot), Color(200, 255, 255, 255), Color(40, 255, 255, 255));
     g.FillPath(&fill, &path);
-    LinearGradientBrush edgeB(PointF(0, top), PointF(0, bot), Color(230, (BYTE)(c >> 16), (BYTE)(c >> 8), (BYTE)c), Color(0, (BYTE)(c >> 16), (BYTE)(c >> 8), (BYTE)c));
-    Pen edge(&edgeB, W * 0.07f);
+    LinearGradientBrush edgeB(PointF(0, top), PointF(0, bot), Color(230, (BYTE)(c >> 16), (BYTE)(c >> 8), (BYTE)c), Color(80, (BYTE)(c >> 16), (BYTE)(c >> 8), (BYTE)c));
+    Pen edge(&edgeB, W * 0.09f);
     g.DrawPath(&edge, &path);
     Pen nail(Color(110, 255, 255, 255), W * 0.04f); // fingernail outline
     g.DrawArc(&nail, m + w * 0.22f, top + w * 0.18f, w * 0.56f, w * 0.7f, 180.f, 180.f);

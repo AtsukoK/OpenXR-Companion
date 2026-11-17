@@ -500,10 +500,10 @@ void Engine::UpdatePointers() {
         if (wristUp && prof->wrist[panel].press != "poke" && !wv.cursor)
             test(wv.pose, wv.sizeM / 2, wv.sizeM / 2);
         // Fingertip silhouette: where the poke tip is, so you can find your "finger" before it reaches the panel.
-        if (wristUp && prof->pointer.finger && prof->wrist[panel].press != "point" && dPanel < 0.45f) {
-            const float len = 0.075f;
+        if (wristUp && prof->pointer.finger && dPanel < 0.5f) { // on every panel: it also shows where the laser starts
+            const float len = 0.09f;
             Vec3 tip = o + d * 0.015f; // same tip as the poke test in UpdateWrist
-            P.finger = true; P.fingerLen = len; P.fingerW = 0.02f;
+            P.finger = true; P.fingerLen = len; P.fingerW = 0.024f;
             P.fingerPose = alongRay(tip - d * (len * 0.5f), Rotate(wv.pose.orientation, { 0, 0, 1 }));
         }
         if (best > 1e8f) {
