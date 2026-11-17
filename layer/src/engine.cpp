@@ -466,10 +466,17 @@ void Engine::UpdateWheel() {
 // Laser pointers: for each controller, the nearest pointable surface it is aimed at.
 void Engine::UpdatePointers() {
     for (int h = 0; h < 2; h++) {
-        PointerView& P = pointer[h]; P.on = false;
+        PointerView& P = pointer[h]; P.on = false; P.finger = false; P.dot = true;
         const HandRaw& hr = fr.h[h];
         if (!hr.aimValid || !fr.headValid) continue;
         Vec3 o = V(hr.aimPose.position), d = Rotate(hr.aimPose.orientation, { 0, 0, -1 });
+        Vec3 eye = V(fr.head.position);
+        // A quad standing along the ray, turned to face the eye (used by the beam and the finger).
+        auto alongRay = [&](Vec3 mid, Vec3 fallbackN) {
+            Vec3 toEye = eye - mid; toEye = toEye - d * Dot(toEye, d);
+            Vec3 z = Len(toEye) > 1e-4f ? Norm(toEye) : fallbackN;
+            return XrPosef{ QuatFromBasis(Cross(d, z), d, z), X(mid) };
+        };
         float best = 1e9f; XrQuaternionf bestQ{ 0,0,0,1 };
         // Ray against a square/rect surface (half sizes in metres, with a little margin).
         auto test = [&](const XrPosef& pose, float hw, float hh) {
@@ -487,20 +494,34 @@ void Engine::UpdatePointers() {
         if (kb.visible) test(kb.pose, kb.widthM / 2, kb.heightM / 2);
         int panel = 1 - h; // a hand points at the panel on the other arm
         const WristView& wv = wrist[panel];
-        if (wv.visible && prof->wrist[panel].press != "poke" && !(grab.target == panel)) {
-            float dPanel = Len(V(wv.pose.position) - o);
-            if (dPanel > 0.09f) test(wv.pose, wv.sizeM / 2, wv.sizeM / 2); // close up it is poking, with its own cursor
+        bool wristUp = wv.visible && grab.target != panel;
+        float dPanel = wristUp ? Len(V(wv.pose.position) - o) : 1e9f;
+        // The laser stays until the touch cursor actually takes over (no gap where neither shows).
+        if (wristUp && prof->wrist[panel].press != "poke" && !wv.cursor)
+            test(wv.pose, wv.sizeM / 2, wv.sizeM / 2);
+        // Fingertip silhouette: where the poke tip is, so you can find your "finger" before it reaches the panel.
+        if (wristUp && prof->pointer.finger && prof->wrist[panel].press != "point" && dPanel < 0.45f) {
+            const float len = 0.075f;
+            Vec3 tip = o + d * 0.015f; // same tip as the poke test in UpdateWrist
+            P.finger = true; P.fingerLen = len; P.fingerW = 0.02f;
+            P.fingerPose = alongRay(tip - d * (len * 0.5f), Rotate(wv.pose.orientation, { 0, 0, 1 }));
         }
-        if (best > 1e8f) continue;
+        if (best > 1e8f) {
+            // Guide laser: a wrist panel is up but this hand isn't aimed at it yet. Show a short beam
+            // so the ray can be found and steered onto the panel. Hidden while the touch cursor shows.
+            if (!(wristUp && prof->pointer.guide && prof->wrist[panel].press != "poke" && !wv.cursor && dPanel < 0.8f)) continue;
+            float len = std::clamp(dPanel * 1.3f, 0.12f, 0.6f);
+            P.on = true; P.dot = false;
+            P.beamPose = alongRay(o + d * (len * 0.5f), d * -1.f);
+            P.beamLen = len;
+            continue;
+        }
         Vec3 hit = o + d * best;
         Vec3 n = Rotate(bestQ, { 0, 0, 1 });
         P.on = true;
         P.dotPose = { bestQ, X(hit + n * 0.003f) };
         P.dotSize = 0.008f + 0.006f * best;
-        Vec3 mid = (o + hit) * 0.5f, eye = V(fr.head.position);
-        Vec3 toEye = eye - mid; toEye = toEye - d * Dot(toEye, d);
-        Vec3 z = Len(toEye) > 1e-4f ? Norm(toEye) : n;
-        P.beamPose = { QuatFromBasis(Cross(d, z), d, z), X(mid) };
+        P.beamPose = alongRay((o + hit) * 0.5f, n);
         P.beamLen = best;
     }
 }
@@ -548,6 +569,22 @@ void Engine::Update(const Frame& f) {
     if (!Active()) { memset(blockOut, 0, sizeof(blockOut)); for (auto& h : ovOut) for (auto& o : h) o = Override{}; return; }
     fr = f;
     now = f.t;
+    // Pointer correction: turn the aim ray down and move its start toward the index finger.
+    // Done once here so the wheel, keyboard, wrist panels and lasers all use the same ray.
+    {
+        const PointerStyle& P = prof->pointer;
+        for (int h = 0; h < 2; h++) {
+            HandRaw& hr = fr.h[h];
+            bool on = P.correction == "always" || (P.correction == "auto" && hr.touchCtl);
+            if (!on || !hr.aimValid) continue;
+            XrQuaternionf q = hr.aimPose.orientation;
+            float a = -P.pitchDeg * 3.14159265f / 180.f * 0.5f; // about local +X; negative = down
+            float s = std::sin(a), w = std::cos(a);
+            XrQuaternionf r{ q.w * s + q.x * w, q.y * w + q.z * s, q.z * w - q.y * s, q.w * w - q.x * s }; // q * (s,0,0,w)
+            Vec3 pos = V(hr.aimPose.position) + Rotate(q, { 0, -P.downM, 0 }) + Rotate(r, { 0, 0, -P.forwardM });
+            hr.aimPose = { r, X(pos) };
+        }
+    }
     ComputeDown();
     ProcessBindings();
     UpdateWheel();

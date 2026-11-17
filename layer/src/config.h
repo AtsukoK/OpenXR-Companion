@@ -104,8 +104,20 @@ struct WristStyle {
     std::string press = "both";     // poke|point|both
 };
 
+// Pointer correction and helpers. Quest (Touch) controllers report an aim ray that starts above
+// the index finger and points about 15 degrees up from where a pointing finger goes.
+struct PointerStyle {
+    std::string correction = "auto"; // auto = Touch controllers only | always | off
+    float pitchDeg = 15.f;          // turn the ray down by this much
+    float downM = 0.02f;            // move the ray start down (toward the finger) by this much
+    float forwardM = 0.f;           // and forward along the ray
+    bool finger = true;             // show a fingertip silhouette near a wrist panel
+    bool guide = true;              // keep a short laser showing while a wrist panel is up
+};
+
 struct Profile {
     std::string sourceName;
+    PointerStyle pointer;
     bool enabled = true;
     std::string blockWhileOpen = "hand"; // none|minimal|hand|all
     float pressOn = 0.6f, pressOff = 0.4f, stickOn = 0.7f, stickOff = 0.5f;

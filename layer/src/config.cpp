@@ -181,6 +181,15 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
     Get(j, "focus_game_window", p->focusWindow);
     if (j.contains("style")) ParseStyle(j["style"], p->style);
     if (j.contains("selection")) ParseSel(j["selection"], p->sel);
+    if (j.contains("pointer")) {
+        auto& k = j["pointer"]; auto& P = p->pointer;
+        Get(k, "correction", P.correction); P.correction = Lower(P.correction);
+        if (P.correction != "auto" && P.correction != "always" && P.correction != "off") P.correction = "auto";
+        Get(k, "pitch_down_deg", P.pitchDeg); Get(k, "down_m", P.downM); Get(k, "forward_m", P.forwardM);
+        Get(k, "finger", P.finger); Get(k, "guide_laser", P.guide);
+        P.pitchDeg = std::clamp(P.pitchDeg, -45.f, 45.f);
+        P.downM = std::clamp(P.downM, -0.1f, 0.1f); P.forwardM = std::clamp(P.forwardM, -0.1f, 0.1f);
+    }
     if (j.contains("keyboard")) {
         auto& k = j["keyboard"];
         Get(k, "width_m", p->kb.width); Get(k, "distance_m", p->kb.distance);

@@ -29,7 +29,7 @@ public class SettingsEditor : EditorBase
     public SettingsEditor(ProfileModel model, int wristHand = -1)
     {
         p = model;
-        p.Thresholds ??= new(); p.Style ??= new(); p.Selection ??= new(); p.Keyboard ??= new(); p.WristLeft ??= new(); p.WristRight ??= new(); p.Style.Colors ??= new();
+        p.Thresholds ??= new(); p.Style ??= new(); p.Selection ??= new(); p.Keyboard ??= new(); p.Pointer ??= new(); p.WristLeft ??= new(); p.WristRight ??= new(); p.Style.Colors ??= new();
         var s = p.Style; var sel = p.Selection; var kb = p.Keyboard; var th = p.Thresholds; var col = s.Colors;
 
         // ---------------- general
@@ -87,6 +87,20 @@ public class SettingsEditor : EditorBase
         pick.AddRow("", Check("Close the wheel after picking an item", sel.CloseAfterSelect, v => sel.CloseAfterSelect = v));
         pick.AddRow("Open submenus by resting (ms)", Int(0, 3000, 50, sel.SubmenuDwellMs, v => sel.SubmenuDwellMs = v), "For 'let go of the button' wheels. 0 = off.");
         pick.AddRow("Close by itself after (ms)", Int(0, 60000, 500, sel.AutoCloseMs, v => sel.AutoCloseMs = v), "0 = never.");
+
+        // ---------------- pointing
+        var ptr = p.Pointer; var aim = new FormPanel();
+        Label lPitch = null, lDown = null, lFwd = null;
+        void SyncCorr() { bool on = ptr.Correction != "off"; FormPanel.Show(lPitch, on); FormPanel.Show(lDown, on); FormPanel.Show(lFwd, on); }
+        aim.AddRow("Correct the laser direction", Pick(new Choice[] { new("auto", "Only on Quest (Touch) controllers"), new("always", "On every controller"), new("off", "Off, use the game's controller ray") }, ptr.Correction, v => { ptr.Correction = v; SyncCorr(); }),
+            "Quest controllers aim from above your index finger and about 15 degrees upward. This makes the laser go where a pointing finger goes.");
+        lPitch = aim.AddRow("Turn the laser down by (deg)", Num(-45, 45, 1, 0, ptr.PitchDownDeg, v => ptr.PitchDownDeg = v), "15 matches most people on Quest. Saved changes apply in the headset within a second.");
+        lDown = aim.AddRow("Move the laser start down (m)", Num(-0.1m, 0.1m, 0.005m, 3, ptr.DownM, v => ptr.DownM = v), "Toward your index finger. Also moves the poking fingertip.");
+        lFwd = aim.AddRow("Move the laser start forward (m)", Num(-0.1m, 0.1m, 0.005m, 3, ptr.ForwardM, v => ptr.ForwardM = v));
+        aim.AddRow("", Check("Show a fingertip near wrist panels (where your poke lands)", ptr.Finger, v => ptr.Finger = v));
+        aim.AddRow("", Check("Keep a short laser showing while a wrist panel is up", ptr.GuideLaser, v => ptr.GuideLaser = v),
+            "So you can find your pointer before it reaches the panel. It hands over to the touch ring when your fingertip gets close.");
+        SyncCorr();
 
         // ---------------- keyboard
         var keys = new FormPanel();
@@ -156,6 +170,7 @@ public class SettingsEditor : EditorBase
               Section("General"), general,
               Section("Wheel position and look"), look,
               Section("Picking items"), pick,
+              Section("Pointing (laser and fingertip)"), aim,
               Section("VR keyboard"), keys,
               advToggle, adv);
     }

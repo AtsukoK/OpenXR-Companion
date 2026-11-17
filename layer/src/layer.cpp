@@ -34,6 +34,7 @@ static struct {
     PFN_xrDestroySpace DestroySpace;
     PFN_xrLocateSpace LocateSpace;
     PFN_xrApplyHapticFeedback ApplyHapticFeedback;
+    PFN_xrGetCurrentInteractionProfile GetCurrentInteractionProfile;
 } N{};
 static XrFns gSwap;
 
@@ -112,6 +113,7 @@ static Panel gWheelPanel, gToastPanel, gKbPanel, gWristPanel[2], gCursorPanel[2]
 static uint64_t gDrawnWrist[2] = { ~0ull, ~0ull };
 static int gDrawnCursor[2] = { -1, -1 };
 static Panel gDotPanel, gBeamPanel; static bool gDrawnPointer = false;
+static Panel gFingerPanel; static bool gDrawnFinger = false;
 static uint64_t gDrawnKb = ~0ull;
 static uint64_t gDrawnWheel = ~0ull, gDrawnToast = ~0ull;
 static int gWheelTex = 0;
@@ -185,7 +187,7 @@ static void ReloadProfile(bool announce) {
         return;
     }
     gEng.SetProfile(p);
-    gDrawnWheel = gDrawnKb = ~0ull; gDrawnWrist[0] = gDrawnWrist[1] = ~0ull; gDrawnPointer = false; gDrawnCursor[0] = gDrawnCursor[1] = -1;
+    gDrawnWheel = gDrawnKb = ~0ull; gDrawnWrist[0] = gDrawnWrist[1] = ~0ull; gDrawnPointer = false; gDrawnFinger = false; gDrawnCursor[0] = gDrawnCursor[1] = -1;
     Log("loaded profile %s (%zu bindings, %zu wheels, enabled=%d)", p->sourceName.c_str(), p->bindings.size(), p->wheels.size(), p->enabled);
     if (announce) gEng.Toast("Hand menus: " + p->sourceName + " loaded");
 }
@@ -217,9 +219,27 @@ static bool Locate(XrSpace sp, XrSpace base, XrPosef& out) {
     return true;
 }
 
+// Which controllers are in use: checked once a second (the profile changes rarely).
+static bool gTouchCtl[2]{};
+static double gLastIpCheck = -10;
+static void CheckInteractionProfiles(double now) {
+    if (now - gLastIpCheck < 1.0 || !N.GetCurrentInteractionProfile || !gSess) return;
+    gLastIpCheck = now;
+    for (int h = 0; h < 2; h++) {
+        XrInteractionProfileState st{ XR_TYPE_INTERACTION_PROFILE_STATE };
+        if (XR_FAILED(N.GetCurrentInteractionProfile(gSess, gHandPath[h], &st))) continue;
+        std::string p = st.interactionProfile ? S(st.interactionProfile) : "";
+        bool touch = p.find("touch") != std::string::npos && (p.find("oculus") != std::string::npos ||
+                     p.find("meta") != std::string::npos || p.find("facebook") != std::string::npos);
+        if (touch != gTouchCtl[h]) Log("%s controller: %s%s", h ? "right" : "left", p.c_str(), touch ? " (Touch: aim correction available)" : "");
+        gTouchCtl[h] = touch;
+    }
+}
+
 static void ReadInputsAndUpdate() {
     Frame f;
     f.t = NowSec();
+    CheckInteractionProfiles(f.t);
     for (int h = 0; h < 2; h++) {
         auto gb = [&](int a) {
             XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO }; gi.action = gA[a]; gi.subactionPath = gHandPath[h];
@@ -242,6 +262,7 @@ static void ReadInputsAndUpdate() {
         r.sc = gb(A_STICKC); r.st = gb(A_STICKT); r.rest = gb(A_REST); r.menu = gb(A_MENU);
         r.gripValid = Locate(gGripSp[h], gLocal, r.gripPose);
         r.aimValid = Locate(gAimSp[h], gLocal, r.aimPose);
+        r.touchCtl = gTouchCtl[h];
     }
     f.headValid = Locate(gView, gLocal, f.head);
     gEng.Update(f);
@@ -343,7 +364,7 @@ static XrResult XRAPI_CALL Hook_xrCreateSession(XrInstance inst, const XrSession
 }
 
 static void DestroySessionStuff() {
-    gWheelPanel.Destroy(gSwap); gToastPanel.Destroy(gSwap); gKbPanel.Destroy(gSwap); gDrawnKb = ~0ull; for (int h = 0; h < 2; h++) { gWristPanel[h].Destroy(gSwap); gDrawnWrist[h] = ~0ull; gCursorPanel[h].Destroy(gSwap); gDrawnCursor[h] = -1; } gDotPanel.Destroy(gSwap); gBeamPanel.Destroy(gSwap); gDrawnPointer = false;
+    gWheelPanel.Destroy(gSwap); gToastPanel.Destroy(gSwap); gKbPanel.Destroy(gSwap); gDrawnKb = ~0ull; for (int h = 0; h < 2; h++) { gWristPanel[h].Destroy(gSwap); gDrawnWrist[h] = ~0ull; gCursorPanel[h].Destroy(gSwap); gDrawnCursor[h] = -1; } gDotPanel.Destroy(gSwap); gBeamPanel.Destroy(gSwap); gDrawnPointer = false; gFingerPanel.Destroy(gSwap); gDrawnFinger = false;
     for (int h = 0; h < 2; h++) {
         if (gGripSp[h]) N.DestroySpace(gGripSp[h]);
         if (gAimSp[h]) N.DestroySpace(gAimSp[h]);
@@ -532,7 +553,7 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
     std::lock_guard l(gMx);
     if (s != gSess || !fi || !gEng.Active() || !gGfx.api) return N.EndFrame(s, fi);
     std::vector<const XrCompositionLayerBaseHeader*> layers(fi->layers, fi->layers + fi->layerCount);
-    XrCompositionLayerQuad wq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, tq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, kq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, rq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, cq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, pq[4]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } };
+    XrCompositionLayerQuad wq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, tq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, kq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, rq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, cq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, pq[4]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, fq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } };
     const Profile& p = *gEng.prof;
 
     if (gEng.view.visible && gLocal) {
@@ -641,7 +662,28 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
             d.subImage.swapchain = gDotPanel.sc; d.subImage.imageRect = { {0, 0}, {DS, DS} };
             d.pose = P.dotPose; d.size = { P.dotSize, P.dotSize };
             layers.push_back((const XrCompositionLayerBaseHeader*)&b);
-            layers.push_back((const XrCompositionLayerBaseHeader*)&d);
+            if (P.dot) layers.push_back((const XrCompositionLayerBaseHeader*)&d);
+        }
+    }
+    // Fingertip silhouettes near wrist panels.
+    if (gLocal && (gEng.pointer[0].finger || gEng.pointer[1].finger)) {
+        const int FW = 64, FH = 256;
+        if (!gFingerPanel.sc) gFingerPanel.Create(gSess, gGfx, gSwap, FW, FH);
+        if (!gDrawnFinger && gFingerPanel.sc) {
+            std::vector<uint32_t> px;
+            DrawFinger(px, FW, FH, p.style);
+            gDrawnFinger = gFingerPanel.Upload(gGfx, gSwap, px);
+        }
+        for (int h = 0; h < 2; h++) {
+            const PointerView& P = gEng.pointer[h];
+            if (!P.finger || !gFingerPanel.ready) continue;
+            auto& q = fq[h];
+            q.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+            q.space = gLocal;
+            q.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
+            q.subImage.swapchain = gFingerPanel.sc; q.subImage.imageRect = { {0, 0}, {FW, FH} };
+            q.pose = P.fingerPose; q.size = { P.fingerW, P.fingerLen };
+            layers.push_back((const XrCompositionLayerBaseHeader*)&q);
         }
     }
     if (NowSec() < gEng.toastUntil && gView) {
@@ -704,6 +746,7 @@ static XrResult XRAPI_CALL Hook_xrCreateApiLayerInstance(const XrInstanceCreateI
     get("xrCreateActionSpace", N.CreateActionSpace); get("xrCreateReferenceSpace", N.CreateReferenceSpace);
     get("xrDestroySpace", N.DestroySpace); get("xrLocateSpace", N.LocateSpace);
     get("xrApplyHapticFeedback", N.ApplyHapticFeedback);
+    get("xrGetCurrentInteractionProfile", N.GetCurrentInteractionProfile);
     get("xrEnumerateSwapchainFormats", gSwap.EnumerateSwapchainFormats); get("xrCreateSwapchain", gSwap.CreateSwapchain);
     get("xrDestroySwapchain", gSwap.DestroySwapchain); get("xrEnumerateSwapchainImages", gSwap.EnumerateSwapchainImages);
     get("xrAcquireSwapchainImage", gSwap.AcquireSwapchainImage); get("xrWaitSwapchainImage", gSwap.WaitSwapchainImage);

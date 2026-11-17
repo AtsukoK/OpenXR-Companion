@@ -221,7 +221,7 @@ void Engine::UpdateWrist(int h) {
         bool inside = u >= 0 && u <= 1 && v >= 0 && v <= 1;
         if (inside && d > -0.04f && d < 0.05f) hover = WristCellAt(h, u, v);
         // Touch cursor: shows where the fingertip will land, shrinking and filling in as it gets close.
-        const float kCursorRange = 0.06f;
+        const float kCursorRange = 0.08f; // the laser hands over to this cursor, so start it a bit early
         if (inside && d > -0.04f && d < kCursorRange) {
             float k = d <= 0.f ? 0.f : d / kCursorRange;   // 0 touching .. 1 far
             Vec3 at = c + Rotate(pose.orientation, { (u - 0.5f) * W.size, (0.5f - v) * W.size, 0.002f });

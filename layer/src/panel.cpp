@@ -337,6 +337,34 @@ void DrawPointerDot(std::vector<uint32_t>& out, int S, const Style& st) {
     g.FillEllipse(&dot, S / 2.f - r, S / 2.f - r, 2 * r, 2 * r);
     Grab(bmp, out, S, S);
 }
+// Fingertip silhouette: a see-through index finger, tip at the texture top, fading toward the hand.
+void DrawFinger(std::vector<uint32_t>& out, int W, int H, const Style& st) {
+    EnsureGdi();
+    Bitmap bmp(W, H, PixelFormat32bppPARGB);
+    Graphics g(&bmp);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+    g.Clear(Color(0, 0, 0, 0));
+    uint32_t c = st.accent;
+    float m = W * 0.1f, w = W - 2 * m, top = m * 0.5f, bot = (float)H;
+    GraphicsPath path; // rounded tip, sides widening a little toward the knuckle
+    path.AddArc(m, top, w, w, 180.f, 180.f);
+    path.AddLine(m + w, top + w / 2, W - m * 0.4f, bot);
+    path.AddLine(m * 0.4f, bot, m, top + w / 2);
+    path.CloseFigure();
+    LinearGradientBrush fill(PointF(0, top), PointF(0, bot), Color(150, 255, 255, 255), Color(0, 255, 255, 255));
+    g.FillPath(&fill, &path);
+    LinearGradientBrush edgeB(PointF(0, top), PointF(0, bot), Color(230, (BYTE)(c >> 16), (BYTE)(c >> 8), (BYTE)c), Color(0, (BYTE)(c >> 16), (BYTE)(c >> 8), (BYTE)c));
+    Pen edge(&edgeB, W * 0.07f);
+    g.DrawPath(&edge, &path);
+    Pen nail(Color(110, 255, 255, 255), W * 0.04f); // fingernail outline
+    g.DrawArc(&nail, m + w * 0.22f, top + w * 0.18f, w * 0.56f, w * 0.7f, 180.f, 180.f);
+    g.DrawLine(&nail, m + w * 0.22f, top + w * 0.53f, m + w * 0.22f, top + w * 1.1f);
+    g.DrawLine(&nail, m + w * 0.78f, top + w * 0.53f, m + w * 0.78f, top + w * 1.1f);
+    Pen crease(Color(70, 255, 255, 255), W * 0.035f); // first knuckle
+    g.DrawLine(&crease, m + w * 0.2f, H * 0.42f, m + w * 0.8f, H * 0.42f);
+    Grab(bmp, out, W, H);
+}
+
 void DrawBeam(std::vector<uint32_t>& out, int W, int H, const Style& st) {
     out.assign((size_t)W * H, 0);
     uint32_t c = st.accent;

@@ -100,6 +100,8 @@ public class ProfileModel
     [DisplayName("VR keyboard")]
     [JsonPropertyName("keyboard")] public KeyboardModel Keyboard { get; set; } = new();
 
+    [Browsable(false)][JsonPropertyName("pointer")] public PointerModel Pointer { get; set; } = new();
+
     [Browsable(false)][JsonPropertyName("wrist_left")] public WristModel WristLeft { get; set; } = new();
     [Browsable(false)][JsonPropertyName("wrist_right")] public WristModel WristRight { get; set; } = new() { Mirror = true };
     // Older profiles had one panel; moved into WristLeft/WristRight on load.
@@ -177,6 +179,17 @@ public class WristModel
     [JsonPropertyName("show_ms")] public int ShowMs { get; set; } = 250;
     [JsonPropertyName("hide_ms")] public int HideMs { get; set; } = 350;
     [JsonPropertyName("press")] public string Press { get; set; } = "both";
+}
+
+// Laser / pointing correction (Quest Touch aim ray is high and tilted up) and wrist-panel helpers.
+public class PointerModel
+{
+    [JsonPropertyName("correction")] public string Correction { get; set; } = "auto";
+    [JsonPropertyName("pitch_down_deg")] public float PitchDownDeg { get; set; } = 15f;
+    [JsonPropertyName("down_m")] public float DownM { get; set; } = 0.02f;
+    [JsonPropertyName("forward_m")] public float ForwardM { get; set; } = 0f;
+    [JsonPropertyName("finger")] public bool Finger { get; set; } = true;
+    [JsonPropertyName("guide_laser")] public bool GuideLaser { get; set; } = true;
 }
 
 public class KeyboardModel

@@ -9,6 +9,7 @@ struct HandRaw {
     float sx = 0, sy = 0; bool sc = false, st = false;
     bool rest = false, menu = false;
     bool gripValid = false, aimValid = false;
+    bool touchCtl = false;  // a Meta Touch controller (its aim ray needs correcting)
     XrPosef gripPose{ {0,0,0,1}, {0,0,0} }, aimPose{ {0,0,0,1}, {0,0,0} };
 };
 struct Frame {
@@ -77,6 +78,10 @@ struct PointerView {
     bool on = false;
     XrPosef dotPose{ {0,0,0,1}, {0,0,0} }; float dotSize = 0.012f;
     XrPosef beamPose{ {0,0,0,1}, {0,0,0} }; float beamLen = 0.f;
+    bool dot = true;        // false: a guide beam that hits nothing (wrist panel up, aimed elsewhere)
+    // Fingertip silhouette, drawn along the (corrected) pointing ray near a wrist panel.
+    bool finger = false;
+    XrPosef fingerPose{ {0,0,0,1}, {0,0,0} }; float fingerLen = 0.08f, fingerW = 0.022f;
 };
 
 class Engine {
