@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.2.2 (2026-11-17)
+
+### New
+- **Aim correction for Touch controllers.** Quest/Rift Touch controllers point a little high. The laser, wheel, keyboard and wrist panels now use a corrected aim (tilted down 15°, set in Settings > Pointing). It applies automatically when a Touch controller profile is detected, and can be set to always or off.
+- **Guide laser.** While a wrist panel is open and your other hand isn't aimed at it, a short beam shows where that hand points.
+- **Fingertip.** A see-through fingertip shows along the pointer when you are close to any wrist panel, including point-only panels, so you can see where you'll touch.
+
+### Changed
+- The laser no longer disappears when you get close to a wrist panel. It now hands over to the touch cursor only once the cursor is shown, which also fixes point-only panels losing the laser up close.
+- The touch cursor appears from a little further away (8 cm instead of 6 cm).
+
 ## v0.2.1 (2026-11-11)
 
 ### New
