@@ -115,7 +115,8 @@ static uint64_t gDrawnWrist[2] = { ~0ull, ~0ull };
 static int gDrawnCursor[2] = { -1, -1 };
 static Panel gDotPanel, gBeamPanel; static bool gDrawnPointer = false;
 static Panel gFingerPanel; static bool gDrawnFinger = false;
-static uint64_t gWinAsk = 0;
+static uint64_t gWinAsk = 0; static std::string gPickedExe, gPickedTitle;
+static void MarkOwnSave();
 static Panel gBarPanel, gPickPanel; static uint64_t gDrawnBar = ~0ull, gDrawnPick = ~0ull;
 static Panel gScreenPanel; static ScreenCapture gCap; static std::vector<uint32_t> gScreenPix; static uint64_t gScreenMsgVer = 0;
 static uint64_t gDrawnKb = ~0ull;
@@ -201,6 +202,13 @@ static FILETIME FileTime(const std::wstring& f) {
     if (!GetFileAttributesExW(f.c_str(), GetFileExInfoStandard, &d)) return {};
     return d.ftLastWriteTime;
 }
+// The layer wrote the profile itself: take the new file times without reloading (a reload would close menus).
+static void MarkOwnSave() {
+    std::wstring dir = ProfilesDir();
+    gCfgTimes[0] = FileTime(dir + L"\\" + Utf8ToW(ExeName()) + L".json");
+    gCfgTimes[1] = FileTime(dir + L"\\default.json");
+}
+
 static void CheckConfigChanged() {
     double now = NowSec();
     if (now - gLastCfgCheck < 1.0) return;
@@ -282,7 +290,7 @@ static void ReadInputsAndUpdate() {
     if (gEng.saveRequested && gEng.prof) { // leaving adjust mode: keep the new placement
         gEng.saveRequested = false;
         std::string err;
-        if (SavePlacement(*gEng.prof, err)) Log("adjust: placement saved to %s", gEng.prof->sourceName.c_str());
+        if (SavePlacement(*gEng.prof, err)) { MarkOwnSave(); Log("adjust: placement saved to %s", gEng.prof->sourceName.c_str()); }
         else { Log("adjust: save failed: %s", err.c_str()); gEng.Toast("Could not save positions: " + err, 6.0); }
     }
 }
@@ -573,7 +581,10 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
             int cur = -1;
             for (int i = 0; i < (int)wins.size(); i++) if (wins[i].hwnd == sv.hwnd) cur = i;
             int pick = -1;
-            if (!sv.windowMatch.empty()) {
+            if (!sv.windowTitle.empty()) // the window picked last time, if it's still open with the same title
+                for (int i = 0; i < (int)wins.size() && pick < 0; i++) if (wins[i].title == sv.windowTitle) pick = i;
+            if (pick >= 0) {}
+            else if (!sv.windowMatch.empty()) {
                 std::string m = low(sv.windowMatch);
                 for (int i = 0; i < (int)wins.size() && pick < 0; i++) if (low(wins[i].title).find(m) != std::string::npos || low(wins[i].exe).find(m) != std::string::npos) pick = i;
                 if (pick < 0) gEng.Toast("Screen: no open window matches '" + sv.windowMatch + "'", 3.0);
@@ -581,7 +592,7 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
                 int step = sv.windowStep ? sv.windowStep : 0;
                 pick = cur < 0 ? (step < 0 ? (int)wins.size() - 1 : 0) : ((cur + step) % (int)wins.size() + (int)wins.size()) % (int)wins.size();
             }
-            sv.windowStep = 0; sv.windowMatch.clear();
+            sv.windowStep = 0; sv.windowMatch.clear(); sv.windowTitle.clear();
             if (pick < 0) { // nothing to show: back to the monitor
                 if (wins.empty()) gEng.Toast("Screen: no window to show", 2.5);
                 sv.source = "monitor"; sv.hwnd = 0;
@@ -590,7 +601,20 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
                 sv.hwnd = wins[pick].hwnd;
                 if (asked || changed) gEng.Toast("Screen: " + (wins[pick].title.size() > 48 ? wins[pick].title.substr(0, 45) + "..." : wins[pick].title), 2.0);
                 Log("screen window: %s (%s)", wins[pick].title.c_str(), wins[pick].exe.c_str());
+                std::string exe = low(wins[pick].exe); size_t dot = exe.rfind('.'); if (dot != std::string::npos) exe = exe.substr(0, dot);
+                gPickedExe = exe; gPickedTitle = wins[pick].title;
             }
+        }
+        // Picked in the headset: that monitor / window is the default from now on.
+        if (sv.choiceChanged && sv.windowAsk == gWinAsk) {
+            sv.choiceChanged = false;
+            ScreenStyle& PS = gEng.prof->screen;
+            PS.source = sv.source;
+            if (sv.source == "window") { PS.window = gPickedExe; PS.windowTitle = gPickedTitle; }
+            else PS.monitor = sv.monitor;
+            std::string err;
+            if (SaveScreenChoice(*gEng.prof, err)) { MarkOwnSave(); Log("screen: remembered %s", sv.source == "window" ? gPickedTitle.c_str() : ("monitor " + std::to_string(sv.monitor)).c_str()); }
+            else Log("screen: could not remember the choice: %s", err.c_str());
         }
         if (sv.source != "window") sv.hwnd = 0;
         if (sv.wantChoices) { // picker list: monitors, then open windows

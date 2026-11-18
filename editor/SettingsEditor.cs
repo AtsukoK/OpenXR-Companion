@@ -118,12 +118,12 @@ public class SettingsEditor : EditorBase
         Label lMon = null, lWin = null;
         scr.AddRow("Show", Pick(new Choice[] { new("monitor", "A whole monitor"), new("window", "One window (a browser, Discord, a video...)") }, sc.Source ?? "monitor",
             v => { sc.Source = v; FormPanel.Show(lMon, v != "window"); FormPanel.Show(lWin, v == "window"); }),
-            "Switch while playing with 'next monitor' / 'next window' buttons. A window is shown even when other windows cover it, but not while it's minimised.");
+            "Whatever you pick in the headset (Choose... on the screen's bar) is saved here and becomes the default. A window is shown even when other windows cover it, but not while it's minimised.");
         lMon = scr.AddRow("Monitor", Pick(Monitors.Choices(false), sc.Monitor.ToString(), v => sc.Monitor = int.TryParse(v, out var m) ? m : 0),
             "Monitors are numbered from left to right.");
         var win = new ComboBox { Width = 260, Text = sc.Window ?? "" };
         foreach (var n in OpenWindows.Names()) win.Items.Add(n);
-        win.TextChanged += (o, e) => { sc.Window = string.IsNullOrWhiteSpace(win.Text) ? null : win.Text.Trim(); Fire(); };
+        win.TextChanged += (o, e) => { sc.Window = string.IsNullOrWhiteSpace(win.Text) ? null : win.Text.Trim(); sc.WindowTitle = null; Fire(); };
         lWin = scr.AddRow("Window", win, "Part of its title or the program name, e.g. chrome, firefox, Discord, vlc. Pick one that's open now or type it. Empty = the first open window.");
         FormPanel.Show(lMon, sc.Source != "window"); FormPanel.Show(lWin, sc.Source == "window");
         scr.AddRow("Frame rate cap (fps)", Int(0, 240, 5, sc.Fps, v => sc.Fps = v),

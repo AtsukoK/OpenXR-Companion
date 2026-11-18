@@ -565,6 +565,29 @@ int main(int argc, char** argv) {
         CHECK(fo == 0, "screen bar: the game doesn't take the focus back while the keyboard is up");
         Keys::SetDryRun(false);
     }
+    // ---------------- the screen remembers what was picked in the headset
+    {
+        std::wstring path = ProfilesDir() + L"\\vro_choice_test.json";
+        { std::ofstream o(path, std::ios::binary); o << DefaultProfileJson(); }
+        auto q = ParseProfileText(DefaultProfileJson(), err);
+        q->sourceName = "vro_choice_test.json";
+        CHECK(q->screen.source == "monitor", "screen choice: the default is a monitor");
+        q->screen.source = "window"; q->screen.window = "chrome"; q->screen.windowTitle = "Chat - Twitch";
+        std::string serr; bool ok = SaveScreenChoice(*q, serr); if (!ok) printf("save error: %s\n", serr.c_str());
+        std::ifstream in(path, std::ios::binary); std::stringstream ss; ss << in.rdbuf(); in.close();
+        auto back = ParseProfileText(ss.str(), err);
+        CHECK(ok && back && back->screen.source == "window" && back->screen.window == "chrome" && back->screen.windowTitle == "Chat - Twitch" && back->wheels.size() == q->wheels.size(),
+              "screen choice: a picked window is saved as the default and the rest of the profile is kept");
+        Engine e; e.SetProfile(back);
+        CHECK(e.screen.source == "window" && e.screen.windowMatch == "chrome" && e.screen.windowTitle == "Chat - Twitch", "screen choice: the next start asks for that same window");
+        q->screen.source = "monitor"; q->screen.monitor = 2; SaveScreenChoice(*q, serr);
+        std::ifstream in2(path, std::ios::binary); std::stringstream s2; s2 << in2.rdbuf(); in2.close();
+        auto back2 = ParseProfileText(s2.str(), err);
+        CHECK(back2 && back2->screen.source == "monitor" && back2->screen.monitor == 2, "screen choice: a picked monitor is saved as the default");
+        Action nm; nm.type = ActType::Screen; nm.mode = "next_monitor"; e.screen.monitorCount = 2; e.ScreenAction(nm);
+        CHECK(e.screen.choiceChanged, "screen choice: switching in the headset asks to remember it");
+        DeleteFileW(path.c_str());
+    }
     // ---------------- hand-placed positions are saved and read back
     {
         std::wstring path = ProfilesDir() + L"\\vro_pose_test.json";

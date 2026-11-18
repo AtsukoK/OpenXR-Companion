@@ -202,6 +202,7 @@ public class ScreenModel
     [JsonPropertyName("monitor")] public int Monitor { get; set; } = 0;
     [JsonPropertyName("source")] public string Source { get; set; } = "monitor";
     [JsonPropertyName("window"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string Window { get; set; }
+    [JsonPropertyName("window_title"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string WindowTitle { get; set; }
     [JsonPropertyName("fps")] public int Fps { get; set; } = 30;
     [JsonPropertyName("fps_steps")] public List<int> FpsSteps { get; set; } = new() { 10, 15, 30, 60, 0 };
     [JsonPropertyName("place")] public string Place { get; set; } = "wrist_left";

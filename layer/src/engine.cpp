@@ -12,7 +12,7 @@ void Engine::SetProfile(std::shared_ptr<Profile> p) {
     if (prof) { // the editor's screen settings apply on every (re)load; on/off survives a reload
         const ScreenStyle& S = prof->screen;
         screen.place = S.place; screen.monitor = S.monitor; screen.fps = S.fps;
-        if (S.source == "window" && screen.source != "window") { screen.source = "window"; screen.windowMatch = S.window; screen.windowStep = 0; screen.windowAsk++; }
+        if (S.source == "window" && screen.source != "window") { screen.source = "window"; screen.windowMatch = S.window; screen.windowTitle = S.windowTitle; screen.windowStep = 0; screen.windowAsk++; }
         else if (S.source == "monitor") screen.source = "monitor";
         if (!screenInit) { screen.on = S.startOn; screenPlaceFront = screen.on; screenInit = true; }
         else if (screen.on) screenPlaceFront = true;
@@ -655,11 +655,11 @@ void Engine::ScreenAction(const Action& a) {
         int cur = screen.monitor == 0 ? screen.primaryIndex : screen.monitor;
         cur = m == "next_monitor" ? cur % n + 1 : (cur + n - 2) % n + 1;
         if (screen.source == "window") cur = screen.monitor == 0 ? screen.primaryIndex : screen.monitor; // back to monitors: start where it was
-        screen.monitor = cur; screen.source = "monitor";
+        screen.monitor = cur; screen.source = "monitor"; screen.choiceChanged = true;
         if (!screen.on) { screen.on = true; screenPlaceFront = true; }
         Toast("Screen: monitor " + std::to_string(cur) + " of " + std::to_string(n), 1.5);
     } else if (m == "next_window" || m == "prev_window") {
-        screen.source = "window"; screen.windowStep = m == "next_window" ? 1 : -1; screen.windowMatch.clear(); screen.windowAsk++;
+        screen.source = "window"; screen.windowStep = m == "next_window" ? 1 : -1; screen.windowMatch.clear(); screen.windowAsk++; screen.choiceChanged = true;
         if (!screen.on) { screen.on = true; screenPlaceFront = true; }
         // the layer shows the window's name once it has picked it
     } else if (m == "choose") {
@@ -903,6 +903,7 @@ void Engine::PickerActivate(int cell) {
     const ScreenChoice& c = screen.choices[k];
     if (c.hwnd) { screen.source = "window"; screen.hwnd = c.hwnd; screen.windowStep = 0; screen.windowMatch.clear(); screen.windowAsk++; }
     else { screen.source = "monitor"; screen.monitor = c.monitor; Toast("Screen: " + c.label.substr(0, c.label.find('\n')), 1.5); }
+    screen.choiceChanged = true; // remembered as the default from now on
     Log("screen picked: %s", c.label.c_str());
 }
 
