@@ -459,6 +459,55 @@ int main(int argc, char** argv) {
         CHECK(e.screen.hoverHand < 0 && fo == 1 && !e.Blocked(1, C_TRIGGER), "screen use: pointing away gives the game its window and buttons back");
         Keys::SetDryRun(false);
     }
+    // ---------------- mirrored screen: windows instead of monitors
+    {
+        auto q = ParseProfileText(DefaultProfileJson(), err);
+        Engine e; e.SetProfile(q);
+        Action nw; nw.type = ActType::Screen; nw.mode = "next_window";
+        uint64_t ask0 = e.screen.windowAsk;
+        e.ScreenAction(nw);
+        CHECK(e.screen.on && e.screen.source == "window" && e.screen.windowStep == 1 && e.screen.windowAsk == ask0 + 1, "screen window: next window switches to windows and asks for the next one");
+        nw.mode = "prev_window"; e.ScreenAction(nw);
+        CHECK(e.screen.windowStep == -1, "screen window: previous window asks for the one before");
+        Action nm; nm.type = ActType::Screen; nm.mode = "next_monitor"; e.screen.monitorCount = 2;
+        e.ScreenAction(nm);
+        CHECK(e.screen.source == "monitor", "screen window: next monitor goes back to monitors");
+        Action sw; sw.type = ActType::Screen; sw.mode = "on"; sw.window = "chrome";
+        e.ScreenAction(sw);
+        CHECK(e.screen.source == "window" && e.screen.windowMatch == "chrome", "screen window: a button can show a window by name");
+        std::string perr;
+        auto pj = ParseProfileText(R"({"screen":{"source":"window","window":"discord"}})", perr);
+        CHECK(pj && pj->screen.source == "window" && pj->screen.window == "discord", "screen window: profile can start on a window by name");
+    }
+    // ---------------- mirrored screen: real window capture on this PC
+    {
+        auto wins = ScreenCapture::Windows();
+        printf("windows found: %d\n", (int)wins.size());
+        for (size_t i = 0; i < wins.size() && i < 12; i++) printf("  %s | %s\n", wins[i].exe.c_str(), wins[i].title.substr(0, 50).c_str());
+        int pick = -1;
+        for (int i = 0; i < (int)wins.size() && pick < 0; i++) { std::string x = wins[i].exe; for (auto& ch : x) ch = (char)tolower((unsigned char)ch); if (x.find("chrome") != std::string::npos || x.find("firefox") != std::string::npos || x.find("msedge") != std::string::npos) pick = i; }
+        if (pick < 0 && !wins.empty()) pick = 0;
+        if (pick >= 0) {
+            ScreenCapture c; c.Configure(0, wins[pick].hwnd, 30, 1280, true, 1.f);
+            std::vector<uint32_t> px; int w = 0, h = 0; bool got = false;
+            for (int i = 0; i < 300 && !got; i++) { got = c.TakeFrame(px, w, h); if (!got) std::this_thread::sleep_for(std::chrono::milliseconds(10)); }
+            int n, prim, shown; std::string msg; uint64_t mv; c.Status(n, prim, shown, msg, mv);
+            int rx, ry, rw, rh; c.Rect(rx, ry, rw, rh);
+            char b[300]; snprintf(b, sizeof b, "screen window: capture '%s' -> %dx%d, window at %d,%d %dx%d (%s)", wins[pick].exe.c_str(), w, h, rx, ry, rw, rh, msg.c_str());
+            CHECK(got && w > 0 && (int)px.size() == w * h && rw > 0, b);
+            if (got && getenv("VRO_SCREEN_BMP")) {
+                std::string fn = std::string(getenv("VRO_SCREEN_BMP")) + "win.bmp";
+                FILE* fo = fopen(fn.c_str(), "wb");
+                if (fo) {
+                    BITMAPFILEHEADER fh{}; BITMAPINFOHEADER ih{};
+                    ih.biSize = sizeof ih; ih.biWidth = w; ih.biHeight = -h; ih.biPlanes = 1; ih.biBitCount = 32;
+                    fh.bfType = 0x4D42; fh.bfOffBits = sizeof fh + sizeof ih; fh.bfSize = fh.bfOffBits + w * h * 4;
+                    fwrite(&fh, sizeof fh, 1, fo); fwrite(&ih, sizeof ih, 1, fo); fwrite(px.data(), 4, px.size(), fo); fclose(fo);
+                }
+            }
+            c.Stop();
+        }
+    }
     // ---------------- hand-placed positions are saved and read back
     {
         std::wstring path = ProfilesDir() + L"\\vro_pose_test.json";
@@ -481,7 +530,7 @@ int main(int argc, char** argv) {
         printf("monitors found: %d\n", (int)mons.size());
         for (size_t i = 0; i < mons.size(); i++) printf("  %d: %dx%d at %d,%d%s\n", (int)i + 1, mons[i].w, mons[i].h, mons[i].x, mons[i].y, mons[i].primary ? " (main)" : "");
         for (int m = 0; m <= (int)mons.size() && !mons.empty(); m++) {
-            ScreenCapture c; c.Configure(m, 30, getenv("VRO_SCREEN_MAXW") ? atoi(getenv("VRO_SCREEN_MAXW")) : 1280, true, 1.f);
+            ScreenCapture c; c.Configure(m, 0, 30, getenv("VRO_SCREEN_MAXW") ? atoi(getenv("VRO_SCREEN_MAXW")) : 1280, true, 1.f);
             std::vector<uint32_t> px; int w = 0, h = 0; bool got = false;
             for (int i = 0; i < 300 && !got; i++) { got = c.TakeFrame(px, w, h); if (!got) std::this_thread::sleep_for(std::chrono::milliseconds(10)); }
             int n, prim, shown; std::string msg; uint64_t mv; c.Status(n, prim, shown, msg, mv);

@@ -18,6 +18,7 @@ void MouseTo(int x, int y);
 void MouseButton(int button, bool down); // 0 left, 1 right, 2 middle
 void MouseWheel(int delta);              // 120 = one notch up
 void FocusGameNow();                     // give the game's window the focus back
+void BringToFront(uintptr_t hwnd);       // before clicking a mirrored window that may be covered
 // Tests: record instead of moving the real mouse.
 void SetDryRun(bool on);
 void DryState(int& x, int& y, bool& left, bool& right, int& wheel, int& focus);

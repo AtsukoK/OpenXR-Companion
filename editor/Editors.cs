@@ -45,6 +45,7 @@ public static class Choices
     {
         new("toggle", "Show / hide it (pressing it again hides it)"), new("on", "Show it"), new("off", "Hide it"),
         new("next_monitor", "Switch to the next monitor"), new("prev_monitor", "Switch to the previous monitor"),
+        new("next_window", "Switch to the next open window (browser, Discord, ...)"), new("prev_window", "Switch to the previous open window"),
         new("next_fps", "Next frame rate (from Settings > Screen mirror)"), new("next_place", "Move it: left wrist, right wrist, in front, following view"),
     };
     public static readonly Choice[] ScreenPlaces =
@@ -345,7 +346,8 @@ public class ActionEditor : FormPanel
     readonly ChoiceBox screenMode = new(Choices.ScreenModes, 420);
     readonly ChoiceBox screenPlace = new(Choices.ScreenPlaces, 360);
     readonly ChoiceBox screenMon = new(Monitors.Choices(true), 360);
-    readonly Label lKeys, lKeyMode, lSteps, lWheel, lConfirm, lLayer, lLayerMode, lTarget, lScreenMode, lScreenPlace, lScreenMon;
+    readonly ComboBox screenWin = new() { Width = 260 };
+    readonly Label lKeys, lKeyMode, lSteps, lWheel, lConfirm, lLayer, lLayerMode, lTarget, lScreenMode, lScreenPlace, lScreenMon, lScreenWin;
 
     public ActionEditor(bool inWheel, WristModel wrist = null)
     {
@@ -377,6 +379,8 @@ public class ActionEditor : FormPanel
         lScreenMode = AddRow("Screen", screenMode, "Settings > Screen mirror sets the monitor, frame rates, size and position.");
         lScreenPlace = AddRow("Show it", screenPlace);
         lScreenMon = AddRow("Monitor", screenMon, "Monitors are numbered from left to right.");
+        lScreenWin = AddRow("Or a window", screenWin, "Leave empty for a monitor. Type part of a window's title or a program name (e.g. chrome, Discord), or pick one that's open now. The first matching window is shown.");
+        screenWin.TextChanged += (s, e) => { if (!loading) { a.Window = string.IsNullOrWhiteSpace(screenWin.Text) ? null : screenWin.Text.Trim(); Fire(); } };
         screenMode.SelectedIndexChanged += (s, e) => { if (!loading) { a.Mode = screenMode.Code; Sync(); Fire(); } };
         screenPlace.SelectedIndexChanged += (s, e) => { if (!loading) { a.Place = string.IsNullOrEmpty(screenPlace.Code) ? null : screenPlace.Code; Fire(); } };
         screenMon.SelectedIndexChanged += (s, e) => { if (!loading) { a.Monitor = int.TryParse(screenMon.Code, out var m) ? m : null; Fire(); } };
@@ -436,6 +440,8 @@ public class ActionEditor : FormPanel
         screenMode.Code = a.Type == "screen" && !string.IsNullOrEmpty(a.Mode) ? a.Mode : "toggle";
         screenPlace.Code = a.Place ?? "";
         screenMon.Code = a.Monitor?.ToString() ?? "";
+        screenWin.Items.Clear(); foreach (var n in OpenWindows.Names()) screenWin.Items.Add(n);
+        screenWin.Text = a.Window ?? "";
         loading = false;
         Sync();
     }
@@ -450,7 +456,7 @@ public class ActionEditor : FormPanel
         Show(lLayer, t == "layer"); Show(lLayerMode, t == "layer");
         Show(lTarget, t == "xr_input");
         bool turnsOn = t == "screen" && (a.Mode is null or "toggle" or "on");
-        Show(lScreenMode, t == "screen"); Show(lScreenPlace, turnsOn); Show(lScreenMon, turnsOn);
+        Show(lScreenMode, t == "screen"); Show(lScreenPlace, turnsOn); Show(lScreenMon, turnsOn); Show(lScreenWin, turnsOn);
         if (t == "xr_input") { keyMode.Code = string.IsNullOrEmpty(a.Mode) ? "tap" : a.Mode; }
     }
 }

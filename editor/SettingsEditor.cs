@@ -115,8 +115,17 @@ public class SettingsEditor : EditorBase
         }
         scr.AddRow("", Check("Show it as soon as the game starts", sc.StartOn, v => sc.StartOn = v),
             "Otherwise add a Screen button to a wheel or wrist panel (the default left wrist panel has them under More > Screen).");
-        scr.AddRow("Monitor", Pick(Monitors.Choices(false), sc.Monitor.ToString(), v => sc.Monitor = int.TryParse(v, out var m) ? m : 0),
-            "Monitors are numbered from left to right. Switch while playing with a 'next monitor' button.");
+        Label lMon = null, lWin = null;
+        scr.AddRow("Show", Pick(new Choice[] { new("monitor", "A whole monitor"), new("window", "One window (a browser, Discord, a video...)") }, sc.Source ?? "monitor",
+            v => { sc.Source = v; FormPanel.Show(lMon, v != "window"); FormPanel.Show(lWin, v == "window"); }),
+            "Switch while playing with 'next monitor' / 'next window' buttons. A window is shown even when other windows cover it, but not while it's minimised.");
+        lMon = scr.AddRow("Monitor", Pick(Monitors.Choices(false), sc.Monitor.ToString(), v => sc.Monitor = int.TryParse(v, out var m) ? m : 0),
+            "Monitors are numbered from left to right.");
+        var win = new ComboBox { Width = 260, Text = sc.Window ?? "" };
+        foreach (var n in OpenWindows.Names()) win.Items.Add(n);
+        win.TextChanged += (o, e) => { sc.Window = string.IsNullOrWhiteSpace(win.Text) ? null : win.Text.Trim(); Fire(); };
+        lWin = scr.AddRow("Window", win, "Part of its title or the program name, e.g. chrome, firefox, Discord, vlc. Pick one that's open now or type it. Empty = the first open window.");
+        FormPanel.Show(lMon, sc.Source != "window"); FormPanel.Show(lWin, sc.Source == "window");
         scr.AddRow("Frame rate cap (fps)", Int(0, 240, 5, sc.Fps, v => sc.Fps = v),
             "How often the picture updates at most. 0 = as fast as the headset. Lower uses less CPU and GPU; 15-30 is plenty for reading.");
         var steps = new TextBox { Width = 200, Text = string.Join(", ", sc.FpsSteps ?? new()) };

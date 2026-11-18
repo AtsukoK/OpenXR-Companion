@@ -168,6 +168,7 @@ public partial class MainForm
             {
                 "on" => "Shows the mirrored screen", "off" => "Hides the mirrored screen",
                 "next_monitor" => "Screen: next monitor", "prev_monitor" => "Screen: previous monitor",
+                "next_window" => "Screen: next window", "prev_window" => "Screen: previous window",
                 "next_fps" => "Screen: next frame rate", "next_place" => "Screen: moves it to the next place",
                 _ => "Shows / hides the mirrored screen" + (a.Place switch { "wrist_left" => " on the left wrist", "wrist_right" => " on the right wrist", "front" => " in front of you", "head" => " following your view", _ => "" }),
             },

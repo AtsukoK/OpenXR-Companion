@@ -34,7 +34,7 @@ public class GestureConv : ChoiceConverter { protected override bool Exclusive =
 public class BlockConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "trigger", "all" }; }
 public class BlockOpenConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "minimal", "hand", "all" }; }
 public class TypeConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "key", "sequence", "xr_input", "wheel", "back", "close", "layer", "reload", "keyboard", "page", "adjust", "screen" }; }
-public class ModeConv : ChoiceConverter { protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "tap", "hold", "toggle", "on", "off", "next_monitor", "prev_monitor", "next_fps", "next_place" }; }
+public class ModeConv : ChoiceConverter { protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "tap", "hold", "toggle", "on", "off", "next_monitor", "prev_monitor", "next_window", "prev_window", "next_fps", "next_place" }; }
 public class ConfirmConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "auto", "release", "stick_return", "button" }; }
 public class AnchorConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "hand", "hand_locked", "head", "head_locked" }; }
 public class MethodConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "thumbstick", "point", "both" }; }
@@ -200,6 +200,8 @@ public class PointerModel
 public class ScreenModel
 {
     [JsonPropertyName("monitor")] public int Monitor { get; set; } = 0;
+    [JsonPropertyName("source")] public string Source { get; set; } = "monitor";
+    [JsonPropertyName("window"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string Window { get; set; }
     [JsonPropertyName("fps")] public int Fps { get; set; } = 30;
     [JsonPropertyName("fps_steps")] public List<int> FpsSteps { get; set; } = new() { 10, 15, 30, 60, 0 };
     [JsonPropertyName("place")] public string Place { get; set; } = "wrist_left";
@@ -219,6 +221,22 @@ public class ScreenModel
     [JsonPropertyName("interact")] public bool Interact { get; set; } = true;
     [JsonPropertyName("refocus_game")] public bool RefocusGame { get; set; } = true;
     [JsonPropertyName("poses"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, List<float>> Poses { get; set; }
+}
+
+// Open windows with a title, for "show this window" pickers (program name first).
+public static class OpenWindows
+{
+    public static string[] Names()
+    {
+        var l = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in System.Diagnostics.Process.GetProcesses())
+        {
+            try { if (p.MainWindowHandle != IntPtr.Zero && !string.IsNullOrWhiteSpace(p.MainWindowTitle) && p.Id != Environment.ProcessId) { l.Add(p.ProcessName); } }
+            catch { }
+            finally { p.Dispose(); }
+        }
+        return l.ToArray();
+    }
 }
 
 // Monitors numbered the way the layer numbers them: left to right, then top to bottom.
@@ -343,6 +361,7 @@ public class ActionModel
     [Description("page: the wrist panel page to open"), JsonPropertyName("page"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string Page { get; set; }
     [Description("screen: where it shows when turned on: wrist_left, wrist_right, front, head (empty = the Settings choice)"), JsonPropertyName("place"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string Place { get; set; }
     [Description("screen: which monitor when turned on: 0 = main, 1.. = left to right (empty = keep)"), JsonPropertyName("monitor"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? Monitor { get; set; }
+    [Description("screen: show the first open window whose title or program contains this, e.g. chrome or Discord"), JsonPropertyName("window"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string Window { get; set; }
 
     public override string ToString() => Type switch
     {

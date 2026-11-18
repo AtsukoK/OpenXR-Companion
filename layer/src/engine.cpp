@@ -12,6 +12,8 @@ void Engine::SetProfile(std::shared_ptr<Profile> p) {
     if (prof) { // the editor's screen settings apply on every (re)load; on/off survives a reload
         const ScreenStyle& S = prof->screen;
         screen.place = S.place; screen.monitor = S.monitor; screen.fps = S.fps;
+        if (S.source == "window" && screen.source != "window") { screen.source = "window"; screen.windowMatch = S.window; screen.windowStep = 0; screen.windowAsk++; }
+        else if (S.source == "monitor") screen.source = "monitor";
         if (!screenInit) { screen.on = S.startOn; screenPlaceFront = screen.on; screenInit = true; }
         else if (screen.on) screenPlaceFront = true;
     }
@@ -637,7 +639,8 @@ void Engine::ScreenAction(const Action& a) {
     const std::string& m = a.mode;
     auto turnOn = [&] {
         if (!a.place.empty()) screen.place = a.place;
-        if (a.monitor >= 0) screen.monitor = a.monitor;
+        if (a.monitor >= 0) { screen.monitor = a.monitor; screen.source = "monitor"; }
+        if (!a.window.empty()) { screen.source = "window"; screen.windowMatch = a.window; screen.windowStep = 0; screen.windowAsk++; }
         screen.on = true; screenPlaceFront = true;
         Toast(std::string("Screen on (") + PlaceName(screen.place) + ")", 1.5);
     };
@@ -648,9 +651,14 @@ void Engine::ScreenAction(const Action& a) {
         int n = std::max(1, screen.monitorCount);
         int cur = screen.monitor == 0 ? screen.primaryIndex : screen.monitor;
         cur = m == "next_monitor" ? cur % n + 1 : (cur + n - 2) % n + 1;
-        screen.monitor = cur;
+        if (screen.source == "window") cur = screen.monitor == 0 ? screen.primaryIndex : screen.monitor; // back to monitors: start where it was
+        screen.monitor = cur; screen.source = "monitor";
         if (!screen.on) { screen.on = true; screenPlaceFront = true; }
         Toast("Screen: monitor " + std::to_string(cur) + " of " + std::to_string(n), 1.5);
+    } else if (m == "next_window" || m == "prev_window") {
+        screen.source = "window"; screen.windowStep = m == "next_window" ? 1 : -1; screen.windowMatch.clear(); screen.windowAsk++;
+        if (!screen.on) { screen.on = true; screenPlaceFront = true; }
+        // the layer shows the window's name once it has picked it
     } else if (m == "next_fps") {
         const auto& st = prof->screen.fpsSteps;
         size_t i = 0;
@@ -825,6 +833,7 @@ void Engine::ScreenInteract() {
     // buttons: press only on a fresh press while pointing, so a held game trigger doesn't click
     bool trig = cur[hand][C_TRIGGER][F_PRESS], trigEdge = trig && !prev[hand][C_TRIGGER][F_PRESS];
     bool b1 = cur[hand][C_BTN1][F_PRESS], b1Edge = b1 && !prev[hand][C_BTN1][F_PRESS];
+    if ((trigEdge || b1Edge) && screen.source == "window" && screen.hwnd) Keys::BringToFront(screen.hwnd);
     if (trigEdge && !mouseL) { Keys::MouseButton(0, true); mouseL = true; screenClicked = true; if (prof->haptics) haptics.push_back({ hand, prof->hapticAmp, 0.02f }); }
     if (!trig && mouseL) { Keys::MouseButton(0, false); mouseL = false; }
     if (b1Edge && !mouseR) { Keys::MouseButton(1, true); mouseR = true; screenClicked = true; if (prof->haptics) haptics.push_back({ hand, prof->hapticAmp, 0.02f }); }

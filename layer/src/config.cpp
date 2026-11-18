@@ -122,6 +122,7 @@ static Action ParseAction(const json& j, const std::string& ctx) {
     Get(j, "layer", a.layer);
     Get(j, "place", a.place); a.place = Lower(a.place);
     Get(j, "monitor", a.monitor);
+    Get(j, "window", a.window);
     if (a.mode.empty()) a.mode = "tap";
     if (a.type == ActType::Screen && (a.mode == "tap" || a.mode == "hold")) a.mode = "toggle";
     if (a.type == ActType::Screen && !a.place.empty() && a.place != "wrist_left" && a.place != "wrist_right" && a.place != "front" && a.place != "head")
@@ -227,6 +228,8 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
     if (j.contains("screen")) {
         auto& k = j["screen"]; auto& S = p->screen;
         Get(k, "monitor", S.monitor); Get(k, "fps", S.fps);
+        Get(k, "source", S.source); S.source = Lower(S.source); if (S.source != "window") S.source = "monitor";
+        Get(k, "window", S.window);
         if (k.contains("fps_steps") && k["fps_steps"].is_array()) {
             S.fpsSteps.clear();
             for (auto& v : k["fps_steps"]) if (v.is_number()) S.fpsSteps.push_back(std::clamp(v.get<int>(), 0, 240));
@@ -525,6 +528,7 @@ const char* DefaultProfileJson() {
         { "label": "On my wrist", "action": { "type": "screen", "mode": "toggle", "place": "wrist_left" } },
         { "label": "In front of me", "action": { "type": "screen", "mode": "toggle", "place": "front" } },
         { "label": "Next monitor", "action": { "type": "screen", "mode": "next_monitor" } },
+        { "label": "Next window", "action": { "type": "screen", "mode": "next_window" } },
         { "label": "Frame rate", "action": { "type": "screen", "mode": "next_fps" } },
         { "label": "Move it", "action": { "type": "screen", "mode": "next_place" } },
         { "label": "Screen off", "action": { "type": "screen", "mode": "off" } }
