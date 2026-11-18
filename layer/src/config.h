@@ -32,6 +32,7 @@ struct Action {
     InputId target;            // xr_input: game input to fake
     // screen: mode toggle|on|off|next_monitor|prev_monitor|next_fps|next_place
     std::string place;         // screen: where to show it when turned on (empty = the profile's place)
+    std::string window;        // screen: show the first window whose title or program contains this
     int monitor = -1;          // screen: which monitor when turned on (-1 = keep, 0 = main, 1..N left to right)
 };
 
@@ -127,6 +128,8 @@ struct PointerStyle {
 // A desktop monitor shown in VR (mirrored with Desktop Duplication).
 struct ScreenStyle {
     int monitor = 0;                // 0 = the main monitor, 1..N = monitors from left to right
+    std::string source = "monitor"; // monitor | window
+    std::string window;             // source window: the first window whose title or program name contains this
     int fps = 30;                   // capture rate cap; 0 = as fast as the headset draws
     std::vector<int> fpsSteps{ 10, 15, 30, 60, 0 }; // what "next frame rate" cycles through
     std::string place = "wrist_left"; // wrist_left|wrist_right|front|head

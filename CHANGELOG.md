@@ -8,6 +8,7 @@
 - **New action "screen"**: show / hide it (optionally at a set place and monitor), next / previous monitor, next frame rate, move it to the next place. All of them work while playing, from a wheel or a wrist panel.
 - **Adjust positions moves the screen too**: it shows while adjusting, grip to move, stick to resize, saved when you finish.
 - **Place anything anywhere by grabbing it**: in Adjust positions the wheel, both wrist panels and the screen keep exactly the position and angle you leave them at (x, y, z, tilted or turned any way), relative to the hand, arm or head they belong to. Settings shows "Placed by hand" with a button to go back to the numbers. (Replaces turning wrist panels with the stick.)
+- **Mirror one window instead of a whole monitor** (a browser, Discord, a video player...), like SteamVR or Discord let you pick. It shows even when other windows cover it. Pick it in Settings > Screen mirror, give a button a window name (e.g. "chrome"), or flip through open windows with the new "next window" / "previous window" buttons while playing. Clicking on a mirrored window brings it to the front first.
 - **Use the desktop from VR**: point at the mirrored screen and the mouse follows; trigger = left click (hold to drag), A / X = right click, stick up/down = scroll. The game gets its window back when you point away. Both can be switched off in Settings > Screen mirror.
 - The built-in default profile has the buttons on the left wrist panel under More > Screen.
 

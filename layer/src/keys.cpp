@@ -231,6 +231,15 @@ void MouseWheel(int delta) {
     if (gDry) { gDWheel += delta; return; }
     Post([delta] { INPUT in{}; in.type = INPUT_MOUSE; in.mi.dwFlags = MOUSEEVENTF_WHEEL; in.mi.mouseData = (DWORD)delta; SendInput(1, &in, sizeof(in)); });
 }
+void BringToFront(uintptr_t hwnd) {
+    if (gDry) return;
+    Post([hwnd] {
+        HWND h = (HWND)hwnd;
+        if (!IsWindow(h) || GetForegroundWindow() == h) return;
+        SetForegroundWindow(h);
+        Sleep(30); // let it come up before the click lands
+    });
+}
 void FocusGameNow() {
     if (gDry) { gDFocus++; return; }
     Post([] { FocusGameAlways(); });

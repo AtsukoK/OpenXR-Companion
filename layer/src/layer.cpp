@@ -115,6 +115,7 @@ static uint64_t gDrawnWrist[2] = { ~0ull, ~0ull };
 static int gDrawnCursor[2] = { -1, -1 };
 static Panel gDotPanel, gBeamPanel; static bool gDrawnPointer = false;
 static Panel gFingerPanel; static bool gDrawnFinger = false;
+static uint64_t gWinAsk = 0;
 static Panel gScreenPanel; static ScreenCapture gCap; static std::vector<uint32_t> gScreenPix; static uint64_t gScreenMsgVer = 0;
 static uint64_t gDrawnKb = ~0ull;
 static uint64_t gDrawnWheel = ~0ull, gDrawnToast = ~0ull;
@@ -563,7 +564,35 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
     if (gEng.screen.shown && gLocal) {
         const ScreenStyle& S = p.screen;
         int maxW = S.maxPx > 0 ? S.maxPx : (sizeof(void*) == 4 ? 1280 : 1920); // 32-bit games are short on memory
-        gCap.Configure(gEng.screen.monitor, gEng.screen.fps, maxW, S.cursor, S.opacity);
+        ScreenView& sv = gEng.screen;
+        if (sv.source == "window" && (sv.windowAsk != gWinAsk || !IsWindow((HWND)sv.hwnd) || gCap.WindowGone())) {
+            bool asked = sv.windowAsk != gWinAsk; gWinAsk = sv.windowAsk;
+            auto wins = ScreenCapture::Windows();
+            auto low = [](std::string s) { for (auto& c : s) c = (char)tolower((unsigned char)c); return s; };
+            int cur = -1;
+            for (int i = 0; i < (int)wins.size(); i++) if (wins[i].hwnd == sv.hwnd) cur = i;
+            int pick = -1;
+            if (!sv.windowMatch.empty()) {
+                std::string m = low(sv.windowMatch);
+                for (int i = 0; i < (int)wins.size() && pick < 0; i++) if (low(wins[i].title).find(m) != std::string::npos || low(wins[i].exe).find(m) != std::string::npos) pick = i;
+                if (pick < 0) gEng.Toast("Screen: no open window matches '" + sv.windowMatch + "'", 3.0);
+            } else if (!wins.empty()) {
+                int step = sv.windowStep ? sv.windowStep : 0;
+                pick = cur < 0 ? (step < 0 ? (int)wins.size() - 1 : 0) : ((cur + step) % (int)wins.size() + (int)wins.size()) % (int)wins.size();
+            }
+            sv.windowStep = 0; sv.windowMatch.clear();
+            if (pick < 0) { // nothing to show: back to the monitor
+                if (wins.empty()) gEng.Toast("Screen: no window to show", 2.5);
+                sv.source = "monitor"; sv.hwnd = 0;
+            } else {
+                bool changed = wins[pick].hwnd != sv.hwnd;
+                sv.hwnd = wins[pick].hwnd;
+                if (asked || changed) gEng.Toast("Screen: " + (wins[pick].title.size() > 48 ? wins[pick].title.substr(0, 45) + "..." : wins[pick].title), 2.0);
+                Log("screen window: %s (%s)", wins[pick].title.c_str(), wins[pick].exe.c_str());
+            }
+        }
+        if (sv.source != "window") sv.hwnd = 0;
+        gCap.Configure(sv.monitor, sv.hwnd, sv.fps, maxW, S.cursor, S.opacity);
         int n, prim, shown; std::string msg; uint64_t mv;
         gCap.Status(n, prim, shown, msg, mv);
         if (n > 0) { gEng.screen.monitorCount = n; gEng.screen.primaryIndex = prim; }

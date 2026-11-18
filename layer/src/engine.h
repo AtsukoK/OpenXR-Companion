@@ -83,7 +83,13 @@ struct ScreenView {
     bool poseValid = false;
     // Filled in by the layer from the capture: how many monitors there are, and which is the main one.
     int monitorCount = 0, primaryIndex = 1;
-    int monX = 0, monY = 0, monW = 0, monH = 0; // the shown monitor on the desktop (pixels)
+    int monX = 0, monY = 0, monW = 0, monH = 0; // the shown monitor or window on the desktop (pixels)
+    // Showing one window instead of a monitor. The engine asks, the layer picks the window.
+    std::string source = "monitor";             // monitor | window
+    int windowStep = 0;                         // asked: +1 next / -1 previous window (layer clears it)
+    std::string windowMatch;                    // asked: a window whose title or program contains this (layer clears it)
+    uint64_t windowAsk = 0;                     // bumped on every ask
+    uintptr_t hwnd = 0;                         // the window shown (set by the layer)
     float aspect = 9.f / 16.f;                  // picture height / width
     // Pointing at it: which hand moves the mouse (-1 = none), and whether pointing works right now.
     int hoverHand = -1;
