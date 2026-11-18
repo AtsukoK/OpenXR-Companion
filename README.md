@@ -57,21 +57,64 @@ The editor opens on the **Overview**: one card per feature, with a switch to tur
 
 ![Wrist panel page: off / own pages / mirror, first page, side of the arm and text direction](docs/images/editor-wrist-panel.png)
 
-## Screen mirror (a monitor in VR)
+## Screen mirror (a monitor or window in VR)
 
-Shows one of your desktop monitors on your wrist or in front of you while you play, for example a guide, a video or a chat window.
+Shows one of your monitors, or a single window (a browser, Discord, a video, a Twitch chat), on your wrist or in front of you while you play. You can use it with the laser like a mouse.
 
-- Add a button with the action **Mirror a monitor** to a wheel or a wrist panel. It can show / hide the screen at a place you choose (left wrist, right wrist, in front of you, following your view), switch to the next or previous monitor, step through frame rates, or move the screen to the next place. The default profile has these under the left wrist panel's More > Screen.
-- **Settings > Screen mirror** sets the monitor, the frame rate cap (0 = as fast as the headset), the frame rates the button steps through, the size and position, opacity, the mouse pointer and a sharpness limit.
-- **Adjust positions** also shows the screen (even while it's off): grab it with a grip and put it anywhere, at any angle; push that hand's stick up/down to resize it. Using Adjust positions again saves it. Each place keeps its own spot.
-- **Point at it to use your desktop**: the mouse follows the laser; trigger = left click (hold to drag), A / X = right click, stick up/down = scroll. While you point at it those buttons don't reach the game, and the game gets its window back when you point away.
-- **Button bar**: point at the screen and a bar appears under it: Choose... (pick any monitor or open window from a list), Frame rate, Move, Keyboard (type into the mirrored window) and Hide.
-- **It remembers**: the screen starts on your main monitor; whatever you pick in the headset becomes the default next time (saved in the profile).
-- **One window instead of a monitor**: Settings > Screen mirror > Show: One window, or a button with "next window" / "previous window" to flip through open windows while playing, or a button set to show a window by name (part of its title or the program name, e.g. chrome, Discord). Covered windows still show; minimised ones don't. On Windows 10, Windows draws a yellow frame around a window while it's being mirrored (Windows 11 doesn't).
-- Monitors are numbered from left to right; "Main monitor" follows whichever one Windows uses as main.
-- The picture updates only when something on that monitor changes, and never faster than the cap. Lower caps cost less CPU and GPU.
-- 32-bit games get a lower sharpness limit by default (1280 pixels wide) because they have little memory to spare.
-- Protected video (some streaming apps) shows as black; that is a Windows rule. Mirroring the monitor the game itself is drawn on can also show black or a frozen image.
+### Getting started
+
+1. Turn it on with a **Screen** button. The default profile has a page of them on the left wrist panel: **More > Screen**. You can also add a button with the action **Mirror a monitor** to any wheel or wrist panel.
+2. Point at the screen. A button bar appears under it.
+3. Press **Choose...** and pick a monitor or window from the list.
+
+The screen starts on your main monitor. Whatever you pick in the headset is saved and becomes the default next time.
+
+### The button bar
+
+Point at the screen and the bar appears just under it. It stays for 2 seconds after you point away. Point at a button and pull the trigger.
+
+| Button | What it does |
+|---|---|
+| **Choose...** | A list of every monitor and open window, 12 per page with More / Close. The one showing now has a dot. Your pick is remembered. |
+| **Frame rate** | Steps through your frame rates (shown under the name). Set the list in Settings. |
+| **Move...** | A list of places: left wrist, right wrist, in front of you (stays where it appears), following your view. **Cancel** leaves it where it is. |
+| **Keyboard** | Opens the VR keyboard and brings the mirrored window to the front, so typing goes into it. Click the text box first (for example a chat box), then press Keyboard. The game doesn't take the focus back until you close the keyboard. |
+| **Adjust** | Turns on Adjust positions: grab the screen (or the wheel, or a wrist panel) with a grip and put it anywhere, at any angle; the stick resizes it. The bar becomes one **Done adjusting** button, which saves. |
+| **Hide** | Turns the screen off. |
+
+### Using the desktop on it
+
+- Point at the screen: the mouse follows the laser.
+- **Trigger** = left click (hold to drag), **A / X** = right click, **stick up/down** = scroll.
+- While you point at the screen, those buttons don't reach the game. When you point away, the game gets its buttons and its window back.
+- On a mirrored window, a click first brings that window to the front, so it lands in the right app even if something covers it.
+- The hand on the arm with a wrist screen can't point at it (use the other hand).
+
+### Recommended settings (Settings > Screen mirror)
+
+| Setting | Recommended | Why |
+|---|---|---|
+| Show | **A whole monitor** to start | Then use **Choose...** in the headset; your pick is saved here automatically. |
+| Frame rate cap | **15-30 fps** | Plenty for chat, guides and browsing. Use 60 for video. Lower = less CPU/GPU. 0 = as fast as the headset. |
+| Frame rates to switch between | `10, 15, 30, 60, 0` | What the Frame rate button steps through. |
+| Where it shows | **Left wrist** (or **In front of me** for videos) | Then place it exactly by hand with **Adjust**. |
+| Button bar size | **0.7** | 1 = as wide as the screen. Raise it if the buttons are hard to hit. |
+| Use the desktop by pointing at it | **On** | Off = view only. |
+| Give the game its window back after clicking | **On** | Otherwise the game may stop reacting after you click on the desktop. |
+| Sharpness limit | **0 (automatic)** | 1920 pixels wide, or 1280 in 32-bit games (Fallout), which have little memory to spare. |
+| Show it as soon as the game starts | Off | Turn on if you always want it. |
+
+**On your Screen buttons, leave "Monitor" on "Keep the current one" and "Or a window" empty.** Then the button just shows and hides the screen, and your **Choose...** pick stays. A button with a fixed monitor or window always switches to that one.
+
+### Good to know
+
+- Monitors are numbered from left to right; "Main monitor" is whichever one Windows uses as main.
+- A remembered window comes back by its exact title if it's still open, otherwise another window of the same program.
+- Windows still show when other windows cover them, but not while they're minimised.
+- On Windows 10, Windows draws a yellow frame around a window while it's being mirrored (Windows 11 doesn't).
+- The picture only updates when something changes, and never faster than the cap.
+- Protected video (some streaming apps) shows black; that is a Windows rule. Mirroring the monitor the game itself is on can show black or a frozen picture.
+- Lowest frame rate cap is 1 fps.
 
 ## Files and switching it off
 

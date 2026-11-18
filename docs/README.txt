@@ -48,6 +48,20 @@ with the 64-bit one. The toolbar then shows "Layer: installed (+ 32-bit)".
 3. Start the game. The same profiles are used (per-game: profiles\FalloutNV.json).
 "Uninstall layer" removes both (or run x86\uninstall.ps1 as admin).
 
+SCREEN MIRROR (a monitor or window in VR)
+Turn it on from the left wrist panel: More > Screen. Point at the screen and a button bar
+appears under it:
+  Choose...   pick any monitor or open window (your pick is remembered)
+  Frame rate  steps through the frame rates from Settings
+  Move...     left wrist / right wrist / in front of you / following your view, or Cancel
+  Keyboard    VR keyboard; typing goes into the mirrored window
+  Adjust      grab the screen (or wheel, wrist panels) with a grip and place it anywhere;
+              press "Done adjusting" to save
+  Hide        turns it off
+Pointing at the screen moves the mouse: trigger = left click, A/X = right click,
+stick = scroll. Recommended: frame rate 15-30, button bar size 0.7, and on your Screen
+buttons leave Monitor on "Keep the current one" and the window name empty.
+
 UNINSTALL
 Open the editor and click "Uninstall layer", or run uninstall.ps1 as admin. Then delete the folder.
 Your settings are in %LOCALAPPDATA%\OpenXRHandMenus\ if you want to remove those too.

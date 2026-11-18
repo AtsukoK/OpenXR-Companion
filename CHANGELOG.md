@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.2.5 (2026-11-18)
 
 ### New
 - **Screen mirror: show a desktop monitor in VR**, on either wrist, in front of you, or following your view. Works with every monitor (numbered left to right) and in 32-bit games.
