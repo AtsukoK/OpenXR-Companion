@@ -21,6 +21,7 @@ struct ScreenCapture::Impl {
     Cfg cfg; uint64_t cfgVersion = 0;
     std::vector<uint32_t> px; int w = 0, h = 0; bool fresh = false;
     int count = 0, primary = 1, shown = 0; std::string msg; uint64_t msgVersion = 0;
+    int rx = 0, ry = 0, rw = 0, rh = 0;
     void Run();
     void SetMsg(const std::string& m) { std::lock_guard l(mx); if (m != msg) { msg = m; msgVersion++; Log("[screen] %s", m.c_str()); } }
 };
@@ -82,6 +83,13 @@ void ScreenCapture::Stop() {
     delete d; d = nullptr;
 }
 
+void ScreenCapture::Rect(int& x, int& y, int& w, int& h) {
+    x = y = w = h = 0;
+    if (!d) return;
+    std::lock_guard l(d->mx);
+    x = d->rx; y = d->ry; w = d->rw; h = d->rh;
+}
+
 bool ScreenCapture::Running() const { return d && d->th.joinable(); }
 
 bool ScreenCapture::TakeFrame(std::vector<uint32_t>& out, int& w, int& h) {
@@ -130,7 +138,10 @@ void ScreenCapture::Impl::Run() {
         for (size_t i = 0; i < outs.size(); i++) { const RECT& r = outs[i].desc.DesktopCoordinates; if (r.left == 0 && r.top == 0) prim = (int)i + 1; }
         int idx = c.monitor <= 0 ? prim : std::min<int>(c.monitor, (int)outs.size());
         OutInfo& o = outs[idx - 1];
-        { std::lock_guard l(mx); count = (int)outs.size(); primary = prim; shown = idx; }
+        {
+            std::lock_guard l(mx); count = (int)outs.size(); primary = prim; shown = idx;
+            const RECT& r = o.desc.DesktopCoordinates; rx = r.left; ry = r.top; rw = r.right - r.left; rh = r.bottom - r.top;
+        }
         const RECT dr = o.desc.DesktopCoordinates;
         const int deskW = dr.right - dr.left, deskH = dr.bottom - dr.top;
         const DXGI_MODE_ROTATION rot = o.desc.Rotation;

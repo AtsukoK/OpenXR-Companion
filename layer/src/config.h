@@ -55,6 +55,10 @@ struct WheelItem {
 };
 struct Wheel { std::string name, title; std::vector<WheelItem> items; };
 
+// A position and angle set by hand in adjust mode, relative to what the thing is attached to
+// (a controller, the head, or the head's direction when it appeared). Unset = use the numbers.
+struct FreePose { bool set = false; XrPosef p{ {0,0,0,1}, {0,0,0} }; };
+
 struct Style {
     std::string anchor = "head_locked"; // hand|hand_locked|head|head_locked
     float radius = 0.127f, distance = 0.70f, headDown = 0.10f;
@@ -65,6 +69,7 @@ struct Style {
     int texSize = 768;
     uint32_t bg = 0xB0101418, segment = 0xD0283040, hover = 0xF03C8CFF, text = 0xFFFFFFFF, accent = 0xFF7FC4FF, border = 0x60FFFFFF;
     uint32_t toggled = 0xE02E9E5B; // buttons whose toggle (key, game input or layer) is currently on
+    std::map<std::string, FreePose> poses; // per anchor, placed by hand in adjust mode
 };
 
 struct Selection {
@@ -105,6 +110,7 @@ struct WristStyle {
     float gazeDeg = 20.f;           // how close to the centre of view it must be
     int showMs = 250, hideMs = 350;
     std::string press = "both";     // poke|point|both
+    FreePose pose;                  // placed by hand in adjust mode (relative to the controller)
 };
 
 // Pointer correction and helpers. Quest (Touch) controllers report an aim ray that starts above
@@ -133,6 +139,9 @@ struct ScreenStyle {
     float opacity = 1.f;
     bool cursor = true;             // draw the mouse pointer
     bool startOn = false;           // shown when the game starts
+    std::map<std::string, FreePose> poses; // per place, placed by hand in adjust mode
+    bool interact = true;           // point at it to move the mouse, trigger = left click, A/X = right click, stick = scroll
+    bool refocus = true;            // give the game its window back after clicking on the desktop
 };
 
 struct Profile {

@@ -83,6 +83,11 @@ struct ScreenView {
     bool poseValid = false;
     // Filled in by the layer from the capture: how many monitors there are, and which is the main one.
     int monitorCount = 0, primaryIndex = 1;
+    int monX = 0, monY = 0, monW = 0, monH = 0; // the shown monitor on the desktop (pixels)
+    float aspect = 9.f / 16.f;                  // picture height / width
+    // Pointing at it: which hand moves the mouse (-1 = none), and whether pointing works right now.
+    int hoverHand = -1;
+    bool interactive = false;
 };
 
 struct HapticReq { int hand; float amp; float sec; };
@@ -149,12 +154,20 @@ private:
     std::vector<Pulse> pulses;
     WheelRun wr;
     double now = 0, lastNow = 0;
-    struct GrabRun { int target = -1; int hand = -1; Vec3 off; }; // target: 0/1 wrist panel, 2 wheel, 3 screen
+    struct GrabRun { int target = -1; int hand = -1; Vec3 off; XrPosef rel{ {0,0,0,1}, {0,0,0} }; }; // target: 0/1 wrist panel, 2 wheel, 3 screen
+    // grabbing: the thing keeps the position and angle it had in the grabbing hand
+    void StartGrab(int target, int hand, const XrPosef& obj);
+    XrPosef GrabbedPose() const;
+    XrPosef WheelFrame(int hand) const;
     GrabRun grab;
     double adjustClosedAt = -1;
     void UpdateAdjustWheel();
     bool screenInit = false, screenPlaceFront = false;
-    XrPosef screenFrontPose{ {0,0,0,1}, {0,0,0} };
+    XrPosef screenFrontPose{ {0,0,0,1}, {0,0,0} }, screenFrontFrame{ {0,0,0,1}, {0,0,0} };
+    bool mouseL = false, mouseR = false, screenClicked = false;
+    int lastMx = -1, lastMy = -1; float wheelAcc = 0; double screenLeftAt = -1;
+    void ScreenInteract();
+    bool ScreenRay(int h, float& u, float& v, float& t) const;
     void UpdateScreen();
     void ScreenPose();
 

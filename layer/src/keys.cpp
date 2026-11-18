@@ -67,6 +67,20 @@ static bool Parse(const std::string& combo, std::vector<K>& out, std::string& er
 static bool gFocus = false;
 static std::set<std::string> gHeld; // combos currently held via Down/toggle
 
+static void FocusGameAlways() {
+    DWORD pid = GetCurrentProcessId();
+    HWND fg = GetForegroundWindow();
+    DWORD fpid = 0; GetWindowThreadProcessId(fg, &fpid);
+    if (fpid == pid) return;
+    struct C { DWORD pid; HWND best; } c{ pid, nullptr };
+    EnumWindows([](HWND h, LPARAM lp) -> BOOL {
+        auto* c = (C*)lp; DWORD p = 0; GetWindowThreadProcessId(h, &p);
+        if (p == c->pid && IsWindowVisible(h) && !GetWindow(h, GW_OWNER)) { c->best = h; return FALSE; }
+        return TRUE;
+    }, (LPARAM)&c);
+    if (c.best) SetForegroundWindow(c.best);
+}
+
 static void FocusGame() {
     if (!gFocus) return;
     DWORD pid = GetCurrentProcessId();
@@ -187,6 +201,39 @@ void Sequence(const std::string& steps) {
             else { Parse(st, k, e); ComboDown(k); Sleep(50); ComboUp(k); }
         }
     });
+}
+
+static bool gDry = false;
+static int gDx = -1, gDy = -1, gDWheel = 0, gDFocus = 0; static bool gDL = false, gDR = false;
+void SetDryRun(bool on) { gDry = on; gDx = gDy = -1; gDWheel = gDFocus = 0; gDL = gDR = false; }
+void DryState(int& x, int& y, bool& l, bool& r, int& wheel, int& focus) { x = gDx; y = gDy; l = gDL; r = gDR; wheel = gDWheel; focus = gDFocus; }
+
+void MouseTo(int x, int y) {
+    if (gDry) { gDx = x; gDy = y; return; }
+    Post([x, y] {
+        // Per-monitor aware for this call so x, y are real pixels whatever the game's DPI setting.
+        using SetCtx = DPI_AWARENESS_CONTEXT(WINAPI*)(DPI_AWARENESS_CONTEXT);
+        static auto set = (SetCtx)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetThreadDpiAwarenessContext");
+        DPI_AWARENESS_CONTEXT old = set ? set(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) : nullptr;
+        SetCursorPos(x, y);
+        if (set && old) set(old);
+    });
+}
+void MouseButton(int b, bool down) {
+    if (gDry) { if (b == 0) gDL = down; else if (b == 1) gDR = down; return; }
+    Post([b, down] {
+        INPUT in{}; in.type = INPUT_MOUSE;
+        in.mi.dwFlags = b == 0 ? (down ? MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_LEFTUP) : b == 1 ? (down ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_RIGHTUP) : (down ? MOUSEEVENTF_MIDDLEDOWN : MOUSEEVENTF_MIDDLEUP);
+        SendInput(1, &in, sizeof(in));
+    });
+}
+void MouseWheel(int delta) {
+    if (gDry) { gDWheel += delta; return; }
+    Post([delta] { INPUT in{}; in.type = INPUT_MOUSE; in.mi.dwFlags = MOUSEEVENTF_WHEEL; in.mi.mouseData = (DWORD)delta; SendInput(1, &in, sizeof(in)); });
+}
+void FocusGameNow() {
+    if (gDry) { gDFocus++; return; }
+    Post([] { FocusGameAlways(); });
 }
 
 void Shutdown() {

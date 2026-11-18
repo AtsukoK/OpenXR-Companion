@@ -311,12 +311,17 @@ int main(int argc, char** argv) {
         CHECK(e.Blocked(1, C_GRIP), "adjust: the grabbing grip is hidden from the game");
         f.h[1].gripPose.position = X(V(f.h[1].gripPose.position) + Vec3{ 0, 0, 0.04f }); f.h[1].aimPose = f.h[1].gripPose;
         f.h[1].sy = 1; step(10); f.h[1].sy = 0;
-        Vec3 up0v = Rotate(e.wrist[0].pose.orientation, { 0, 1, 0 });
-        f.h[1].sx = 1; step(20); f.h[1].sx = 0; // about 20 degrees
-        Vec3 up1v = Rotate(e.wrist[0].pose.orientation, { 0, 1, 0 });
-        float turned = std::acos(std::clamp(Dot(up0v, up1v), -1.f, 1.f)) * 57.2958f;
-        CHECK(q->wrist[0].textUp == "custom" && turned > 12.f && turned < 30.f, ("adjust: stick sideways turns the panel (custom), turned " + std::to_string(turned)).c_str());
-        CHECK(std::fabs(q->wrist[0].towardElbow - (elbow0 + 0.04f)) < 0.003f, "adjust: dragging moves the panel along the forearm");
+        XrQuaternionf q0 = e.wrist[0].pose.orientation;
+        f.h[1].gripPose.orientation = { 0, 0, std::sin(0.2618f), std::cos(0.2618f) }; step(3); // turn the grabbing hand 30 degrees
+        XrQuaternionf dq = QMul(e.wrist[0].pose.orientation, QInv(q0));
+        float turned = 2.f * std::acos(std::clamp(std::fabs(dq.w), 0.f, 1.f)) * 57.2958f;
+        CHECK(turned > 27.f && turned < 33.f, ("adjust: the panel turns with the grabbing hand, turned " + std::to_string(turned)).c_str());
+        f.h[1].gripPose.orientation = { 0, 0, 0, 1 }; step(3);
+        {
+            XrPosef rel = PMul(PInv(f.h[0].gripPose), e.wrist[0].pose);
+            CHECK(q->wrist[0].pose.set && std::fabs(rel.position.z - (q->wrist[0].pose.p.position.z)) < 0.002f, "adjust: the panel's place is kept relative to its arm");
+        }
+        (void)elbow0;
         CHECK(q->wrist[0].size > size0, "adjust: stick up while holding makes the panel bigger");
         CHECK(std::fabs(V(e.wrist[0].pose.position).z - (pc.z + 0.04f)) < 0.003f, "adjust: the panel follows the hand");
         f.h[1].grip = 0; step(3);
@@ -328,7 +333,9 @@ int main(int argc, char** argv) {
         f.h[0].gripPose.position = X(wc); step(2);
         f.h[0].grip = 1; step(2);
         f.h[0].gripPose.position = X(wc + Vec3{ 0, 0.05f, 0 }); f.h[0].sy = -1; step(10); f.h[0].sy = 0;
-        CHECK(std::fabs(q->style.headDown - (down0 - 0.05f)) < 0.004f && std::fabs(q->style.distance - dist0) < 0.01f, "adjust: dragging the wheel up raises it (head-anchored default)");
+        CHECK(q->style.poses.count(q->style.anchor) && q->style.poses[q->style.anchor].set && std::fabs(V(e.view.pose.position).y - (wc.y + 0.05f)) < 0.004f,
+              "adjust: dragging the wheel up raises it and keeps that spot");
+        (void)down0; (void)dist0;
         CHECK(q->style.radius < rad0, "adjust: stick down while holding makes the wheel smaller");
         f.h[0].grip = 0; step(3);
         f.h[0].b1 = true; step(2); f.h[0].b1 = false; step(3);
@@ -413,11 +420,60 @@ int main(int argc, char** argv) {
         f.h[1].grip = 1.f; step(2);
         f.h[1].gripPose.position = X(c + Vec3{ 0.05f, -0.2f, 0.3f }); f.h[1].sy = 1.f; step(10);
         f.h[1].grip = 0.f; f.h[1].sy = 0.f; step();
-        CHECK(std::fabs(q->screen.distance - 0.6f) < 0.03f && std::fabs(q->screen.below - 0.25f) < 0.03f && q->screen.width > 0.8f,
-              ("screen adjust: grip drags it closer and lower, stick makes it bigger (distance " + std::to_string(q->screen.distance) +
-               ", below " + std::to_string(q->screen.below) + ", width " + std::to_string(q->screen.width) + ")").c_str());
+        Vec3 moved = V(e.screen.pose.position) - c;
+        CHECK(q->screen.poses.count("front") && Len(moved - Vec3{ 0, -0.2f, 0.3f }) < 0.01f && q->screen.width > 0.8f,
+              "screen adjust: grip moves it anywhere (x, y, z), stick makes it bigger");
         f.h[0].menu = true; step(); f.h[0].menu = false; step();
         CHECK(!e.adjust && !e.screen.shown && e.saveRequested, "screen adjust: finishing hides it again and saves");
+    }
+    // ---------------- mirrored screen: pointing at it works the desktop mouse
+    {
+        Keys::SetDryRun(true);
+        auto q = ParseProfileText(DefaultProfileJson(), err);
+        q->screen.place = "front"; q->screen.distance = 1.0f; q->screen.below = 0.f; q->screen.width = 1.0f;
+        Engine e; e.SetProfile(q);
+        Frame f; f.headValid = true; f.head = XrPosef{ {0,0,0,1}, {0, 1.6f, 0} };
+        for (int h = 0; h < 2; h++) { f.h[h].gripValid = f.h[h].aimValid = true; f.h[h].gripPose.orientation.w = f.h[h].aimPose.orientation.w = 1; }
+        f.h[0].gripPose.position = f.h[0].aimPose.position = { -0.3f, 1.0f, -0.2f };
+        f.h[1].gripPose.position = { 0.3f, 1.0f, -0.2f };
+        f.h[1].aimPose.position = { 0.f, 1.6f, -0.2f }; // straight at the middle of the screen
+        double t = 0; auto step = [&](int n = 1) { for (int i = 0; i < n; i++) { t += 0.011; f.t = t; e.Update(f); } };
+        e.screen.monX = -1920; e.screen.monY = 0; e.screen.monW = 1920; e.screen.monH = 1080; e.screen.aspect = 9.f / 16.f;
+        Action on; on.type = ActType::Screen; on.mode = "on"; e.ScreenAction(on);
+        step(2);
+        int x, y, wh, fo; bool l, r; Keys::DryState(x, y, l, r, wh, fo);
+        CHECK(e.screen.hoverHand == 1 && std::abs(x - (-960)) <= 2 && std::abs(y - 540) <= 2, ("screen use: pointing at the middle puts the mouse in the middle of that monitor (" + std::to_string(x) + ", " + std::to_string(y) + ")").c_str());
+        CHECK(e.Blocked(1, C_TRIGGER) && e.Blocked(1, C_BTN1) && e.pointer[1].on, "screen use: the pointing hand's trigger and A go to the desktop, and the laser shows");
+        f.h[1].trig = 1.f; step(2); Keys::DryState(x, y, l, r, wh, fo);
+        CHECK(l, "screen use: trigger holds the left mouse button");
+        f.h[1].aimPose.position = { 0.25f, 1.6f, -0.2f }; step(2); Keys::DryState(x, y, l, r, wh, fo);
+        CHECK(l && x > -960 + 400, "screen use: dragging moves the mouse with the button held");
+        f.h[1].trig = 0.f; step(2); Keys::DryState(x, y, l, r, wh, fo);
+        CHECK(!l, "screen use: letting go of the trigger lets go of the button");
+        f.h[1].b1 = true; step(2); Keys::DryState(x, y, l, r, wh, fo);
+        CHECK(r, "screen use: A holds the right mouse button");
+        f.h[1].b1 = false; step(2);
+        f.h[1].sy = 1.f; step(20); f.h[1].sy = 0.f; step(); Keys::DryState(x, y, l, r, wh, fo);
+        CHECK(wh >= 120 * 1 && wh <= 120 * 4, ("screen use: stick up scrolls (" + std::to_string(wh / 120) + " notches)").c_str());
+        f.h[1].aimPose.position = { 3.f, 1.6f, -0.2f }; step(60); Keys::DryState(x, y, l, r, wh, fo);
+        CHECK(e.screen.hoverHand < 0 && fo == 1 && !e.Blocked(1, C_TRIGGER), "screen use: pointing away gives the game its window and buttons back");
+        Keys::SetDryRun(false);
+    }
+    // ---------------- hand-placed positions are saved and read back
+    {
+        std::wstring path = ProfilesDir() + L"\\vro_pose_test.json";
+        { std::ofstream o(path, std::ios::binary); o << DefaultProfileJson(); }
+        auto q = ParseProfileText(DefaultProfileJson(), err);
+        q->sourceName = "vro_pose_test.json";
+        XrPosef p{ { 0, std::sin(0.3f), 0, std::cos(0.3f) }, { 0.1f, -0.2f, 0.3f } };
+        q->wrist[1].pose = { true, p }; q->style.poses["head_locked"] = { true, p }; q->screen.poses["wrist_right"] = { true, p };
+        std::string serr; bool ok = SavePlacement(*q, serr);
+        std::ifstream in(path, std::ios::binary); std::stringstream ss; ss << in.rdbuf(); in.close();
+        auto back = ParseProfileText(ss.str(), err);
+        auto same = [&](const FreePose& a) { return a.set && std::fabs(a.p.position.z - 0.3f) < 1e-3f && std::fabs(a.p.orientation.y - std::sin(0.3f)) < 1e-3f; };
+        CHECK(ok && back && same(back->wrist[1].pose) && same(back->style.poses["head_locked"]) && same(back->screen.poses["wrist_right"]) && !back->wrist[0].pose.set,
+              "hand-placed positions and angles of wheel, wrist panels and screen are saved and read back");
+        DeleteFileW(path.c_str());
     }
     // ---------------- mirrored screen: real capture on this PC
     {

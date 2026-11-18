@@ -567,6 +567,8 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
         int n, prim, shown; std::string msg; uint64_t mv;
         gCap.Status(n, prim, shown, msg, mv);
         if (n > 0) { gEng.screen.monitorCount = n; gEng.screen.primaryIndex = prim; }
+        gCap.Rect(gEng.screen.monX, gEng.screen.monY, gEng.screen.monW, gEng.screen.monH);
+        if (gScreenPanel.w > 0) gEng.screen.aspect = (float)gScreenPanel.h / gScreenPanel.w;
         if (mv != gScreenMsgVer) {
             gScreenMsgVer = mv;
             if (msg.find("can't") != std::string::npos || msg.find("no monitor") != std::string::npos) gEng.Toast("Screen: " + msg, 4.0);

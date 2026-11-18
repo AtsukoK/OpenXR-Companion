@@ -14,7 +14,7 @@ Radial wheels, wrist panels, button combos and a VR keyboard for any OpenXR game
 
 ![Radial wheel sub-menu with Back, Quick load, Keyboard, Adjust positions and Reload profile](docs/images/radial-wheel.jpg)
 
-**Adjust mode:** move and resize the wheel and wrist panels by hand in the headset: grab with the grip, and use the stick to resize or turn.
+**Adjust mode:** grab the wheel, the wrist panels or the mirrored screen with the grip and put them anywhere, at any angle; the stick resizes them.
 
 ![Adjust mode: the main wheel and a wrist panel shown together, with "Adjust: grip to move" on the panel](docs/images/adjust-mode.jpg)
 
@@ -63,7 +63,8 @@ Shows one of your desktop monitors on your wrist or in front of you while you pl
 
 - Add a button with the action **Mirror a monitor** to a wheel or a wrist panel. It can show / hide the screen at a place you choose (left wrist, right wrist, in front of you, following your view), switch to the next or previous monitor, step through frame rates, or move the screen to the next place. The default profile has these under the left wrist panel's More > Screen.
 - **Settings > Screen mirror** sets the monitor, the frame rate cap (0 = as fast as the headset), the frame rates the button steps through, the size and position, opacity, the mouse pointer and a sharpness limit.
-- **Adjust positions** also shows the screen (even while it's off): grab it with a grip to move it, push that hand's stick up/down to resize it, and left/right to turn it on a wrist. Using Adjust positions again saves it.
+- **Adjust positions** also shows the screen (even while it's off): grab it with a grip and put it anywhere, at any angle; push that hand's stick up/down to resize it. Using Adjust positions again saves it. Each place keeps its own spot.
+- **Point at it to use your desktop**: the mouse follows the laser; trigger = left click (hold to drag), A / X = right click, stick up/down = scroll. While you point at it those buttons don't reach the game, and the game gets its window back when you point away.
 - Monitors are numbered from left to right; "Main monitor" follows whichever one Windows uses as main.
 - The picture updates only when something on that monitor changes, and never faster than the cap. Lower caps cost less CPU and GPU.
 - 32-bit games get a lower sharpness limit by default (1280 pixels wide) because they have little memory to spare.
