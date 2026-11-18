@@ -164,6 +164,13 @@ public partial class MainForm
             "back" => "Goes back",
             "close" => "Closes / hides",
             "reload" => "Reloads the profile",
+            "screen" => a.Mode switch
+            {
+                "on" => "Shows the mirrored screen", "off" => "Hides the mirrored screen",
+                "next_monitor" => "Screen: next monitor", "prev_monitor" => "Screen: previous monitor",
+                "next_fps" => "Screen: next frame rate", "next_place" => "Screen: moves it to the next place",
+                _ => "Shows / hides the mirrored screen" + (a.Place switch { "wrist_left" => " on the left wrist", "wrist_right" => " on the right wrist", "front" => " in front of you", "head" => " following your view", _ => "" }),
+            },
             _ => "Does nothing",
         };
     }

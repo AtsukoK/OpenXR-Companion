@@ -1,6 +1,7 @@
 // OpenXR Hand Menus - OpenXR API layer.
 // Adds a configurable radial menu, chords and layers on top of any OpenXR game.
 #include "panel.h"
+#include "screen.h"
 #include "keys.h"
 #include <openxr/openxr_loader_negotiation.h>
 #include <unordered_map>
@@ -114,6 +115,7 @@ static uint64_t gDrawnWrist[2] = { ~0ull, ~0ull };
 static int gDrawnCursor[2] = { -1, -1 };
 static Panel gDotPanel, gBeamPanel; static bool gDrawnPointer = false;
 static Panel gFingerPanel; static bool gDrawnFinger = false;
+static Panel gScreenPanel; static ScreenCapture gCap; static std::vector<uint32_t> gScreenPix; static uint64_t gScreenMsgVer = 0;
 static uint64_t gDrawnKb = ~0ull;
 static uint64_t gDrawnWheel = ~0ull, gDrawnToast = ~0ull;
 static int gWheelTex = 0;
@@ -364,7 +366,7 @@ static XrResult XRAPI_CALL Hook_xrCreateSession(XrInstance inst, const XrSession
 }
 
 static void DestroySessionStuff() {
-    gWheelPanel.Destroy(gSwap); gToastPanel.Destroy(gSwap); gKbPanel.Destroy(gSwap); gDrawnKb = ~0ull; for (int h = 0; h < 2; h++) { gWristPanel[h].Destroy(gSwap); gDrawnWrist[h] = ~0ull; gCursorPanel[h].Destroy(gSwap); gDrawnCursor[h] = -1; } gDotPanel.Destroy(gSwap); gBeamPanel.Destroy(gSwap); gDrawnPointer = false; gFingerPanel.Destroy(gSwap); gDrawnFinger = false;
+    gWheelPanel.Destroy(gSwap); gToastPanel.Destroy(gSwap); gKbPanel.Destroy(gSwap); gDrawnKb = ~0ull; for (int h = 0; h < 2; h++) { gWristPanel[h].Destroy(gSwap); gDrawnWrist[h] = ~0ull; gCursorPanel[h].Destroy(gSwap); gDrawnCursor[h] = -1; } gDotPanel.Destroy(gSwap); gBeamPanel.Destroy(gSwap); gDrawnPointer = false; gFingerPanel.Destroy(gSwap); gDrawnFinger = false; gScreenPanel.Destroy(gSwap); gCap.Stop();
     for (int h = 0; h < 2; h++) {
         if (gGripSp[h]) N.DestroySpace(gGripSp[h]);
         if (gAimSp[h]) N.DestroySpace(gAimSp[h]);
@@ -555,6 +557,39 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
     std::vector<const XrCompositionLayerBaseHeader*> layers(fi->layers, fi->layers + fi->layerCount);
     XrCompositionLayerQuad wq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, tq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, kq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, rq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, cq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, pq[4]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, fq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } };
     const Profile& p = *gEng.prof;
+    XrCompositionLayerQuad sq{ XR_TYPE_COMPOSITION_LAYER_QUAD };
+
+    // Mirrored desktop monitor, under the menus. Captured on its own thread while it is on.
+    if (gEng.screen.on && gLocal) {
+        const ScreenStyle& S = p.screen;
+        int maxW = S.maxPx > 0 ? S.maxPx : (sizeof(void*) == 4 ? 1280 : 1920); // 32-bit games are short on memory
+        gCap.Configure(gEng.screen.monitor, gEng.screen.fps, maxW, S.cursor, S.opacity);
+        int n, prim, shown; std::string msg; uint64_t mv;
+        gCap.Status(n, prim, shown, msg, mv);
+        if (n > 0) { gEng.screen.monitorCount = n; gEng.screen.primaryIndex = prim; }
+        if (mv != gScreenMsgVer) {
+            gScreenMsgVer = mv;
+            if (msg.find("can't") != std::string::npos || msg.find("no monitor") != std::string::npos) gEng.Toast("Screen: " + msg, 4.0);
+        }
+        int fw, fh;
+        if (gCap.TakeFrame(gScreenPix, fw, fh)) {
+            if (gScreenPanel.sc && (gScreenPanel.w != fw || gScreenPanel.h != fh)) gScreenPanel.Destroy(gSwap);
+            if (!gScreenPanel.sc) gScreenPanel.Create(gSess, gGfx, gSwap, fw, fh);
+            if (gScreenPanel.sc) gScreenPanel.Upload(gGfx, gSwap, gScreenPix);
+        }
+        if (gScreenPanel.ready && gEng.screen.poseValid && gScreenPanel.w > 0) {
+            sq.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+            sq.space = gLocal;
+            sq.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
+            sq.subImage.swapchain = gScreenPanel.sc;
+            sq.subImage.imageRect = { {0, 0}, {gScreenPanel.w, gScreenPanel.h} };
+            sq.pose = gEng.screen.pose;
+            sq.size = { gEng.screen.widthM, gEng.screen.widthM * gScreenPanel.h / gScreenPanel.w };
+            layers.push_back((const XrCompositionLayerBaseHeader*)&sq);
+        }
+    } else if (gCap.Running() || gScreenPanel.sc) {
+        gCap.Stop(); gScreenPanel.Destroy(gSwap); gScreenPix.clear(); gScreenPix.shrink_to_fit();
+    }
 
     if (gEng.view.visible && gLocal) {
         int tex = p.style.texSize;

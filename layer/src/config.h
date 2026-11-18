@@ -17,7 +17,7 @@ bool ParseInput(const std::string& s, InputId& out);
 std::string InputName(const InputId& i);
 int ParseCompName(const std::string& s); // "trigger", "primary", ... -> Comp or -1
 
-enum class ActType { None, Key, Sequence, XrInput, Wheel, Back, Close, Layer, Reload, Keyboard, Page, Adjust };
+enum class ActType { None, Key, Sequence, XrInput, Wheel, Back, Close, Layer, Reload, Keyboard, Page, Adjust, Screen };
 
 struct Action {
     ActType type = ActType::None;
@@ -30,6 +30,9 @@ struct Action {
     std::string layer;         // layer: name
     std::string page;          // page: wrist panel page name
     InputId target;            // xr_input: game input to fake
+    // screen: mode toggle|on|off|next_monitor|prev_monitor|next_fps|next_place
+    std::string place;         // screen: where to show it when turned on (empty = the profile's place)
+    int monitor = -1;          // screen: which monitor when turned on (-1 = keep, 0 = main, 1..N left to right)
 };
 
 struct Binding {
@@ -115,6 +118,23 @@ struct PointerStyle {
     bool guide = true;              // keep a short laser showing while a wrist panel is up
 };
 
+// A desktop monitor shown in VR (mirrored with Desktop Duplication).
+struct ScreenStyle {
+    int monitor = 0;                // 0 = the main monitor, 1..N = monitors from left to right
+    int fps = 30;                   // capture rate cap; 0 = as fast as the headset draws
+    std::vector<int> fpsSteps{ 10, 15, 30, 60, 0 }; // what "next frame rate" cycles through
+    std::string place = "wrist_left"; // wrist_left|wrist_right|front|head
+    // on a forearm
+    float wristWidth = 0.16f, towardElbow = 0.14f, lift = 0.03f, side = 0.f, rotateDeg = 0.f;
+    std::string face = "back";      // back = watch side, inner = palm side
+    // front (placed in front of you when shown) / head (follows your view)
+    float width = 0.8f, distance = 0.9f, below = 0.05f;
+    int maxPx = 0;                  // widest captured image in pixels (0 = 1920, or 1280 in 32-bit games)
+    float opacity = 1.f;
+    bool cursor = true;             // draw the mouse pointer
+    bool startOn = false;           // shown when the game starts
+};
+
 struct Profile {
     std::string sourceName;
     PointerStyle pointer;
@@ -127,6 +147,7 @@ struct Profile {
     Style style;
     Selection sel;
     KbStyle kb;
+    ScreenStyle screen;
     WristStyle wrist[2];            // [0] left forearm, [1] right forearm; each is pressed by the other hand
     // The panel whose pages a forearm shows (either one can mirror the other, not both).
     const WristStyle& WristPages(int h) const { return wrist[h].mirror ? wrist[1 - h] : wrist[h]; }

@@ -2,6 +2,8 @@
 #include <fstream>
 #include "../src/panel.h"
 #include "../src/keys.h"
+#include "../src/screen.h"
+#include <thread>
 #include <cstdio>
 #include <objidl.h>
 #include <algorithm>
@@ -350,6 +352,64 @@ int main(int argc, char** argv) {
               && std::fabs(back->wrist[1].size - 0.13f) < 1e-4f && back->wrist[0].textUp == "custom" && std::fabs(back->wrist[0].rotateDeg - 33.f) < 0.1f && back->wheels.size() == q->wheels.size(),
               ("adjust: positions are saved to the profile file and the rest is kept " + serr).c_str());
         DeleteFileW(path.c_str());
+    }
+
+    // ---------------- mirrored screen: actions
+    {
+        auto q = ParseProfileText(DefaultProfileJson(), err);
+        q->screen.fpsSteps = { 15, 30, 60, 0 }; q->screen.fps = 30;
+        Engine e; e.SetProfile(q);
+        Frame f; f.headValid = true; f.head.orientation.w = 1; f.h[0].gripValid = true; f.h[0].gripPose.orientation.w = 1;
+        double t = 0; auto step = [&] { t += 0.011; f.t = t; e.Update(f); };
+        Action tg; tg.type = ActType::Screen; tg.mode = "toggle"; tg.place = "wrist_left";
+        CHECK(!e.screen.on, "screen: off at start (start_on false)");
+        e.ScreenAction(tg); step();
+        CHECK(e.screen.on && e.screen.place == "wrist_left" && e.screen.poseValid && e.IsOn(tg), "screen: wrist button turns it on, on the left wrist");
+        Action fr2 = tg; fr2.place = "front";
+        e.ScreenAction(fr2); step();
+        CHECK(e.screen.on && e.screen.place == "front" && e.screen.poseValid && !e.IsOn(tg) && e.IsOn(fr2), "screen: a button for another place moves it there");
+        CHECK(e.screen.pose.position.z < -0.5f, "screen: front is placed in front of the head");
+        e.ScreenAction(fr2); step();
+        CHECK(!e.screen.on && !e.screen.poseValid, "screen: the same button turns it off");
+        Action nf; nf.type = ActType::Screen; nf.mode = "next_fps";
+        e.ScreenAction(nf); CHECK(e.screen.fps == 60, "screen: next frame rate 30 -> 60");
+        e.ScreenAction(nf); CHECK(e.screen.fps == 0, "screen: next frame rate 60 -> every frame");
+        e.ScreenAction(nf); CHECK(e.screen.fps == 15, "screen: next frame rate wraps to 15");
+        e.screen.monitorCount = 3; e.screen.primaryIndex = 2; e.screen.monitor = 0;
+        Action nm; nm.type = ActType::Screen; nm.mode = "next_monitor";
+        e.ScreenAction(nm); CHECK(e.screen.monitor == 3 && e.screen.on, "screen: next monitor from the main one (2 of 3) is 3, and shows it");
+        e.ScreenAction(nm); CHECK(e.screen.monitor == 1, "screen: next monitor wraps 3 -> 1");
+        nm.mode = "prev_monitor"; e.ScreenAction(nm); CHECK(e.screen.monitor == 3, "screen: previous monitor wraps 1 -> 3");
+        Action np; np.type = ActType::Screen; np.mode = "next_place";
+        e.screen.place = "head"; e.ScreenAction(np); CHECK(e.screen.place == "wrist_left", "screen: next place cycles head -> left wrist");
+        std::string perr;
+        auto bad = ParseProfileText(R"({"bindings":[{"name":"x","input":"left.x","action":{"type":"screen","place":"ceiling"}}]})", perr);
+        CHECK(!bad, "screen: unknown place is a profile error");
+    }
+    // ---------------- mirrored screen: real capture on this PC
+    {
+        auto mons = ScreenCapture::Monitors();
+        printf("monitors found: %d\n", (int)mons.size());
+        for (size_t i = 0; i < mons.size(); i++) printf("  %d: %dx%d at %d,%d%s\n", (int)i + 1, mons[i].w, mons[i].h, mons[i].x, mons[i].y, mons[i].primary ? " (main)" : "");
+        for (int m = 0; m <= (int)mons.size() && !mons.empty(); m++) {
+            ScreenCapture c; c.Configure(m, 30, getenv("VRO_SCREEN_MAXW") ? atoi(getenv("VRO_SCREEN_MAXW")) : 1280, true, 1.f);
+            std::vector<uint32_t> px; int w = 0, h = 0; bool got = false;
+            for (int i = 0; i < 300 && !got; i++) { got = c.TakeFrame(px, w, h); if (!got) std::this_thread::sleep_for(std::chrono::milliseconds(10)); }
+            int n, prim, shown; std::string msg; uint64_t mv; c.Status(n, prim, shown, msg, mv);
+            char b[256]; snprintf(b, sizeof b, "screen: capture monitor setting %d -> %dx%d (%s)", m, w, h, msg.c_str());
+            CHECK(got && w > 0 && (int)px.size() == w * h, b);
+            if (got && getenv("VRO_SCREEN_BMP")) { // look at what was captured
+                std::string fn = std::string(getenv("VRO_SCREEN_BMP")) + std::to_string(m) + ".bmp";
+                FILE* fo = fopen(fn.c_str(), "wb");
+                if (fo) {
+                    BITMAPFILEHEADER fh{}; BITMAPINFOHEADER ih{};
+                    ih.biSize = sizeof ih; ih.biWidth = w; ih.biHeight = -h; ih.biPlanes = 1; ih.biBitCount = 32;
+                    fh.bfType = 0x4D42; fh.bfOffBits = sizeof fh + sizeof ih; fh.bfSize = fh.bfOffBits + w * h * 4;
+                    fwrite(&fh, sizeof fh, 1, fo); fwrite(&ih, sizeof ih, 1, fo); fwrite(px.data(), 4, px.size(), fo); fclose(fo);
+                }
+            }
+            c.Stop();
+        }
     }
 
     printf("\n%d failures\n", fails);

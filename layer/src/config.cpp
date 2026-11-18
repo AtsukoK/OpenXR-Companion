@@ -109,6 +109,7 @@ static Action ParseAction(const json& j, const std::string& ctx) {
     else if (t == "keyboard") a.type = ActType::Keyboard;
     else if (t == "page") a.type = ActType::Page;
     else if (t == "adjust") a.type = ActType::Adjust;
+    else if (t == "screen") a.type = ActType::Screen;
     else if (t == "none" || t.empty()) a.type = ActType::None;
     else throw std::runtime_error(ctx + ": unknown action type '" + t + "'");
     Get(j, "keys", a.keys);
@@ -119,7 +120,12 @@ static Action ParseAction(const json& j, const std::string& ctx) {
     Get(j, "page", a.page);
     Get(j, "confirm", a.confirm); a.confirm = Lower(a.confirm);
     Get(j, "layer", a.layer);
+    Get(j, "place", a.place); a.place = Lower(a.place);
+    Get(j, "monitor", a.monitor);
     if (a.mode.empty()) a.mode = "tap";
+    if (a.type == ActType::Screen && (a.mode == "tap" || a.mode == "hold")) a.mode = "toggle";
+    if (a.type == ActType::Screen && !a.place.empty() && a.place != "wrist_left" && a.place != "wrist_right" && a.place != "front" && a.place != "head")
+        throw std::runtime_error(ctx + ": screen place must be wrist_left, wrist_right, front or head");
     if (a.confirm.empty()) a.confirm = "auto";
     if (a.type == ActType::Layer && a.mode == "tap") a.mode = "toggle";
     if (j.contains("target")) {
@@ -195,6 +201,28 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
         Get(k, "width_m", p->kb.width); Get(k, "distance_m", p->kb.distance);
         Get(k, "below_eyes_m", p->kb.below); Get(k, "close_on_enter", p->kb.closeOnEnter);
         p->kb.width = std::clamp(p->kb.width, 0.2f, 1.5f);
+    }
+
+    if (j.contains("screen")) {
+        auto& k = j["screen"]; auto& S = p->screen;
+        Get(k, "monitor", S.monitor); Get(k, "fps", S.fps);
+        if (k.contains("fps_steps") && k["fps_steps"].is_array()) {
+            S.fpsSteps.clear();
+            for (auto& v : k["fps_steps"]) if (v.is_number()) S.fpsSteps.push_back(std::clamp(v.get<int>(), 0, 240));
+            if (S.fpsSteps.empty()) S.fpsSteps = { 10, 15, 30, 60, 0 };
+        }
+        Get(k, "place", S.place); S.place = Lower(S.place);
+        if (S.place != "wrist_left" && S.place != "wrist_right" && S.place != "front" && S.place != "head") S.place = "wrist_left";
+        Get(k, "wrist_width_m", S.wristWidth); Get(k, "toward_elbow_m", S.towardElbow); Get(k, "lift_m", S.lift);
+        Get(k, "side_m", S.side); Get(k, "rotate_deg", S.rotateDeg); Get(k, "face", S.face); S.face = Lower(S.face);
+        if (S.face != "back" && S.face != "inner") S.face = "back";
+        Get(k, "width_m", S.width); Get(k, "distance_m", S.distance); Get(k, "below_eyes_m", S.below);
+        Get(k, "max_width_px", S.maxPx); Get(k, "opacity", S.opacity);
+        Get(k, "cursor", S.cursor); Get(k, "start_on", S.startOn);
+        S.monitor = std::clamp(S.monitor, 0, 16); S.fps = std::clamp(S.fps, 0, 240);
+        S.wristWidth = std::clamp(S.wristWidth, 0.04f, 0.6f); S.width = std::clamp(S.width, 0.1f, 4.f);
+        S.distance = std::clamp(S.distance, 0.2f, 5.f); S.opacity = std::clamp(S.opacity, 0.1f, 1.f);
+        S.maxPx = std::clamp(S.maxPx, 0, 7680);
     }
 
     if (j.contains("bindings")) {
@@ -431,6 +459,7 @@ const char* DefaultProfileJson() {
       { "label": "Reload profile", "action": { "type": "reload" } }
     ] }
   },
+  "screen": { "monitor": 0, "fps": 30, "fps_steps": [10, 15, 30, 60, 0], "place": "wrist_left", "wrist_width_m": 0.16, "width_m": 0.8, "distance_m": 0.9 },
   "wrist_left": {
     "enabled": true, "mirror": false, "face": "inner", "text_up": "custom", "rotate_deg": -140.3, "press": "both", "columns": 3,
     "size_m": 0.073, "toward_elbow_m": 0.06, "lift_m": 0.022, "side_m": 0.085,
@@ -450,7 +479,16 @@ const char* DefaultProfileJson() {
         { "label": "Screenshot", "action": { "type": "key", "keys": "F12" } },
         { "label": "Adjust positions", "action": { "type": "adjust" } },
         { "label": "Reload profile", "action": { "type": "reload" } },
+        { "label": "Screen", "action": { "type": "page", "page": "Screen (sub-page)" } },
         { "label": "Hide", "action": { "type": "close" } }
+      ] },
+      "Screen (sub-page)": { "title": "Screen", "items": [
+        { "label": "On my wrist", "action": { "type": "screen", "mode": "toggle", "place": "wrist_left" } },
+        { "label": "In front of me", "action": { "type": "screen", "mode": "toggle", "place": "front" } },
+        { "label": "Next monitor", "action": { "type": "screen", "mode": "next_monitor" } },
+        { "label": "Frame rate", "action": { "type": "screen", "mode": "next_fps" } },
+        { "label": "Move it", "action": { "type": "screen", "mode": "next_place" } },
+        { "label": "Screen off", "action": { "type": "screen", "mode": "off" } }
       ] }
     }
   },
