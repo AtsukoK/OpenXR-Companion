@@ -244,6 +244,7 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
         Get(k, "max_width_px", S.maxPx); Get(k, "opacity", S.opacity);
         Get(k, "cursor", S.cursor); Get(k, "start_on", S.startOn);
         Get(k, "interact", S.interact); Get(k, "refocus_game", S.refocus);
+        Get(k, "bar_scale", S.barScale); S.barScale = std::clamp(S.barScale, 0.3f, 2.f);
         if (k.contains("poses")) ParsePoses(k["poses"], S.poses);
         S.monitor = std::clamp(S.monitor, 0, 16); S.fps = std::clamp(S.fps, 0, 240);
         S.wristWidth = std::clamp(S.wristWidth, 0.04f, 0.6f); S.width = std::clamp(S.width, 0.1f, 4.f);

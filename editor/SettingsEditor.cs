@@ -153,6 +153,8 @@ public class SettingsEditor : EditorBase
         scr.AddRow("", Check("Show the mouse pointer", sc.Cursor, v => sc.Cursor = v));
         scr.AddRow("", Check("Use the desktop by pointing at it", sc.Interact, v => sc.Interact = v),
             "Point at the screen: the mouse follows. Trigger = left click (hold to drag), A / X = right click, stick up/down = scroll. While pointing, those buttons don't reach the game.");
+        scr.AddRow("Button bar size", Num(0.3m, 2, 0.05m, 2, sc.BarScale, v => sc.BarScale = v),
+            "The bar under the screen (Choose, Frame rate, Move, Keyboard, Adjust, Hide). 1 = as wide as the screen, 0.7 = the default.");
         scr.AddRow("", Check("Give the game its window back after clicking", sc.RefocusGame, v => sc.RefocusGame = v),
             "Clicking on the desktop takes the focus from the game; this hands it back when you point away.");
         scr.AddRow("Placed by hand", ResetPose(() => sc.Poses is { Count: > 0 }, () => sc.Poses = null),

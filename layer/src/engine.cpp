@@ -869,13 +869,27 @@ bool Engine::PanelRay(int h, const XrPosef& pose, float w, float hgt, float& u, 
 }
 
 void Engine::OpenPicker() {
-    screen.pickOpen = true; pickPage = 0;
+    screen.pickOpen = true; pickPage = 0; pickMode = 0;
     screen.wantChoices = true; // the layer fills the list
     BuildPicker();
 }
 
 // The picker's cells for the current page: choices, then page buttons and Close.
+static const char* kPlaces[4] = { "wrist_left", "wrist_right", "front", "head" };
+static const char* kPlaceNames[4] = { "Left wrist", "Right wrist", "In front of me\nstays where it appears", "Following my view" };
+
 void Engine::BuildPicker() {
+    if (pickMode == 1) { // where to put the screen
+        pickMap.clear(); screen.pickLabels.clear();
+        for (int i = 0; i < 4; i++) {
+            pickMap.push_back(i);
+            screen.pickLabels.push_back((screen.place == kPlaces[i] ? "\xE2\x80\xA2 " : "") + std::string(kPlaceNames[i]));
+        }
+        pickMap.push_back(-3); screen.pickLabels.push_back("Cancel");
+        screen.pickTitle = "Move the screen to";
+        screen.pickHover = -1; screen.uiVersion++;
+        return;
+    }
     const int perPage = 12;
     int n = (int)screen.choices.size();
     int pages = std::max(1, (n + perPage - 1) / perPage);
@@ -896,6 +910,14 @@ void Engine::BuildPicker() {
 void Engine::PickerActivate(int cell) {
     if (cell < 0 || cell >= (int)pickMap.size()) return;
     int k = pickMap[cell];
+    if (pickMode == 1) {
+        screen.pickOpen = false; screen.uiVersion++;
+        if (k >= 0 && screen.place != kPlaces[k]) {
+            screen.place = kPlaces[k]; screenPlaceFront = true;
+            Toast(std::string("Screen: ") + kPlaceNames[k], 1.5);
+        }
+        return;
+    }
     if (k == -1) { pickPage--; BuildPicker(); return; }
     if (k == -2) { pickPage++; BuildPicker(); return; }
     screen.pickOpen = false; screen.uiVersion++;
@@ -909,10 +931,18 @@ void Engine::PickerActivate(int cell) {
 
 void Engine::BarActivate(int cell) {
     Action a; a.type = ActType::Screen;
+    if (adjust) { Action d; d.type = ActType::Adjust; RunAction(d, -1, -1, true); return; } // the bar is just "Done"
     switch (cell) {
-    case 0: if (screen.pickOpen) { screen.pickOpen = false; screen.uiVersion++; } else OpenPicker(); return;
+    case 0: if (screen.pickOpen && pickMode == 0) { screen.pickOpen = false; screen.uiVersion++; } else OpenPicker(); return;
     case 1: a.mode = "next_fps"; break;
-    case 2: a.mode = "next_place"; break;
+    case 2:
+        if (screen.pickOpen && pickMode == 1) { screen.pickOpen = false; screen.uiVersion++; return; }
+        screen.pickOpen = true; pickMode = 1; BuildPicker(); return;
+    case 4: { // adjust positions: move the screen, wheel and wrist panels by hand
+        screen.pickOpen = false; screen.uiVersion++;
+        Action d; d.type = ActType::Adjust; RunAction(d, -1, -1, true);
+        return;
+    }
     case 3: // typing goes to the mirrored window: bring it up first
         screen.pickOpen = false; screen.uiVersion++;
         if (screen.source == "window" && screen.hwnd) Keys::BringToFront(screen.hwnd);
@@ -927,7 +957,8 @@ void Engine::BarActivate(int cell) {
 // Bar under the screen while you point at it, and the picker in front of it.
 void Engine::ScreenUi() {
     uiHand = -1;
-    bool live = screen.on && screen.poseValid && !adjust && !wr.open && !kb.visible && prof->screen.interact;
+    // In adjust mode the bar stays as one "Done" button (the screen shows then even while off).
+    bool live = screen.shown && screen.poseValid && (adjust || (screen.on && !wr.open)) && !kb.visible && prof->screen.interact;
     if (!live) {
         if (screen.barVisible || screen.pickOpen) { screen.barVisible = screen.pickOpen = false; screen.uiVersion++; }
         return;
@@ -935,13 +966,16 @@ void Engine::ScreenUi() {
     if (screen.choicesVersion != seenChoices) { seenChoices = screen.choicesVersion; if (screen.pickOpen) BuildPicker(); }
     // where they go: the bar just under the screen, the picker a little in front of it
     float sw = screen.widthM, sh = screen.widthM * screen.aspect;
-    screen.barW = std::max(sw, 0.26f); screen.barH = screen.barW / 7.5f;
+    screen.barW = std::max(sw, 0.26f) * prof->screen.barScale; screen.barH = screen.barW / (adjust ? 4.f : 8.5f);
+    if (adjust && screen.pickOpen) { screen.pickOpen = false; screen.uiVersion++; }
     Vec3 up = Rotate(screen.pose.orientation, { 0, 1, 0 }), nrm = Rotate(screen.pose.orientation, { 0, 0, 1 });
     screen.barPose = { screen.pose.orientation, X(V(screen.pose.position) - up * (sh / 2 + screen.barH / 2 + 0.006f) + nrm * 0.002f) };
     screen.pickW = std::max(sw * 0.9f, 0.36f); screen.pickH = screen.pickW * 0.95f;
     screen.pickPose = { screen.pose.orientation, X(V(screen.pose.position) + nrm * 0.03f) };
     std::string fps = screen.fps ? std::to_string(screen.fps) + " fps" : std::string("max fps");
-    std::vector<std::string> bar = { screen.pickOpen ? "Close list" : "Choose...", "Frame rate\n" + fps, "Move", "Keyboard", "Hide" };
+    bool listOpen = screen.pickOpen && pickMode == 0, moveOpen = screen.pickOpen && pickMode == 1;
+    std::vector<std::string> bar = adjust ? std::vector<std::string>{ "Done adjusting" }
+        : std::vector<std::string>{ listOpen ? "Close list" : "Choose...", "Frame rate\n" + fps, moveOpen ? "Cancel move" : "Move...", "Keyboard", "Adjust", "Hide" };
     if (bar != screen.barLabels) { screen.barLabels = bar; screen.uiVersion++; }
 
     bool onWrist = screen.place == "wrist_left" || screen.place == "wrist_right";
@@ -967,7 +1001,7 @@ void Engine::ScreenUi() {
         if (ScreenRay(g, u, v, t) && u > -0.1f && u < 1.1f && v > -0.1f && v < 1.3f) pointedAt = true;
     }
     if (pointedAt) barUntil = now + 2.0;
-    bool barVis = now < barUntil || screen.pickOpen;
+    bool barVis = now < barUntil || screen.pickOpen || adjust;
     if (barVis != screen.barVisible) { screen.barVisible = barVis; screen.uiVersion++; }
     if (!screen.barVisible) barHover = -1;
     if (barHover != screen.barHover || pickHover != screen.pickHover) {

@@ -221,6 +221,7 @@ public class ScreenModel
     [JsonPropertyName("start_on")] public bool StartOn { get; set; }
     [JsonPropertyName("interact")] public bool Interact { get; set; } = true;
     [JsonPropertyName("refocus_game")] public bool RefocusGame { get; set; } = true;
+    [JsonPropertyName("bar_scale")] public float BarScale { get; set; } = 0.7f;
     [JsonPropertyName("poses"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, List<float>> Poses { get; set; }
 }
 
