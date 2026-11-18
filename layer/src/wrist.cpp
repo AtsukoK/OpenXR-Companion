@@ -7,6 +7,23 @@
 
 static constexpr float kDeg = 3.14159265f / 180.f;
 
+void ListLayout(int n, int cols, float aspect, bool title, std::vector<Cell>& out, Cell& header) {
+    out.clear();
+    // work in units of the panel's width: x 0..1, y 0..aspect, then scale y back to 0..1
+    const float pad = 0.02f, gap = 0.012f, headH = title ? 0.07f : 0.f;
+    header = { pad, pad / aspect, 1 - 2 * pad, headH / aspect };
+    if (n <= 0) return;
+    cols = std::clamp(std::min(cols, n), 1, 8);
+    int rows = (n + cols - 1) / cols;
+    float top = pad + headH + (title ? gap : 0.f);
+    float cw = (1 - 2 * pad - gap * (cols - 1)) / cols;
+    float ch = (aspect - top - pad - gap * (rows - 1)) / rows;
+    for (int i = 0; i < n; i++) {
+        int r = i / cols, k = i % cols;
+        out.push_back({ pad + k * (cw + gap), (top + r * (ch + gap)) / aspect, cw, ch / aspect });
+    }
+}
+
 void WristLayout(int n, int cols, std::vector<Cell>& out, Cell& header) {
     out.clear();
     const float pad = 0.03f, gap = 0.02f, headH = 0.14f;

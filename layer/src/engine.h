@@ -68,8 +68,13 @@ struct WristView {
     bool adjust = false;    // adjust mode: the header says so
 };
 struct Cell { float x, y, w, h; }; // 0..1, y down
+// Title strip (optional) plus a grid, for a panel aspect = height / width; cells in 0..1 of each side.
+void ListLayout(int n, int cols, float aspect, bool title, std::vector<Cell>& out, Cell& header);
 // Header strip plus a grid; the same numbers are used for drawing and hit tests.
 void WristLayout(int count, int columns, std::vector<Cell>& out, Cell& header);
+
+// One entry of the screen picker: a monitor or an open window.
+struct ScreenChoice { std::string label; int monitor = -1; uintptr_t hwnd = 0; bool current = false; };
 
 // Mirrored desktop monitor. The engine decides if and where; the layer captures and draws it.
 struct ScreenView {
@@ -94,6 +99,19 @@ struct ScreenView {
     // Pointing at it: which hand moves the mouse (-1 = none), and whether pointing works right now.
     int hoverHand = -1;
     bool interactive = false;
+    // Button bar under the screen (shown while you point at it) and the picker (monitors + windows).
+    bool barVisible = false, pickOpen = false;
+    XrPosef barPose{ {0,0,0,1}, {0,0,0} }, pickPose{ {0,0,0,1}, {0,0,0} };
+    float barW = 0.3f, barH = 0.04f, pickW = 0.4f, pickH = 0.44f;
+    int barHover = -1, pickHover = -1, barPressed = -1, pickPressed = -1;
+    std::vector<std::string> barLabels, pickLabels;
+    std::string pickTitle;
+    int pickCols = 2;
+    uint64_t uiVersion = 0;
+    // The engine asks for the list; the layer fills it (monitors first, then windows).
+    bool wantChoices = false;
+    std::vector<ScreenChoice> choices;
+    uint64_t choicesVersion = 0;
 };
 
 struct HapticReq { int hand; float amp; float sec; };
@@ -173,6 +191,15 @@ private:
     bool mouseL = false, mouseR = false, screenClicked = false;
     int lastMx = -1, lastMy = -1; float wheelAcc = 0; double screenLeftAt = -1;
     void ScreenInteract();
+    void ScreenUi();
+    bool PanelRay(int h, const XrPosef& pose, float w, float hgt, float& u, float& v) const;
+    int pickPage = 0; std::vector<int> pickMap; uint64_t seenChoices = 0;
+    double barUntil = -1, uiFlashUntil = 0;
+    int uiHand = -1;            // the hand on the bar or picker this frame
+    void OpenPicker();
+    void BuildPicker();
+    void PickerActivate(int cell);
+    void BarActivate(int cell);
     bool ScreenRay(int h, float& u, float& v, float& t) const;
     void UpdateScreen();
     void ScreenPose();

@@ -116,6 +116,7 @@ static int gDrawnCursor[2] = { -1, -1 };
 static Panel gDotPanel, gBeamPanel; static bool gDrawnPointer = false;
 static Panel gFingerPanel; static bool gDrawnFinger = false;
 static uint64_t gWinAsk = 0;
+static Panel gBarPanel, gPickPanel; static uint64_t gDrawnBar = ~0ull, gDrawnPick = ~0ull;
 static Panel gScreenPanel; static ScreenCapture gCap; static std::vector<uint32_t> gScreenPix; static uint64_t gScreenMsgVer = 0;
 static uint64_t gDrawnKb = ~0ull;
 static uint64_t gDrawnWheel = ~0ull, gDrawnToast = ~0ull;
@@ -367,7 +368,7 @@ static XrResult XRAPI_CALL Hook_xrCreateSession(XrInstance inst, const XrSession
 }
 
 static void DestroySessionStuff() {
-    gWheelPanel.Destroy(gSwap); gToastPanel.Destroy(gSwap); gKbPanel.Destroy(gSwap); gDrawnKb = ~0ull; for (int h = 0; h < 2; h++) { gWristPanel[h].Destroy(gSwap); gDrawnWrist[h] = ~0ull; gCursorPanel[h].Destroy(gSwap); gDrawnCursor[h] = -1; } gDotPanel.Destroy(gSwap); gBeamPanel.Destroy(gSwap); gDrawnPointer = false; gFingerPanel.Destroy(gSwap); gDrawnFinger = false; gScreenPanel.Destroy(gSwap); gCap.Stop();
+    gWheelPanel.Destroy(gSwap); gToastPanel.Destroy(gSwap); gKbPanel.Destroy(gSwap); gDrawnKb = ~0ull; for (int h = 0; h < 2; h++) { gWristPanel[h].Destroy(gSwap); gDrawnWrist[h] = ~0ull; gCursorPanel[h].Destroy(gSwap); gDrawnCursor[h] = -1; } gDotPanel.Destroy(gSwap); gBeamPanel.Destroy(gSwap); gDrawnPointer = false; gFingerPanel.Destroy(gSwap); gDrawnFinger = false; gScreenPanel.Destroy(gSwap); gCap.Stop(); gBarPanel.Destroy(gSwap); gPickPanel.Destroy(gSwap); gDrawnBar = gDrawnPick = ~0ull;
     for (int h = 0; h < 2; h++) {
         if (gGripSp[h]) N.DestroySpace(gGripSp[h]);
         if (gAimSp[h]) N.DestroySpace(gAimSp[h]);
@@ -592,6 +593,27 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
             }
         }
         if (sv.source != "window") sv.hwnd = 0;
+        if (sv.wantChoices) { // picker list: monitors, then open windows
+            sv.wantChoices = false;
+            std::vector<ScreenChoice> ch;
+            auto mons = ScreenCapture::Monitors();
+            for (int i = 0; i < (int)mons.size(); i++) {
+                ScreenChoice c; c.monitor = i + 1;
+                c.label = "Monitor " + std::to_string(i + 1) + (mons[i].primary ? " (main)" : "") + "\n" + std::to_string(mons[i].w) + " x " + std::to_string(mons[i].h);
+                int curMon = sv.monitor == 0 ? sv.primaryIndex : sv.monitor;
+                c.current = sv.source != "window" && curMon == i + 1;
+                ch.push_back(c);
+            }
+            for (auto& w : ScreenCapture::Windows()) {
+                ScreenChoice c; c.hwnd = w.hwnd;
+                std::string exe = w.exe; size_t dot = exe.rfind('.'); if (dot != std::string::npos) exe = exe.substr(0, dot);
+                std::string t = w.title.size() > 60 ? w.title.substr(0, 57) + "..." : w.title;
+                c.label = exe + "\n" + t;
+                c.current = sv.source == "window" && sv.hwnd == w.hwnd;
+                ch.push_back(c);
+            }
+            sv.choices = std::move(ch); sv.choicesVersion++;
+        }
         gCap.Configure(sv.monitor, sv.hwnd, sv.fps, maxW, S.cursor, S.opacity);
         int n, prim, shown; std::string msg; uint64_t mv;
         gCap.Status(n, prim, shown, msg, mv);
@@ -618,8 +640,27 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
             sq.size = { gEng.screen.widthM, gEng.screen.widthM * gScreenPanel.h / gScreenPanel.w };
             layers.push_back((const XrCompositionLayerBaseHeader*)&sq);
         }
+        // button bar under the screen and the picker in front of it
+        static XrCompositionLayerQuad bq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, kq2{ XR_TYPE_COMPOSITION_LAYER_QUAD };
+        auto drawPanel = [&](Panel& pn, uint64_t& drawn, int W, int H, const std::string& title, const std::vector<std::string>& labels, int cols, int hover, int pressed,
+                             XrCompositionLayerQuad& q, const XrPosef& pose, float wM, float hM) {
+            if (pn.sc && (pn.w != W || pn.h != H)) { pn.Destroy(gSwap); drawn = ~0ull; }
+            if (!pn.sc) pn.Create(gSess, gGfx, gSwap, W, H);
+            if (pn.sc && drawn != gEng.screen.uiVersion) { std::vector<uint32_t> px; DrawList(px, W, H, title, labels, cols, hover, pressed, p.style); if (pn.Upload(gGfx, gSwap, px)) drawn = gEng.screen.uiVersion; }
+            if (!pn.ready) return;
+            q = XrCompositionLayerQuad{ XR_TYPE_COMPOSITION_LAYER_QUAD };
+            q.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT; q.space = gLocal; q.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
+            q.subImage.swapchain = pn.sc; q.subImage.imageRect = { {0, 0}, {W, H} };
+            q.pose = pose; q.size = { wM, hM };
+            layers.push_back((const XrCompositionLayerBaseHeader*)&q);
+        };
+        if (sv.barVisible && sv.poseValid)
+            drawPanel(gBarPanel, gDrawnBar, 1200, (int)(1200 * sv.barH / sv.barW), "", sv.barLabels, (int)sv.barLabels.size(), sv.barHover, sv.barPressed, bq, sv.barPose, sv.barW, sv.barH);
+        if (sv.pickOpen && sv.poseValid)
+            drawPanel(gPickPanel, gDrawnPick, 1000, (int)(1000 * sv.pickH / sv.pickW), sv.pickTitle, sv.pickLabels, sv.pickCols, sv.pickHover, sv.pickPressed, kq2, sv.pickPose, sv.pickW, sv.pickH);
     } else if (gCap.Running() || gScreenPanel.sc) {
         gCap.Stop(); gScreenPanel.Destroy(gSwap); gScreenPix.clear(); gScreenPix.shrink_to_fit();
+        gBarPanel.Destroy(gSwap); gPickPanel.Destroy(gSwap); gDrawnBar = gDrawnPick = ~0ull;
     }
 
     if (gEng.view.visible && gLocal) {

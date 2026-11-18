@@ -435,6 +435,59 @@ void DrawKeyboard(std::vector<uint32_t>& out, int W, int Hp, const KeyboardView&
     Grab(bmp, out, W, Hp);
 }
 
+void DrawList(std::vector<uint32_t>& out, int W, int H, const std::string& title, const std::vector<std::string>& labels,
+              int cols, int hover, int pressed, const Style& st) {
+    EnsureGdi();
+    Bitmap bmp(W, H, PixelFormat32bppPARGB);
+    Graphics g(&bmp);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+    g.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);
+    g.Clear(Color(0, 0, 0, 0));
+    std::vector<Cell> cells; Cell hd;
+    ListLayout((int)labels.size(), cols, (float)H / W, !title.empty(), cells, hd);
+    auto roundRect = [](GraphicsPath& gp, float x, float y, float w, float h, float r) {
+        r = std::max(1.f, std::min(r, std::min(w, h)));
+        gp.AddArc(x, y, r, r, 180, 90); gp.AddArc(x + w - r, y, r, r, 270, 90);
+        gp.AddArc(x + w - r, y + h - r, r, r, 0, 90); gp.AddArc(x, y + h - r, r, r, 90, 90); gp.CloseFigure();
+    };
+    GraphicsPath bgp; roundRect(bgp, 1, 1, W - 2.f, H - 2.f, std::min(W, H) * 0.12f);
+    SolidBrush bg{ Color(st.bg) }; g.FillPath(&bg, &bgp);
+    Pen edge(Color(st.border), 2.f); g.DrawPath(&edge, &bgp);
+    StringFormat fmt; fmt.SetAlignment(StringAlignmentCenter); fmt.SetLineAlignment(StringAlignmentCenter);
+    fmt.SetTrimming(StringTrimmingEllipsisCharacter);
+    SolidBrush textB{ Color(st.text) }, accentB{ Color(st.accent) }, darkB{ Color(0xFF101418) };
+    if (!title.empty()) {
+        auto hf = MakeFont(st, hd.h * H * 0.62f * st.fontScale, FontStyleBold);
+        RectF hr(hd.x * W, hd.y * H, hd.w * W, hd.h * H);
+        g.DrawString(Utf8ToW(title).c_str(), -1, hf.get(), hr, &fmt, &accentB);
+    }
+    float cellH = cells.empty() ? 1.f : cells[0].h * H;
+    auto font = MakeFont(st, std::max(9.f, cellH * 0.26f) * st.fontScale, FontStyleBold);
+    auto subFont = MakeFont(st, std::max(8.f, cellH * 0.2f) * st.fontScale, FontStyleRegular);
+    Pen hovPen(Color(st.border | 0xFF000000u), 3.f);
+    for (int i = 0; i < (int)cells.size(); i++) {
+        const Cell& c = cells[i];
+        float x = c.x * W, y = c.y * H, w = c.w * W, h = c.h * H;
+        uint32_t col = hover == i ? st.hover : st.segment;
+        if (pressed == i) col = 0xFFFFFFFF;
+        GraphicsPath cp; roundRect(cp, x, y, w, h, h * 0.25f);
+        SolidBrush cb{ Color(col) }; g.FillPath(&cb, &cp);
+        if (hover == i) g.DrawPath(&hovPen, &cp);
+        const std::string& lab = labels[i];
+        size_t nl = lab.find('\n');
+        Brush* tb = pressed == i ? (Brush*)&darkB : (Brush*)&textB;
+        if (nl == std::string::npos) {
+            RectF rc(x + 4, y + 2, w - 8, h - 4);
+            g.DrawString(Utf8ToW(lab).c_str(), -1, font.get(), rc, &fmt, tb);
+        } else {
+            RectF r1(x + 4, y + 2, w - 8, h * 0.5f - 2), r2(x + 4, y + h * 0.5f, w - 8, h * 0.5f - 2);
+            g.DrawString(Utf8ToW(lab.substr(0, nl)).c_str(), -1, font.get(), r1, &fmt, tb);
+            g.DrawString(Utf8ToW(lab.substr(nl + 1)).c_str(), -1, subFont.get(), r2, &fmt, tb);
+        }
+    }
+    Grab(bmp, out, W, H);
+}
+
 void DrawWrist(std::vector<uint32_t>& out, int S, const Profile& p, const WristStyle& ws, const WristView& v) {
     EnsureGdi();
     Bitmap bmp(S, S, PixelFormat32bppPARGB);

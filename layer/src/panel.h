@@ -50,3 +50,6 @@ void DrawCursor(std::vector<uint32_t>& out, int size, int level, const Style& st
 void DrawPointerDot(std::vector<uint32_t>& out, int size, const Style& st);
 void DrawBeam(std::vector<uint32_t>& out, int w, int h, const Style& st);
 void DrawShutdown();
+// Buttons in a grid (see ListLayout); labels may hold a second line after '\n'.
+void DrawList(std::vector<uint32_t>& out, int w, int h, const std::string& title, const std::vector<std::string>& labels,
+              int cols, int hover, int pressed, const Style& st);

@@ -45,6 +45,7 @@ public static class Choices
     {
         new("toggle", "Show / hide it (pressing it again hides it)"), new("on", "Show it"), new("off", "Hide it"),
         new("next_monitor", "Switch to the next monitor"), new("prev_monitor", "Switch to the previous monitor"),
+        new("choose", "Open the list of monitors and windows to pick from"),
         new("next_window", "Switch to the next open window (browser, Discord, ...)"), new("prev_window", "Switch to the previous open window"),
         new("next_fps", "Next frame rate (from Settings > Screen mirror)"), new("next_place", "Move it: left wrist, right wrist, in front, following view"),
     };

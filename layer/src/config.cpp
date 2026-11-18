@@ -528,7 +528,7 @@ const char* DefaultProfileJson() {
         { "label": "On my wrist", "action": { "type": "screen", "mode": "toggle", "place": "wrist_left" } },
         { "label": "In front of me", "action": { "type": "screen", "mode": "toggle", "place": "front" } },
         { "label": "Next monitor", "action": { "type": "screen", "mode": "next_monitor" } },
-        { "label": "Next window", "action": { "type": "screen", "mode": "next_window" } },
+        { "label": "Choose window", "action": { "type": "screen", "mode": "choose" } },
         { "label": "Frame rate", "action": { "type": "screen", "mode": "next_fps" } },
         { "label": "Move it", "action": { "type": "screen", "mode": "next_place" } },
         { "label": "Screen off", "action": { "type": "screen", "mode": "off" } }

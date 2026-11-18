@@ -508,6 +508,63 @@ int main(int argc, char** argv) {
             c.Stop();
         }
     }
+    // ---------------- mirrored screen: button bar and picker
+    {
+        Keys::SetDryRun(true);
+        auto q = ParseProfileText(DefaultProfileJson(), err);
+        q->screen.place = "front"; q->screen.distance = 1.0f; q->screen.below = 0.f; q->screen.width = 1.0f;
+        Engine e; e.SetProfile(q);
+        Frame f; f.headValid = true; f.head = XrPosef{ {0,0,0,1}, {0, 1.6f, 0} };
+        for (int h = 0; h < 2; h++) { f.h[h].gripValid = f.h[h].aimValid = true; f.h[h].gripPose.orientation.w = f.h[h].aimPose.orientation.w = 1; }
+        f.h[0].gripPose.position = f.h[0].aimPose.position = { -0.3f, 1.0f, -0.2f };
+        f.h[1].gripPose.position = { 0.3f, 1.0f, -0.2f };
+        f.h[1].aimPose.position = { 0.f, 1.6f, -0.2f };
+        double t = 0; auto step = [&](int n = 1) { for (int i = 0; i < n; i++) { t += 0.011; f.t = t; e.Update(f); } };
+        e.screen.monX = 0; e.screen.monY = 0; e.screen.monW = 1920; e.screen.monH = 1080; e.screen.aspect = 9.f / 16.f;
+        Action on; on.type = ActType::Screen; on.mode = "on"; e.ScreenAction(on);
+        step(2);
+        CHECK(e.screen.barVisible && e.screen.barLabels.size() == 5, "screen bar: pointing at the screen shows its button bar");
+        auto aimAt = [&](const XrPosef& pose, float w, float h, const Cell& c) { // point the right laser at a cell's middle
+            Vec3 local{ (c.x + c.w / 2 - 0.5f) * w, (0.5f - (c.y + c.h / 2)) * h, 0 };
+            Vec3 p = V(pose.position) + Rotate(pose.orientation, local);
+            f.h[1].aimPose.position = X(p + Vec3{ 0, 0, 0.5f });
+        };
+        std::vector<Cell> cells; Cell hd;
+        ListLayout(5, 5, e.screen.barH / e.screen.barW, false, cells, hd);
+        aimAt(e.screen.barPose, e.screen.barW, e.screen.barH, cells[0]); step(2);
+        CHECK(e.screen.barHover == 0 && e.screen.hoverHand < 0, "screen bar: the laser on 'Choose...' highlights it and doesn't move the mouse");
+        f.h[1].trig = 1.f; step(2); f.h[1].trig = 0.f; step(2);
+        CHECK(e.screen.pickOpen && e.screen.wantChoices, "screen bar: 'Choose...' opens the picker and asks for the list");
+        e.screen.wantChoices = false;
+        e.screen.choices.clear();
+        { ScreenChoice c; c.label = "Monitor 1\n1920 x 1080"; c.monitor = 1; e.screen.choices.push_back(c); }
+        for (int i = 0; i < 15; i++) { ScreenChoice c; c.label = "app" + std::to_string(i) + "\nWindow " + std::to_string(i); c.hwnd = 1000 + i; e.screen.choices.push_back(c); }
+        e.screen.choicesVersion++; step(2);
+        CHECK(e.screen.pickLabels.size() == 14 && e.screen.pickLabels[12] == "More \xE2\x80\xBA", "screen picker: 12 per page, then More and Close");
+        ListLayout((int)e.screen.pickLabels.size(), e.screen.pickCols, e.screen.pickH / e.screen.pickW, true, cells, hd);
+        aimAt(e.screen.pickPose, e.screen.pickW, e.screen.pickH, cells[3]); step(2);
+        CHECK(e.screen.pickHover == 3, "screen picker: the laser highlights an entry");
+        {
+            std::vector<uint32_t> px; int W = 1000, H = (int)(1000 * e.screen.pickH / e.screen.pickW);
+            DrawList(px, W, H, e.screen.pickTitle, e.screen.pickLabels, e.screen.pickCols, e.screen.pickHover, -1, q->style);
+            SavePng(px, W, H, L"screen_picker.png");
+            int BW = 1200, BH = (int)(1200 * e.screen.barH / e.screen.barW);
+            DrawList(px, BW, BH, "", e.screen.barLabels, (int)e.screen.barLabels.size(), 1, -1, q->style);
+            SavePng(px, BW, BH, L"screen_bar.png");
+        }
+        f.h[1].trig = 1.f; step(2); f.h[1].trig = 0.f; step(2);
+        CHECK(!e.screen.pickOpen && e.screen.source == "window" && e.screen.hwnd == 1002, "screen picker: picking a window shows that window");
+        // keyboard button
+        f.h[1].aimPose.position = { 0.f, 1.6f, -0.2f }; step(2);
+        ListLayout(5, 5, e.screen.barH / e.screen.barW, false, cells, hd);
+        aimAt(e.screen.barPose, e.screen.barW, e.screen.barH, cells[3]); step(2);
+        f.h[1].trig = 1.f; step(2); f.h[1].trig = 0.f; step(2);
+        CHECK(e.kb.visible, "screen bar: 'Keyboard' opens the VR keyboard");
+        f.h[1].aimPose.position = { 3.f, 1.6f, -0.2f }; step(80);
+        int x, y, wh, fo; bool l, r; Keys::DryState(x, y, l, r, wh, fo);
+        CHECK(fo == 0, "screen bar: the game doesn't take the focus back while the keyboard is up");
+        Keys::SetDryRun(false);
+    }
     // ---------------- hand-placed positions are saved and read back
     {
         std::wstring path = ProfilesDir() + L"\\vro_pose_test.json";
