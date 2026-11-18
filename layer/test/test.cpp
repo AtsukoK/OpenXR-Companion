@@ -386,6 +386,39 @@ int main(int argc, char** argv) {
         auto bad = ParseProfileText(R"({"bindings":[{"name":"x","input":"left.x","action":{"type":"screen","place":"ceiling"}}]})", perr);
         CHECK(!bad, "screen: unknown place is a profile error");
     }
+    // ---------------- mirrored screen: adjust mode
+    {
+        auto q = ParseProfileText(DefaultProfileJson(), err);
+        q->screen.place = "front"; q->screen.distance = 0.9f; q->screen.below = 0.05f; q->screen.width = 0.8f;
+        q->wheels.clear(); // keep adjust mode from opening a wheel in the way
+        Engine e; e.SetProfile(q);
+        Frame f; f.headValid = true; f.head.orientation.w = 1; f.head.position = { 0, 1.6f, 0 };
+        for (int h = 0; h < 2; h++) { f.h[h].gripValid = f.h[h].aimValid = true; f.h[h].gripPose.orientation.w = f.h[h].aimPose.orientation.w = 1; }
+        f.h[0].gripPose.position = { -0.3f, 1.0f, -0.2f };
+        f.h[1].gripPose.position = { 0.3f, 1.0f, -0.2f };
+        double t = 0; auto step = [&](int n = 1) { for (int i = 0; i < n; i++) { t += 0.011; f.t = t; e.Update(f); } };
+        step();
+        CHECK(!e.screen.shown, "screen adjust: hidden while off");
+        Action adj; adj.type = ActType::Adjust;
+        e.ScreenAction(Action{}); // no-op guard
+        // turn adjust mode on through the engine's own action path
+        Action on; on.type = ActType::Screen; on.mode = "off"; e.ScreenAction(on);
+        q->bindings.clear();
+        Binding b; b.name = "adj"; InputId i; ParseInput("left.menu", i); b.chord.push_back(i); b.chordText = "left.menu"; b.action = adj; b.block = "none";
+        q->bindings.push_back(b); e.SetProfile(q);
+        f.h[0].menu = true; step(); f.h[0].menu = false; step();
+        CHECK(e.adjust && e.screen.shown && e.screen.poseValid, "screen adjust: shown in adjust mode even while off");
+        Vec3 c = V(e.screen.pose.position);
+        f.h[1].gripPose.position = X(c + Vec3{ 0.05f, 0, 0 }); step();
+        f.h[1].grip = 1.f; step(2);
+        f.h[1].gripPose.position = X(c + Vec3{ 0.05f, -0.2f, 0.3f }); f.h[1].sy = 1.f; step(10);
+        f.h[1].grip = 0.f; f.h[1].sy = 0.f; step();
+        CHECK(std::fabs(q->screen.distance - 0.6f) < 0.03f && std::fabs(q->screen.below - 0.25f) < 0.03f && q->screen.width > 0.8f,
+              ("screen adjust: grip drags it closer and lower, stick makes it bigger (distance " + std::to_string(q->screen.distance) +
+               ", below " + std::to_string(q->screen.below) + ", width " + std::to_string(q->screen.width) + ")").c_str());
+        f.h[0].menu = true; step(); f.h[0].menu = false; step();
+        CHECK(!e.adjust && !e.screen.shown && e.saveRequested, "screen adjust: finishing hides it again and saves");
+    }
     // ---------------- mirrored screen: real capture on this PC
     {
         auto mons = ScreenCapture::Monitors();

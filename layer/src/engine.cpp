@@ -665,7 +665,75 @@ void Engine::ScreenAction(const Action& a) {
 
 void Engine::UpdateScreen() {
     screen.poseValid = false;
-    if (!screen.on) return;
+    bool wasShown = screen.shown;
+    screen.shown = screen.on || adjust; // adjust mode shows it so it can be moved
+    if (screen.shown && !wasShown) screenPlaceFront = true;
+    if (grab.target == 3 && !screen.shown) grab = GrabRun{};
+    if (!screen.shown) return;
+    ScreenStyle& S = prof->screen;
+    ScreenPose();
+    if (!adjust || !screen.poseValid || (grab.target >= 0 && grab.target != 3)) return;
+
+    // Adjust mode: a grip near the screen grabs it; it follows that hand, its stick resizes (and turns it on a wrist).
+    bool onWrist = screen.place == "wrist_left" || screen.place == "wrist_right";
+    int wh = screen.place == "wrist_left" ? 0 : 1;
+    Vec3 c = V(screen.pose.position);
+    if (grab.target < 0) {
+        for (int g = 0; g < 2; g++) {
+            if (onWrist && g == wh) continue; // the arm it sits on can't grab it
+            const HandRaw& hr = fr.h[g];
+            if (!hr.gripValid || !cur[g][C_GRIP][F_PRESS] || prev[g][C_GRIP][F_PRESS]) continue;
+            if (Len(V(hr.gripPose.position) - c) < screen.widthM * 0.6f + 0.08f) {
+                grab = { 3, g, c - V(hr.gripPose.position) };
+                if (prof->haptics) haptics.push_back({ g, prof->hapticAmp, 0.02f });
+                break;
+            }
+        }
+        return;
+    }
+    const HandRaw& hr = fr.h[grab.hand];
+    if (!cur[grab.hand][C_GRIP][F_PRESS] || !hr.gripValid) {
+        if (prof->haptics) haptics.push_back({ grab.hand, prof->hapticAmp * 0.6f, 0.015f });
+        grab = GrabRun{};
+        return;
+    }
+    float dt = (float)std::clamp(now - lastNow, 0.0, 0.1);
+    auto dz = [](float v) { return std::fabs(v) < 0.25f ? 0.f : v; };
+    Vec3 want = V(hr.gripPose.position) + grab.off;
+    if (onWrist) {
+        const HandRaw& arm = fr.h[wh];
+        if (!arm.gripValid) return;
+        const XrQuaternionf& q = arm.gripPose.orientation;
+        Vec3 ax = Rotate(q, { 1, 0, 0 }), Z = Rotate(q, { 0, 0, 1 });
+        Vec3 palmOut = wh == 0 ? ax : ax * -1.f;
+        Vec3 n = S.face == "inner" ? palmOut : palmOut * -1.f;
+        Vec3 d = want - V(arm.gripPose.position);
+        S.towardElbow = Dot(d, Z); S.lift = Dot(d, n); S.side = Dot(d, Norm(Cross(Z, n)));
+        S.wristWidth = std::clamp(S.wristWidth * (1.f + dz(hr.sy) * dt * 0.8f), 0.04f, 0.6f);
+        S.rotateDeg += dz(hr.sx) * dt * 90.f;
+        if (S.rotateDeg > 180.f) S.rotateDeg -= 360.f;
+        if (S.rotateDeg < -180.f) S.rotateDeg += 360.f;
+    } else if (fr.headValid) {
+        Vec3 head = V(fr.head.position);
+        if (screen.place == "head") {
+            Vec3 f = Rotate(fr.head.orientation, { 0, 0, -1 }), up = Rotate(fr.head.orientation, { 0, 1, 0 });
+            S.distance = std::clamp(Dot(want - head, f), 0.2f, 5.f); S.below = Dot(head - want, up);
+        } else {
+            Vec3 f = want - head; f.y = 0;
+            if (Len(f) > 0.1f) {
+                f = Norm(f);
+                S.distance = std::clamp(Dot(want - head, f), 0.2f, 5.f); S.below = head.y - want.y;
+                Vec3 zf = f * -1.f, yUp{ 0, 1, 0 };
+                screenFrontPose = { QuatFromBasis(Cross(yUp, zf), yUp, zf), X(want) };
+            }
+        }
+        S.width = std::clamp(S.width * (1.f + dz(hr.sy) * dt * 0.8f), 0.1f, 4.f);
+    }
+    ScreenPose();
+}
+
+void Engine::ScreenPose() {
+    screen.poseValid = false;
     const ScreenStyle& S = prof->screen;
     if (screen.place == "wrist_left" || screen.place == "wrist_right") {
         int h = screen.place == "wrist_left" ? 0 : 1;
