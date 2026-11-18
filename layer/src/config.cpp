@@ -395,6 +395,12 @@ bool SavePlacement(const Profile& p, std::string& err) {
         s["radius_m"] = r(p.style.radius);
         s["hand_up_m"] = r(p.style.handUp); s["hand_toward_head_m"] = r(p.style.handToward);
         s["head_distance_m"] = r(p.style.distance); s["head_down_m"] = r(p.style.headDown);
+        {
+            json& sc = j["screen"]; const ScreenStyle& S = p.screen;
+            sc["wrist_width_m"] = r(S.wristWidth); sc["toward_elbow_m"] = r(S.towardElbow); sc["lift_m"] = r(S.lift);
+            sc["side_m"] = r(S.side); sc["rotate_deg"] = std::round(S.rotateDeg * 10.f) / 10.f;
+            sc["width_m"] = r(S.width); sc["distance_m"] = r(S.distance); sc["below_eyes_m"] = r(S.below);
+        }
         const char* keys[2] = { "wrist_left", "wrist_right" };
         for (int h = 0; h < 2; h++) {
             if (!j.contains(keys[h])) continue;

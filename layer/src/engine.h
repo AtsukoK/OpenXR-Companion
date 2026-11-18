@@ -74,6 +74,7 @@ void WristLayout(int count, int columns, std::vector<Cell>& out, Cell& header);
 // Mirrored desktop monitor. The engine decides if and where; the layer captures and draws it.
 struct ScreenView {
     bool on = false;
+    bool shown = false;                 // on, or adjust mode (shown so it can be moved)
     std::string place = "wrist_left";   // wrist_left|wrist_right|front|head
     int monitor = 0;                    // 0 = main, 1..N left to right
     int fps = 30;                       // 0 = every headset frame
@@ -148,13 +149,14 @@ private:
     std::vector<Pulse> pulses;
     WheelRun wr;
     double now = 0, lastNow = 0;
-    struct GrabRun { int target = -1; int hand = -1; Vec3 off; }; // target: 0/1 wrist panel, 2 wheel
+    struct GrabRun { int target = -1; int hand = -1; Vec3 off; }; // target: 0/1 wrist panel, 2 wheel, 3 screen
     GrabRun grab;
     double adjustClosedAt = -1;
     void UpdateAdjustWheel();
     bool screenInit = false, screenPlaceFront = false;
     XrPosef screenFrontPose{ {0,0,0,1}, {0,0,0} };
     void UpdateScreen();
+    void ScreenPose();
 
     bool Down(const InputId& i) const { return cur[i.hand][i.comp][i.feat]; }
     bool Pressed(const InputId& i) const { return cur[i.hand][i.comp][i.feat] && !prev[i.hand][i.comp][i.feat]; }

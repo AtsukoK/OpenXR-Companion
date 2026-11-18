@@ -127,7 +127,7 @@ public class SettingsEditor : EditorBase
         };
         scr.AddRow("Frame rates to switch between", steps, "For the 'next frame rate' button, e.g. 10, 15, 30, 60, 0  (0 = as fast as the headset).");
         scr.AddRow("Where it shows", Pick(Choices.ScreenPlaces.Skip(1).ToArray(), sc.Place, v => { sc.Place = v; SyncPlace(); }),
-            "A Screen button can pick its own place; this is used when it doesn't.");
+            "A Screen button can pick its own place; this is used when it doesn't. Easiest to place by hand: Adjust positions in the headset shows the screen; grab it with a grip, stick to resize.");
         lWW = scr.AddRow("Width on the wrist (m)", Num(0.04m, 0.6m, 0.01m, 2, sc.WristWidth, v => sc.WristWidth = v), "0.16 m is about a small tablet.");
         lFace = scr.AddRow("Side of the arm", Pick(new Choice[] { new("back", "Back of the wrist (like a watch)"), new("inner", "Inner side (palm side)") }, sc.Face, v => sc.Face = v),
             "Wrist panels with buttons use the inner side by default, so the back keeps them apart.");

@@ -560,7 +560,7 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
     XrCompositionLayerQuad sq{ XR_TYPE_COMPOSITION_LAYER_QUAD };
 
     // Mirrored desktop monitor, under the menus. Captured on its own thread while it is on.
-    if (gEng.screen.on && gLocal) {
+    if (gEng.screen.shown && gLocal) {
         const ScreenStyle& S = p.screen;
         int maxW = S.maxPx > 0 ? S.maxPx : (sizeof(void*) == 4 ? 1280 : 1920); // 32-bit games are short on memory
         gCap.Configure(gEng.screen.monitor, gEng.screen.fps, maxW, S.cursor, S.opacity);
