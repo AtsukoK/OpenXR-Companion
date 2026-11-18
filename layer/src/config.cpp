@@ -136,6 +136,26 @@ static Action ParseAction(const json& j, const std::string& ctx) {
     return a;
 }
 
+static void ParsePose(const json& j, FreePose& fp) {
+    if (!j.is_array() || j.size() != 7) return;
+    for (auto& v : j) if (!v.is_number()) return;
+    fp.set = true;
+    fp.p.position = { j[0].get<float>(), j[1].get<float>(), j[2].get<float>() };
+    XrQuaternionf q{ j[3].get<float>(), j[4].get<float>(), j[5].get<float>(), j[6].get<float>() };
+    float l = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+    if (l < 1e-4f) { fp.set = false; return; }
+    fp.p.orientation = { q.x / l, q.y / l, q.z / l, q.w / l };
+}
+static json PoseJson(const FreePose& fp) {
+    auto r = [](float v, float k) { return std::round(v * k) / k; };
+    const auto& p = fp.p.position; const auto& q = fp.p.orientation;
+    return json::array({ r(p.x, 1000), r(p.y, 1000), r(p.z, 1000), r(q.x, 10000), r(q.y, 10000), r(q.z, 10000), r(q.w, 10000) });
+}
+static void ParsePoses(const json& j, std::map<std::string, FreePose>& m) {
+    if (!j.is_object()) return;
+    for (auto& [k, v] : j.items()) { FreePose fp; ParsePose(v, fp); if (fp.set) m[Lower(k)] = fp; }
+}
+
 static void ParseStyle(const json& j, Style& s) {
     Get(j, "anchor", s.anchor); s.anchor = Lower(s.anchor);
     Get(j, "radius_m", s.radius);
@@ -148,6 +168,7 @@ static void ParseStyle(const json& j, Style& s) {
     Get(j, "font", s.font);
     Get(j, "font_scale", s.fontScale);
     Get(j, "texture_px", s.texSize);
+    if (j.contains("poses")) ParsePoses(j["poses"], s.poses);
     s.texSize = std::clamp(s.texSize, 256, 2048);
     if (j.contains("colors")) {
         auto& c = j["colors"];
@@ -219,6 +240,8 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
         Get(k, "width_m", S.width); Get(k, "distance_m", S.distance); Get(k, "below_eyes_m", S.below);
         Get(k, "max_width_px", S.maxPx); Get(k, "opacity", S.opacity);
         Get(k, "cursor", S.cursor); Get(k, "start_on", S.startOn);
+        Get(k, "interact", S.interact); Get(k, "refocus_game", S.refocus);
+        if (k.contains("poses")) ParsePoses(k["poses"], S.poses);
         S.monitor = std::clamp(S.monitor, 0, 16); S.fps = std::clamp(S.fps, 0, 240);
         S.wristWidth = std::clamp(S.wristWidth, 0.04f, 0.6f); S.width = std::clamp(S.width, 0.1f, 4.f);
         S.distance = std::clamp(S.distance, 0.2f, 5.f); S.opacity = std::clamp(S.opacity, 0.1f, 1.f);
@@ -278,6 +301,7 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
         Get(w, "enabled", W.enabled);
         Get(w, "mirror", W.mirror);
         Get(w, "start_page", W.start);
+        if (w.contains("pose")) ParsePose(w["pose"], W.pose);
         if (w.contains("pages"))
             for (auto& [name, pg] : w["pages"].items()) {
                 Wheel P; P.name = name; P.title = pg.value("title", name);
@@ -400,6 +424,14 @@ bool SavePlacement(const Profile& p, std::string& err) {
             sc["wrist_width_m"] = r(S.wristWidth); sc["toward_elbow_m"] = r(S.towardElbow); sc["lift_m"] = r(S.lift);
             sc["side_m"] = r(S.side); sc["rotate_deg"] = std::round(S.rotateDeg * 10.f) / 10.f;
             sc["width_m"] = r(S.width); sc["distance_m"] = r(S.distance); sc["below_eyes_m"] = r(S.below);
+            json poses = json::object();
+            for (auto& [k, fp] : S.poses) if (fp.set) poses[k] = PoseJson(fp);
+            if (poses.empty()) sc.erase("poses"); else sc["poses"] = poses;
+        }
+        {
+            json poses = json::object();
+            for (auto& [k, fp] : p.style.poses) if (fp.set) poses[k] = PoseJson(fp);
+            if (poses.empty()) s.erase("poses"); else s["poses"] = poses;
         }
         const char* keys[2] = { "wrist_left", "wrist_right" };
         for (int h = 0; h < 2; h++) {
@@ -407,6 +439,7 @@ bool SavePlacement(const Profile& p, std::string& err) {
             json& w = j[keys[h]]; const WristStyle& W = p.wrist[h];
             w["size_m"] = r(W.size); w["toward_elbow_m"] = r(W.towardElbow); w["lift_m"] = r(W.lift); w["side_m"] = r(W.side);
             w["text_up"] = W.textUp; if (W.textUp == "custom") w["rotate_deg"] = std::round(W.rotateDeg * 10.f) / 10.f;
+            if (W.pose.set) w["pose"] = PoseJson(W.pose); else w.erase("pose");
         }
         std::ofstream f(path, std::ios::binary | std::ios::trunc);
         if (!f) { err = "cannot write " + WToUtf8(path); return false; }

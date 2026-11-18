@@ -155,6 +155,8 @@ public class StyleModel
     [TypeConverter(typeof(ExpandableObjectConverter)), Description("Colours as #RRGGBB or #RRGGBBAA (AA = opacity).")]
     [DisplayName("Colours")]
     [JsonPropertyName("colors")] public ColorsModel Colors { get; set; } = new();
+    // Placed by hand in adjust mode, per anchor: x, y, z, then the angle as a quaternion.
+    [Browsable(false)][JsonPropertyName("poses"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, List<float>> Poses { get; set; }
     public override string ToString() => $"{Anchor}, radius {Radius} m";
 }
 
@@ -180,6 +182,8 @@ public class WristModel
     [JsonPropertyName("show_ms")] public int ShowMs { get; set; } = 250;
     [JsonPropertyName("hide_ms")] public int HideMs { get; set; } = 350;
     [JsonPropertyName("press")] public string Press { get; set; } = "both";
+    // Placed by hand in adjust mode (relative to this arm's controller); overrides the numbers above.
+    [JsonPropertyName("pose"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<float> Pose { get; set; }
 }
 
 // Laser / pointing correction (Quest Touch aim ray is high and tilted up) and wrist-panel helpers.
@@ -212,6 +216,9 @@ public class ScreenModel
     [JsonPropertyName("opacity")] public float Opacity { get; set; } = 1f;
     [JsonPropertyName("cursor")] public bool Cursor { get; set; } = true;
     [JsonPropertyName("start_on")] public bool StartOn { get; set; }
+    [JsonPropertyName("interact")] public bool Interact { get; set; } = true;
+    [JsonPropertyName("refocus_game")] public bool RefocusGame { get; set; } = true;
+    [JsonPropertyName("poses"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, List<float>> Poses { get; set; }
 }
 
 // Monitors numbered the way the layer numbers them: left to right, then top to bottom.

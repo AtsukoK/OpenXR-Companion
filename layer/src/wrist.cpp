@@ -32,6 +32,11 @@ bool Engine::WristPoseNow(int h, XrPosef& pose, Vec3& n) const {
     const WristStyle& W = prof->wrist[h];
     const HandRaw& hr = fr.h[h];
     if (!hr.gripValid) return false;
+    if (W.pose.set) { // placed by hand in adjust mode
+        pose = PMul(hr.gripPose, W.pose.p);
+        n = Rotate(pose.orientation, { 0, 0, 1 });
+        return true;
+    }
     const XrQuaternionf& q = hr.gripPose.orientation;
     Vec3 ax = Rotate(q, { 1, 0, 0 }), Z = Rotate(q, { 0, 0, 1 });
     // OpenXR grip space: +X points out of the palm on the left hand and into it on the right.
@@ -173,30 +178,15 @@ void Engine::UpdateWrist(int h) {
         if (prof->haptics) haptics.push_back({ o, prof->hapticAmp * 0.6f, 0.015f });
     }
     if (adjust && grab.target < 0 && hr.gripValid && cur[o][C_GRIP][F_PRESS] && !prev[o][C_GRIP][F_PRESS]
-        && Len(V(hr.gripPose.position) - c) < W.size * 0.7f + 0.08f) {
-        grab = { h, o, c - V(hr.gripPose.position) };
-        if (prof->haptics) haptics.push_back({ o, prof->hapticAmp, 0.02f });
-    }
+        && Len(V(hr.gripPose.position) - c) < W.size * 0.7f + 0.08f)
+        StartGrab(h, o, pose);
     if (grab.target == h) {
         WristStyle& Wm = prof->wrist[h];
-        const XrQuaternionf& q = fr.h[h].gripPose.orientation;
-        Vec3 Z = Rotate(q, { 0, 0, 1 }), side = Norm(Cross(Z, n));
-        Vec3 d = V(hr.gripPose.position) + grab.off - V(fr.h[h].gripPose.position);
-        Wm.towardElbow = Dot(d, Z); Wm.lift = Dot(d, n); Wm.side = Dot(d, side);
+        // Keeps the grabbing hand's angle; saved relative to this arm's controller.
+        Wm.pose = { true, PMul(PInv(fr.h[h].gripPose), GrabbedPose()) };
         float dt = (float)std::clamp(now - lastNow, 0.0, 0.1);
         auto dz = [](float v) { return std::fabs(v) < 0.25f ? 0.f : v; };
         Wm.size = std::clamp(Wm.size * (1.f + dz(hr.sy) * dt * 0.8f), 0.05f, 0.4f);
-        if (dz(hr.sx) != 0.f) { // stick sideways turns the text; the panel becomes 'custom'
-            if (Wm.textUp != "custom") {
-                Vec3 yNow = Rotate(pose.orientation, { 0, 1, 0 });
-                Vec3 xAlong = h == 0 ? Z * -1.f : Z, yAlong = Cross(n, xAlong);
-                Wm.rotateDeg = std::atan2(Dot(yNow, Cross(n, yAlong)), Dot(yNow, yAlong)) / kDeg;
-                Wm.textUp = "custom";
-            }
-            Wm.rotateDeg += dz(hr.sx) * dt * 90.f;
-            if (Wm.rotateDeg > 180.f) Wm.rotateDeg -= 360.f;
-            if (Wm.rotateDeg < -180.f) Wm.rotateDeg += 360.f;
-        }
         Vec3 nn;
         if (WristPoseNow(h, pose, nn)) { wv.pose = pose; wv.sizeM = Wm.size; }
         wv.cursor = false;

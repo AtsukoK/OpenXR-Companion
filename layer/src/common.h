@@ -38,3 +38,8 @@ Vec3 Rotate(const XrQuaternionf& q, Vec3 v);
 Vec3 RotateInv(const XrQuaternionf& q, Vec3 v);
 XrQuaternionf QuatFromBasis(Vec3 x, Vec3 y, Vec3 z);
 XrQuaternionf BillboardTo(Vec3 center, Vec3 eye);
+XrQuaternionf QMul(const XrQuaternionf& a, const XrQuaternionf& b);
+inline XrQuaternionf QInv(const XrQuaternionf& q) { return { -q.x, -q.y, -q.z, q.w }; }
+XrPosef PMul(const XrPosef& a, const XrPosef& b);   // b given in a's frame -> world
+XrPosef PInv(const XrPosef& a);
+XrPosef YawFrame(const XrPosef& head);              // head position, turned only left/right like the head

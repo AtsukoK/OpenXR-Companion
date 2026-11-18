@@ -60,6 +60,8 @@ public class SettingsEditor : EditorBase
         lHandToward = look.AddRow("Closer to my face by (m)", Num(-0.3m, 0.3m, 0.01m, 2, s.HandToward, v => s.HandToward = v));
         lHeadDist = look.AddRow("Distance in front (m)", Num(0.2m, 2, 0.05m, 2, s.HeadDistance, v => s.HeadDistance = v));
         lHeadDown = look.AddRow("Below eye level (m)", Num(-0.5m, 0.8m, 0.01m, 2, s.HeadDown, v => s.HeadDown = v));
+        look.AddRow("Placed by hand", ResetPose(() => s.Poses is { Count: > 0 }, () => s.Poses = null),
+            "Adjust positions in the headset: grab the wheel with a grip and put it anywhere, at any angle. That spot replaces the distance and height numbers here.");
         look.AddRow("Wheel size (radius, m)", Num(0.05m, 0.5m, 0.01m, 2, s.Radius, v => s.Radius = v), "0.12 m makes a wheel about 24 cm across.");
         look.AddRow("Text size", Num(0.5m, 2.5m, 0.1m, 1, s.FontScale, v => s.FontScale = v));
         look.AddRow("Font", Text(s.Font, v => s.Font = v));
@@ -140,6 +142,12 @@ public class SettingsEditor : EditorBase
         lFB = scr.AddRow("Below eye level (m)", Num(-1, 1, 0.01m, 2, sc.Below, v => sc.Below = v));
         scr.AddRow("Opacity", Num(0.1m, 1, 0.05m, 2, sc.Opacity, v => sc.Opacity = v));
         scr.AddRow("", Check("Show the mouse pointer", sc.Cursor, v => sc.Cursor = v));
+        scr.AddRow("", Check("Use the desktop by pointing at it", sc.Interact, v => sc.Interact = v),
+            "Point at the screen: the mouse follows. Trigger = left click (hold to drag), A / X = right click, stick up/down = scroll. While pointing, those buttons don't reach the game.");
+        scr.AddRow("", Check("Give the game its window back after clicking", sc.RefocusGame, v => sc.RefocusGame = v),
+            "Clicking on the desktop takes the focus from the game; this hands it back when you point away.");
+        scr.AddRow("Placed by hand", ResetPose(() => sc.Poses is { Count: > 0 }, () => sc.Poses = null),
+            "Adjust positions shows the screen; grab it and put it anywhere, at any angle. Each place (left wrist, right wrist, in front, following view) keeps its own spot.");
         scr.AddRow("Sharpness limit (pixels wide)", Int(0, 7680, 160, sc.MaxWidthPx, v => sc.MaxWidthPx = v),
             "0 = automatic: 1920 in 64-bit games, 1280 in 32-bit games (they have little memory to spare). The picture is halved until it fits.");
         SyncPlace();
@@ -171,11 +179,13 @@ public class SettingsEditor : EditorBase
         Changed += () => pose.Invalidate(); // size, offsets, columns, side and mirror all show in the picture
         wrist.AddRow("Text direction", Pick(new Choice[] { new("fingers", "Top toward my fingers (hand held up, palm to face)"), new("between", "In between (arm half raised)"), new("along_arm", "Along the forearm (arm held across my body)"), new("custom", "Custom angle (set below, or by turning it in adjust mode)") }, wp.TextUp ?? "fingers", v => { wp.TextUp = v; pose.Mode = v; FormPanel.Show(lRot, v == "custom"); }));
         lRot = wrist.AddRow("Custom angle (deg)", Num(-180, 180, 5, 0, wp.RotateDeg, v => { wp.RotateDeg = v; pose.Invalidate(); }),
-            "0 = text along the forearm. Turn it by hand in the headset: Adjust positions, grab the panel, push the stick left or right.");
+            "0 = text along the forearm. Or place the panel by hand in the headset (Adjust positions): grab it and turn your hand.");
         FormPanel.Show(lRot, wp.TextUp == "custom");
         wrist.AddRow("", pose);
         wrist.AddRow("Press buttons by", Pick(new Choice[] { new("both", "Poking or pointing + trigger"), new("poke", "Poking with the other controller"), new("point", "Pointing + trigger") }, wp.Press, v => wp.Press = v));
         wrist.AddRow("Columns", Int(1, 4, 1, wp.Columns, v => wp.Columns = v));
+        wrist.AddRow("Placed by hand", ResetPose(() => wp.Pose != null, () => wp.Pose = null),
+            "Adjust positions in the headset: grab the panel with your other hand's grip and put it anywhere on the arm, at any angle. That spot replaces side, text direction, toward the elbow, off the arm and sideways.");
         wrist.AddRow("Panel size (m)", Num(0.05m, 0.4m, 0.01m, 2, wp.Size, v => wp.Size = v), "0.11 m is about the width of a large phone.");
         wrist.AddRow("Toward the elbow (m)", Num(-0.1m, 0.3m, 0.01m, 2, wp.TowardElbow, v => wp.TowardElbow = v), "Distance back along the forearm from the controller.");
         wrist.AddRow("Off the arm (m)", Num(-0.1m, 0.15m, 0.005m, 3, wp.Lift, v => wp.Lift = v));
@@ -219,6 +229,17 @@ public class SettingsEditor : EditorBase
     }
 
     // ---------------- small builders
+    Control ResetPose(Func<bool> isSet, Action clear)
+    {
+        var f = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+        var l = new Label { AutoSize = true, Padding = new Padding(0, 6, 8, 0) };
+        var b = new Button { Text = "Use the numbers below again", AutoSize = true };
+        void Show() { bool on = isSet(); l.Text = on ? "Yes, set in the headset" : "No, using the numbers below"; b.Enabled = on; }
+        b.Click += (o, e) => { clear(); Show(); Fire(); };
+        f.Controls.Add(l); f.Controls.Add(b); Show();
+        return f;
+    }
+
     static Label Section(string t) => new()
     {
         Text = t, AutoSize = true, Dock = DockStyle.Top, Font = new Font("Segoe UI", 11f, FontStyle.Bold),

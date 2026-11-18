@@ -115,3 +115,27 @@ XrQuaternionf BillboardTo(Vec3 center, Vec3 eye) {
     Vec3 y = Cross(z, x);
     return QuatFromBasis(x, y, z);
 }
+
+XrQuaternionf QMul(const XrQuaternionf& a, const XrQuaternionf& b) {
+    return { a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+             a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+             a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+             a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z };
+}
+XrPosef PMul(const XrPosef& a, const XrPosef& b) {
+    XrQuaternionf q = QMul(a.orientation, b.orientation);
+    float l = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+    if (l > 1e-6f) { q.x /= l; q.y /= l; q.z /= l; q.w /= l; }
+    return { q, X(V(a.position) + Rotate(a.orientation, V(b.position))) };
+}
+XrPosef PInv(const XrPosef& a) {
+    XrQuaternionf qi = QInv(a.orientation);
+    return { qi, X(Rotate(qi, V(a.position) * -1.f)) };
+}
+XrPosef YawFrame(const XrPosef& head) {
+    Vec3 f = Rotate(head.orientation, { 0, 0, -1 }); f.y = 0;
+    if (Len(f) < 1e-3f) f = { 0, 0, -1 };
+    f = Norm(f);
+    Vec3 z = f * -1.f, y{ 0, 1, 0 };
+    return { QuatFromBasis(Cross(y, z), y, z), head.position };
+}

@@ -22,6 +22,9 @@ void Engine::Reset() {
     kb = KeyboardView{}; kbRepeatKey = kbRepeatHand = -1;
     for (int h = 0; h < 2; h++) { wrist[h] = WristView{}; wrun[h] = WristRun{}; }
     adjust = false; grab = GrabRun{}; adjustClosedAt = -1;
+    if (mouseL) Keys::MouseButton(0, false);
+    if (mouseR) Keys::MouseButton(1, false);
+    mouseL = mouseR = false; screen.hoverHand = -1;
     Keys::ReleaseAll();
     keyToggles.clear();
     xrToggles.clear(); xrHolds.clear(); pulses.clear();
@@ -291,10 +294,7 @@ void Engine::UpdateAdjustWheel() {
     Vec3 c = V(wr.pose.position);
     if (grab.target < 0) {
         bool edge = cur[g][C_GRIP][F_PRESS] && !prev[g][C_GRIP][F_PRESS];
-        if (edge && hr.gripValid && Len(V(hr.gripPose.position) - c) < st.radius + 0.08f) {
-            grab = { 2, g, c - V(hr.gripPose.position) };
-            if (prof->haptics) haptics.push_back({ g, prof->hapticAmp, 0.02f });
-        }
+        if (edge && hr.gripValid && Len(V(hr.gripPose.position) - c) < st.radius + 0.08f) StartGrab(2, g, wr.pose);
         return;
     }
     if (!cur[g][C_GRIP][F_PRESS] || !hr.gripValid) {
@@ -302,28 +302,32 @@ void Engine::UpdateAdjustWheel() {
         if (prof->haptics) haptics.push_back({ g, prof->hapticAmp * 0.6f, 0.015f });
         return;
     }
-    c = V(hr.gripPose.position) + grab.off;
-    Vec3 head = V(fr.head.position);
-    bool handAnchor = st.anchor == "hand" || st.anchor == "hand_locked";
-    const HandRaw& oh = fr.h[wr.openerHand];
-    if (handAnchor && oh.gripValid) {
-        Vec3 gp = V(oh.gripPose.position);
-        Vec3 toward = head - gp; toward.y = 0; toward = Norm(toward);
-        st.handUp = c.y - gp.y;
-        st.handToward = Dot(c - gp, toward);
-    } else {
-        Vec3 f = Rotate(fr.head.orientation, { 0, 0, -1 }); f.y = 0; f = Norm(f);
-        st.distance = Dot(c - head, f);
-        st.headDown = head.y - c.y;
-    }
+    XrPosef obj = GrabbedPose(); // keeps the hand's angle: tilt and turn it however you like
+    st.poses[st.anchor] = { true, PMul(PInv(WheelFrame(wr.openerHand)), obj) };
     float dt = (float)std::clamp(now - lastNow, 0.0, 0.1);
     st.radius = std::clamp(st.radius * (1.f + hr.sy * dt * 0.8f), 0.05f, 0.4f);
-    wr.pose.position = X(c);
-    wr.pose.orientation = BillboardTo(c, head);
+    wr.pose = obj;
+}
+
+void Engine::StartGrab(int target, int hand, const XrPosef& obj) {
+    grab = GrabRun{}; grab.target = target; grab.hand = hand;
+    grab.rel = PMul(PInv(fr.h[hand].gripPose), obj);
+    if (prof->haptics) haptics.push_back({ hand, prof->hapticAmp, 0.02f });
+}
+XrPosef Engine::GrabbedPose() const { return PMul(fr.h[grab.hand].gripPose, grab.rel); }
+
+// What a hand-placed wheel is attached to: the hand's position (hand anchors) or the head, turned like the head.
+XrPosef Engine::WheelFrame(int hand) const {
+    XrPosef f = YawFrame(fr.head);
+    const Style& st = prof->style;
+    if ((st.anchor == "hand" || st.anchor == "hand_locked") && fr.h[hand].gripValid) f.position = fr.h[hand].gripPose.position;
+    return f;
 }
 
 XrPosef Engine::WheelPose(int hand) const {
     const Style& st = prof->style;
+    auto fp = st.poses.find(st.anchor);
+    if (fp != st.poses.end() && fp->second.set) return PMul(WheelFrame(hand), fp->second.p);
     Vec3 head = V(fr.head.position);
     Vec3 center;
     bool handAnchor = st.anchor == "hand" || st.anchor == "hand_locked";
@@ -502,6 +506,7 @@ void Engine::UpdatePointers() {
         if (wr.open && h == wr.selHand && (prof->sel.method == "point" || prof->sel.method == "both"))
             test(wr.pose, prof->style.radius, prof->style.radius);
         if (kb.visible) test(kb.pose, kb.widthM / 2, kb.heightM / 2);
+        if (screen.interactive && screen.hoverHand == h) test(screen.pose, screen.widthM / 2 * 1.2f, screen.widthM * screen.aspect / 2 * 1.2f);
         int panel = 1 - h; // a hand points at the panel on the other arm
         const WristView& wv = wrist[panel];
         bool wristUp = wv.visible && grab.target != panel;
@@ -559,6 +564,7 @@ void Engine::ComputeBlocks() {
         want[0][C_GRIP] = want[1][C_GRIP] = true;
         if (grab.hand >= 0) want[grab.hand][C_STICK] = true;
     }
+    if (screen.hoverHand >= 0) { int h = screen.hoverHand; want[h][C_TRIGGER] = want[h][C_BTN1] = want[h][C_STICK] = true; }
     for (int h = 0; h < 2; h++) // the pressing (other) hand's trigger belongs to the panel while over a button
         if (wrist[h].visible && wrist[h].hover >= 0) want[1 - h][C_TRIGGER] = true;
     for (int h = 0; h < 2; h++)
@@ -602,9 +608,9 @@ void Engine::Update(const Frame& f) {
     UpdateKeyboard();
     UpdateWrist(0);
     UpdateWrist(1);
+    UpdateScreen();
     ComputeBlocks();
     UpdatePointers();
-    UpdateScreen();
     lastNow = now;
 
     view.visible = wr.open;
@@ -669,12 +675,13 @@ void Engine::UpdateScreen() {
     screen.shown = screen.on || adjust; // adjust mode shows it so it can be moved
     if (screen.shown && !wasShown) screenPlaceFront = true;
     if (grab.target == 3 && !screen.shown) grab = GrabRun{};
-    if (!screen.shown) return;
+    if (!screen.shown) { ScreenInteract(); return; }
     ScreenStyle& S = prof->screen;
     ScreenPose();
+    ScreenInteract();
     if (!adjust || !screen.poseValid || (grab.target >= 0 && grab.target != 3)) return;
 
-    // Adjust mode: a grip near the screen grabs it; it follows that hand, its stick resizes (and turns it on a wrist).
+    // Adjust mode: a grip near the screen grabs it; it keeps the hand's angle, the stick resizes.
     bool onWrist = screen.place == "wrist_left" || screen.place == "wrist_right";
     int wh = screen.place == "wrist_left" ? 0 : 1;
     Vec3 c = V(screen.pose.position);
@@ -683,11 +690,7 @@ void Engine::UpdateScreen() {
             if (onWrist && g == wh) continue; // the arm it sits on can't grab it
             const HandRaw& hr = fr.h[g];
             if (!hr.gripValid || !cur[g][C_GRIP][F_PRESS] || prev[g][C_GRIP][F_PRESS]) continue;
-            if (Len(V(hr.gripPose.position) - c) < screen.widthM * 0.6f + 0.08f) {
-                grab = { 3, g, c - V(hr.gripPose.position) };
-                if (prof->haptics) haptics.push_back({ g, prof->hapticAmp, 0.02f });
-                break;
-            }
+            if (Len(V(hr.gripPose.position) - c) < screen.widthM * 0.6f + 0.08f) { StartGrab(3, g, screen.pose); break; }
         }
         return;
     }
@@ -699,42 +702,32 @@ void Engine::UpdateScreen() {
     }
     float dt = (float)std::clamp(now - lastNow, 0.0, 0.1);
     auto dz = [](float v) { return std::fabs(v) < 0.25f ? 0.f : v; };
-    Vec3 want = V(hr.gripPose.position) + grab.off;
-    if (onWrist) {
-        const HandRaw& arm = fr.h[wh];
-        if (!arm.gripValid) return;
-        const XrQuaternionf& q = arm.gripPose.orientation;
-        Vec3 ax = Rotate(q, { 1, 0, 0 }), Z = Rotate(q, { 0, 0, 1 });
-        Vec3 palmOut = wh == 0 ? ax : ax * -1.f;
-        Vec3 n = S.face == "inner" ? palmOut : palmOut * -1.f;
-        Vec3 d = want - V(arm.gripPose.position);
-        S.towardElbow = Dot(d, Z); S.lift = Dot(d, n); S.side = Dot(d, Norm(Cross(Z, n)));
-        S.wristWidth = std::clamp(S.wristWidth * (1.f + dz(hr.sy) * dt * 0.8f), 0.04f, 0.6f);
-        S.rotateDeg += dz(hr.sx) * dt * 90.f;
-        if (S.rotateDeg > 180.f) S.rotateDeg -= 360.f;
-        if (S.rotateDeg < -180.f) S.rotateDeg += 360.f;
-    } else if (fr.headValid) {
-        Vec3 head = V(fr.head.position);
-        if (screen.place == "head") {
-            Vec3 f = Rotate(fr.head.orientation, { 0, 0, -1 }), up = Rotate(fr.head.orientation, { 0, 1, 0 });
-            S.distance = std::clamp(Dot(want - head, f), 0.2f, 5.f); S.below = Dot(head - want, up);
-        } else {
-            Vec3 f = want - head; f.y = 0;
-            if (Len(f) > 0.1f) {
-                f = Norm(f);
-                S.distance = std::clamp(Dot(want - head, f), 0.2f, 5.f); S.below = head.y - want.y;
-                Vec3 zf = f * -1.f, yUp{ 0, 1, 0 };
-                screenFrontPose = { QuatFromBasis(Cross(yUp, zf), yUp, zf), X(want) };
-            }
-        }
-        S.width = std::clamp(S.width * (1.f + dz(hr.sy) * dt * 0.8f), 0.1f, 4.f);
-    }
+    XrPosef obj = GrabbedPose();
+    XrPosef frame;
+    if (onWrist) { if (!fr.h[wh].gripValid) return; frame = fr.h[wh].gripPose; }
+    else if (screen.place == "head") frame = fr.head;
+    else frame = screenFrontFrame;
+    S.poses[screen.place] = { true, PMul(PInv(frame), obj) };
+    if (onWrist) S.wristWidth = std::clamp(S.wristWidth * (1.f + dz(hr.sy) * dt * 0.8f), 0.04f, 0.6f);
+    else S.width = std::clamp(S.width * (1.f + dz(hr.sy) * dt * 0.8f), 0.1f, 4.f);
     ScreenPose();
 }
 
 void Engine::ScreenPose() {
     screen.poseValid = false;
     const ScreenStyle& S = prof->screen;
+    if (screenPlaceFront && fr.headValid) screenFrontFrame = YawFrame(fr.head);
+    auto fp = S.poses.find(screen.place);
+    if (fp != S.poses.end() && fp->second.set) { // placed by hand in adjust mode
+        bool onWrist = screen.place == "wrist_left" || screen.place == "wrist_right";
+        int wh = screen.place == "wrist_left" ? 0 : 1;
+        if (onWrist) { if (!fr.h[wh].gripValid) return; screen.pose = PMul(fr.h[wh].gripPose, fp->second.p); }
+        else if (screen.place == "head") { if (!fr.headValid) return; screen.pose = PMul(fr.head, fp->second.p); }
+        else { if (screenPlaceFront) { if (!fr.headValid) return; screenPlaceFront = false; } screen.pose = PMul(screenFrontFrame, fp->second.p); }
+        screen.widthM = onWrist ? S.wristWidth : S.width;
+        screen.poseValid = true;
+        return;
+    }
     if (screen.place == "wrist_left" || screen.place == "wrist_right") {
         int h = screen.place == "wrist_left" ? 0 : 1;
         const HandRaw& hr = fr.h[h];
@@ -775,4 +768,70 @@ void Engine::ScreenPose() {
         screenPlaceFront = false;
     }
     screen.pose = screenFrontPose; screen.widthM = S.width; screen.poseValid = true;
+}
+
+// Ray from hand h's pointer against the screen; u, v = 0..1 across it (v down), t = distance.
+bool Engine::ScreenRay(int h, float& u, float& v, float& t) const {
+    const HandRaw& hr = fr.h[h];
+    if (!hr.aimValid || !screen.poseValid) return false;
+    Vec3 o = V(hr.aimPose.position), d = Rotate(hr.aimPose.orientation, { 0, 0, -1 });
+    Vec3 c = V(screen.pose.position), n = Rotate(screen.pose.orientation, { 0, 0, 1 });
+    float den = Dot(d, n);
+    if (std::fabs(den) < 1e-4f) return false;
+    t = Dot(c - o, n) / den;
+    if (t <= 0.01f || t > 5.f) return false;
+    Vec3 l = RotateInv(screen.pose.orientation, (o + d * t) - c);
+    float w = screen.widthM, hgt = screen.widthM * screen.aspect;
+    u = l.x / w + 0.5f; v = 0.5f - l.y / hgt;
+    return true;
+}
+
+// Point at the screen to move the mouse; trigger = left button, A/X = right button, stick = scroll.
+void Engine::ScreenInteract() {
+    const ScreenStyle& S = prof->screen;
+    bool onWrist = screen.place == "wrist_left" || screen.place == "wrist_right";
+    int wh = screen.place == "wrist_left" ? 0 : 1;
+    screen.interactive = S.interact && screen.on && screen.poseValid && !adjust && !wr.open && !kb.visible && screen.monW > 0;
+    int hand = -1; float hu = 0, hv = 0;
+    if (screen.interactive) {
+        int order[2] = { screen.hoverHand >= 0 ? screen.hoverHand : 1, screen.hoverHand >= 0 ? 1 - screen.hoverHand : 0 };
+        for (int g : order) {
+            if (onWrist && g == wh) continue; // the arm it sits on can't point at it
+            float u, v, t;
+            if (!ScreenRay(g, u, v, t)) continue;
+            bool held = g == screen.hoverHand && (mouseL || mouseR); // dragging keeps going past the edge
+            if (held || (u >= 0 && u <= 1 && v >= 0 && v <= 1)) { hand = g; hu = std::clamp(u, 0.f, 1.f); hv = std::clamp(v, 0.f, 1.f); break; }
+        }
+    }
+    auto release = [&] {
+        if (mouseL) { Keys::MouseButton(0, false); mouseL = false; }
+        if (mouseR) { Keys::MouseButton(1, false); mouseR = false; }
+    };
+    if (hand >= 0 && hand != screen.hoverHand) release();
+    screen.hoverHand = hand;
+    if (hand < 0) {
+        release();
+        lastMx = lastMy = -1; wheelAcc = 0;
+        if (screenClicked) {
+            if (screenLeftAt < 0) screenLeftAt = now;
+            else if (now - screenLeftAt > 0.4) { if (S.refocus) Keys::FocusGameNow(); screenClicked = false; screenLeftAt = -1; }
+        }
+        return;
+    }
+    screenLeftAt = -1;
+    int x = screen.monX + std::min(screen.monW - 1, (int)(hu * screen.monW));
+    int y = screen.monY + std::min(screen.monH - 1, (int)(hv * screen.monH));
+    if (x != lastMx || y != lastMy) { Keys::MouseTo(x, y); lastMx = x; lastMy = y; }
+    // buttons: press only on a fresh press while pointing, so a held game trigger doesn't click
+    bool trig = cur[hand][C_TRIGGER][F_PRESS], trigEdge = trig && !prev[hand][C_TRIGGER][F_PRESS];
+    bool b1 = cur[hand][C_BTN1][F_PRESS], b1Edge = b1 && !prev[hand][C_BTN1][F_PRESS];
+    if (trigEdge && !mouseL) { Keys::MouseButton(0, true); mouseL = true; screenClicked = true; if (prof->haptics) haptics.push_back({ hand, prof->hapticAmp, 0.02f }); }
+    if (!trig && mouseL) { Keys::MouseButton(0, false); mouseL = false; }
+    if (b1Edge && !mouseR) { Keys::MouseButton(1, true); mouseR = true; screenClicked = true; if (prof->haptics) haptics.push_back({ hand, prof->hapticAmp, 0.02f }); }
+    if (!b1 && mouseR) { Keys::MouseButton(1, false); mouseR = false; }
+    float sy = fr.h[hand].sy;
+    float dt = (float)std::clamp(now - lastNow, 0.0, 0.1);
+    if (std::fabs(sy) > 0.3f) wheelAcc += sy * dt * 10.f; else wheelAcc = 0; // up to 10 notches a second
+    while (wheelAcc >= 1.f) { Keys::MouseWheel(120); wheelAcc -= 1.f; }
+    while (wheelAcc <= -1.f) { Keys::MouseWheel(-120); wheelAcc += 1.f; }
 }

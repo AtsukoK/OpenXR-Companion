@@ -13,5 +13,13 @@ void Up(const std::string& combo);
 void Sequence(const std::string& steps);
 void ReleaseAll();
 void SetFocusWindow(bool on);
+// Desktop mouse for the mirrored screen. x, y are desktop pixels (not scaled by Windows' text size).
+void MouseTo(int x, int y);
+void MouseButton(int button, bool down); // 0 left, 1 right, 2 middle
+void MouseWheel(int delta);              // 120 = one notch up
+void FocusGameNow();                     // give the game's window the focus back
+// Tests: record instead of moving the real mouse.
+void SetDryRun(bool on);
+void DryState(int& x, int& y, bool& left, bool& right, int& wheel, int& focus);
 void Shutdown();
 }

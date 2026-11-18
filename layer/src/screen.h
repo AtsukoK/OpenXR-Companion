@@ -22,6 +22,7 @@ public:
     // What the capture thread found: monitor count, the main monitor's number (1-based),
     // the monitor shown (1-based) and a status line for messages and the log.
     void Status(int& count, int& primary, int& shown, std::string& msg, uint64_t& msgVersion);
+    void Rect(int& x, int& y, int& w, int& h); // the shown monitor on the desktop, in pixels
 
     static std::vector<MonitorInfo> Monitors(); // left to right, then top to bottom
     struct Impl;
