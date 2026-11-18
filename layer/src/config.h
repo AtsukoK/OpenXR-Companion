@@ -130,6 +130,7 @@ struct ScreenStyle {
     int monitor = 0;                // 0 = the main monitor, 1..N = monitors from left to right
     std::string source = "monitor"; // monitor | window
     std::string window;             // source window: the first window whose title or program name contains this
+    std::string windowTitle;        // remembered from the last pick: a window with exactly this title wins
     int fps = 30;                   // capture rate cap; 0 = as fast as the headset draws
     std::vector<int> fpsSteps{ 10, 15, 30, 60, 0 }; // what "next frame rate" cycles through
     std::string place = "wrist_left"; // wrist_left|wrist_right|front|head
@@ -172,4 +173,6 @@ std::shared_ptr<Profile> LoadProfile(std::wstring& pathOut, std::string& err);
 const char* DefaultProfileJson();
 // Adjust mode: write the wheel and wrist panel placement of p back into its profile file.
 bool SavePlacement(const Profile& p, std::string& err);
+// The monitor or window last picked in the headset becomes the profile's default.
+bool SaveScreenChoice(const Profile& p, std::string& err);
 std::shared_ptr<Profile> ParseProfileText(const std::string& text, std::string& err);

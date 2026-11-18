@@ -229,7 +229,7 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
         auto& k = j["screen"]; auto& S = p->screen;
         Get(k, "monitor", S.monitor); Get(k, "fps", S.fps);
         Get(k, "source", S.source); S.source = Lower(S.source); if (S.source != "window") S.source = "monitor";
-        Get(k, "window", S.window);
+        Get(k, "window", S.window); Get(k, "window_title", S.windowTitle);
         if (k.contains("fps_steps") && k["fps_steps"].is_array()) {
             S.fpsSteps.clear();
             for (auto& v : k["fps_steps"]) if (v.is_number()) S.fpsSteps.push_back(std::clamp(v.get<int>(), 0, 240));
@@ -444,6 +444,24 @@ bool SavePlacement(const Profile& p, std::string& err) {
             w["text_up"] = W.textUp; if (W.textUp == "custom") w["rotate_deg"] = std::round(W.rotateDeg * 10.f) / 10.f;
             if (W.pose.set) w["pose"] = PoseJson(W.pose); else w.erase("pose");
         }
+        std::ofstream f(path, std::ios::binary | std::ios::trunc);
+        if (!f) { err = "cannot write " + WToUtf8(path); return false; }
+        f << j.dump(2);
+        return true;
+    } catch (const std::exception& e) { err = e.what(); return false; }
+}
+
+bool SaveScreenChoice(const Profile& p, std::string& err) {
+    std::wstring dir = ProfilesDir();
+    std::wstring path = dir + L"\\" + Utf8ToW(p.sourceName);
+    std::string text;
+    if (!ReadFile(path, text)) { err = "cannot read " + WToUtf8(path); return false; }
+    try {
+        json j = json::parse(text, nullptr, true, true);
+        json& sc = j["screen"]; const ScreenStyle& S = p.screen;
+        sc["source"] = S.source; sc["monitor"] = S.monitor;
+        if (S.source == "window") { sc["window"] = S.window; sc["window_title"] = S.windowTitle; }
+        else { sc.erase("window_title"); }
         std::ofstream f(path, std::ios::binary | std::ios::trunc);
         if (!f) { err = "cannot write " + WToUtf8(path); return false; }
         f << j.dump(2);

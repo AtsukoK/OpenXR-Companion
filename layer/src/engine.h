@@ -95,6 +95,8 @@ struct ScreenView {
     std::string windowMatch;                    // asked: a window whose title or program contains this (layer clears it)
     uint64_t windowAsk = 0;                     // bumped on every ask
     uintptr_t hwnd = 0;                         // the window shown (set by the layer)
+    std::string windowTitle;                    // asked with windowMatch: prefer a window with exactly this title
+    bool choiceChanged = false;                 // picked in the headset: the layer saves it as the new default
     float aspect = 9.f / 16.f;                  // picture height / width
     // Pointing at it: which hand moves the mouse (-1 = none), and whether pointing works right now.
     int hoverHand = -1;
