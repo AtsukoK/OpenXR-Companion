@@ -61,6 +61,8 @@ The editor opens on the **Overview**: one card per feature, with a switch to tur
 
 Shows one of your monitors, or a single window (a browser, Discord, a video, a Twitch chat), on your wrist or in front of you while you play. You can use it with the laser like a mouse.
 
+![A Chrome window mirrored in front of the player in Fallout 3 VR, with the laser pointing at it](docs/images/screen-mirror.jpg)
+
 ### Getting started
 
 1. Turn it on with a **Screen** button. The default profile has a page of them on the left wrist panel: **More > Screen**. You can also add a button with the action **Mirror a monitor** to any wheel or wrist panel.
@@ -68,6 +70,20 @@ Shows one of your monitors, or a single window (a browser, Discord, a video, a T
 3. Press **Choose...** and pick a monitor or window from the list.
 
 The screen starts on your main monitor. Whatever you pick in the headset is saved and becomes the default next time.
+
+![The Choose list in the headset: monitors and open windows such as Chrome, Discord and Explorer](docs/images/screen-picker.jpg)
+
+### Add a screen button to a wrist panel
+
+1. Open the editor. In the list on the left, unfold your **Left wrist panel** (or right) and select the page you want it on, for example the first page.
+2. Click **+ Add** and give the new button a name, for example "Monitor".
+3. Under **When pressed**, set **What happens** to **Mirror a monitor**, and **Screen** to **Show / hide it**.
+4. Leave **Monitor** on **Keep the current one** and **Or a window** empty, so the button keeps whatever you pick with **Choose...** in the headset. Optionally set **Show it** to the wrist or place you want.
+5. Save (Ctrl+S). A running game picks it up within a second.
+
+![Editor: a "Monitor" button on the left wrist panel set to Mirror a monitor, Show / hide it](docs/images/editor-screen-button.png)
+
+The same works on a wheel: add an item to any wheel and pick **Mirror a monitor**. Other choices for the button are **Open the list of monitors and windows** (Choose), next / previous monitor or window, next frame rate, and move.
 
 ### The button bar
 
