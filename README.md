@@ -127,6 +127,8 @@ Needs Visual Studio Build Tools (C++ with CMake) and the .NET 10 SDK.
 
 If OpenXR Hand Menus is useful to you, you can support its development and find my other VR mods on **[Patreon](https://www.patreon.com/cw/AtsukoK)**. Bug reports and ideas are welcome as [GitHub issues](https://github.com/AtsukoK/OpenXR-Hand-Menus/issues).
 
+You can also buy me a coffee or a beer sometimes through my Ko-fi: https://ko-fi.com/atsukok
+
 ## Licence
 
 GPLv3, see [LICENSE](LICENSE). Changes per version: [CHANGELOG.md](CHANGELOG.md). Third-party code: [nlohmann/json](third_party/nlohmann) (MIT) and the [OpenXR SDK](third_party/openxr-sdk) (Apache-2.0); their licences are kept in their folders. Code signing: see [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
