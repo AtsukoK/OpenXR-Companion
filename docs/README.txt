@@ -1,4 +1,4 @@
-OpenXR Hand Menus v0.2.0 (test build)
+OpenXR Hand Menus
 
 Adds radial menus (wheels), wrist panels, button combos and a VR keyboard to any OpenXR game.
 Works with Virtual Desktop (VDXR), SteamVR OpenXR, Meta Link and other OpenXR runtimes.
@@ -37,6 +37,15 @@ DEFAULT CONTROLS
 
 Change anything in the editor and save (Ctrl+S). A running game picks it up within a second.
 
+
+32-BIT GAMES (Fallout: New Vegas / Fallout 3 / TTW with TTWVR)
+32-bit games only load 32-bit layers, which Windows keeps in a separate list, so the
+"Install layer" button does not cover them. Use the x86 folder:
+1. Install as above.
+2. Run x86\install.ps1 as admin (right-click > Run with PowerShell, or from an admin
+   PowerShell: powershell -ExecutionPolicy Bypass -File x86\install.ps1).
+3. Start the game. The same profiles are used (per-game: profiles\FalloutNV.json).
+Remove it with x86\uninstall.ps1 (as admin).
 
 UNINSTALL
 Open the editor and click "Uninstall layer", or run uninstall.ps1 as admin. Then delete the folder.

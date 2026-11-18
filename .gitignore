@@ -7,3 +7,4 @@ release/
 *.bak
 .vs/
 SESSION_NOTES.md
+layer/build32/

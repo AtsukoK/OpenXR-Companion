@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.3 (2026-11-18)
+
+### New
+- **32-bit build for 32-bit OpenXR games**, such as Fallout: New Vegas, Fallout 3 and Tale of Two Wastelands with TTWVR. It is in the zip's `x86` folder with its own `install.ps1` / `uninstall.ps1` (run as admin), because 32-bit layers are registered in a separate place that the editor's Install layer button doesn't cover. See "32-bit games" in the README.
+
 ## v0.2.2 (2026-11-17)
 
 ### New

@@ -28,6 +28,17 @@ Radial wheels, wrist panels, button combos and a VR keyboard for any OpenXR game
 4. Start any OpenXR game. A message at the bottom of your view, "Hand menus: default.json loaded", means the layer is running.
 5. Change things in the editor and save (Ctrl+S). A running game reloads the profile within a second.
 
+## 32-bit games (Fallout: New Vegas, Fallout 3, Tale of Two Wastelands with TTWVR)
+
+32-bit games load only 32-bit OpenXR layers, from a separate registry list, so the editor's **Install layer** button doesn't reach them. The zip has a 32-bit copy of the layer in the `x86` folder.
+
+1. Install as above (the editor is the same for both).
+2. Right-click `x86\install.ps1` > **Run with PowerShell** as admin (or from an admin PowerShell: `powershell -ExecutionPolicy Bypass -File x86\install.ps1`). It registers `x86\XR_APILAYER_NOVENDOR_openxr_hand_menus.json` under `HKLM\SOFTWARE\WOW6432Node\Khronos\OpenXR\1\ApiLayers\Implicit`.
+3. Start the game. "Hand menus: default.json loaded" at the bottom of your view means it is running. Both builds share the same profiles, so a per-game profile for New Vegas is `profiles\FalloutNV.json`.
+4. To remove it, run `x86\uninstall.ps1` the same way.
+
+Tested with TTWVR on Virtual Desktop (VDXR).
+
 ## Using the editor
 
 The editor opens on the **Overview**: one card per feature, with a switch to turn it on or off and a blue button that jumps to its settings. The list on the left holds everything in the profile, grouped by controller, wheels and wrist panels.
