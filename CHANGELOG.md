@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.4 (2026-11-18)
+
+### Changed
+- **Install layer now also installs the 32-bit layer** (for Fallout: New Vegas / Fallout 3 with TTWVR) in the same admin prompt, and **Uninstall layer** removes both. The toolbar shows whether the 32-bit layer is installed too. Running the scripts in `x86` by hand still works.
+
 ## v0.2.3 (2026-11-18)
 
 ### New

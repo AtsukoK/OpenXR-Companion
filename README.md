@@ -30,12 +30,12 @@ Radial wheels, wrist panels, button combos and a VR keyboard for any OpenXR game
 
 ## 32-bit games (Fallout: New Vegas, Fallout 3, Tale of Two Wastelands with TTWVR)
 
-32-bit games load only 32-bit OpenXR layers, from a separate registry list, so the editor's **Install layer** button doesn't reach them. The zip has a 32-bit copy of the layer in the `x86` folder.
+32-bit games load only 32-bit OpenXR layers, from a separate registry list. The zip has a 32-bit copy of the layer in the `x86` folder, and the editor's **Install layer** button installs it together with the 64-bit one (one admin prompt). The toolbar shows "Layer: installed (+ 32-bit)" when both are set up.
 
 1. Install as above (the editor is the same for both).
-2. Right-click `x86\install.ps1` > **Run with PowerShell** as admin (or from an admin PowerShell: `powershell -ExecutionPolicy Bypass -File x86\install.ps1`). It registers `x86\XR_APILAYER_NOVENDOR_openxr_hand_menus.json` under `HKLM\SOFTWARE\WOW6432Node\Khronos\OpenXR\1\ApiLayers\Implicit`.
+2. Click **Install layer** in the editor. That's all. (Without the editor: right-click `x86\install.ps1` > **Run with PowerShell** as admin, or from an admin PowerShell: `powershell -ExecutionPolicy Bypass -File x86\install.ps1`). It registers `x86\XR_APILAYER_NOVENDOR_openxr_hand_menus.json` under `HKLM\SOFTWARE\WOW6432Node\Khronos\OpenXR\1\ApiLayers\Implicit`.
 3. Start the game. "Hand menus: default.json loaded" at the bottom of your view means it is running. Both builds share the same profiles, so a per-game profile for New Vegas is `profiles\FalloutNV.json`.
-4. To remove it, run `x86\uninstall.ps1` the same way.
+4. **Uninstall layer** removes both (or run `x86\uninstall.ps1` as admin).
 
 Tested with TTWVR on Virtual Desktop (VDXR).
 

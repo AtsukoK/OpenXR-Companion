@@ -1091,11 +1091,15 @@ public partial class MainForm : Form
     // ------------------------------------------------------------ install
     static string ScriptDir => AppContext.BaseDirectory;
 
-    void UpdateLayerStatus()
+    static string X86Dir => Path.Combine(ScriptDir, "x86");
+    static bool HasX86 => File.Exists(Path.Combine(X86Dir, LayerJson)) && File.Exists(Path.Combine(X86Dir, "OpenXRHandMenus.dll"));
+
+    // 0 = not installed, 1 = installed from this folder, 2 = installed from another folder
+    static int LayerState(RegistryView view, string manifest)
     {
-        string manifest = Path.Combine(ScriptDir, LayerJson);
         bool installed = false, other = false;
-        using (var k = Registry.LocalMachine.OpenSubKey(ImplicitKey))
+        using (var hk = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, view))
+        using (var k = hk.OpenSubKey(ImplicitKey))
             if (k != null)
                 foreach (var v in k.GetValueNames())
                     if (v.EndsWith(LayerJson, StringComparison.OrdinalIgnoreCase))
@@ -1103,8 +1107,23 @@ public partial class MainForm : Form
                         if (string.Equals(v, manifest, StringComparison.OrdinalIgnoreCase) && k.GetValue(v) is int i && i == 0) installed = true;
                         else other = true;
                     }
-        layerStatus.Text = installed ? "  Layer: installed" : other ? "  Layer: installed from another folder" : "  Layer: NOT installed";
-        layerStatus.ForeColor = installed ? Color.ForestGreen : Color.Firebrick;
+        return installed ? 1 : other ? 2 : 0;
+    }
+
+    void UpdateLayerStatus()
+    {
+        int s64 = LayerState(RegistryView.Registry64, Path.Combine(ScriptDir, LayerJson));
+        string text = s64 == 1 ? "Layer: installed" : s64 == 2 ? "Layer: installed from another folder" : "Layer: NOT installed";
+        bool ok = s64 == 1;
+        if (HasX86)
+        {
+            int s32 = LayerState(RegistryView.Registry32, Path.Combine(X86Dir, LayerJson));
+            text += s32 == 1 ? " (+ 32-bit)" : s32 == 2 ? " (32-bit: from another folder)" : " (32-bit: not installed)";
+            ok &= s32 == 1;
+        }
+        layerStatus.Text = "  " + text;
+        layerStatus.ToolTipText = "64-bit games use the main layer. 32-bit games (Fallout: New Vegas / Fallout 3 with TTWVR) use the 32-bit one in the x86 folder. Install layer sets up both.";
+        layerStatus.ForeColor = ok ? Color.ForestGreen : Color.Firebrick;
     }
 
     void RunScript(string name)
@@ -1121,7 +1140,11 @@ public partial class MainForm : Form
         }
         try
         {
-            var p = Process.Start(new ProcessStartInfo("powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -File \"{script}\"") { Verb = "runas", UseShellExecute = true });
+            // One admin prompt for both: the 64-bit layer, then the 32-bit one (x86 folder) if it shipped.
+            string cmd = $"& '{script.Replace("'", "''")}'";
+            string script32 = Path.Combine(X86Dir, name);
+            if (HasX86 && File.Exists(script32)) cmd += $"; & '{script32.Replace("'", "''")}'";
+            var p = Process.Start(new ProcessStartInfo("powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -Command \"{cmd}\"") { Verb = "runas", UseShellExecute = true });
             p?.WaitForExit();
         }
         catch (Exception e) { MessageBox.Show(this, e.Message); }

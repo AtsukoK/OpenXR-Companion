@@ -39,13 +39,14 @@ Change anything in the editor and save (Ctrl+S). A running game picks it up with
 
 
 32-BIT GAMES (Fallout: New Vegas / Fallout 3 / TTW with TTWVR)
-32-bit games only load 32-bit layers, which Windows keeps in a separate list, so the
-"Install layer" button does not cover them. Use the x86 folder:
+32-bit games only load 32-bit layers, which Windows keeps in a separate list. The x86
+folder has the 32-bit layer, and "Install layer" in the editor installs it too, together
+with the 64-bit one. The toolbar then shows "Layer: installed (+ 32-bit)".
 1. Install as above.
-2. Run x86\install.ps1 as admin (right-click > Run with PowerShell, or from an admin
+2. Without the editor: run x86\install.ps1 as admin (right-click > Run with PowerShell, or from an admin
    PowerShell: powershell -ExecutionPolicy Bypass -File x86\install.ps1).
 3. Start the game. The same profiles are used (per-game: profiles\FalloutNV.json).
-Remove it with x86\uninstall.ps1 (as admin).
+"Uninstall layer" removes both (or run x86\uninstall.ps1 as admin).
 
 UNINSTALL
 Open the editor and click "Uninstall layer", or run uninstall.ps1 as admin. Then delete the folder.
