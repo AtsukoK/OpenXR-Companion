@@ -37,9 +37,21 @@ public static class Choices
         new("layer", "Switch a layer (changes what other buttons do)"),
         new("xr_input", "Press a controller button inside the game"),
         new("back", "Wheel: go back one level"), new("close", "Wheel: close"),
-        new("reload", "Reload this profile"), new("adjust", "Adjust positions: move wheels and wrist panels by hand"), new("none", "Do nothing"),
+        new("reload", "Reload this profile"), new("adjust", "Adjust positions: move wheels and wrist panels by hand"),
+        new("screen", "Mirror a monitor: show / hide it, switch monitor, frame rate or place"), new("none", "Do nothing"),
     };
     public static readonly Choice[] KeyModes = { new("tap", "Tap it once"), new("hold", "Keep it held while my button is held"), new("toggle", "Toggle: first time down, next time up") };
+    public static readonly Choice[] ScreenModes =
+    {
+        new("toggle", "Show / hide it (pressing it again hides it)"), new("on", "Show it"), new("off", "Hide it"),
+        new("next_monitor", "Switch to the next monitor"), new("prev_monitor", "Switch to the previous monitor"),
+        new("next_fps", "Next frame rate (from Settings > Screen mirror)"), new("next_place", "Move it: left wrist, right wrist, in front, following view"),
+    };
+    public static readonly Choice[] ScreenPlaces =
+    {
+        new("", "Where Settings says"), new("wrist_left", "On my left wrist"), new("wrist_right", "On my right wrist"),
+        new("front", "In front of me (stays where it appeared)"), new("head", "In front of me, following my view"),
+    };
     public static readonly Choice[] LayerModes = { new("hold", "On while held"), new("toggle", "Toggle on / off"), new("on", "Turn on"), new("off", "Turn off") };
     public static readonly Choice[] Confirms =
     {
@@ -330,7 +342,10 @@ public class ActionEditor : FormPanel
     readonly ComboBox layer = new() { Width = 220 };
     readonly ChoiceBox layerMode = new(Choices.LayerModes, 220);
     readonly ChordEditor target = new();
-    readonly Label lKeys, lKeyMode, lSteps, lWheel, lConfirm, lLayer, lLayerMode, lTarget;
+    readonly ChoiceBox screenMode = new(Choices.ScreenModes, 420);
+    readonly ChoiceBox screenPlace = new(Choices.ScreenPlaces, 360);
+    readonly ChoiceBox screenMon = new(Monitors.Choices(true), 360);
+    readonly Label lKeys, lKeyMode, lSteps, lWheel, lConfirm, lLayer, lLayerMode, lTarget, lScreenMode, lScreenPlace, lScreenMon;
 
     public ActionEditor(bool inWheel, WristModel wrist = null)
     {
@@ -359,6 +374,12 @@ public class ActionEditor : FormPanel
         lLayerMode = AddRow("Layer", layerMode);
         lTarget = AddRow("Game button", target, "The game will think this controller button is pressed.");
         lTarget.Text = "Game button";
+        lScreenMode = AddRow("Screen", screenMode, "Settings > Screen mirror sets the monitor, frame rates, size and position.");
+        lScreenPlace = AddRow("Show it", screenPlace);
+        lScreenMon = AddRow("Monitor", screenMon, "Monitors are numbered from left to right.");
+        screenMode.SelectedIndexChanged += (s, e) => { if (!loading) { a.Mode = screenMode.Code; Sync(); Fire(); } };
+        screenPlace.SelectedIndexChanged += (s, e) => { if (!loading) { a.Place = string.IsNullOrEmpty(screenPlace.Code) ? null : screenPlace.Code; Fire(); } };
+        screenMon.SelectedIndexChanged += (s, e) => { if (!loading) { a.Monitor = int.TryParse(screenMon.Code, out var m) ? m : null; Fire(); } };
 
         type.SelectedIndexChanged += (s, e) => { if (loading) return; a.Type = type.Code; Defaults(); Sync(); Fire(); };
         keys.Changed += () => { if (!loading) { a.Keys = keys.Value; Fire(); } };
@@ -388,6 +409,7 @@ public class ActionEditor : FormPanel
             case "page": a.Page ??= wristOwner?.Pages.Keys.FirstOrDefault(); break;
             case "layer": a.Layer ??= "shift"; if (a.Mode is not ("hold" or "toggle" or "on" or "off")) a.Mode = inWheel ? "toggle" : "hold"; break;
             case "xr_input": a.Target ??= "left.menu"; break;
+            case "screen": if (Choices.ScreenModes.All(c => c.Code != a.Mode)) a.Mode = "toggle"; break;
         }
     }
 
@@ -411,6 +433,9 @@ public class ActionEditor : FormPanel
         layer.Text = a.Layer ?? "";
         layerMode.Code = a.Type == "layer" && !string.IsNullOrEmpty(a.Mode) ? a.Mode : (inWheel ? "toggle" : "hold");
         target.Value = a.Target ?? "left.menu";
+        screenMode.Code = a.Type == "screen" && !string.IsNullOrEmpty(a.Mode) ? a.Mode : "toggle";
+        screenPlace.Code = a.Place ?? "";
+        screenMon.Code = a.Monitor?.ToString() ?? "";
         loading = false;
         Sync();
     }
@@ -424,6 +449,8 @@ public class ActionEditor : FormPanel
         Show(lPage, t == "page");
         Show(lLayer, t == "layer"); Show(lLayerMode, t == "layer");
         Show(lTarget, t == "xr_input");
+        bool turnsOn = t == "screen" && (a.Mode is null or "toggle" or "on");
+        Show(lScreenMode, t == "screen"); Show(lScreenPlace, turnsOn); Show(lScreenMon, turnsOn);
         if (t == "xr_input") { keyMode.Code = string.IsNullOrEmpty(a.Mode) ? "tap" : a.Mode; }
     }
 }

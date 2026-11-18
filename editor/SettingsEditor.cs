@@ -102,6 +102,48 @@ public class SettingsEditor : EditorBase
             "So you can find your pointer before it reaches the panel. It hands over to the touch ring when your fingertip gets close.");
         SyncCorr();
 
+        // ---------------- screen mirror
+        p.Screen ??= new(); var sc = p.Screen; var scr = new FormPanel();
+        Label lWW = null, lTE = null, lLift = null, lSide = null, lRot2 = null, lFace = null, lFW = null, lFD = null, lFB = null;
+        void SyncPlace()
+        {
+            bool wr = sc.Place is "wrist_left" or "wrist_right";
+            foreach (var l in new[] { lWW, lTE, lLift, lSide, lRot2, lFace }) FormPanel.Show(l, wr);
+            foreach (var l in new[] { lFW, lFD, lFB }) FormPanel.Show(l, !wr);
+        }
+        scr.AddRow("", Check("Show it as soon as the game starts", sc.StartOn, v => sc.StartOn = v),
+            "Otherwise add a Screen button to a wheel or wrist panel (the default left wrist panel has them under More > Screen).");
+        scr.AddRow("Monitor", Pick(Monitors.Choices(false), sc.Monitor.ToString(), v => sc.Monitor = int.TryParse(v, out var m) ? m : 0),
+            "Monitors are numbered from left to right. Switch while playing with a 'next monitor' button.");
+        scr.AddRow("Frame rate cap (fps)", Int(0, 240, 5, sc.Fps, v => sc.Fps = v),
+            "How often the picture updates at most. 0 = as fast as the headset. Lower uses less CPU and GPU; 15-30 is plenty for reading.");
+        var steps = new TextBox { Width = 200, Text = string.Join(", ", sc.FpsSteps ?? new()) };
+        steps.TextChanged += (o, e) =>
+        {
+            var vals = steps.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(x => int.TryParse(x, out var n) ? n : -1).ToList();
+            bool ok = vals.Count > 0 && vals.All(n => n >= 0 && n <= 240);
+            steps.BackColor = ok ? SystemColors.Window : Color.MistyRose;
+            if (ok) { sc.FpsSteps = vals; Fire(); }
+        };
+        scr.AddRow("Frame rates to switch between", steps, "For the 'next frame rate' button, e.g. 10, 15, 30, 60, 0  (0 = as fast as the headset).");
+        scr.AddRow("Where it shows", Pick(Choices.ScreenPlaces.Skip(1).ToArray(), sc.Place, v => { sc.Place = v; SyncPlace(); }),
+            "A Screen button can pick its own place; this is used when it doesn't.");
+        lWW = scr.AddRow("Width on the wrist (m)", Num(0.04m, 0.6m, 0.01m, 2, sc.WristWidth, v => sc.WristWidth = v), "0.16 m is about a small tablet.");
+        lFace = scr.AddRow("Side of the arm", Pick(new Choice[] { new("back", "Back of the wrist (like a watch)"), new("inner", "Inner side (palm side)") }, sc.Face, v => sc.Face = v),
+            "Wrist panels with buttons use the inner side by default, so the back keeps them apart.");
+        lTE = scr.AddRow("Toward the elbow (m)", Num(-0.1m, 0.4m, 0.01m, 2, sc.TowardElbow, v => sc.TowardElbow = v));
+        lLift = scr.AddRow("Off the arm (m)", Num(-0.1m, 0.2m, 0.005m, 3, sc.Lift, v => sc.Lift = v));
+        lSide = scr.AddRow("Sideways (m)", Num(-0.3m, 0.3m, 0.005m, 3, sc.Side, v => sc.Side = v));
+        lRot2 = scr.AddRow("Turn (deg)", Num(-180, 180, 5, 0, sc.RotateDeg, v => sc.RotateDeg = v), "0 = the picture runs along the forearm, read with the arm held across your body.");
+        lFW = scr.AddRow("Width in front (m)", Num(0.1m, 4, 0.05m, 2, sc.Width, v => sc.Width = v));
+        lFD = scr.AddRow("Distance in front (m)", Num(0.2m, 5, 0.05m, 2, sc.Distance, v => sc.Distance = v));
+        lFB = scr.AddRow("Below eye level (m)", Num(-1, 1, 0.01m, 2, sc.Below, v => sc.Below = v));
+        scr.AddRow("Opacity", Num(0.1m, 1, 0.05m, 2, sc.Opacity, v => sc.Opacity = v));
+        scr.AddRow("", Check("Show the mouse pointer", sc.Cursor, v => sc.Cursor = v));
+        scr.AddRow("Sharpness limit (pixels wide)", Int(0, 7680, 160, sc.MaxWidthPx, v => sc.MaxWidthPx = v),
+            "0 = automatic: 1920 in 64-bit games, 1280 in 32-bit games (they have little memory to spare). The picture is halved until it fits.");
+        SyncPlace();
+
         // ---------------- keyboard
         var keys = new FormPanel();
         keys.AddRow("Width (m)", Num(0.2m, 1.5m, 0.02m, 2, kb.Width, v => kb.Width = v));
@@ -172,6 +214,7 @@ public class SettingsEditor : EditorBase
               Section("Picking items"), pick,
               Section("Pointing (laser and fingertip)"), aim,
               Section("VR keyboard"), keys,
+              Section("Screen mirror (a monitor in VR)"), scr,
               advToggle, adv);
     }
 

@@ -9,6 +9,12 @@ void Engine::SetProfile(std::shared_ptr<Profile> p) {
     prof = std::move(p);
     bs.assign(prof ? prof->bindings.size() : 0, BState{});
     if (prof) Keys::SetFocusWindow(prof->focusWindow);
+    if (prof) { // the editor's screen settings apply on every (re)load; on/off survives a reload
+        const ScreenStyle& S = prof->screen;
+        screen.place = S.place; screen.monitor = S.monitor; screen.fps = S.fps;
+        if (!screenInit) { screen.on = S.startOn; screenPlaceFront = screen.on; screenInit = true; }
+        else if (screen.on) screenPlaceFront = true;
+    }
 }
 
 void Engine::Reset() {
@@ -30,6 +36,7 @@ bool Engine::IsOn(const Action& a) const {
     case ActType::Key: return a.mode == "toggle" && keyToggles.count(a.keys) > 0;
     case ActType::XrInput: return a.mode == "toggle" && xrToggles.count({ a.target.hand, a.target.comp }) > 0;
     case ActType::Layer: return layers.count(a.layer) > 0;
+    case ActType::Screen: return (a.mode == "toggle" || a.mode == "on") && screen.on && (a.place.empty() || a.place == screen.place);
     default: return false;
     }
 }
@@ -148,6 +155,9 @@ bool Engine::RunAction(const Action& a, int hand, int bi, bool fromWheel) {
         return false;
     case ActType::Keyboard:
         OpenKeyboard(bi);
+        return false;
+    case ActType::Screen:
+        ScreenAction(a);
         return false;
     case ActType::Adjust:
         adjust = !adjust; grab = GrabRun{};
@@ -594,6 +604,7 @@ void Engine::Update(const Frame& f) {
     UpdateWrist(1);
     ComputeBlocks();
     UpdatePointers();
+    UpdateScreen();
     lastNow = now;
 
     view.visible = wr.open;
@@ -609,4 +620,91 @@ void Engine::Update(const Frame& f) {
         if (on != view.on) { view.on = std::move(on); Dirty(); }
         view.size = prof->style.radius * 2.f;
     }
+}
+
+// ------------------------------------------------------------ mirrored screen
+static const char* PlaceName(const std::string& p) {
+    return p == "wrist_left" ? "left wrist" : p == "wrist_right" ? "right wrist" : p == "front" ? "in front of you" : "following your view";
+}
+
+void Engine::ScreenAction(const Action& a) {
+    const std::string& m = a.mode;
+    auto turnOn = [&] {
+        if (!a.place.empty()) screen.place = a.place;
+        if (a.monitor >= 0) screen.monitor = a.monitor;
+        screen.on = true; screenPlaceFront = true;
+        Toast(std::string("Screen on (") + PlaceName(screen.place) + ")", 1.5);
+    };
+    auto turnOff = [&] { screen.on = false; Toast("Screen off", 1.2); };
+    if (m == "on") turnOn();
+    else if (m == "off") turnOff();
+    else if (m == "next_monitor" || m == "prev_monitor") {
+        int n = std::max(1, screen.monitorCount);
+        int cur = screen.monitor == 0 ? screen.primaryIndex : screen.monitor;
+        cur = m == "next_monitor" ? cur % n + 1 : (cur + n - 2) % n + 1;
+        screen.monitor = cur;
+        if (!screen.on) { screen.on = true; screenPlaceFront = true; }
+        Toast("Screen: monitor " + std::to_string(cur) + " of " + std::to_string(n), 1.5);
+    } else if (m == "next_fps") {
+        const auto& st = prof->screen.fpsSteps;
+        size_t i = 0;
+        while (i < st.size() && st[i] != screen.fps) i++;
+        screen.fps = st.empty() ? 30 : st[(i + 1) % st.size()]; // not in the list: starts at the first
+        Toast(screen.fps ? "Screen: " + std::to_string(screen.fps) + " fps" : std::string("Screen: every frame"), 1.5);
+    } else if (m == "next_place") {
+        static const char* order[] = { "wrist_left", "wrist_right", "front", "head" };
+        int i = 0; while (i < 4 && screen.place != order[i]) i++;
+        screen.place = order[(i + 1) % 4];
+        screen.on = true; screenPlaceFront = true;
+        Toast(std::string("Screen: ") + PlaceName(screen.place), 1.5);
+    } else { // toggle: the same button with another place moves it there instead of turning it off
+        if (screen.on && (a.place.empty() || a.place == screen.place)) turnOff(); else turnOn();
+    }
+    Log("screen %s: on %d place %s monitor %d fps %d", m.c_str(), screen.on, screen.place.c_str(), screen.monitor, screen.fps);
+}
+
+void Engine::UpdateScreen() {
+    screen.poseValid = false;
+    if (!screen.on) return;
+    const ScreenStyle& S = prof->screen;
+    if (screen.place == "wrist_left" || screen.place == "wrist_right") {
+        int h = screen.place == "wrist_left" ? 0 : 1;
+        const HandRaw& hr = fr.h[h];
+        if (!hr.gripValid) return;
+        const XrQuaternionf& q = hr.gripPose.orientation;
+        Vec3 ax = Rotate(q, { 1, 0, 0 }), Z = Rotate(q, { 0, 0, 1 });
+        Vec3 palmOut = h == 0 ? ax : ax * -1.f;
+        Vec3 n = S.face == "inner" ? palmOut : palmOut * -1.f;
+        // Landscape along the forearm, read with the arm held across the body (like a watch); rotate_deg turns it.
+        Vec3 xAlong = h == 0 ? Z * -1.f : Z;
+        Vec3 yAlong = Cross(n, xAlong);
+        float r = S.rotateDeg * 3.14159265f / 180.f;
+        Vec3 y = Norm(yAlong * std::cos(r) + Cross(n, yAlong) * std::sin(r));
+        Vec3 x = Cross(y, n);
+        Vec3 c = V(hr.gripPose.position) + Z * S.towardElbow + n * S.lift + Norm(Cross(Z, n)) * S.side;
+        screen.pose = { QuatFromBasis(x, y, n), X(c) };
+        screen.widthM = S.wristWidth;
+        screen.poseValid = true;
+        return;
+    }
+    if (!fr.headValid) return;
+    const XrPosef& hp = fr.head;
+    if (screen.place == "head") {
+        Vec3 fwd = Rotate(hp.orientation, { 0, 0, -1 }), up = Rotate(hp.orientation, { 0, 1, 0 });
+        screen.pose = { hp.orientation, X(V(hp.position) + fwd * S.distance - up * S.below) };
+        screen.widthM = S.width; screen.poseValid = true;
+        return;
+    }
+    // front: placed in front of you (level, facing you) when shown, then stays there
+    if (screenPlaceFront) {
+        Vec3 f = Rotate(hp.orientation, { 0, 0, -1 }); f.y = 0;
+        if (Len(f) < 1e-3f) f = { 0, 0, -1 };
+        f = Norm(f);
+        Vec3 eye = V(hp.position);
+        Vec3 c = eye + f * S.distance; c.y -= S.below;
+        Vec3 zf = f * -1.f, yUp{ 0, 1, 0 }, xr = Cross(yUp, zf);
+        screenFrontPose = { QuatFromBasis(xr, yUp, zf), X(c) };
+        screenPlaceFront = false;
+    }
+    screen.pose = screenFrontPose; screen.widthM = S.width; screen.poseValid = true;
 }

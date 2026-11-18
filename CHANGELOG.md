@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### New
+- **Screen mirror: show a desktop monitor in VR**, on either wrist, in front of you, or following your view. Works with every monitor (numbered left to right) and in 32-bit games.
+- **Frame rate cap you choose** (Settings > Screen mirror), from a few frames a second up to as fast as the headset, plus a list of rates a button steps through while playing.
+- **New action "screen"**: show / hide it (optionally at a set place and monitor), next / previous monitor, next frame rate, move it to the next place. All of them work while playing, from a wheel or a wrist panel.
+- The built-in default profile has the buttons on the left wrist panel under More > Screen.
+
 ## v0.2.4 (2026-11-18)
 
 ### Changed

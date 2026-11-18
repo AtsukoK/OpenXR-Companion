@@ -57,6 +57,17 @@ The editor opens on the **Overview**: one card per feature, with a switch to tur
 
 ![Wrist panel page: off / own pages / mirror, first page, side of the arm and text direction](docs/images/editor-wrist-panel.png)
 
+## Screen mirror (a monitor in VR)
+
+Shows one of your desktop monitors on your wrist or in front of you while you play, for example a guide, a video or a chat window.
+
+- Add a button with the action **Mirror a monitor** to a wheel or a wrist panel. It can show / hide the screen at a place you choose (left wrist, right wrist, in front of you, following your view), switch to the next or previous monitor, step through frame rates, or move the screen to the next place. The default profile has these under the left wrist panel's More > Screen.
+- **Settings > Screen mirror** sets the monitor, the frame rate cap (0 = as fast as the headset), the frame rates the button steps through, the size and position, opacity, the mouse pointer and a sharpness limit.
+- Monitors are numbered from left to right; "Main monitor" follows whichever one Windows uses as main.
+- The picture updates only when something on that monitor changes, and never faster than the cap. Lower caps cost less CPU and GPU.
+- 32-bit games get a lower sharpness limit by default (1280 pixels wide) because they have little memory to spare.
+- Protected video (some streaming apps) shows as black; that is a Windows rule. Mirroring the monitor the game itself is drawn on can also show black or a frozen image.
+
 ## Files and switching it off
 
 Turn it off for one game with `enabled: false` in that game's profile. Remove it entirely with **Uninstall layer**. Setting the environment variable `DISABLE_XR_APILAYER_NOVENDOR_openxr_hand_menus=1` also disables it.

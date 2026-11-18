@@ -71,6 +71,19 @@ struct Cell { float x, y, w, h; }; // 0..1, y down
 // Header strip plus a grid; the same numbers are used for drawing and hit tests.
 void WristLayout(int count, int columns, std::vector<Cell>& out, Cell& header);
 
+// Mirrored desktop monitor. The engine decides if and where; the layer captures and draws it.
+struct ScreenView {
+    bool on = false;
+    std::string place = "wrist_left";   // wrist_left|wrist_right|front|head
+    int monitor = 0;                    // 0 = main, 1..N left to right
+    int fps = 30;                       // 0 = every headset frame
+    XrPosef pose{ {0,0,0,1}, {0,0,0} };
+    float widthM = 0.16f;
+    bool poseValid = false;
+    // Filled in by the layer from the capture: how many monitors there are, and which is the main one.
+    int monitorCount = 0, primaryIndex = 1;
+};
+
 struct HapticReq { int hand; float amp; float sec; };
 // Laser pointer of one controller: a beam from the controller and a dot where it hits a wheel,
 // the keyboard or a wrist panel. Shown only while it is aimed at one of them.
@@ -91,6 +104,7 @@ public:
     KeyboardView kb;
     WristView wrist[2];             // [0] left forearm, [1] right forearm
     PointerView pointer[2];         // per controller
+    ScreenView screen;
     std::string toast; uint64_t toastVersion = 0; double toastUntil = 0;
     std::vector<HapticReq> haptics;
     bool reloadRequested = false;
@@ -107,6 +121,7 @@ public:
     bool Active() const { return prof && prof->enabled; }
     // Is this action a toggle that is currently on? (key toggle, game input toggle, layer)
     bool IsOn(const Action& a) const;
+    void ScreenAction(const Action& a); // screen on/off, monitor, frame rate, place
 
 private:
     struct BState { bool armed = false; double armTime = 0; bool fired = false; bool needEnd = false; double lastTap = -1; };
@@ -137,6 +152,9 @@ private:
     GrabRun grab;
     double adjustClosedAt = -1;
     void UpdateAdjustWheel();
+    bool screenInit = false, screenPlaceFront = false;
+    XrPosef screenFrontPose{ {0,0,0,1}, {0,0,0} };
+    void UpdateScreen();
 
     bool Down(const InputId& i) const { return cur[i.hand][i.comp][i.feat]; }
     bool Pressed(const InputId& i) const { return cur[i.hand][i.comp][i.feat] && !prev[i.hand][i.comp][i.feat]; }

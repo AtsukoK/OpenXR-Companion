@@ -33,8 +33,8 @@ public class InputConv : ChoiceConverter { protected override IEnumerable<string
 public class GestureConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "press", "tap", "hold", "double_tap", "while_held" }; }
 public class BlockConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "trigger", "all" }; }
 public class BlockOpenConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "minimal", "hand", "all" }; }
-public class TypeConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "key", "sequence", "xr_input", "wheel", "back", "close", "layer", "reload", "keyboard", "page", "adjust" }; }
-public class ModeConv : ChoiceConverter { protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "tap", "hold", "toggle", "on", "off" }; }
+public class TypeConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "key", "sequence", "xr_input", "wheel", "back", "close", "layer", "reload", "keyboard", "page", "adjust", "screen" }; }
+public class ModeConv : ChoiceConverter { protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "tap", "hold", "toggle", "on", "off", "next_monitor", "prev_monitor", "next_fps", "next_place" }; }
 public class ConfirmConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "auto", "release", "stick_return", "button" }; }
 public class AnchorConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "hand", "hand_locked", "head", "head_locked" }; }
 public class MethodConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "thumbstick", "point", "both" }; }
@@ -101,6 +101,7 @@ public class ProfileModel
     [JsonPropertyName("keyboard")] public KeyboardModel Keyboard { get; set; } = new();
 
     [Browsable(false)][JsonPropertyName("pointer")] public PointerModel Pointer { get; set; } = new();
+    [Browsable(false)][JsonPropertyName("screen")] public ScreenModel Screen { get; set; } = new();
 
     [Browsable(false)][JsonPropertyName("wrist_left")] public WristModel WristLeft { get; set; } = new();
     [Browsable(false)][JsonPropertyName("wrist_right")] public WristModel WristRight { get; set; } = new() { Mirror = true };
@@ -190,6 +191,47 @@ public class PointerModel
     [JsonPropertyName("forward_m")] public float ForwardM { get; set; } = 0f;
     [JsonPropertyName("finger")] public bool Finger { get; set; } = true;
     [JsonPropertyName("guide_laser")] public bool GuideLaser { get; set; } = true;
+}
+
+public class ScreenModel
+{
+    [JsonPropertyName("monitor")] public int Monitor { get; set; } = 0;
+    [JsonPropertyName("fps")] public int Fps { get; set; } = 30;
+    [JsonPropertyName("fps_steps")] public List<int> FpsSteps { get; set; } = new() { 10, 15, 30, 60, 0 };
+    [JsonPropertyName("place")] public string Place { get; set; } = "wrist_left";
+    [JsonPropertyName("wrist_width_m")] public float WristWidth { get; set; } = 0.16f;
+    [JsonPropertyName("toward_elbow_m")] public float TowardElbow { get; set; } = 0.14f;
+    [JsonPropertyName("lift_m")] public float Lift { get; set; } = 0.03f;
+    [JsonPropertyName("side_m")] public float Side { get; set; } = 0f;
+    [JsonPropertyName("rotate_deg")] public float RotateDeg { get; set; } = 0f;
+    [JsonPropertyName("face")] public string Face { get; set; } = "back";
+    [JsonPropertyName("width_m")] public float Width { get; set; } = 0.8f;
+    [JsonPropertyName("distance_m")] public float Distance { get; set; } = 0.9f;
+    [JsonPropertyName("below_eyes_m")] public float Below { get; set; } = 0.05f;
+    [JsonPropertyName("max_width_px")] public int MaxWidthPx { get; set; } = 0;
+    [JsonPropertyName("opacity")] public float Opacity { get; set; } = 1f;
+    [JsonPropertyName("cursor")] public bool Cursor { get; set; } = true;
+    [JsonPropertyName("start_on")] public bool StartOn { get; set; }
+}
+
+// Monitors numbered the way the layer numbers them: left to right, then top to bottom.
+public static class Monitors
+{
+    public static Screen[] Sorted() => Screen.AllScreens.OrderBy(s => s.Bounds.X).ThenBy(s => s.Bounds.Y).ToArray();
+    public static Choice[] Choices(bool withKeep)
+    {
+        var l = new List<Choice>();
+        if (withKeep) l.Add(new("", "Keep the current one"));
+        l.Add(new("0", "Main monitor"));
+        var s = Sorted();
+        for (int i = 0; i < s.Length; i++)
+        {
+            string where = s.Length < 2 ? "" : i == 0 ? ", leftmost" : i == s.Length - 1 ? ", rightmost" : "";
+            l.Add(new((i + 1).ToString(), $"Monitor {i + 1}: {s[i].Bounds.Width}x{s[i].Bounds.Height}{(s[i].Primary ? " (main)" : "")}{where}"));
+        }
+        for (int i = s.Length; i < 4; i++) l.Add(new((i + 1).ToString(), $"Monitor {i + 1} (not connected now)"));
+        return l.ToArray();
+    }
 }
 
 public class KeyboardModel
@@ -292,6 +334,8 @@ public class ActionModel
     [Description("xr_input: the controller input the game should think is pressed, e.g. left.menu or right.thumbstick.up"), TypeConverter(typeof(InputConv))]
     [JsonPropertyName("target"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string Target { get; set; }
     [Description("page: the wrist panel page to open"), JsonPropertyName("page"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string Page { get; set; }
+    [Description("screen: where it shows when turned on: wrist_left, wrist_right, front, head (empty = the Settings choice)"), JsonPropertyName("place"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string Place { get; set; }
+    [Description("screen: which monitor when turned on: 0 = main, 1.. = left to right (empty = keep)"), JsonPropertyName("monitor"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? Monitor { get; set; }
 
     public override string ToString() => Type switch
     {
@@ -301,6 +345,7 @@ public class ActionModel
         "wheel" => $"wheel {Wheel}",
         "page" => $"page {Page}",
         "layer" => $"layer {Layer} {Mode}".Trim(),
+        "screen" => $"screen {Mode} {Place}".Trim(),
         _ => Type,
     };
 }
