@@ -523,14 +523,14 @@ int main(int argc, char** argv) {
         e.screen.monX = 0; e.screen.monY = 0; e.screen.monW = 1920; e.screen.monH = 1080; e.screen.aspect = 9.f / 16.f;
         Action on; on.type = ActType::Screen; on.mode = "on"; e.ScreenAction(on);
         step(2);
-        CHECK(e.screen.barVisible && e.screen.barLabels.size() == 5, "screen bar: pointing at the screen shows its button bar");
+        CHECK(e.screen.barVisible && e.screen.barLabels.size() == 6, "screen bar: pointing at the screen shows its button bar");
         auto aimAt = [&](const XrPosef& pose, float w, float h, const Cell& c) { // point the right laser at a cell's middle
             Vec3 local{ (c.x + c.w / 2 - 0.5f) * w, (0.5f - (c.y + c.h / 2)) * h, 0 };
             Vec3 p = V(pose.position) + Rotate(pose.orientation, local);
             f.h[1].aimPose.position = X(p + Vec3{ 0, 0, 0.5f });
         };
         std::vector<Cell> cells; Cell hd;
-        ListLayout(5, 5, e.screen.barH / e.screen.barW, false, cells, hd);
+        ListLayout(6, 6, e.screen.barH / e.screen.barW, false, cells, hd);
         aimAt(e.screen.barPose, e.screen.barW, e.screen.barH, cells[0]); step(2);
         CHECK(e.screen.barHover == 0 && e.screen.hoverHand < 0, "screen bar: the laser on 'Choose...' highlights it and doesn't move the mouse");
         f.h[1].trig = 1.f; step(2); f.h[1].trig = 0.f; step(2);
@@ -556,13 +556,45 @@ int main(int argc, char** argv) {
         CHECK(!e.screen.pickOpen && e.screen.source == "window" && e.screen.hwnd == 1002, "screen picker: picking a window shows that window");
         // keyboard button
         f.h[1].aimPose.position = { 0.f, 1.6f, -0.2f }; step(2);
-        ListLayout(5, 5, e.screen.barH / e.screen.barW, false, cells, hd);
+        ListLayout(6, 6, e.screen.barH / e.screen.barW, false, cells, hd);
         aimAt(e.screen.barPose, e.screen.barW, e.screen.barH, cells[3]); step(2);
         f.h[1].trig = 1.f; step(2); f.h[1].trig = 0.f; step(2);
         CHECK(e.kb.visible, "screen bar: 'Keyboard' opens the VR keyboard");
         f.h[1].aimPose.position = { 3.f, 1.6f, -0.2f }; step(80);
         int x, y, wh, fo; bool l, r; Keys::DryState(x, y, l, r, wh, fo);
         CHECK(fo == 0, "screen bar: the game doesn't take the focus back while the keyboard is up");
+        e.kb.visible = false; // closed
+        // Move...: a list of places with Cancel
+        f.h[1].aimPose.position = { 0.f, 1.6f, -0.2f }; step(2);
+        ListLayout(6, 6, e.screen.barH / e.screen.barW, false, cells, hd);
+        aimAt(e.screen.barPose, e.screen.barW, e.screen.barH, cells[2]); step(2);
+        f.h[1].trig = 1.f; step(2); f.h[1].trig = 0.f; step(2);
+        CHECK(e.screen.pickOpen && e.screen.pickLabels.size() == 5 && e.screen.pickLabels[4] == "Cancel" && e.screen.barLabels[2] == "Cancel move",
+              "screen bar: 'Move...' lists the places with a Cancel");
+        ListLayout(5, e.screen.pickCols, e.screen.pickH / e.screen.pickW, true, cells, hd);
+        aimAt(e.screen.pickPose, e.screen.pickW, e.screen.pickH, cells[4]); step(2);
+        f.h[1].trig = 1.f; step(2); f.h[1].trig = 0.f; step(2);
+        CHECK(!e.screen.pickOpen && e.screen.place == "front", "screen bar: Cancel leaves it where it was");
+        f.h[1].aimPose.position = { 0.f, 1.6f, -0.2f }; step(2);
+        ListLayout(6, 6, e.screen.barH / e.screen.barW, false, cells, hd);
+        aimAt(e.screen.barPose, e.screen.barW, e.screen.barH, cells[2]); step(2);
+        f.h[1].trig = 1.f; step(2); f.h[1].trig = 0.f; step(2);
+        ListLayout(5, e.screen.pickCols, e.screen.pickH / e.screen.pickW, true, cells, hd);
+        aimAt(e.screen.pickPose, e.screen.pickW, e.screen.pickH, cells[3]); step(2);
+        f.h[1].trig = 1.f; step(2); f.h[1].trig = 0.f; step(2);
+        CHECK(e.screen.place == "head", "screen bar: picking 'Following my view' moves it there");
+        // Adjust: turns adjust mode on; the bar becomes one Done button
+        float bw0 = e.screen.barW;
+        f.h[1].aimPose.position = X(V(e.screen.pose.position) + Vec3{ 0, 0, 0.5f }); step(2);
+        ListLayout(6, 6, e.screen.barH / e.screen.barW, false, cells, hd);
+        aimAt(e.screen.barPose, e.screen.barW, e.screen.barH, cells[4]); step(2);
+        f.h[1].trig = 1.f; step(2); f.h[1].trig = 0.f; step(2);
+        CHECK(e.adjust && e.screen.barVisible && e.screen.barLabels.size() == 1, "screen bar: 'Adjust' starts adjust mode and the bar turns into Done");
+        ListLayout(1, 1, e.screen.barH / e.screen.barW, false, cells, hd);
+        aimAt(e.screen.barPose, e.screen.barW, e.screen.barH, cells[0]); step(2);
+        f.h[1].trig = 1.f; step(2); f.h[1].trig = 0.f; step(2);
+        CHECK(!e.adjust && e.saveRequested, "screen bar: 'Done adjusting' ends adjust mode and saves");
+        CHECK(std::fabs(bw0 - 1.0f * 0.7f) < 0.01f, ("screen bar: 30% smaller by default (" + std::to_string(bw0) + " m wide on a 1 m screen)").c_str());
         Keys::SetDryRun(false);
     }
     // ---------------- the screen remembers what was picked in the headset

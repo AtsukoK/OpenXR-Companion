@@ -196,6 +196,7 @@ private:
     void ScreenUi();
     bool PanelRay(int h, const XrPosef& pose, float w, float hgt, float& u, float& v) const;
     int pickPage = 0; std::vector<int> pickMap; uint64_t seenChoices = 0;
+    int pickMode = 0;           // 0 = what to show (monitors, windows), 1 = where to put it
     double barUntil = -1, uiFlashUntil = 0;
     int uiHand = -1;            // the hand on the bar or picker this frame
     void OpenPicker();

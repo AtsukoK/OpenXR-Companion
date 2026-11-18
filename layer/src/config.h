@@ -146,6 +146,7 @@ struct ScreenStyle {
     std::map<std::string, FreePose> poses; // per place, placed by hand in adjust mode
     bool interact = true;           // point at it to move the mouse, trigger = left click, A/X = right click, stick = scroll
     bool refocus = true;            // give the game its window back after clicking on the desktop
+    float barScale = 0.7f;          // size of the button bar under the screen
 };
 
 struct Profile {
