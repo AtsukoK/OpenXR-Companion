@@ -620,6 +620,39 @@ int main(int argc, char** argv) {
         CHECK(e.screen.choiceChanged, "screen choice: switching in the headset asks to remember it");
         DeleteFileW(path.c_str());
     }
+    // ---------------- steadying for shaky hands
+    {
+        auto run = [&](float strength, float& jitter, float& lagAfter) {
+            auto q = ParseProfileText(DefaultProfileJson(), err);
+            q->screen.place = "wrist_left"; q->screen.smoothing = strength;
+            Engine e; e.SetProfile(q);
+            Frame f; f.headValid = true; f.head = XrPosef{ {0,0,0,1}, {0, 1.6f, 0} };
+            f.h[0].gripValid = true; f.h[0].gripPose = XrPosef{ {0,0,0,1}, {-0.2f, 1.2f, -0.3f} };
+            Action on; on.type = ActType::Screen; on.mode = "on"; e.ScreenAction(on);
+            double t = 0;
+            float mn = 1e9f, mx = -1e9f;
+            for (int i = 0; i < 400; i++) { // 4.4 s of a 6 Hz, 3 mm shake
+                t += 0.011; f.t = t;
+                f.h[0].gripPose.position.x = -0.2f + 0.003f * std::sin((float)t * 6.f * 6.2832f);
+                e.Update(f);
+                if (i > 200) { mn = std::min(mn, e.screen.pose.position.x); mx = std::max(mx, e.screen.pose.position.x); }
+            }
+            jitter = mx - mn;
+            float x0 = e.screen.pose.position.x;
+            for (int i = 0; i < 20; i++) { t += 0.011; f.t = t; f.h[0].gripPose.position.x = -0.2f + 0.10f * (i + 1) / 20.f; e.Update(f); } // a real 10 cm move
+            for (int i = 0; i < 27; i++) { t += 0.011; f.t = t; e.Update(f); } // then 0.3 s still
+            lagAfter = std::fabs((x0 + 0.10f) - e.screen.pose.position.x);
+        };
+        float j0, l0, j1, l1;
+        run(0.f, j0, l0); run(0.6f, j1, l1);
+        char b[200]; snprintf(b, sizeof b, "steady screen: a 6 Hz shake moves it %.1f mm instead of %.1f mm", j1 * 1000, j0 * 1000);
+        CHECK(j1 < j0 / 3.f, b);
+        snprintf(b, sizeof b, "steady screen: a real 10 cm move is followed (%.1f mm behind 0.3 s later)", l1 * 1000);
+        CHECK(l1 < 0.01f, b);
+        PoseSmoother ps; XrPosef a{ {0,0,0,1}, {0,0,0} };
+        XrPosef r = ps.Apply(a, 0.011f, 0.f); r = ps.Apply(XrPosef{ {0,0,0,1}, {0.05f,0,0} }, 0.011f, 0.f);
+        CHECK(std::fabs(r.position.x - 0.05f) < 1e-6f, "steady: 0 = off, no smoothing at all");
+    }
     // ---------------- hand-placed positions are saved and read back
     {
         std::wstring path = ProfilesDir() + L"\\vro_pose_test.json";

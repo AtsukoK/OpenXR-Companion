@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### New
+- **Steadying for shaky hands** (off by default): **Settings > Screen mirror > Steady the screen** keeps a screen on your wrist (or following your view) still while you look at it, and **Settings > Pointing > Steady the laser** smooths the laser and the mouse on the mirrored screen. Both hold still through small shakes but follow straight away when you really move (a one-euro filter). 0.5 is a good start.
+
 ## v0.2.5 (2026-11-18)
 
 ### New

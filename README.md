@@ -119,6 +119,7 @@ Point at the screen and the bar appears just under it. It stays for 2 seconds af
 | Give the game its window back after clicking | **On** | Otherwise the game may stop reacting after you click on the desktop. |
 | Sharpness limit | **0 (automatic)** | 1920 pixels wide, or 1280 in 32-bit games (Fallout), which have little memory to spare. |
 | Show it as soon as the game starts | Off | Turn on if you always want it. |
+| Steady the screen | **0** (off), or **0.5** for shaky hands | Keeps a wrist screen still through small shakes; real movements still follow. Pair it with **Settings > Pointing > Steady the laser** for a steadier mouse. |
 
 **On your Screen buttons, leave "Monitor" on "Keep the current one" and "Or a window" empty.** Then the button just shows and hides the screen, and your **Choose...** pick stays. A button with a fixed monitor or window always switches to that one.
 

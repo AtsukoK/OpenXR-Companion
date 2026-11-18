@@ -605,6 +605,13 @@ void Engine::Update(const Frame& f) {
             Vec3 pos = V(hr.aimPose.position) + Rotate(q, { 0, -P.downM, 0 }) + Rotate(r, { 0, 0, -P.forwardM });
             hr.aimPose = { r, X(pos) };
         }
+        // Steady the laser for shaky hands (wheel, keyboard, wrist buttons, screen mouse all use it).
+        float dt = (float)std::clamp(f.t - lastNow, 0.0, 0.25);
+        for (int h = 0; h < 2; h++) {
+            HandRaw& hr = fr.h[h];
+            if (!hr.aimValid) { aimSmooth[h].Reset(); continue; }
+            hr.aimPose = aimSmooth[h].Apply(hr.aimPose, dt, P.smoothing);
+        }
     }
     ComputeDown();
     ProcessBindings();
@@ -692,6 +699,10 @@ void Engine::UpdateScreen() {
     if (!screen.shown) { ScreenInteract(); return; }
     ScreenStyle& S = prof->screen;
     ScreenPose();
+    if (screen.poseValid && screen.place != "front" && grab.target != 3) {
+        float dt = (float)std::clamp(now - lastNow, 0.0, 0.25);
+        screen.pose = screenSmooth.Apply(screen.pose, dt, S.smoothing);
+    } else screenSmooth.Reset();
     ScreenInteract();
     if (!adjust || !screen.poseValid || (grab.target >= 0 && grab.target != 3)) return;
 

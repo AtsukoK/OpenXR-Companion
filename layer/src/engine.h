@@ -206,6 +206,7 @@ private:
     bool ScreenRay(int h, float& u, float& v, float& t) const;
     void UpdateScreen();
     void ScreenPose();
+    PoseSmoother aimSmooth[2], screenSmooth;
 
     bool Down(const InputId& i) const { return cur[i.hand][i.comp][i.feat]; }
     bool Pressed(const InputId& i) const { return cur[i.hand][i.comp][i.feat] && !prev[i.hand][i.comp][i.feat]; }

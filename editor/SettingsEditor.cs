@@ -100,6 +100,8 @@ public class SettingsEditor : EditorBase
         lDown = aim.AddRow("Move the laser start down (m)", Num(-0.1m, 0.1m, 0.005m, 3, ptr.DownM, v => ptr.DownM = v), "Toward your index finger. Also moves the poking fingertip.");
         lFwd = aim.AddRow("Move the laser start forward (m)", Num(-0.1m, 0.1m, 0.005m, 3, ptr.ForwardM, v => ptr.ForwardM = v));
         aim.AddRow("", Check("Show a fingertip near wrist panels (where your poke lands and the laser starts)", ptr.Finger, v => ptr.Finger = v));
+        aim.AddRow("Steady the laser", Num(0, 1, 0.05m, 2, ptr.Smoothing, v => ptr.Smoothing = v),
+            "For shaky hands: smooths the laser (and the mouse on the mirrored screen) while you hold still or move slowly; quick movements still follow straight away. 0 = off, 0.5 = a good start, 1 = strongest.");
         aim.AddRow("", Check("Keep a short laser showing while a wrist panel is up", ptr.GuideLaser, v => ptr.GuideLaser = v),
             "So you can find your pointer before it reaches the panel. It hands over to the touch ring when your fingertip gets close.");
         SyncCorr();
@@ -153,6 +155,8 @@ public class SettingsEditor : EditorBase
         scr.AddRow("", Check("Show the mouse pointer", sc.Cursor, v => sc.Cursor = v));
         scr.AddRow("", Check("Use the desktop by pointing at it", sc.Interact, v => sc.Interact = v),
             "Point at the screen: the mouse follows. Trigger = left click (hold to drag), A / X = right click, stick up/down = scroll. While pointing, those buttons don't reach the game.");
+        scr.AddRow("Steady the screen", Num(0, 1, 0.05m, 2, sc.Smoothing, v => sc.Smoothing = v),
+            "For shaky hands: keeps a screen on your wrist (or following your view) still while you look at it, but still follows when you really move. 0 = off, 0.5 = a good start, 1 = strongest.");
         scr.AddRow("Button bar size", Num(0.3m, 2, 0.05m, 2, sc.BarScale, v => sc.BarScale = v),
             "The bar under the screen (Choose, Frame rate, Move, Keyboard, Adjust, Hide). 1 = as wide as the screen, 0.7 = the default.");
         scr.AddRow("", Check("Give the game its window back after clicking", sc.RefocusGame, v => sc.RefocusGame = v),

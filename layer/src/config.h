@@ -123,6 +123,7 @@ struct PointerStyle {
     float forwardM = 0.f;           // and forward along the ray
     bool finger = true;             // show a fingertip silhouette near a wrist panel
     bool guide = true;              // keep a short laser showing while a wrist panel is up
+    float smoothing = 0.f;          // steady the laser against shaky hands (0 = off .. 1 = strongest)
 };
 
 // A desktop monitor shown in VR (mirrored with Desktop Duplication).
@@ -147,6 +148,7 @@ struct ScreenStyle {
     bool interact = true;           // point at it to move the mouse, trigger = left click, A/X = right click, stick = scroll
     bool refocus = true;            // give the game its window back after clicking on the desktop
     float barScale = 0.7f;          // size of the button bar under the screen
+    float smoothing = 0.f;          // steady the screen against shaky hands (0 = off .. 1 = strongest)
 };
 
 struct Profile {

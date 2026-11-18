@@ -43,3 +43,14 @@ inline XrQuaternionf QInv(const XrQuaternionf& q) { return { -q.x, -q.y, -q.z, q
 XrPosef PMul(const XrPosef& a, const XrPosef& b);   // b given in a's frame -> world
 XrPosef PInv(const XrPosef& a);
 XrPosef YawFrame(const XrPosef& head);              // head position, turned only left/right like the head
+
+// Steadies a pose that shakes a little (hand tremor) without lagging behind real movement:
+// a one-euro filter. Nearly still = smoothed hard; moving on purpose = follows quickly.
+// strength 0 = off, 1 = strongest.
+struct PoseSmoother {
+    bool init = false;
+    XrPosef s{ {0,0,0,1}, {0,0,0} }, last{ {0,0,0,1}, {0,0,0} };
+    float speed = 0, turn = 0; // filtered m/s and rad/s
+    void Reset() { init = false; }
+    XrPosef Apply(const XrPosef& in, float dt, float strength);
+};

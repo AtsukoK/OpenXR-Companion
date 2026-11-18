@@ -195,6 +195,7 @@ public class PointerModel
     [JsonPropertyName("forward_m")] public float ForwardM { get; set; } = 0f;
     [JsonPropertyName("finger")] public bool Finger { get; set; } = true;
     [JsonPropertyName("guide_laser")] public bool GuideLaser { get; set; } = true;
+    [JsonPropertyName("smoothing")] public float Smoothing { get; set; } = 0f;
 }
 
 public class ScreenModel
@@ -222,6 +223,7 @@ public class ScreenModel
     [JsonPropertyName("interact")] public bool Interact { get; set; } = true;
     [JsonPropertyName("refocus_game")] public bool RefocusGame { get; set; } = true;
     [JsonPropertyName("bar_scale")] public float BarScale { get; set; } = 0.7f;
+    [JsonPropertyName("smoothing")] public float Smoothing { get; set; } = 0f;
     [JsonPropertyName("poses"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, List<float>> Poses { get; set; }
 }
 

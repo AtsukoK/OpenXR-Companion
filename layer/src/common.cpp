@@ -139,3 +139,35 @@ XrPosef YawFrame(const XrPosef& head) {
     Vec3 z = f * -1.f, y{ 0, 1, 0 };
     return { QuatFromBasis(Cross(y, z), y, z), head.position };
 }
+
+static float OneEuroAlpha(float cutoffHz, float dt) {
+    float tau = 1.f / (2.f * 3.14159265f * cutoffHz);
+    return 1.f / (1.f + tau / std::max(dt, 1e-4f));
+}
+
+XrPosef PoseSmoother::Apply(const XrPosef& in, float dt, float strength) {
+    if (strength <= 0.001f || !init || dt <= 0.f || dt > 0.25f) { // off, first frame, or a long pause: no smoothing
+        s = last = in; init = true; speed = turn = 0; return in;
+    }
+    // how fast the raw pose is moving (itself lightly smoothed, 1 Hz)
+    Vec3 dp = V(in.position) - V(last.position);
+    XrQuaternionf dq = QMul(in.orientation, QInv(last.orientation));
+    float ang = 2.f * std::acos(std::min(1.f, std::fabs(dq.w)));
+    float ad = OneEuroAlpha(1.f, dt);
+    speed += ad * (Len(dp) / dt - speed);
+    turn += ad * (ang / dt - turn);
+    last = in;
+    // cutoff: strength 0 -> 8 Hz (barely any), 1 -> 0.35 Hz (very steady); faster movement opens it up
+    float minC = 8.f * std::pow(0.35f / 8.f, std::clamp(strength, 0.f, 1.f));
+    float aP = OneEuroAlpha(minC + 6.f * speed, dt);   // 6 Hz more per m/s
+    float aR = OneEuroAlpha(minC + 1.5f * turn, dt);   // 1.5 Hz more per rad/s
+    Vec3 p = V(s.position) + (V(in.position) - V(s.position)) * aP;
+    // nlerp the angle, taking the short way round
+    XrQuaternionf a = s.orientation, b = in.orientation;
+    if (a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w < 0) b = { -b.x, -b.y, -b.z, -b.w };
+    XrQuaternionf q{ a.x + (b.x - a.x) * aR, a.y + (b.y - a.y) * aR, a.z + (b.z - a.z) * aR, a.w + (b.w - a.w) * aR };
+    float l = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+    if (l > 1e-6f) { q.x /= l; q.y /= l; q.z /= l; q.w /= l; }
+    s = { q, X(p) };
+    return s;
+}

@@ -215,6 +215,7 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
         if (P.correction != "auto" && P.correction != "always" && P.correction != "off") P.correction = "auto";
         Get(k, "pitch_down_deg", P.pitchDeg); Get(k, "down_m", P.downM); Get(k, "forward_m", P.forwardM);
         Get(k, "finger", P.finger); Get(k, "guide_laser", P.guide);
+        Get(k, "smoothing", P.smoothing); P.smoothing = std::clamp(P.smoothing, 0.f, 1.f);
         P.pitchDeg = std::clamp(P.pitchDeg, -45.f, 45.f);
         P.downM = std::clamp(P.downM, -0.1f, 0.1f); P.forwardM = std::clamp(P.forwardM, -0.1f, 0.1f);
     }
@@ -245,6 +246,7 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
         Get(k, "cursor", S.cursor); Get(k, "start_on", S.startOn);
         Get(k, "interact", S.interact); Get(k, "refocus_game", S.refocus);
         Get(k, "bar_scale", S.barScale); S.barScale = std::clamp(S.barScale, 0.3f, 2.f);
+        Get(k, "smoothing", S.smoothing); S.smoothing = std::clamp(S.smoothing, 0.f, 1.f);
         if (k.contains("poses")) ParsePoses(k["poses"], S.poses);
         S.monitor = std::clamp(S.monitor, 0, 16); S.fps = std::clamp(S.fps, 0, 240);
         S.wristWidth = std::clamp(S.wristWidth, 0.04f, 0.6f); S.width = std::clamp(S.width, 0.1f, 4.f);
