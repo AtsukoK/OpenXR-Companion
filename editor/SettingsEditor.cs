@@ -1,4 +1,4 @@
-namespace OpenXRHandMenusEditor;
+namespace OpenXRCompanionEditor;
 
 public class SettingsEditor : EditorBase
 {

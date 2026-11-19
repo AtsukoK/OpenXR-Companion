@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Renamed: OpenXR Hand Menus is now **OpenXR Companion**
+- It does a lot more than menus now. The layer, the editor (`OpenXRCompanionEditor.exe`) and the settings folder (`%LOCALAPPDATA%\OpenXRCompanion`) have the new name. **Your profiles are copied over by themselves** the first time either one runs.
+- **Click Install layer once** in the new editor: it registers the new layer and removes the old one, so the two never run together.
+
 ### New
 - **Controller offsets for the game** (new Settings section and action `controller_offsets`): turn and move the controllers the *game* sees (its hands, guns and its own laser), for games whose hands point too low on Quest controllers or that have no pitch setting. Pitch, yaw, roll and up/down, left/right, forward/back, for both hands mirrored or each hand on its own, for the grip and aim poses together or apart. Works in any OpenXR game; each game's profile keeps its own numbers, and one tick turns it off.
   - **In the headset**: a panel with + / - buttons (hold to repeat, or point at a row and push the stick like a slider), the value in the middle resets it, **Grab to set** (hold grip, turn the controller until it feels right, let go: the game's hand holds still while you turn), Reset hand / Reset all, step size and on/off. Changes save by themselves.

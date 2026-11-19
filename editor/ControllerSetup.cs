@@ -1,6 +1,6 @@
 using System.Drawing;
 
-namespace OpenXRHandMenusEditor;
+namespace OpenXRCompanionEditor;
 
 // "Which controllers do you use?" Sets the buttons that open the two main wheels to ones that
 // exist on that controller. Asked once on first run, and from the "Controllers" toolbar button.
@@ -31,7 +31,7 @@ public partial class MainForm
     {
         if (Profile == null) return;
         using var dlg = new Form { Text = "Your controllers", FormBorderStyle = FormBorderStyle.FixedDialog, StartPosition = FormStartPosition.CenterParent, MinimizeBox = false, MaximizeBox = false, ShowInTaskbar = false, ClientSize = new Size(620, 400), Font = new Font("Segoe UI", 10.5f) };
-        dlg.Controls.Add(new Label { Text = (firstRun ? "Welcome to OpenXR Hand Menus!\n\n" : "") + "Which controllers do you use? This sets the buttons that open the right and left hand wheels in '" + Path.GetFileName(currentFile) + "'. Nothing else changes, and you can change it later with the 'Controllers' button at the top.", Location = new Point(18, 14), Size = new Size(584, firstRun ? 86 : 60) });
+        dlg.Controls.Add(new Label { Text = (firstRun ? "Welcome to OpenXR Companion!\n\n" : "") + "Which controllers do you use? This sets the buttons that open the right and left hand wheels in '" + Path.GetFileName(currentFile) + "'. Nothing else changes, and you can change it later with the 'Controllers' button at the top.", Location = new Point(18, 14), Size = new Size(584, firstRun ? 86 : 60) });
         var how = new Label { Location = new Point(18, 300), Size = new Size(584, 44), ForeColor = Color.FromArgb(60, 70, 90) };
         var radios = new List<RadioButton>();
         int y = firstRun ? 108 : 82;

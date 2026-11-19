@@ -1,4 +1,4 @@
-namespace OpenXRHandMenusEditor;
+namespace OpenXRCompanionEditor;
 
 // The layer can change the profile too (adjust mode in the headset writes new positions).
 // When the editor gets focus again, reload the file if it changed on disk.

@@ -1,4 +1,4 @@
-// OpenXR Hand Menus - OpenXR API layer.
+// OpenXR Companion - OpenXR API layer.
 // Adds a configurable radial menu, chords and layers on top of any OpenXR game.
 #include "panel.h"
 #include "screen.h"
@@ -9,7 +9,7 @@
 #include <set>
 #include <climits>
 
-#define LAYER_NAME "XR_APILAYER_NOVENDOR_openxr_hand_menus"
+#define LAYER_NAME "XR_APILAYER_NOVENDOR_openxr_companion"
 
 // ---------------------------------------------------------------- next-layer functions
 static PFN_xrGetInstanceProcAddr gNextGipa = nullptr;
@@ -223,8 +223,8 @@ static void EnsureActions() {
     gHandPath[0] = P("/user/hand/left");
     gHandPath[1] = P("/user/hand/right");
     XrActionSetCreateInfo si{ XR_TYPE_ACTION_SET_CREATE_INFO };
-    strcpy_s(si.actionSetName, "openxr_hand_menus_set");
-    strcpy_s(si.localizedActionSetName, "OpenXR Hand Menus");
+    strcpy_s(si.actionSetName, "openxr_companion_set");
+    strcpy_s(si.localizedActionSetName, "OpenXR Companion");
     si.priority = gMinPriority == INT_MAX ? 0 : (uint32_t)gMinPriority;
     XrResult r = N.CreateActionSet(gInst, &si, &gSet);
     if (XR_FAILED(r)) { Log("CreateActionSet failed %d", r); gSet = XR_NULL_HANDLE; return; }
@@ -251,7 +251,7 @@ static void ReloadProfile(bool announce) {
     gEng.SetProfile(p);
     gDrawnWheel = gDrawnKb = ~0ull; gDrawnWrist[0] = gDrawnWrist[1] = ~0ull; gDrawnPointer = false; gDrawnFinger = false; gDrawnCursor[0] = gDrawnCursor[1] = -1;
     Log("loaded profile %s (%zu bindings, %zu wheels, enabled=%d)", p->sourceName.c_str(), p->bindings.size(), p->wheels.size(), p->enabled);
-    if (announce) gEng.Toast("Hand menus: " + p->sourceName + " loaded");
+    if (announce) gEng.Toast("OpenXR Companion: " + p->sourceName + " loaded");
 }
 
 static FILETIME FileTime(const std::wstring& f) {

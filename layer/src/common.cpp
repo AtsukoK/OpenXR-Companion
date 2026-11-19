@@ -28,9 +28,11 @@ std::wstring DataDir() {
     if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &p))) d = p;
     CoTaskMemFree(p);
     std::wstring base = d;
-    d += L"\\OpenXRHandMenus";
-    // First run after the rename: copy the settings from the old VRRadialOverlay folder.
+    d += L"\\OpenXRCompanion";
+    // First run after a rename: copy the settings from the old folder (OpenXR Hand Menus, before that VR Radial Overlay).
     std::error_code ec;
+    if (!std::filesystem::exists(d, ec) && std::filesystem::exists(base + L"\\OpenXRHandMenus", ec))
+        std::filesystem::copy(base + L"\\OpenXRHandMenus", d, std::filesystem::copy_options::recursive, ec);
     if (!std::filesystem::exists(d, ec) && std::filesystem::exists(base + L"\\VRRadialOverlay", ec))
         std::filesystem::copy(base + L"\\VRRadialOverlay", d, std::filesystem::copy_options::recursive, ec);
     CreateDirectoryW(d.c_str(), nullptr);

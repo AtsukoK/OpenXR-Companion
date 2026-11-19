@@ -4,7 +4,7 @@ using System.Net.Http;
 using System.Reflection;
 using System.Text.Json;
 
-namespace OpenXRHandMenusEditor;
+namespace OpenXRCompanionEditor;
 
 // Asks GitHub once per start whether a newer release exists. Only reads the public
 // "latest release" record; nothing is sent about the user and nothing is downloaded.
@@ -59,7 +59,7 @@ public partial class MainForm
         try
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("OpenXRHandMenus-Editor/" + AppVersion.ToString(3));
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("OpenXRCompanion-Editor/" + AppVersion.ToString(3));
             http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
             using var doc = JsonDocument.Parse(await http.GetStringAsync(RepoApi));
             string tag = doc.RootElement.GetProperty("tag_name").GetString() ?? "";

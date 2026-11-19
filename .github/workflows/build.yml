@@ -18,12 +18,12 @@ jobs:
       - name: Build layer DLL
         run: |
           cmake -S layer -B layer/build -A x64
-          cmake --build layer/build --config Release --target OpenXRHandMenus
+          cmake --build layer/build --config Release --target OpenXRCompanion
 
       - name: Build 32-bit layer DLL
         run: |
           cmake -S layer -B layer/build32 -A Win32
-          cmake --build layer/build32 --config Release --target OpenXRHandMenus
+          cmake --build layer/build32 --config Release --target OpenXRCompanion
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -31,27 +31,27 @@ jobs:
 
       - name: Build editor (self-contained single file)
         run: >
-          dotnet publish editor/OpenXRHandMenusEditor.csproj -c Release -r win-x64
+          dotnet publish editor/OpenXRCompanionEditor.csproj -c Release -r win-x64
           --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
           -p:EnableCompressionInSingleFile=true -p:DebugType=none -o editor/bin/publish
 
       - name: Assemble release folder
         shell: pwsh
         run: |
-          $out = "release/OpenXRHandMenus"
+          $out = "release/OpenXRCompanion"
           New-Item -ItemType Directory -Force $out | Out-Null
-          Copy-Item layer/build/Release/OpenXRHandMenus.dll $out
+          Copy-Item layer/build/Release/OpenXRCompanion.dll $out
           Copy-Item package/* $out
-          Copy-Item editor/bin/publish/OpenXRHandMenusEditor.exe $out
+          Copy-Item editor/bin/publish/OpenXRCompanionEditor.exe $out
           Copy-Item docs/README.txt $out
           Copy-Item LICENSE $out/LICENSE.txt
           New-Item -ItemType Directory -Force $out/x86 | Out-Null
-          Copy-Item layer/build32/Release/OpenXRHandMenus.dll $out/x86
+          Copy-Item layer/build32/Release/OpenXRCompanion.dll $out/x86
           Copy-Item package/x86/* $out/x86
 
       # The editor exe is signed here once the SignPath Foundation application is approved.
 
       - uses: actions/upload-artifact@v4
         with:
-          name: OpenXRHandMenus
-          path: release/OpenXRHandMenus
+          name: OpenXRCompanion
+          path: release/OpenXRCompanion

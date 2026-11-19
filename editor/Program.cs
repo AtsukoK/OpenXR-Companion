@@ -1,4 +1,4 @@
-namespace OpenXRHandMenusEditor;
+namespace OpenXRCompanionEditor;
 
 static class Program
 {

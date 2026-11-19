@@ -5,13 +5,13 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Win32;
 
-namespace OpenXRHandMenusEditor;
+namespace OpenXRCompanionEditor;
 
 static class Native
 {
-    [DllImport("OpenXRHandMenus.dll", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport("OpenXRCompanion.dll", CallingConvention = CallingConvention.Cdecl)]
     static extern int vro_validate([MarshalAs(UnmanagedType.LPUTF8Str)] string text, byte[] err, int errLen);
-    [DllImport("OpenXRHandMenus.dll", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport("OpenXRCompanion.dll", CallingConvention = CallingConvention.Cdecl)]
     static extern IntPtr vro_default_profile();
 
     public static string Validate(string json)
@@ -22,9 +22,9 @@ static class Native
             if (vro_validate(json, buf, buf.Length) != 0) return null;
             return Encoding.UTF8.GetString(buf, 0, Array.IndexOf(buf, (byte)0) is int n && n >= 0 ? n : buf.Length);
         }
-        catch (Exception e) { return "(could not load OpenXRHandMenus.dll to check: " + e.Message + ")"; }
+        catch (Exception e) { return "(could not load OpenXRCompanion.dll to check: " + e.Message + ")"; }
     }
-    [DllImport("OpenXRHandMenus.dll", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport("OpenXRCompanion.dll", CallingConvention = CallingConvention.Cdecl)]
     static extern int vro_check_keys([MarshalAs(UnmanagedType.LPUTF8Str)] string text, int seq, byte[] err, int errLen);
 
     /// <summary>null = fine (or cannot check), otherwise the layer's reason.</summary>
@@ -51,15 +51,17 @@ public partial class MainForm : Form
     public static MainForm Current;
     public ProfileModel Profile;
 
-    const string LayerJson = "XR_APILAYER_NOVENDOR_openxr_hand_menus.json";
+    const string LayerJson = "XR_APILAYER_NOVENDOR_openxr_companion.json";
     const string ImplicitKey = @"SOFTWARE\Khronos\OpenXR\1\ApiLayers\Implicit";
     static readonly string DataDir = MigrateDataDir();
     // First run after the rename from VR Radial Overlay: copy the old settings folder across.
     static string MigrateDataDir()
     {
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var dir = Path.Combine(local, "OpenXRHandMenus");
-        var old = Path.Combine(local, "VRRadialOverlay");
+        var dir = Path.Combine(local, "OpenXRCompanion");
+        // OpenXR Hand Menus first, before that VR Radial Overlay
+        var old = Path.Combine(local, "OpenXRHandMenus");
+        if (!Directory.Exists(old)) old = Path.Combine(local, "VRRadialOverlay");
         try
         {
             if (!Directory.Exists(dir) && Directory.Exists(old))
@@ -170,7 +172,7 @@ public partial class MainForm : Form
     public MainForm()
     {
         Current = this;
-        Text = "OpenXR Hand Menus - Profile Editor";
+        Text = "OpenXR Companion - Profile Editor";
         Size = new Size(1150, 760);
         Font = new Font("Segoe UI", 10.5f);
         Directory.CreateDirectory(ProfilesDir);
@@ -643,7 +645,7 @@ public partial class MainForm : Form
     static Button PBtn(string t, Action a) { var b = new Button { Text = t, AutoSize = true }; b.Click += (s, e) => a(); return b; }
 
     void SetStatus(string s, bool error = false) { statusText.Text = s; statusText.ForeColor = error ? Color.Firebrick : SystemColors.ControlText; }
-    void MarkDirty() { dirty = true; Text = "OpenXR Hand Menus - Profile Editor - " + Path.GetFileName(currentFile) + " *"; }
+    void MarkDirty() { dirty = true; Text = "OpenXR Companion - Profile Editor - " + Path.GetFileName(currentFile) + " *"; }
 
     bool ConfirmDiscard()
     {
@@ -693,7 +695,7 @@ public partial class MainForm : Form
             currentFile = path;
             dirty = false;
             NoteFileTime();
-            Text = "OpenXR Hand Menus - Profile Editor - " + Path.GetFileName(path);
+            Text = "OpenXR Companion - Profile Editor - " + Path.GetFileName(path);
             BuildTree();
             var err = Native.Validate(File.ReadAllText(path));
             SetStatus(err == null ? "Loaded " + path : "Loaded, but the layer reports: " + err, err != null);
@@ -825,7 +827,7 @@ public partial class MainForm : Form
         File.WriteAllText(currentFile, json);
         NoteFileTime();
         dirty = false;
-        Text = "OpenXR Hand Menus - Profile Editor - " + Path.GetFileName(currentFile);
+        Text = "OpenXR Companion - Profile Editor - " + Path.GetFileName(currentFile);
         SetStatus(err == null ? "Saved. A running game reloads it within a second." : "Saved with errors: " + err, err != null);
         BuildTree();
         return true;
@@ -1101,7 +1103,7 @@ public partial class MainForm : Form
     static string ScriptDir => AppContext.BaseDirectory;
 
     static string X86Dir => Path.Combine(ScriptDir, "x86");
-    static bool HasX86 => File.Exists(Path.Combine(X86Dir, LayerJson)) && File.Exists(Path.Combine(X86Dir, "OpenXRHandMenus.dll"));
+    static bool HasX86 => File.Exists(Path.Combine(X86Dir, LayerJson)) && File.Exists(Path.Combine(X86Dir, "OpenXRCompanion.dll"));
 
     // 0 = not installed, 1 = installed from this folder, 2 = installed from another folder
     static int LayerState(RegistryView view, string manifest)
@@ -1138,12 +1140,12 @@ public partial class MainForm : Form
     void RunScript(string name)
     {
         string script = Path.Combine(ScriptDir, name);
-        if (!File.Exists(script) || !File.Exists(Path.Combine(ScriptDir, LayerJson)) || !File.Exists(Path.Combine(ScriptDir, "OpenXRHandMenus.dll")))
+        if (!File.Exists(script) || !File.Exists(Path.Combine(ScriptDir, LayerJson)) || !File.Exists(Path.Combine(ScriptDir, "OpenXRCompanion.dll")))
         {
             MessageBox.Show(this, "The layer files aren't next to the editor, so it can't install the layer.\n\n" +
                 "Looked in: " + ScriptDir + "\n\n" +
-                "Extract the WHOLE zip first (right-click it > Extract All), then run OpenXRHandMenusEditor.exe from the extracted folder. " +
-                "It needs install.ps1, OpenXRHandMenus.dll and " + LayerJson + " in the same folder. " +
+                "Extract the WHOLE zip first (right-click it > Extract All), then run OpenXRCompanionEditor.exe from the extracted folder. " +
+                "It needs install.ps1, OpenXRCompanion.dll and " + LayerJson + " in the same folder. " +
                 "Running the exe straight from inside the zip doesn't work.", "Layer files not found", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
