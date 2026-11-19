@@ -292,7 +292,13 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
     if (vh > ey / z) { vh = ey / z; vw = vh * W / H; }
     if (vw > ex) { vw = ex; } if (vh > ey) { vh = ey; }
     float cw = vw / ex, ch = vh / ey;
-    float cl = std::clamp(cu - cw / 2, 0.f, 1.f - cw), ct = std::clamp(cv - ch / 2, 0.f, 1.f - ch);
+    // Sideways: the middle of the picture, not the optical centre. On Quest the optical centre sits toward
+    // the nose side, where each eye's picture has a black unrendered strip, so centring there showed a bar.
+    // Also keep a small margin from every edge (the corners of the eye picture are masked too).
+    (void)cu;
+    const float m = 0.04f;
+    float cl = std::clamp(0.5f - cw / 2, std::min(m, (1.f - cw) / 2), std::max(1.f - m - cw, (1.f - cw) / 2));
+    float ct = std::clamp(cv - ch / 2, std::min(m, (1.f - ch) / 2), std::max(1.f - m - ch, (1.f - ch) / 2));
 
     struct CB { float P[4][4]; float UV[4]; float Mode[4]; } c{};
     ID3D11DeviceContext1* c1 = nullptr;
