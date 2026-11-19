@@ -311,6 +311,8 @@ static void CheckInteractionProfiles(double now) {
     }
 }
 
+static XrPosef gHeadNow{ {0,0,0,1}, {0,0,0} }; static bool gHeadNowValid = false; // head in gLocal, last update
+
 static void ReadInputsAndUpdate() {
     Frame f;
     f.t = NowSec();
@@ -340,6 +342,7 @@ static void ReadInputsAndUpdate() {
         r.touchCtl = gTouchCtl[h];
     }
     f.headValid = Locate(gView, gLocal, f.head);
+    gHeadNow = f.head; gHeadNowValid = f.headValid;
     gEng.Update(f);
 
     for (auto& hq : gEng.haptics) {
@@ -868,7 +871,13 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
             if (!gScreenPanel.sc) gScreenPanel.Create(gSess, gGfx, gSwap, fw, fh);
             if (gScreenPanel.sc) gScreenPanel.Upload(gGfx, gSwap, gScreenPix);
         }
-        if (gScreenPanel.ready && gEng.screen.poseValid && gScreenPanel.w > 0) {
+        // a quad layer shows from both sides: hide the screen when the head is behind it
+        bool screenFront = true;
+        if (gHeadNowValid) {
+            const XrPosef& sp = gEng.screen.pose;
+            screenFront = Dot(Rotate(sp.orientation, { 0, 0, 1 }), V(gHeadNow.position) - V(sp.position)) > 0.f;
+        }
+        if (gScreenPanel.ready && gEng.screen.poseValid && gScreenPanel.w > 0 && screenFront) {
             sq.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
             sq.space = gLocal;
             sq.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
@@ -892,9 +901,9 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
             q.pose = pose; q.size = { wM, hM };
             layers.push_back((const XrCompositionLayerBaseHeader*)&q);
         };
-        if (sv.barVisible && sv.poseValid)
+        if (sv.barVisible && sv.poseValid && screenFront)
             drawPanel(gBarPanel, gDrawnBar, 1200, (int)(1200 * sv.barH / sv.barW), "", sv.barLabels, (int)sv.barLabels.size(), sv.barHover, sv.barPressed, bq, sv.barPose, sv.barW, sv.barH);
-        if (sv.pickOpen && sv.poseValid)
+        if (sv.pickOpen && sv.poseValid && screenFront)
             drawPanel(gPickPanel, gDrawnPick, 1000, (int)(1000 * sv.pickH / sv.pickW), sv.pickTitle, sv.pickLabels, sv.pickCols, sv.pickHover, sv.pickPressed, kq2, sv.pickPose, sv.pickW, sv.pickH);
     } else if (gCap.Running() || gScreenPanel.sc) {
         gCap.Stop(); gScreenPanel.Destroy(gSwap); gScreenPix.clear(); gScreenPix.shrink_to_fit();
