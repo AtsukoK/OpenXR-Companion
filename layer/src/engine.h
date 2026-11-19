@@ -116,6 +116,18 @@ struct ScreenView {
     uint64_t choicesVersion = 0;
 };
 
+// Controller offsets panel (in front of you) and the live offsets the layer applies to the game.
+struct OffsetView {
+    bool open = false;
+    XrPosef pose{ {0,0,0,1}, {0,0,0} };
+    float w = 0.42f, h = 0.5f;
+    int cols = 3;
+    std::string title;
+    std::vector<std::string> labels;
+    int hover = -1, pressed = -1;
+    uint64_t version = 0;
+};
+
 struct HapticReq { int hand; float amp; float sec; };
 // Laser pointer of one controller: a beam from the controller and a dot where it hits a wheel,
 // the keyboard or a wrist panel. Shown only while it is aimed at one of them.
@@ -137,6 +149,13 @@ public:
     WristView wrist[2];             // [0] left forearm, [1] right forearm
     PointerView pointer[2];         // per controller
     ScreenView screen;
+    OffsetView offView;
+    OffsetStyle offs;               // live controller offsets (from the profile, changed in the headset)
+    bool offsSaveRequested = false; // the layer writes offs into the profile
+    int offGrabHand = -1;           // grab-to-set running on this hand (its grip is held)
+    // The pose the game's grip (kind 0) or aim (kind 1) space of a hand is moved by; false = leave it.
+    bool OffsetPose(int hand, int kind, XrPosef& out) const;
+    void OffsetsAction(const Action& a); // panel, enable, on, off, grab, reset
     std::string toast; uint64_t toastVersion = 0; double toastUntil = 0;
     std::vector<HapticReq> haptics;
     bool reloadRequested = false;
@@ -207,6 +226,21 @@ private:
     void UpdateScreen();
     void ScreenPose();
     PoseSmoother aimSmooth[2], screenSmooth;
+    // controller offsets
+    void OpenOffsets();
+    void UpdateOffsets();
+    void BuildOffsetPanel();
+    void OffsetCell(int cell, bool repeat);
+    void OffsetsChanged();
+    HandOffset& EditOffset(int hand, int kind);
+    int offSel = 2;             // 0 left, 1 right, 2 both hands (linked)
+    int offKind = 2;            // 0 grip, 1 aim, 2 both
+    int offStep = 1;            // index into the step sizes
+    bool offGrabArmed = false;  // waiting for a grip to start grab-to-set
+    XrQuaternionf offGrabStart{ 0,0,0,1 };
+    HandOffset offGrabFrom[2];  // [kind] at the start of the grab
+    int offUiHand = -1, offRepeatCell = -1;
+    double offRepeatAt = 0, offFlashUntil = 0, offSaveAt = -1;
 
     bool Down(const InputId& i) const { return cur[i.hand][i.comp][i.feat]; }
     bool Pressed(const InputId& i) const { return cur[i.hand][i.comp][i.feat] && !prev[i.hand][i.comp][i.feat]; }

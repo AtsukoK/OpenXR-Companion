@@ -33,8 +33,8 @@ public class InputConv : ChoiceConverter { protected override IEnumerable<string
 public class GestureConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "press", "tap", "hold", "double_tap", "while_held" }; }
 public class BlockConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "trigger", "all" }; }
 public class BlockOpenConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "minimal", "hand", "all" }; }
-public class TypeConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "key", "sequence", "xr_input", "wheel", "back", "close", "layer", "reload", "keyboard", "page", "adjust", "screen" }; }
-public class ModeConv : ChoiceConverter { protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "tap", "hold", "toggle", "on", "off", "next_monitor", "prev_monitor", "next_window", "prev_window", "choose", "next_fps", "next_place" }; }
+public class TypeConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "key", "sequence", "xr_input", "wheel", "back", "close", "layer", "reload", "keyboard", "page", "adjust", "screen", "controller_offsets" }; }
+public class ModeConv : ChoiceConverter { protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "tap", "hold", "toggle", "on", "off", "next_monitor", "prev_monitor", "next_window", "prev_window", "choose", "next_fps", "next_place", "panel", "enable", "grab", "reset" }; }
 public class ConfirmConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "auto", "release", "stick_return", "button" }; }
 public class AnchorConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "hand", "hand_locked", "head", "head_locked" }; }
 public class MethodConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "thumbstick", "point", "both" }; }
@@ -102,6 +102,7 @@ public class ProfileModel
 
     [Browsable(false)][JsonPropertyName("pointer")] public PointerModel Pointer { get; set; } = new();
     [Browsable(false)][JsonPropertyName("screen")] public ScreenModel Screen { get; set; } = new();
+    [Browsable(false)][JsonPropertyName("controller_offsets")] public OffsetsModel Offsets { get; set; } = new();
 
     [Browsable(false)][JsonPropertyName("wrist_left")] public WristModel WristLeft { get; set; } = new();
     [Browsable(false)][JsonPropertyName("wrist_right")] public WristModel WristRight { get; set; } = new() { Mirror = true };
@@ -196,6 +197,32 @@ public class PointerModel
     [JsonPropertyName("finger")] public bool Finger { get; set; } = true;
     [JsonPropertyName("guide_laser")] public bool GuideLaser { get; set; } = true;
     [JsonPropertyName("smoothing")] public float Smoothing { get; set; } = 0f;
+}
+
+// Controller offsets for the game: turn / move the controller poses the game sees.
+public class OffsetModel
+{
+    [JsonPropertyName("pitch_deg")] public float Pitch { get; set; }
+    [JsonPropertyName("yaw_deg")] public float Yaw { get; set; }
+    [JsonPropertyName("roll_deg")] public float Roll { get; set; }
+    [JsonPropertyName("x_cm")] public float X { get; set; }
+    [JsonPropertyName("y_cm")] public float Y { get; set; }
+    [JsonPropertyName("z_cm")] public float Z { get; set; }
+    public void Clear() { Pitch = Yaw = Roll = X = Y = Z = 0; }
+}
+public class HandOffsetsModel
+{
+    [JsonPropertyName("grip")] public OffsetModel Grip { get; set; } = new();
+    [JsonPropertyName("aim")] public OffsetModel Aim { get; set; } = new();
+}
+public class OffsetsModel
+{
+    [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
+    [JsonPropertyName("link_hands")] public bool LinkHands { get; set; } = true;
+    [JsonPropertyName("aim_same_as_grip")] public bool AimSame { get; set; } = true;
+    [JsonPropertyName("smoothing")] public float Smoothing { get; set; } = 0f;
+    [JsonPropertyName("left")] public HandOffsetsModel Left { get; set; } = new();
+    [JsonPropertyName("right")] public HandOffsetsModel Right { get; set; } = new();
 }
 
 public class ScreenModel
@@ -376,6 +403,7 @@ public class ActionModel
         "page" => $"page {Page}",
         "layer" => $"layer {Layer} {Mode}".Trim(),
         "screen" => $"screen {Mode} {Place}".Trim(),
+        "controller_offsets" => $"controller offsets {Mode}".Trim(),
         _ => Type,
     };
 }

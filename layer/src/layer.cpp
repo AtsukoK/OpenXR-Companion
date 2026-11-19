@@ -34,6 +34,8 @@ static struct {
     PFN_xrCreateReferenceSpace CreateReferenceSpace;
     PFN_xrDestroySpace DestroySpace;
     PFN_xrLocateSpace LocateSpace;
+    PFN_xrLocateSpaces LocateSpaces;
+    PFN_xrLocateSpacesKHR LocateSpacesKHR;
     PFN_xrApplyHapticFeedback ApplyHapticFeedback;
     PFN_xrGetCurrentInteractionProfile GetCurrentInteractionProfile;
 } N{};
@@ -123,6 +125,61 @@ static uint64_t gDrawnKb = ~0ull;
 static uint64_t gDrawnWheel = ~0ull, gDrawnToast = ~0ull;
 static int gWheelTex = 0;
 static std::vector<uint32_t> gPix;
+
+// ---------------------------------------------------------------- controller offsets for the game
+// The game's hand pose actions (from its suggested bindings) and the spaces it makes from them.
+// Every pose the game locates for those spaces is turned / moved by the profile's offsets.
+struct PoseBind { int hand, kind; };   // kind 0 grip, 1 aim
+static std::unordered_map<uint64_t, std::vector<PoseBind>> gPoseBinds; // action -> bindings (under gMx)
+struct GameSpace { int hand, kind; };
+struct OffSnap { bool on = false; bool has[2][2]{}; XrPosef o[2][2]{}; float smooth = 0; };
+static std::mutex gOffMx;                  // own lock: the game may locate from its render thread
+static std::unordered_map<uint64_t, GameSpace> gGameSpaces;
+static OffSnap gOff;
+struct SpaceSmooth { PoseSmoother f; XrTime t = 0; XrPosef out{}; };
+static std::map<std::pair<uint64_t, uint64_t>, SpaceSmooth> gSpaceSmooth;
+static Panel gOffPanel; static uint64_t gDrawnOff = ~0ull;
+
+static bool ParsePosePath(const std::string& s, PoseBind& b) {
+    const std::string pre[2] = { "/user/hand/left/input/", "/user/hand/right/input/" };
+    for (int h = 0; h < 2; h++) {
+        if (s.rfind(pre[h], 0) != 0) continue;
+        std::string rest = s.substr(pre[h].size());
+        if (rest == "grip/pose" || rest == "grip_surface/pose" || rest == "palm_ext/pose") { b = { h, 0 }; return true; }
+        if (rest == "aim/pose") { b = { h, 1 }; return true; }
+        return false;
+    }
+    return false;
+}
+
+// Move one located pose: space' = space * Os, base' = base * Ob  ->  pose' = inv(Ob) * pose * Os.
+static void OffsetLocation(XrSpace space, XrSpace base, XrTime t, XrSpaceLocationFlags& flags, XrPosef& pose, XrSpaceVelocityFlags* vflags, XrVector3f* lin, XrVector3f* ang) {
+    if (!(flags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)) return;
+    std::lock_guard l(gOffMx);
+    if (!gOff.on || gGameSpaces.empty()) return;
+    auto is = gGameSpaces.find((uint64_t)space), ib = gGameSpaces.find((uint64_t)base);
+    bool hs = is != gGameSpaces.end() && gOff.has[is->second.hand][is->second.kind];
+    bool hb = ib != gGameSpaces.end() && gOff.has[ib->second.hand][ib->second.kind];
+    bool smooth = is != gGameSpaces.end() && ib == gGameSpaces.end() && gOff.smooth > 0.001f;
+    if (!hs && !hb && !smooth) return;
+    XrPosef p = pose;
+    if (hs) {
+        const XrPosef& o = gOff.o[is->second.hand][is->second.kind];
+        // the offset point moves on a lever: its speed gains angular x lever arm
+        if (!hb && lin && ang && vflags && (*vflags & XR_SPACE_VELOCITY_ANGULAR_VALID_BIT) && (*vflags & XR_SPACE_VELOCITY_LINEAR_VALID_BIT)) {
+            Vec3 arm = Rotate(pose.orientation, V(o.position));
+            *lin = X(V(*lin) + Cross(V(*ang), arm));
+        }
+        p = PMul(p, o);
+    }
+    if (hb) p = PMul(PInv(gOff.o[ib->second.hand][ib->second.kind]), p);
+    if (smooth) {
+        SpaceSmooth& ss = gSpaceSmooth[{ (uint64_t)space, (uint64_t)base }];
+        if (ss.t && t == ss.t) p = ss.out;                    // asked again for the same time
+        else if (t > ss.t) { float dt = ss.t ? (float)((t - ss.t) * 1e-9) : 0.f; ss.out = ss.f.Apply(p, dt, gOff.smooth); ss.t = t; p = ss.out; }
+    }
+    pose = p;
+}
 
 struct Track { uint64_t sync = ~0ull; float prev[2]{}, cur[2]{}; };
 static std::unordered_map<uint64_t, Track> gTrack;
@@ -286,6 +343,21 @@ static void ReadInputsAndUpdate() {
         N.ApplyHapticFeedback(gSess, &hi, (XrHapticBaseHeader*)&v);
     }
     gEng.haptics.clear();
+    {   // what the game's controller poses are moved by, for the LocateSpace hooks
+        OffSnap sn;
+        sn.on = gEng.Active() && gEng.offs.enabled;
+        sn.smooth = sn.on ? gEng.offs.smoothing : 0.f;
+        for (int h = 0; h < 2; h++) for (int k = 0; k < 2; k++) sn.has[h][k] = sn.on && gEng.OffsetPose(h, k, sn.o[h][k]);
+        std::lock_guard o(gOffMx);
+        gOff = sn;
+    }
+    if (gEng.offsSaveRequested && gEng.prof) {
+        gEng.offsSaveRequested = false;
+        gEng.prof->offsets = gEng.offs;
+        std::string err;
+        if (SaveOffsets(*gEng.prof, err)) { MarkOwnSave(); Log("controller offsets saved to %s", gEng.prof->sourceName.c_str()); }
+        else { Log("offsets: save failed: %s", err.c_str()); gEng.Toast("Could not save offsets: " + err, 6.0); }
+    }
     if (gEng.reloadRequested) { gEng.reloadRequested = false; ReloadProfile(true); }
     if (gEng.saveRequested && gEng.prof) { // leaving adjust mode: keep the new placement
         gEng.saveRequested = false;
@@ -301,7 +373,7 @@ static XrResult XRAPI_CALL Hook_xrDestroyInstance(XrInstance inst) {
         std::lock_guard l(gMx);
         Keys::Shutdown();
         DrawShutdown();
-        gSet = XR_NULL_HANDLE; gAttached = false; gAppBinds.clear(); gActionSubs.clear(); gOurProfiles.clear();
+        gSet = XR_NULL_HANDLE; gAttached = false; gAppBinds.clear(); gPoseBinds.clear(); gActionSubs.clear(); gOurProfiles.clear();
         gMinPriority = INT_MAX; gInst = XR_NULL_HANDLE;
     }
     return N.DestroyInstance(inst);
@@ -327,7 +399,16 @@ static XrResult XRAPI_CALL Hook_xrSuggestInteractionProfileBindings(XrInstance i
     std::string prof = S(sb->interactionProfile);
     for (uint32_t i = 0; i < sb->countSuggestedBindings; i++) {
         AppBind b;
-        if (ParseAppPath(S(sb->suggestedBindings[i].binding), b)) {
+        std::string bp = S(sb->suggestedBindings[i].binding);
+        PoseBind pb;
+        if (ParsePosePath(bp, pb)) {
+            auto& v = gPoseBinds[H(sb->suggestedBindings[i].action)];
+            bool dup = false;
+            for (auto& e : v) if (e.hand == pb.hand && e.kind == pb.kind) dup = true;
+            if (!dup) v.push_back(pb);
+            continue;
+        }
+        if (ParseAppPath(bp, b)) {
             auto& v = gAppBinds[H(sb->suggestedBindings[i].action)];
             bool dup = false;
             for (auto& e : v) if (e.hand == b.hand && e.comp == b.comp && e.pf == b.pf) dup = true;
@@ -376,7 +457,8 @@ static XrResult XRAPI_CALL Hook_xrCreateSession(XrInstance inst, const XrSession
 }
 
 static void DestroySessionStuff() {
-    gWheelPanel.Destroy(gSwap); gToastPanel.Destroy(gSwap); gKbPanel.Destroy(gSwap); gDrawnKb = ~0ull; for (int h = 0; h < 2; h++) { gWristPanel[h].Destroy(gSwap); gDrawnWrist[h] = ~0ull; gCursorPanel[h].Destroy(gSwap); gDrawnCursor[h] = -1; } gDotPanel.Destroy(gSwap); gBeamPanel.Destroy(gSwap); gDrawnPointer = false; gFingerPanel.Destroy(gSwap); gDrawnFinger = false; gScreenPanel.Destroy(gSwap); gCap.Stop(); gBarPanel.Destroy(gSwap); gPickPanel.Destroy(gSwap); gDrawnBar = gDrawnPick = ~0ull;
+    gWheelPanel.Destroy(gSwap); gToastPanel.Destroy(gSwap); gKbPanel.Destroy(gSwap); gDrawnKb = ~0ull; for (int h = 0; h < 2; h++) { gWristPanel[h].Destroy(gSwap); gDrawnWrist[h] = ~0ull; gCursorPanel[h].Destroy(gSwap); gDrawnCursor[h] = -1; } gDotPanel.Destroy(gSwap); gBeamPanel.Destroy(gSwap); gDrawnPointer = false; gFingerPanel.Destroy(gSwap); gDrawnFinger = false; gScreenPanel.Destroy(gSwap); gCap.Stop(); gBarPanel.Destroy(gSwap); gPickPanel.Destroy(gSwap); gDrawnBar = gDrawnPick = ~0ull; gOffPanel.Destroy(gSwap); gDrawnOff = ~0ull;
+    { std::lock_guard o(gOffMx); gGameSpaces.clear(); gSpaceSmooth.clear(); gOff = OffSnap{}; }
     for (int h = 0; h < 2; h++) {
         if (gGripSp[h]) N.DestroySpace(gGripSp[h]);
         if (gAimSp[h]) N.DestroySpace(gAimSp[h]);
@@ -436,6 +518,69 @@ static XrResult XRAPI_CALL Hook_xrSyncActions(XrSession s, const XrActionsSyncIn
     gSyncIdx++;
     if (r == XR_SUCCESS) ReadInputsAndUpdate();
     CheckConfigChanged();
+    return r;
+}
+
+static XrResult XRAPI_CALL Hook_xrCreateActionSpace(XrSession s, const XrActionSpaceCreateInfo* ci, XrSpace* sp) {
+    XrResult r = N.CreateActionSpace(s, ci, sp);
+    if (XR_FAILED(r) || !ci || !sp) return r;
+    std::lock_guard l(gMx);
+    auto it = gPoseBinds.find(H(ci->action));
+    if (it == gPoseBinds.end() || it->second.empty()) return r;
+    int hand = -1;
+    if (ci->subactionPath == gHandPath[0]) hand = 0;
+    else if (ci->subactionPath == gHandPath[1]) hand = 1;
+    else if (ci->subactionPath == XR_NULL_PATH) { // no hand given: only if the action is bound to one hand
+        hand = it->second[0].hand;
+        for (auto& b : it->second) if (b.hand != hand) hand = -1;
+    }
+    if (hand < 0) { Log("game pose space: hand unknown, offsets not applied"); return r; }
+    int kind = -1;
+    for (auto& b : it->second) if (b.hand == hand && kind < 0) kind = b.kind;
+    if (kind < 0) return r;
+    { std::lock_guard o(gOffMx); gGameSpaces[(uint64_t)*sp] = { hand, kind }; }
+    Log("game pose space: %s %s", hand ? "right" : "left", kind ? "aim" : "grip");
+    return r;
+}
+
+static XrResult XRAPI_CALL Hook_xrDestroySpace(XrSpace sp) {
+    {
+        std::lock_guard o(gOffMx);
+        gGameSpaces.erase((uint64_t)sp);
+        for (auto it = gSpaceSmooth.begin(); it != gSpaceSmooth.end();)
+            if (it->first.first == (uint64_t)sp || it->first.second == (uint64_t)sp) it = gSpaceSmooth.erase(it); else ++it;
+    }
+    return N.DestroySpace(sp);
+}
+
+static XrResult XRAPI_CALL Hook_xrLocateSpace(XrSpace sp, XrSpace base, XrTime t, XrSpaceLocation* loc) {
+    XrResult r = N.LocateSpace(sp, base, t, loc);
+    if (XR_FAILED(r) || !loc) return r;
+    XrSpaceVelocity* vel = nullptr;
+    for (auto* n = (XrBaseOutStructure*)loc->next; n; n = n->next) if (n->type == XR_TYPE_SPACE_VELOCITY) vel = (XrSpaceVelocity*)n;
+    OffsetLocation(sp, base, t, loc->locationFlags, loc->pose, vel ? &vel->velocityFlags : nullptr, vel ? &vel->linearVelocity : nullptr, vel ? &vel->angularVelocity : nullptr);
+    return r;
+}
+
+static void OffsetLocations(const XrSpacesLocateInfo* li, XrSpaceLocations* sl) {
+    if (!li || !sl || !sl->locations) return;
+    XrSpaceVelocities* vel = nullptr;
+    for (auto* n = (XrBaseOutStructure*)sl->next; n; n = n->next) if (n->type == XR_TYPE_SPACE_VELOCITIES) vel = (XrSpaceVelocities*)n;
+    uint32_t n = std::min(li->spaceCount, sl->locationCount);
+    for (uint32_t i = 0; i < n; i++) {
+        bool hv = vel && vel->velocities && i < vel->velocityCount;
+        OffsetLocation(li->spaces[i], li->baseSpace, li->time, sl->locations[i].locationFlags, sl->locations[i].pose,
+            hv ? &vel->velocities[i].velocityFlags : nullptr, hv ? &vel->velocities[i].linearVelocity : nullptr, hv ? &vel->velocities[i].angularVelocity : nullptr);
+    }
+}
+static XrResult XRAPI_CALL Hook_xrLocateSpaces(XrSession s, const XrSpacesLocateInfo* li, XrSpaceLocations* sl) {
+    XrResult r = N.LocateSpaces(s, li, sl);
+    if (XR_SUCCEEDED(r)) OffsetLocations(li, sl);
+    return r;
+}
+static XrResult XRAPI_CALL Hook_xrLocateSpacesKHR(XrSession s, const XrSpacesLocateInfo* li, XrSpaceLocations* sl) {
+    XrResult r = N.LocateSpacesKHR(s, li, sl);
+    if (XR_SUCCEEDED(r)) OffsetLocations(li, sl);
     return r;
 }
 
@@ -770,6 +915,22 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
             }
         }
     }
+    // Controller offsets panel
+    static XrCompositionLayerQuad oq{ XR_TYPE_COMPOSITION_LAYER_QUAD };
+    if (gEng.offView.open && gLocal) {
+        const OffsetView& ov = gEng.offView;
+        const int OW = 900, OH = (int)(OW * ov.h / ov.w);
+        if (gOffPanel.sc && (gOffPanel.w != OW || gOffPanel.h != OH)) { gOffPanel.Destroy(gSwap); gDrawnOff = ~0ull; }
+        if (!gOffPanel.sc) gOffPanel.Create(gSess, gGfx, gSwap, OW, OH);
+        if (gOffPanel.sc && gDrawnOff != ov.version) { std::vector<uint32_t> px; DrawList(px, OW, OH, ov.title, ov.labels, ov.cols, ov.hover, ov.pressed, p.style); if (gOffPanel.Upload(gGfx, gSwap, px)) gDrawnOff = ov.version; }
+        if (gOffPanel.ready) {
+            oq = XrCompositionLayerQuad{ XR_TYPE_COMPOSITION_LAYER_QUAD };
+            oq.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT; oq.space = gLocal; oq.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
+            oq.subImage.swapchain = gOffPanel.sc; oq.subImage.imageRect = { {0, 0}, {OW, OH} };
+            oq.pose = ov.pose; oq.size = { ov.w, ov.h };
+            layers.push_back((const XrCompositionLayerBaseHeader*)&oq);
+        }
+    } else if (gOffPanel.sc) { gOffPanel.Destroy(gSwap); gDrawnOff = ~0ull; }
     // Laser pointers, on top of everything: beam from the controller, dot where it hits.
     if (gLocal && (gEng.pointer[0].on || gEng.pointer[1].on)) {
         const int DS = 64, BW = 16, BH = 256;
@@ -852,6 +1013,9 @@ static XrResult XRAPI_CALL Hook_xrGetInstanceProcAddr(XrInstance inst, const cha
     HOOK(CreateActionSet) HOOK(CreateAction) HOOK(SuggestInteractionProfileBindings) HOOK(AttachSessionActionSets)
     HOOK(SyncActions) HOOK(GetActionStateBoolean) HOOK(GetActionStateFloat) HOOK(GetActionStateVector2f)
     HOOK(WaitFrame) HOOK(EndFrame)
+    HOOK(CreateActionSpace) HOOK(DestroySpace) HOOK(LocateSpace)
+    if (n == "xrLocateSpaces") { N.LocateSpaces = (PFN_xrLocateSpaces)*fn; *fn = (PFN_xrVoidFunction)Hook_xrLocateSpaces; return r; }
+    if (n == "xrLocateSpacesKHR") { N.LocateSpacesKHR = (PFN_xrLocateSpacesKHR)*fn; *fn = (PFN_xrVoidFunction)Hook_xrLocateSpacesKHR; return r; }
 #undef HOOK
     return r;
 }

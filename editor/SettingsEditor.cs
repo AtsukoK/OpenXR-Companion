@@ -167,6 +167,89 @@ public class SettingsEditor : EditorBase
             "0 = automatic: 1920 in 64-bit games, 1280 in 32-bit games (they have little memory to spare). The picture is halved until it fits.");
         SyncPlace();
 
+        // ---------------- controller offsets (for the game)
+        p.Offsets ??= new(); var co = p.Offsets; co.Left ??= new(); co.Right ??= new();
+        co.Left.Grip ??= new(); co.Left.Aim ??= new(); co.Right.Grip ??= new(); co.Right.Aim ??= new();
+        var offs = new FormPanel();
+        offs.AddRow("", Check("Use controller offsets in this game", co.Enabled, v => co.Enabled = v),
+            "Turns and moves the controllers the GAME sees: its hands, guns and its own laser. Untick to give the game the plain controllers (your numbers are kept). Each game can have its own profile with its own offsets.");
+        var offRows = new List<(Func<OffsetModel, float> get, Action<OffsetModel, float> set, TrackBar bar, NumericUpDown num)>();
+        bool offLoading = false;
+        int selHand = co.LinkHands ? 2 : 1, selKind = co.AimSame ? 2 : 0;
+        OffsetModel Target()
+        {
+            var h = co.LinkHands || selHand == 1 ? co.Right : co.Left;
+            return co.AimSame || selKind == 0 ? h.Grip : h.Aim;
+        }
+        void RefreshOffsets()
+        {
+            offLoading = true;
+            var t = Target();
+            foreach (var r in offRows)
+            {
+                decimal v = Math.Clamp((decimal)r.get(t), r.num.Minimum, r.num.Maximum);
+                r.num.Value = v;
+                r.bar.Value = Math.Clamp((int)Math.Round(v * 10), r.bar.Minimum, r.bar.Maximum);
+            }
+            offLoading = false;
+        }
+        Mirror Copy(OffsetModel a) => new(a);
+        offs.AddRow("Hand", Pick(new Choice[] { new("2", "Both hands, mirrored (the left copies the right)"), new("1", "Right hand on its own"), new("0", "Left hand on its own") }, selHand.ToString(), v =>
+        {
+            int n = int.Parse(v);
+            if (co.LinkHands && n != 2) { Copy(co.Right.Grip).To(co.Left.Grip); Copy(co.Right.Aim).To(co.Left.Aim); } // nothing jumps when unlinking
+            co.LinkHands = n == 2; selHand = n; RefreshOffsets();
+        }), "Mirrored: yaw, roll and left/right are flipped for the left hand, so both feel the same.");
+        offs.AddRow("Pose", Pick(new Choice[] { new("2", "Grip and aim together"), new("0", "Grip only (the hand, held guns and swords)"), new("1", "Aim only (the game's own laser / pointer ray)") }, selKind.ToString(), v =>
+        {
+            int n = int.Parse(v);
+            if (co.AimSame && n != 2) { co.Right.Aim = Clone(co.Right.Grip); co.Left.Aim = Clone(co.Left.Grip); }
+            co.AimSame = n == 2; selKind = n; RefreshOffsets();
+        }), "Most games put hands and weapons on the grip pose. Together is the safe choice: whatever the game uses gets the same fix.");
+        void OffRow(string label, string unit, int min, int max, Func<OffsetModel, float> get, Action<OffsetModel, float> set, string hint)
+        {
+            var f = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+            var bar = new TrackBar { Minimum = min * 10, Maximum = max * 10, TickFrequency = (max - min) * 10 / 8, Width = 240, SmallChange = 5, LargeChange = 50 };
+            var num = new NumericUpDown { Minimum = min, Maximum = max, Increment = 0.5m, DecimalPlaces = 1, Width = 70 };
+            var minus = new Button { Text = "\u2212", Width = 30 }; var plus = new Button { Text = "+", Width = 30 };
+            var zero = new Button { Text = "0", Width = 30 };
+            var u = new Label { Text = unit, AutoSize = true, Padding = new Padding(0, 6, 4, 0) };
+            void Apply(decimal v)
+            {
+                if (offLoading) return;
+                set(Target(), (float)v); RefreshOffsets(); Fire();
+            }
+            bar.ValueChanged += (o, e) => { if (!offLoading) Apply(bar.Value / 10m); };
+            num.ValueChanged += (o, e) => { if (!offLoading) Apply(num.Value); };
+            minus.Click += (o, e) => Apply(Math.Max(num.Minimum, num.Value - num.Increment));
+            plus.Click += (o, e) => Apply(Math.Min(num.Maximum, num.Value + num.Increment));
+            zero.Click += (o, e) => Apply(0);
+            f.Controls.Add(minus); f.Controls.Add(bar); f.Controls.Add(plus); f.Controls.Add(num); f.Controls.Add(u); f.Controls.Add(zero);
+            offRows.Add((get, set, bar, num));
+            offs.AddRow(label, f, hint);
+        }
+        OffRow("Pitch (tip up +)", "deg", -60, 60, o => o.Pitch, (o, v) => o.Pitch = v,
+            "If you have to point the controller down to aim down a gun's sights, raise this (Quest controllers often need +10 to +20).");
+        OffRow("Yaw (turn left +)", "deg", -60, 60, o => o.Yaw, (o, v) => o.Yaw = v, null);
+        OffRow("Roll (roll left +)", "deg", -90, 90, o => o.Roll, (o, v) => o.Roll = v, null);
+        OffRow("Up / down", "cm", -20, 20, o => o.Y, (o, v) => o.Y = v, null);
+        OffRow("Right / left", "cm", -20, 20, o => o.X, (o, v) => o.X = v, null);
+        OffRow("Forward / back", "cm", -20, 20, o => -o.Z, (o, v) => o.Z = -v, "Positions move the hand in the controller's own directions.");
+        {
+            var f = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+            var r1 = new Button { Text = "Reset this hand / pose", AutoSize = true };
+            var r2 = new Button { Text = "Reset everything", AutoSize = true };
+            r1.Click += (o, e) => { Target().Clear(); RefreshOffsets(); Fire(); };
+            r2.Click += (o, e) => { foreach (var m in new[] { co.Left.Grip, co.Left.Aim, co.Right.Grip, co.Right.Aim }) m.Clear(); RefreshOffsets(); Fire(); };
+            f.Controls.Add(r1); f.Controls.Add(r2);
+            offs.AddRow("Reset", f, "Back to 0, the game's own controller angles.");
+        }
+        offs.AddRow("Steady the game's hands", Num(0, 1, 0.05m, 2, co.Smoothing, v => co.Smoothing = v),
+            "For shaky hands: smooths the hands and guns in the game while you hold still; quick moves still follow straight away. 0 = off, 0.5 = a good start.");
+        offs.AddRow("In the headset", new Label { AutoSize = true, MaximumSize = new Size(460, 0), Text =
+            "Add a button with the action \"Controller offsets\" to a wheel or wrist panel (the default left wrist panel has it under More). It opens a panel with + / - buttons (hold to repeat, or point at a row and push the stick), Grab to set (hold grip, turn the controller to where it feels right, let go) and resets. Changes save by themselves." });
+        RefreshOffsets();
+
         // ---------------- keyboard
         var keys = new FormPanel();
         keys.AddRow("Width (m)", Num(0.2m, 1.5m, 0.02m, 2, kb.Width, v => kb.Width = v));
@@ -240,7 +323,17 @@ public class SettingsEditor : EditorBase
               Section("Pointing (laser and fingertip)"), aim,
               Section("VR keyboard"), keys,
               Section("Screen mirror (a monitor in VR)"), scr,
+              Section("Controller offsets (the game's hands and guns)"), offs,
               advToggle, adv);
+    }
+
+    static OffsetModel Clone(OffsetModel a) => new() { Pitch = a.Pitch, Yaw = a.Yaw, Roll = a.Roll, X = a.X, Y = a.Y, Z = a.Z };
+    // the right hand's values flipped for the left hand
+    readonly struct Mirror
+    {
+        readonly OffsetModel a;
+        public Mirror(OffsetModel a) { this.a = a; }
+        public void To(OffsetModel d) { d.Pitch = a.Pitch; d.Yaw = -a.Yaw; d.Roll = -a.Roll; d.X = -a.X; d.Y = a.Y; d.Z = a.Z; }
     }
 
     // ---------------- small builders

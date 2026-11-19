@@ -110,6 +110,7 @@ static Action ParseAction(const json& j, const std::string& ctx) {
     else if (t == "page") a.type = ActType::Page;
     else if (t == "adjust") a.type = ActType::Adjust;
     else if (t == "screen") a.type = ActType::Screen;
+    else if (t == "controller_offsets" || t == "offsets") a.type = ActType::Offsets;
     else if (t == "none" || t.empty()) a.type = ActType::None;
     else throw std::runtime_error(ctx + ": unknown action type '" + t + "'");
     Get(j, "keys", a.keys);
@@ -127,6 +128,11 @@ static Action ParseAction(const json& j, const std::string& ctx) {
     if (a.type == ActType::Screen && (a.mode == "tap" || a.mode == "hold")) a.mode = "toggle";
     if (a.type == ActType::Screen && !a.place.empty() && a.place != "wrist_left" && a.place != "wrist_right" && a.place != "front" && a.place != "head")
         throw std::runtime_error(ctx + ": screen place must be wrist_left, wrist_right, front or head");
+    if (a.type == ActType::Offsets) {
+        if (a.mode == "tap" || a.mode == "hold" || a.mode == "toggle") a.mode = "panel";
+        if (a.mode != "panel" && a.mode != "enable" && a.mode != "on" && a.mode != "off" && a.mode != "grab" && a.mode != "reset")
+            throw std::runtime_error(ctx + ": controller_offsets mode must be panel, enable, on, off, grab or reset");
+    }
     if (a.confirm.empty()) a.confirm = "auto";
     if (a.type == ActType::Layer && a.mode == "tap") a.mode = "toggle";
     if (j.contains("target")) {
@@ -218,6 +224,24 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
         Get(k, "smoothing", P.smoothing); P.smoothing = std::clamp(P.smoothing, 0.f, 1.f);
         P.pitchDeg = std::clamp(P.pitchDeg, -45.f, 45.f);
         P.downM = std::clamp(P.downM, -0.1f, 0.1f); P.forwardM = std::clamp(P.forwardM, -0.1f, 0.1f);
+    }
+    if (j.contains("controller_offsets")) {
+        auto& k = j["controller_offsets"]; auto& O = p->offsets;
+        Get(k, "enabled", O.enabled); Get(k, "link_hands", O.linkHands); Get(k, "aim_same_as_grip", O.aimSame);
+        Get(k, "smoothing", O.smoothing); O.smoothing = std::clamp(O.smoothing, 0.f, 1.f);
+        const char* hn[2] = { "left", "right" }; const char* kn[2] = { "grip", "aim" };
+        for (int h = 0; h < 2; h++) {
+            if (!k.contains(hn[h]) || !k[hn[h]].is_object()) continue;
+            for (int c = 0; c < 2; c++) {
+                if (!k[hn[h]].contains(kn[c])) continue;
+                auto& e = k[hn[h]][kn[c]]; HandOffset& o = O.o[h][c];
+                Get(e, "pitch_deg", o.pitch); Get(e, "yaw_deg", o.yaw); Get(e, "roll_deg", o.roll);
+                float cm[3] = { 0, 0, 0 };
+                Get(e, "x_cm", cm[0]); Get(e, "y_cm", cm[1]); Get(e, "z_cm", cm[2]);
+                o.pitch = std::clamp(o.pitch, -90.f, 90.f); o.yaw = std::clamp(o.yaw, -90.f, 90.f); o.roll = std::clamp(o.roll, -180.f, 180.f);
+                o.x = std::clamp(cm[0], -30.f, 30.f) / 100.f; o.y = std::clamp(cm[1], -30.f, 30.f) / 100.f; o.z = std::clamp(cm[2], -30.f, 30.f) / 100.f;
+            }
+        }
     }
     if (j.contains("keyboard")) {
         auto& k = j["keyboard"];
@@ -472,6 +496,32 @@ bool SaveScreenChoice(const Profile& p, std::string& err) {
     } catch (const std::exception& e) { err = e.what(); return false; }
 }
 
+bool SaveOffsets(const Profile& p, std::string& err) {
+    std::wstring path = ProfilesDir() + L"\\" + Utf8ToW(p.sourceName);
+    std::string text;
+    if (!ReadFile(path, text)) { err = "cannot read " + WToUtf8(path); return false; }
+    try {
+        json j = json::parse(text, nullptr, true, true);
+        const OffsetStyle& O = p.offsets;
+        auto r1 = [](float v) { return std::round(v * 10.f) / 10.f; };
+        auto r2 = [](float v) { return std::round(v * 100.f) / 100.f; };
+        json k = json::object();
+        k["enabled"] = O.enabled; k["link_hands"] = O.linkHands; k["aim_same_as_grip"] = O.aimSame; k["smoothing"] = r2(O.smoothing);
+        const char* hn[2] = { "left", "right" }; const char* kn[2] = { "grip", "aim" };
+        for (int h = 0; h < 2; h++)
+            for (int c = 0; c < 2; c++) {
+                const HandOffset& o = O.o[h][c];
+                k[hn[h]][kn[c]] = { {"pitch_deg", r1(o.pitch)}, {"yaw_deg", r1(o.yaw)}, {"roll_deg", r1(o.roll)},
+                                    {"x_cm", r1(o.x * 100.f)}, {"y_cm", r1(o.y * 100.f)}, {"z_cm", r1(o.z * 100.f)} };
+            }
+        j["controller_offsets"] = k;
+        std::ofstream f(path, std::ios::binary | std::ios::trunc);
+        if (!f) { err = "cannot write " + WToUtf8(path); return false; }
+        f << j.dump(2);
+        return true;
+    } catch (const std::exception& e) { err = e.what(); return false; }
+}
+
 const char* DefaultProfileJson() {
     // Generic starting profile: every feature switched on so new users can see what exists.
     return R"JSON({
@@ -543,6 +593,7 @@ const char* DefaultProfileJson() {
         { "label": "Adjust positions", "action": { "type": "adjust" } },
         { "label": "Reload profile", "action": { "type": "reload" } },
         { "label": "Screen", "action": { "type": "page", "page": "Screen (sub-page)" } },
+        { "label": "Controller offsets", "action": { "type": "controller_offsets", "mode": "panel" } },
         { "label": "Hide", "action": { "type": "close" } }
       ] },
       "Screen (sub-page)": { "title": "Screen", "items": [

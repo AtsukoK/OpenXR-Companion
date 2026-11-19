@@ -38,7 +38,8 @@ public static class Choices
         new("xr_input", "Press a controller button inside the game"),
         new("back", "Wheel: go back one level"), new("close", "Wheel: close"),
         new("reload", "Reload this profile"), new("adjust", "Adjust positions: move wheels and wrist panels by hand"),
-        new("screen", "Mirror a monitor: show / hide it, switch monitor, frame rate or place"), new("none", "Do nothing"),
+        new("screen", "Mirror a monitor: show / hide it, switch monitor, frame rate or place"),
+        new("controller_offsets", "Controller offsets: fix how the game's hands and guns point"), new("none", "Do nothing"),
     };
     public static readonly Choice[] KeyModes = { new("tap", "Tap it once"), new("hold", "Keep it held while my button is held"), new("toggle", "Toggle: first time down, next time up") };
     public static readonly Choice[] ScreenModes =
@@ -48,6 +49,13 @@ public static class Choices
         new("choose", "Open the list of monitors and windows to pick from"),
         new("next_window", "Switch to the next open window (browser, Discord, ...)"), new("prev_window", "Switch to the previous open window"),
         new("next_fps", "Next frame rate (from Settings > Screen mirror)"), new("next_place", "Move it: left wrist, right wrist, in front, following view"),
+    };
+    public static readonly Choice[] OffsetModes =
+    {
+        new("panel", "Open / close the offsets panel (+/- buttons, grab to set, reset)"),
+        new("enable", "Turn the offsets on / off (compare with the plain controllers)"),
+        new("grab", "Grab to set: hold grip, turn the controller to where it feels right, let go"),
+        new("reset", "Reset every offset to 0"),
     };
     public static readonly Choice[] ScreenPlaces =
     {
@@ -348,6 +356,8 @@ public class ActionEditor : FormPanel
     readonly ChoiceBox screenPlace = new(Choices.ScreenPlaces, 360);
     readonly ChoiceBox screenMon = new(Monitors.Choices(true), 360);
     readonly ComboBox screenWin = new() { Width = 260 };
+    readonly ChoiceBox offMode = new(Choices.OffsetModes, 460);
+    Label lOffMode;
     readonly Label lKeys, lKeyMode, lSteps, lWheel, lConfirm, lLayer, lLayerMode, lTarget, lScreenMode, lScreenPlace, lScreenMon, lScreenWin;
 
     public ActionEditor(bool inWheel, WristModel wrist = null)
@@ -381,6 +391,8 @@ public class ActionEditor : FormPanel
         lScreenPlace = AddRow("Show it", screenPlace);
         lScreenMon = AddRow("Monitor", screenMon, "Monitors are numbered from left to right.");
         lScreenWin = AddRow("Or a window", screenWin, "Leave empty for a monitor. Type part of a window's title or a program name (e.g. chrome, Discord), or pick one that's open now. The first matching window is shown.");
+        lOffMode = AddRow("Offsets", offMode, "Settings > Controller offsets has the numbers, sliders and reset buttons too.");
+        offMode.SelectedIndexChanged += (s, e) => { if (!loading) { a.Mode = offMode.Code; Fire(); } };
         screenWin.TextChanged += (s, e) => { if (!loading) { a.Window = string.IsNullOrWhiteSpace(screenWin.Text) ? null : screenWin.Text.Trim(); Fire(); } };
         screenMode.SelectedIndexChanged += (s, e) => { if (!loading) { a.Mode = screenMode.Code; Sync(); Fire(); } };
         screenPlace.SelectedIndexChanged += (s, e) => { if (!loading) { a.Place = string.IsNullOrEmpty(screenPlace.Code) ? null : screenPlace.Code; Fire(); } };
@@ -415,6 +427,7 @@ public class ActionEditor : FormPanel
             case "layer": a.Layer ??= "shift"; if (a.Mode is not ("hold" or "toggle" or "on" or "off")) a.Mode = inWheel ? "toggle" : "hold"; break;
             case "xr_input": a.Target ??= "left.menu"; break;
             case "screen": if (Choices.ScreenModes.All(c => c.Code != a.Mode)) a.Mode = "toggle"; break;
+            case "controller_offsets": if (Choices.OffsetModes.All(c => c.Code != a.Mode)) a.Mode = "panel"; break;
         }
     }
 
@@ -440,6 +453,7 @@ public class ActionEditor : FormPanel
         target.Value = a.Target ?? "left.menu";
         screenMode.Code = a.Type == "screen" && !string.IsNullOrEmpty(a.Mode) ? a.Mode : "toggle";
         screenPlace.Code = a.Place ?? "";
+        offMode.Code = a.Type == "controller_offsets" && !string.IsNullOrEmpty(a.Mode) ? a.Mode : "panel";
         screenMon.Code = a.Monitor?.ToString() ?? "";
         screenWin.Items.Clear(); foreach (var n in OpenWindows.Names()) screenWin.Items.Add(n);
         screenWin.Text = a.Window ?? "";
@@ -457,6 +471,7 @@ public class ActionEditor : FormPanel
         Show(lLayer, t == "layer"); Show(lLayerMode, t == "layer");
         Show(lTarget, t == "xr_input");
         bool turnsOn = t == "screen" && (a.Mode is null or "toggle" or "on");
+        Show(lOffMode, t == "controller_offsets");
         Show(lScreenMode, t == "screen"); Show(lScreenPlace, turnsOn); Show(lScreenMon, turnsOn); Show(lScreenWin, turnsOn);
         if (t == "xr_input") { keyMode.Code = string.IsNullOrEmpty(a.Mode) ? "tap" : a.Mode; }
     }

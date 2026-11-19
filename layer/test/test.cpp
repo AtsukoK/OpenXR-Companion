@@ -670,6 +670,77 @@ int main(int argc, char** argv) {
         DeleteFileW(path.c_str());
     }
     // ---------------- mirrored screen: real capture on this PC
+    // Controller offsets for the game: profile section, panel +/- buttons, stick slider, grab to set.
+    {
+        auto q = ParseProfileText(R"({ "controller_offsets": { "enabled": true, "link_hands": true, "aim_same_as_grip": true,
+            "right": { "grip": { "pitch_deg": 12, "yaw_deg": 4, "roll_deg": -3, "x_cm": 1, "y_cm": 2, "z_cm": -1.5 } } } })", err);
+        CHECK(q != nullptr, ("offsets: profile with controller_offsets parses " + err).c_str());
+        if (q) {
+            HandOffset l = q->offsets.Effective(0, 1), r = q->offsets.Effective(1, 1);
+            CHECK(r.pitch == 12 && std::fabs(r.y - 0.02f) < 1e-5f && std::fabs(r.z + 0.015f) < 1e-5f, "offsets: aim uses the grip values (aim same as grip)");
+            CHECK(l.pitch == 12 && l.yaw == -4 && l.roll == 3 && std::fabs(l.x + 0.01f) < 1e-5f, "offsets: the left hand is the right hand mirrored");
+            Engine e; e.SetProfile(q);
+            XrPosef o; bool has = e.OffsetPose(1, 0, o);
+            Vec3 fwd = Rotate(o.orientation, { 0, 0, -1 });
+            CHECK(has && fwd.y > 0.19f && fwd.y < 0.23f, "offsets: +12 pitch tips the game's forward up by 12 degrees");
+        }
+        auto d = ParseProfileText(DefaultProfileJson(), err);
+        bool found = false;
+        for (auto& [n, w] : d->wrist[0].pages) for (auto& it : w.items) if (it.action.type == ActType::Offsets) found = true;
+        CHECK(found, "offsets: the default left wrist panel has a Controller offsets button");
+        Engine e; e.SetProfile(d);
+        Frame f; double t = 0;
+        f.headValid = true; f.head = XrPosef{ {0,0,0,1}, {0, 1.6f, 0} };
+        for (int h = 0; h < 2; h++) { f.h[h].gripValid = f.h[h].aimValid = true; f.h[h].gripPose = f.h[h].aimPose = XrPosef{ {0,0,0,1}, {h ? 0.3f : -0.3f, 1.0f, -0.2f} }; }
+        auto step = [&](int frames = 1) { for (int i = 0; i < frames; i++) { t += 0.011; f.t = t; e.Update(f); } };
+        step(3);
+        XrPosef none; CHECK(!e.OffsetPose(1, 0, none), "offsets: nothing is moved while every value is 0");
+        Action pa; pa.type = ActType::Offsets; pa.mode = "panel";
+        e.OffsetsAction(pa); step(2);
+        CHECK(e.offView.open && e.offView.labels.size() == 27, "offsets: the panel opens with its 27 buttons");
+        auto aimAt = [&](int cell) {
+            std::vector<Cell> cells; Cell hd;
+            ListLayout((int)e.offView.labels.size(), e.offView.cols, e.offView.h / e.offView.w, true, cells, hd);
+            const Cell& c = cells[cell];
+            Vec3 local{ (c.x + c.w / 2 - 0.5f) * e.offView.w, (0.5f - (c.y + c.h / 2)) * e.offView.h, 0.3f };
+            f.h[1].aimPose = XrPosef{ e.offView.pose.orientation, X(V(e.offView.pose.position) + Rotate(e.offView.pose.orientation, local)) };
+        };
+        aimAt(5); step(2); // pitch +
+        CHECK(e.offView.hover == 5 && e.Blocked(1, C_TRIGGER), "offsets: pointing at Pitch + hovers it, the trigger is kept from the game");
+        f.h[1].trig = 1; step(2); f.h[1].trig = 0; step(2);
+        CHECK(e.offs.o[1][0].pitch == 1.f, "offsets: one press on Pitch + adds 1 degree");
+        f.h[1].trig = 1; step(70); f.h[1].trig = 0; step(2); // held 0.77 s: repeats after 0.45 s
+        CHECK(e.offs.o[1][0].pitch > 4.f, ("offsets: holding Pitch + keeps adding, now " + std::to_string(e.offs.o[1][0].pitch)).c_str());
+        aimAt(4); step(2); f.h[1].trig = 1; step(2); f.h[1].trig = 0; step(2);
+        CHECK(e.offs.o[1][0].pitch == 0.f, "offsets: pressing the value in the middle resets it");
+        aimAt(7); step(2); f.h[1].sx = 1; step(50); f.h[1].sx = 0; step(2); // yaw row, stick right for 0.55 s
+        CHECK(e.offs.o[1][0].yaw > 3.f && e.offs.o[1][0].yaw < 6.f, ("offsets: the stick slides the pointed value, yaw " + std::to_string(e.offs.o[1][0].yaw)).c_str());
+        step(100);
+        CHECK(e.offsSaveRequested, "offsets: changes are saved a moment later");
+        e.offsSaveRequested = false;
+        {
+            std::vector<uint32_t> px; int W = 900, H = (int)(900 * e.offView.h / e.offView.w);
+            DrawList(px, W, H, e.offView.title, e.offView.labels, e.offView.cols, 5, -1, d->style);
+            SavePng(px, W, H, L"offsets_panel.png");
+        }
+        // Grab to set: hold the left grip, tip the controller 10 degrees down, let go -> +10 pitch kept.
+        aimAt(25); step(2); f.h[1].trig = 1; step(2); f.h[1].trig = 0; step(2); // reset all
+        CHECK(e.offs.o[1][0].Zero(), "offsets: Reset all clears them");
+        aimAt(22); step(2); f.h[1].trig = 1; step(2); f.h[1].trig = 0; step(2);
+        f.h[1].aimPose.position = { 3, 3, 3 }; // point away
+        f.h[0].grip = 1; step(2);
+        CHECK(e.offGrabHand == 0 && e.Blocked(0, C_GRIP), "offsets: grab to set starts on the grip, the grip is kept from the game");
+        float a = -10.f * 3.14159265f / 180.f * 0.5f;
+        f.h[0].gripPose.orientation = { std::sin(a), 0, 0, std::cos(a) }; step(3);
+        XrPosef held; e.OffsetPose(0, 0, held);
+        Vec3 world = Rotate(QMul(f.h[0].gripPose.orientation, held.orientation), { 0, 0, -1 });
+        CHECK(std::fabs(world.y) < 0.01f, "offsets: while grabbing, the game's hand keeps its angle");
+        f.h[0].grip = 0; step(2);
+        CHECK(e.offGrabHand < 0 && std::fabs(e.offs.o[1][0].pitch - 10.f) < 0.2f, ("offsets: letting go keeps +10 pitch, got " + std::to_string(e.offs.o[1][0].pitch)).c_str());
+        Action off; off.type = ActType::Offsets; off.mode = "enable"; e.OffsetsAction(off); step(1);
+        CHECK(!e.OffsetPose(1, 0, none), "offsets: turning them off gives the game the plain controllers");
+    }
+
     {
         auto mons = ScreenCapture::Monitors();
         printf("monitors found: %d\n", (int)mons.size());

@@ -159,6 +159,11 @@ public partial class MainForm
             "page" => $"Opens page '{a.Page}'",
             "keyboard" => "Opens the VR keyboard",
             "adjust" => "Adjust mode on/off: grip to move, stick to resize",
+            "controller_offsets" => a.Mode switch
+            {
+                "enable" => "Controller offsets on / off", "grab" => "Controller offsets: grab to set",
+                "reset" => "Controller offsets: reset all", _ => "Opens the controller offsets panel",
+            },
             "layer" => a.Mode switch { "on" => $"Turns layer '{a.Layer}' on", "off" => $"Turns layer '{a.Layer}' off", "toggle" => $"Switches layer '{a.Layer}' on/off", _ => $"Layer '{a.Layer}' while held" },
             "xr_input" => $"Presses game button {a.Target}{mode}",
             "back" => "Goes back",

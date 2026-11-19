@@ -17,7 +17,7 @@ bool ParseInput(const std::string& s, InputId& out);
 std::string InputName(const InputId& i);
 int ParseCompName(const std::string& s); // "trigger", "primary", ... -> Comp or -1
 
-enum class ActType { None, Key, Sequence, XrInput, Wheel, Back, Close, Layer, Reload, Keyboard, Page, Adjust, Screen };
+enum class ActType { None, Key, Sequence, XrInput, Wheel, Back, Close, Layer, Reload, Keyboard, Page, Adjust, Screen, Offsets };
 
 struct Action {
     ActType type = ActType::None;
@@ -151,9 +151,31 @@ struct ScreenStyle {
     float smoothing = 0.f;          // steady the screen against shaky hands (0 = off .. 1 = strongest)
 };
 
+// Controller offsets for the GAME: turn and move the controller poses the game sees (hands, guns,
+// its own laser). Angles in degrees, positions in metres, in the controller's own frame:
+// pitch + = tip up, yaw + = turn left, roll + = roll left; x + = right, y + = up, z + = back (OpenXR).
+struct HandOffset {
+    float pitch = 0, yaw = 0, roll = 0, x = 0, y = 0, z = 0;
+    bool Zero() const { return !pitch && !yaw && !roll && !x && !y && !z; }
+    HandOffset Mirrored() const { return { pitch, -yaw, -roll, -x, y, z }; } // right hand <-> left hand
+};
+struct OffsetStyle {
+    bool enabled = true;            // off = the game sees the controllers as they are
+    bool linkHands = true;          // the left hand is the right hand mirrored
+    bool aimSame = true;            // the aim pose (game lasers) gets the same offset as the grip (hands, guns)
+    float smoothing = 0.f;          // steady the game's hands against shaky hands (0 = off .. 1 = strongest)
+    HandOffset o[2][2];             // [hand 0 left, 1 right][0 grip, 1 aim] as stored
+    // What actually applies, with linking and "aim same as grip" worked out.
+    HandOffset Effective(int hand, int kind) const {
+        int k = aimSame ? 0 : kind;
+        return linkHands && hand == 0 ? o[1][k].Mirrored() : o[hand][k];
+    }
+};
+
 struct Profile {
     std::string sourceName;
     PointerStyle pointer;
+    OffsetStyle offsets;
     bool enabled = true;
     std::string blockWhileOpen = "hand"; // none|minimal|hand|all
     float pressOn = 0.6f, pressOff = 0.4f, stickOn = 0.7f, stickOff = 0.5f;
@@ -178,4 +200,6 @@ const char* DefaultProfileJson();
 bool SavePlacement(const Profile& p, std::string& err);
 // The monitor or window last picked in the headset becomes the profile's default.
 bool SaveScreenChoice(const Profile& p, std::string& err);
+// Controller offsets changed in the headset: write the controller_offsets section.
+bool SaveOffsets(const Profile& p, std::string& err);
 std::shared_ptr<Profile> ParseProfileText(const std::string& text, std::string& err);

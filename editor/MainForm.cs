@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -277,6 +277,15 @@ public partial class MainForm : Form
             using var bmp = new Bitmap(f.Width, f.Height);
             f.DrawToBitmap(bmp, new Rectangle(0, 0, f.Width, f.Height));
             bmp.Save(Path.Combine(dir, name + ".png"));
+        }
+        {   // the whole Settings page at once (it scrolls in the app)
+            var se = new SettingsEditor(f.Profile) { Size = new Size(1000, 5200), AutoScroll = false };
+            se.CreateControl(); se.PerformLayout();
+            for (int i = 0; i < 10; i++) Application.DoEvents();
+            int hgt = 0; foreach (Control c in se.Controls) hgt = Math.Max(hgt, c.Bottom);
+            using var bmp = new Bitmap(se.Width, Math.Max(200, Math.Min(hgt + 10, 5200)));
+            se.DrawToBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height));
+            bmp.Save(Path.Combine(dir, "settings_full.png"));
         }
         {   // every arm pose picture, both arms, side by side
             string[] modes = { "fingers", "between", "along_arm" };

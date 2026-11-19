@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### New
+- **Controller offsets for the game** (new Settings section and action `controller_offsets`): turn and move the controllers the *game* sees (its hands, guns and its own laser), for games whose hands point too low on Quest controllers or that have no pitch setting. Pitch, yaw, roll and up/down, left/right, forward/back, for both hands mirrored or each hand on its own, for the grip and aim poses together or apart. Works in any OpenXR game; each game's profile keeps its own numbers, and one tick turns it off.
+  - **In the headset**: a panel with + / - buttons (hold to repeat, or point at a row and push the stick like a slider), the value in the middle resets it, **Grab to set** (hold grip, turn the controller until it feels right, let go: the game's hand holds still while you turn), Reset hand / Reset all, step size and on/off. Changes save by themselves.
+  - **Steady the game's hands** (off by default): the same steadying as below, applied to the hands and guns in the game.
+  - The default left wrist panel has a **Controller offsets** button under More.
 - **Steadying for shaky hands** (off by default): **Settings > Screen mirror > Steady the screen** keeps a screen on your wrist (or following your view) still while you look at it, and **Settings > Pointing > Steady the laser** smooths the laser and the mouse on the mirrored screen. Both hold still through small shakes but follow straight away when you really move (a one-euro filter). 0.5 is a good start.
 
 ## v0.2.5 (2026-11-18)

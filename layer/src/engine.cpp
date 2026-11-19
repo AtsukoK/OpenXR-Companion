@@ -16,6 +16,9 @@ void Engine::SetProfile(std::shared_ptr<Profile> p) {
         else if (S.source == "monitor") screen.source = "monitor";
         if (!screenInit) { screen.on = S.startOn; screenPlaceFront = screen.on; screenInit = true; }
         else if (screen.on) screenPlaceFront = true;
+        offs = prof->offsets; // controller offsets: the file's values (also after the editor saves)
+        offSel = offs.linkHands ? 2 : (offSel == 2 ? 1 : offSel);
+        offKind = offs.aimSame ? 2 : (offKind == 2 ? 0 : offKind);
     }
 }
 
@@ -24,6 +27,7 @@ void Engine::Reset() {
     kb = KeyboardView{}; kbRepeatKey = kbRepeatHand = -1;
     for (int h = 0; h < 2; h++) { wrist[h] = WristView{}; wrun[h] = WristRun{}; }
     adjust = false; grab = GrabRun{}; adjustClosedAt = -1;
+    offView.open = false; offView.version++; offGrabArmed = false; offGrabHand = -1; offUiHand = -1; offSaveAt = -1;
     if (mouseL) Keys::MouseButton(0, false);
     if (mouseR) Keys::MouseButton(1, false);
     mouseL = mouseR = false; screen.hoverHand = -1;
@@ -42,6 +46,7 @@ bool Engine::IsOn(const Action& a) const {
     case ActType::XrInput: return a.mode == "toggle" && xrToggles.count({ a.target.hand, a.target.comp }) > 0;
     case ActType::Layer: return layers.count(a.layer) > 0;
     case ActType::Screen: return (a.mode == "toggle" || a.mode == "on") && screen.on && (a.place.empty() || a.place == screen.place);
+    case ActType::Offsets: return (a.mode == "panel" && offView.open) || ((a.mode == "enable" || a.mode == "on") && offs.enabled);
     default: return false;
     }
 }
@@ -163,6 +168,9 @@ bool Engine::RunAction(const Action& a, int hand, int bi, bool fromWheel) {
         return false;
     case ActType::Screen:
         ScreenAction(a);
+        return false;
+    case ActType::Offsets:
+        OffsetsAction(a);
         return false;
     case ActType::Adjust:
         adjust = !adjust; grab = GrabRun{};
@@ -511,6 +519,7 @@ void Engine::UpdatePointers() {
         if (screen.interactive && screen.hoverHand == h) test(screen.pose, screen.widthM / 2 * 1.2f, screen.widthM * screen.aspect / 2 * 1.2f);
         if (uiHand == h && screen.pickOpen) test(screen.pickPose, screen.pickW / 2, screen.pickH / 2);
         if (uiHand == h && screen.barVisible) test(screen.barPose, screen.barW / 2, screen.barH / 2);
+        if (offView.open && h != offGrabHand) test(offView.pose, offView.w / 2, offView.h / 2);
         int panel = 1 - h; // a hand points at the panel on the other arm
         const WristView& wv = wrist[panel];
         bool wristUp = wv.visible && grab.target != panel;
@@ -570,6 +579,8 @@ void Engine::ComputeBlocks() {
     }
     if (screen.hoverHand >= 0) { int h = screen.hoverHand; want[h][C_TRIGGER] = want[h][C_BTN1] = want[h][C_STICK] = true; }
     if (uiHand >= 0) want[uiHand][C_TRIGGER] = true;
+    if (offUiHand >= 0) want[offUiHand][C_TRIGGER] = want[offUiHand][C_STICK] = true;
+    if (offGrabArmed || offGrabHand >= 0) want[0][C_GRIP] = want[1][C_GRIP] = true; // grab-to-set uses the grips
     for (int h = 0; h < 2; h++) // the pressing (other) hand's trigger belongs to the panel while over a button
         if (wrist[h].visible && wrist[h].hover >= 0) want[1 - h][C_TRIGGER] = true;
     for (int h = 0; h < 2; h++)
@@ -621,6 +632,7 @@ void Engine::Update(const Frame& f) {
     UpdateWrist(0);
     UpdateWrist(1);
     UpdateScreen();
+    UpdateOffsets();
     ComputeBlocks();
     UpdatePointers();
     lastNow = now;
