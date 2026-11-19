@@ -231,6 +231,15 @@ public partial class MainForm : Form
         split.Panel2.Controls.Add(BuildNavBar());
 
         status.Items.Add(statusText);
+        {   // credit, bottom right on every page
+            var credit = new ToolStripStatusLabel("Created by Atsuko")
+            {
+                IsLink = true, LinkBehavior = LinkBehavior.HoverUnderline, Font = new Font(Font, FontStyle.Bold),
+                ToolTipText = "OpenXR Companion v" + AppVersion.ToString(3) + " - github.com/AtsukoK/OpenXR-Companion\nSupport: patreon.com/cw/AtsukoK and ko-fi.com/atsukok",
+            };
+            credit.Click += (s, e) => Process.Start(new ProcessStartInfo("https://www.patreon.com/cw/AtsukoK") { UseShellExecute = true });
+            status.Items.Add(credit);
+        }
         Controls.Add(split);
         Controls.Add(ts);
         Controls.Add(status);
