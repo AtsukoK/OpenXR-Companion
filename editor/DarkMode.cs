@@ -11,10 +11,10 @@ namespace OpenXRCompanionEditor;
 public static class ThemeMode
 {
     static string FlagPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenXRCompanion", "editor_theme.txt");
-    // auto (follow Windows) | light | dark
+    // dark (the default) | light | auto (follow Windows)
     public static string Choice
     {
-        get { try { var s = File.ReadAllText(FlagPath).Trim(); return s is "light" or "dark" ? s : "auto"; } catch { return "auto"; } }
+        get { try { var s = File.ReadAllText(FlagPath).Trim(); return s is "light" or "dark" or "auto" ? s : "dark"; } catch { return "dark"; } } // dark unless chosen otherwise
         set { try { Directory.CreateDirectory(Path.GetDirectoryName(FlagPath)!); File.WriteAllText(FlagPath, value); } catch { } }
     }
     public static bool WindowsDark()

@@ -233,7 +233,7 @@ public partial class MainForm : Form
             void ShowT() { tb.Text = ThemeMode.Choice switch { "dark" => "☾ Dark", "light" => "☀ Light", _ => "◐ Auto" }; tb.ToolTipText = "Light or dark look. Auto follows your Windows setting. Click to switch."; }
             tb.Click += (s, e) =>
             {
-                ThemeMode.Choice = ThemeMode.Choice switch { "auto" => "light", "light" => "dark", _ => "auto" };
+                ThemeMode.Choice = ThemeMode.Choice switch { "dark" => "light", "light" => "auto", _ => "dark" };
                 ShowT(); Theme.Set(ThemeMode.IsDark);
                 ThemeWalker.Apply(this); tree.BackColor = Theme.Surface; tree.Invalidate();
                 ShowEditor(tree.SelectedNode);
