@@ -11,8 +11,8 @@ namespace OpenXRCompanionEditor;
 // Turn it off with the "Check for updates" option (a flag file in the settings folder).
 public partial class MainForm
 {
-    const string RepoApi = "https://api.github.com/repos/AtsukoK/OpenXR-Hand-Menus/releases/latest";
-    const string ReleasesPage = "https://github.com/AtsukoK/OpenXR-Hand-Menus/releases/latest";
+    const string RepoApi = "https://api.github.com/repos/AtsukoK/OpenXR-Companion/releases/latest";
+    const string ReleasesPage = "https://github.com/AtsukoK/OpenXR-Companion/releases/latest";
     static string NoUpdateFlag => Path.Combine(DataDir, "no_update_check");
     public static bool UpdateCheckOn
     {
