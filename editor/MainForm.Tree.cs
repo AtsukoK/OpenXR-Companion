@@ -159,6 +159,7 @@ public partial class MainForm
             "page" => $"Opens page '{a.Page}'",
             "keyboard" => "Opens the VR keyboard",
             "adjust" => "Adjust mode on/off: grip to move, stick to resize",
+            "headset_mirror" => a.Mode switch { "on" => "Turns the headset mirror window on", "off" => "Turns the headset mirror window off", _ => "Headset mirror window on / off" },
             "controller_offsets" => a.Mode switch
             {
                 "enable" => "Controller offsets on / off", "grab" => "Controller offsets: grab to set",

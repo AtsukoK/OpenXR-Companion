@@ -152,6 +152,8 @@ public:
     OffsetView offView;
     OffsetStyle offs;               // live controller offsets (from the profile, changed in the headset)
     bool offsSaveRequested = false; // the layer writes offs into the profile
+    int mirrorAsk = 0;              // headset mirror window: 1 toggle, 2 on, 3 off (the layer does it)
+    bool mirrorOn = false;          // set by the layer
     int offGrabHand = -1;           // grab-to-set running on this hand (its grip is held)
     // The pose the game's grip (kind 0) or aim (kind 1) space of a hand is moved by; false = leave it.
     bool OffsetPose(int hand, int kind, XrPosef& out) const;

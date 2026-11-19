@@ -111,6 +111,7 @@ static Action ParseAction(const json& j, const std::string& ctx) {
     else if (t == "adjust") a.type = ActType::Adjust;
     else if (t == "screen") a.type = ActType::Screen;
     else if (t == "controller_offsets" || t == "offsets") a.type = ActType::Offsets;
+    else if (t == "headset_mirror" || t == "mirror") a.type = ActType::Mirror;
     else if (t == "none" || t.empty()) a.type = ActType::None;
     else throw std::runtime_error(ctx + ": unknown action type '" + t + "'");
     Get(j, "keys", a.keys);
@@ -128,6 +129,10 @@ static Action ParseAction(const json& j, const std::string& ctx) {
     if (a.type == ActType::Screen && (a.mode == "tap" || a.mode == "hold")) a.mode = "toggle";
     if (a.type == ActType::Screen && !a.place.empty() && a.place != "wrist_left" && a.place != "wrist_right" && a.place != "front" && a.place != "head")
         throw std::runtime_error(ctx + ": screen place must be wrist_left, wrist_right, front or head");
+    if (a.type == ActType::Mirror) {
+        if (a.mode == "tap" || a.mode == "hold") a.mode = "toggle";
+        if (a.mode != "toggle" && a.mode != "on" && a.mode != "off") throw std::runtime_error(ctx + ": headset_mirror mode must be toggle, on or off");
+    }
     if (a.type == ActType::Offsets) {
         if (a.mode == "tap" || a.mode == "hold" || a.mode == "toggle") a.mode = "panel";
         if (a.mode != "panel" && a.mode != "enable" && a.mode != "on" && a.mode != "off" && a.mode != "grab" && a.mode != "reset")
@@ -522,6 +527,29 @@ bool SaveOffsets(const Profile& p, std::string& err) {
     } catch (const std::exception& e) { err = e.what(); return false; }
 }
 
+std::wstring MirrorSettingsPath() { return DataDir() + L"\\headset_mirror.json"; }
+bool LoadMirrorSettings(MirrorSettings& m) {
+    std::string text;
+    if (!ReadFile(MirrorSettingsPath(), text)) return false;
+    try {
+        json j = json::parse(text, nullptr, true, true);
+        Get(j, "on", m.on); Get(j, "zoom", m.zoom); Get(j, "fps", m.fps);
+        std::string e = "left"; Get(j, "eye", e); m.eye = Lower(e) == "right" ? 1 : 0;
+        m.zoom = std::clamp(m.zoom, 1.f, 3.f); m.fps = std::clamp(m.fps, 0, 240);
+        return true;
+    } catch (...) { return false; }
+}
+bool SaveMirrorSettings(const MirrorSettings& m) {
+    json j = json::object();
+    std::string text;
+    if (ReadFile(MirrorSettingsPath(), text)) { try { j = json::parse(text, nullptr, true, true); } catch (...) { j = json::object(); } }
+    j["on"] = m.on; j["eye"] = m.eye ? "right" : "left"; j["zoom"] = std::round(m.zoom * 100.f) / 100.f; j["fps"] = m.fps;
+    std::ofstream f(MirrorSettingsPath(), std::ios::binary | std::ios::trunc);
+    if (!f) return false;
+    f << j.dump(2);
+    return true;
+}
+
 const char* DefaultProfileJson() {
     // Generic starting profile: every feature switched on so new users can see what exists.
     return R"JSON({
@@ -594,6 +622,7 @@ const char* DefaultProfileJson() {
         { "label": "Reload profile", "action": { "type": "reload" } },
         { "label": "Screen", "action": { "type": "page", "page": "Screen (sub-page)" } },
         { "label": "Controller offsets", "action": { "type": "controller_offsets", "mode": "panel" } },
+        { "label": "Headset mirror", "action": { "type": "headset_mirror", "mode": "toggle" } },
         { "label": "Hide", "action": { "type": "close" } }
       ] },
       "Screen (sub-page)": { "title": "Screen", "items": [

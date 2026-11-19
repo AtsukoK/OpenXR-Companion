@@ -195,6 +195,25 @@ public partial class MainForm : Form
         ts.Items.Add(Btn("Install layer", () => RunScript("install.ps1")));
         ts.Items.Add(Btn("Uninstall layer", () => RunScript("uninstall.ps1")));
         ts.Items.Add(layerStatus);
+        {   // Headset mirror: always one click away, whatever page is open (first on the toolbar so it never overflows)
+            var mb = new ToolStripButton { CheckOnClick = false, DisplayStyle = ToolStripItemDisplayStyle.Text, Font = new Font(Font, FontStyle.Bold) };
+            void ShowMirror()
+            {
+                bool on = HeadsetMirrorFile.On;
+                mb.Text = on ? "● Headset mirror: ON" : "○ Headset mirror: off";
+                mb.ForeColor = on ? Color.ForestGreen : Color.DimGray;
+                mb.ToolTipText = "A window on your desktop showing what the headset shows, with the wheel, wrist panels, screen and lasers in it " +
+                                 "(the game's own mirror can't show those). Turns on in a running game within a second; closing the window turns it off. " +
+                                 "Eye, zoom and frame rate: Settings > Headset mirror. D3D11 games.";
+            }
+            mb.Click += (s, e) => { HeadsetMirrorFile.On = !HeadsetMirrorFile.On; ShowMirror(); };
+            var mt = new System.Windows.Forms.Timer { Interval = 1000 }; // the layer turns it off when its window is closed
+            mt.Tick += (s, e) => ShowMirror();
+            mt.Start();
+            ShowMirror();
+            ts.Items.Insert(0, mb);
+            ts.Items.Insert(1, new ToolStripSeparator());
+        }
         AddUpdateButton(ts);
         profileBox.SelectedIndexChanged += (s, e) => { if (!loading && profileBox.SelectedItem is string f) { if (ConfirmDiscard()) LoadFile(Path.Combine(ProfilesDir, f)); } };
 

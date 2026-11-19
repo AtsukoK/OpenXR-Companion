@@ -3,6 +3,7 @@
 #include "panel.h"
 #include "screen.h"
 #include "keys.h"
+#include "mirror.h"
 #include <openxr/openxr_loader_negotiation.h>
 #include <unordered_map>
 #include <map>
@@ -39,7 +40,12 @@ static struct {
     PFN_xrApplyHapticFeedback ApplyHapticFeedback;
     PFN_xrGetCurrentInteractionProfile GetCurrentInteractionProfile;
 } N{};
-static XrFns gSwap;
+static XrFns gSwap;      // swapchain calls our panels use (our hooks, so the mirror sees them too)
+static XrFns gSwapNext;  // the next layer's
+static HeadsetMirror gMirror;
+static MirrorSettings gMirrorSet;
+static FILETIME gMirrorFileTime{};
+static double gLastMirrorCheck = -10;
 
 // ---------------------------------------------------------------- our action set
 enum OA { A_BTN1, A_BTN1T, A_BTN2, A_BTN2T, A_TRIG, A_TRIGT, A_GRIP, A_STICK, A_STICKC, A_STICKT, A_REST, A_MENU, A_GRIPPOSE, A_AIMPOSE, A_HAPTIC, A_COUNT };
@@ -358,6 +364,29 @@ static void ReadInputsAndUpdate() {
         if (SaveOffsets(*gEng.prof, err)) { MarkOwnSave(); Log("controller offsets saved to %s", gEng.prof->sourceName.c_str()); }
         else { Log("offsets: save failed: %s", err.c_str()); gEng.Toast("Could not save offsets: " + err, 6.0); }
     }
+    if (gEng.mirrorAsk) { // a wheel / wrist button: switch the headset mirror, and remember it for the editor
+        int a = gEng.mirrorAsk; gEng.mirrorAsk = 0;
+        gMirrorSet.on = a == 2 ? true : a == 3 ? false : !gMirrorSet.on;
+        SaveMirrorSettings(gMirrorSet); gMirrorFileTime = FileTime(MirrorSettingsPath());
+        gEng.Toast(gMirrorSet.on ? "Headset mirror ON (a window on the desktop)" : "Headset mirror off", 2.0);
+    }
+    if (gMirror.ClosedByUser()) { gMirrorSet.on = false; SaveMirrorSettings(gMirrorSet); gMirrorFileTime = FileTime(MirrorSettingsPath()); }
+    {
+        double now = NowSec();
+        if (now - gLastMirrorCheck > 1.0) { // the editor's button writes the file
+            gLastMirrorCheck = now;
+            FILETIME ft = FileTime(MirrorSettingsPath());
+            if (memcmp(&ft, &gMirrorFileTime, sizeof(ft)) != 0) { gMirrorFileTime = ft; LoadMirrorSettings(gMirrorSet); }
+        }
+        gMirror.eye = gMirrorSet.eye; gMirror.zoom = gMirrorSet.zoom; gMirror.fps = gMirrorSet.fps;
+        bool want = gMirrorSet.on && gGfx.api == 11;
+        if (gMirrorSet.on && gGfx.api == 12 && !gMirror.On()) {
+            static bool told = false;
+            if (!told) { told = true; gEng.Toast("Headset mirror: this game uses D3D12, not supported yet", 4.0); }
+        }
+        gMirror.SetOn(want);
+        gEng.mirrorOn = gMirrorSet.on;
+    }
     if (gEng.reloadRequested) { gEng.reloadRequested = false; ReloadProfile(true); }
     if (gEng.saveRequested && gEng.prof) { // leaving adjust mode: keep the new placement
         gEng.saveRequested = false;
@@ -468,6 +497,7 @@ static void DestroySessionStuff() {
     if (gView) N.DestroySpace(gView);
     gLocal = gView = XR_NULL_HANDLE;
     gEng.Reset();
+    gMirror.Shutdown();
     gGfx.Release();
     gSess = XR_NULL_HANDLE; gAttached = false; gPredTime = 0;
     gDrawnWheel = gDrawnToast = ~0ull;
@@ -706,9 +736,48 @@ static XrResult XRAPI_CALL Hook_xrWaitFrame(XrSession s, const XrFrameWaitInfo* 
     return r;
 }
 
+static void MirrorFrame(const std::vector<const XrCompositionLayerBaseHeader*>& layers, XrTime t) {
+    gMirror.Frame(gGfx.d11, gGfx.ctx, layers, t, [](XrSpace sp, XrSpace base, XrTime tt, XrPosef& out) {
+        XrSpaceLocation l{ XR_TYPE_SPACE_LOCATION };
+        if (XR_FAILED(N.LocateSpace(sp, base, tt, &l))) return false; // raw: our own spaces, never the game's offsets
+        const XrSpaceLocationFlags need = XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+        if ((l.locationFlags & need) != need) return false;
+        out = l.pose; return true;
+    });
+}
+
+// Swapchains (the game's and ours): the mirror needs their images and which one was shown last.
+static XrResult XRAPI_CALL Hook_xrCreateSwapchain(XrSession s, const XrSwapchainCreateInfo* ci, XrSwapchain* sc) {
+    XrResult r = gSwapNext.CreateSwapchain(s, ci, sc);
+    if (XR_SUCCEEDED(r) && ci && sc) gMirror.OnCreate(*sc, ci);
+    return r;
+}
+static XrResult XRAPI_CALL Hook_xrDestroySwapchain(XrSwapchain sc) {
+    gMirror.OnDestroy(sc);
+    return gSwapNext.DestroySwapchain(sc);
+}
+static XrResult XRAPI_CALL Hook_xrEnumerateSwapchainImages(XrSwapchain sc, uint32_t cap, uint32_t* n, XrSwapchainImageBaseHeader* imgs) {
+    XrResult r = gSwapNext.EnumerateSwapchainImages(sc, cap, n, imgs);
+    if (XR_SUCCEEDED(r) && imgs && n && cap) gMirror.OnImages(sc, imgs, *n);
+    return r;
+}
+static XrResult XRAPI_CALL Hook_xrAcquireSwapchainImage(XrSwapchain sc, const XrSwapchainImageAcquireInfo* ai, uint32_t* idx) {
+    XrResult r = gSwapNext.AcquireSwapchainImage(sc, ai, idx);
+    if (XR_SUCCEEDED(r) && idx) gMirror.OnAcquire(sc, *idx);
+    return r;
+}
+static XrResult XRAPI_CALL Hook_xrReleaseSwapchainImage(XrSwapchain sc, const XrSwapchainImageReleaseInfo* ri) {
+    XrResult r = gSwapNext.ReleaseSwapchainImage(sc, ri);
+    if (XR_SUCCEEDED(r)) gMirror.OnRelease(sc);
+    return r;
+}
+
 static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi) {
     std::lock_guard l(gMx);
-    if (s != gSess || !fi || !gEng.Active() || !gGfx.api) return N.EndFrame(s, fi);
+    if (s != gSess || !fi || !gEng.Active() || !gGfx.api) {
+        if (s == gSess && fi && gMirror.On() && gGfx.api == 11) MirrorFrame(std::vector<const XrCompositionLayerBaseHeader*>(fi->layers, fi->layers + fi->layerCount), fi->displayTime);
+        return N.EndFrame(s, fi);
+    }
     std::vector<const XrCompositionLayerBaseHeader*> layers(fi->layers, fi->layers + fi->layerCount);
     XrCompositionLayerQuad wq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, tq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, kq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, rq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, cq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, pq[4]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, fq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } };
     const Profile& p = *gEng.prof;
@@ -997,6 +1066,7 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
             layers.push_back((const XrCompositionLayerBaseHeader*)&tq);
         }
     }
+    if (gMirror.On() && gGfx.api == 11) MirrorFrame(layers, fi->displayTime);
     XrFrameEndInfo copy = *fi;
     copy.layerCount = (uint32_t)layers.size();
     copy.layers = layers.data();
@@ -1014,6 +1084,7 @@ static XrResult XRAPI_CALL Hook_xrGetInstanceProcAddr(XrInstance inst, const cha
     HOOK(SyncActions) HOOK(GetActionStateBoolean) HOOK(GetActionStateFloat) HOOK(GetActionStateVector2f)
     HOOK(WaitFrame) HOOK(EndFrame)
     HOOK(CreateActionSpace) HOOK(DestroySpace) HOOK(LocateSpace)
+    HOOK(CreateSwapchain) HOOK(DestroySwapchain) HOOK(EnumerateSwapchainImages) HOOK(AcquireSwapchainImage) HOOK(ReleaseSwapchainImage)
     if (n == "xrLocateSpaces") { N.LocateSpaces = (PFN_xrLocateSpaces)*fn; *fn = (PFN_xrVoidFunction)Hook_xrLocateSpaces; return r; }
     if (n == "xrLocateSpacesKHR") { N.LocateSpacesKHR = (PFN_xrLocateSpacesKHR)*fn; *fn = (PFN_xrVoidFunction)Hook_xrLocateSpacesKHR; return r; }
 #undef HOOK
@@ -1042,10 +1113,15 @@ static XrResult XRAPI_CALL Hook_xrCreateApiLayerInstance(const XrInstanceCreateI
     get("xrDestroySpace", N.DestroySpace); get("xrLocateSpace", N.LocateSpace);
     get("xrApplyHapticFeedback", N.ApplyHapticFeedback);
     get("xrGetCurrentInteractionProfile", N.GetCurrentInteractionProfile);
-    get("xrEnumerateSwapchainFormats", gSwap.EnumerateSwapchainFormats); get("xrCreateSwapchain", gSwap.CreateSwapchain);
-    get("xrDestroySwapchain", gSwap.DestroySwapchain); get("xrEnumerateSwapchainImages", gSwap.EnumerateSwapchainImages);
-    get("xrAcquireSwapchainImage", gSwap.AcquireSwapchainImage); get("xrWaitSwapchainImage", gSwap.WaitSwapchainImage);
-    get("xrReleaseSwapchainImage", gSwap.ReleaseSwapchainImage);
+    get("xrEnumerateSwapchainFormats", gSwapNext.EnumerateSwapchainFormats); get("xrCreateSwapchain", gSwapNext.CreateSwapchain);
+    get("xrDestroySwapchain", gSwapNext.DestroySwapchain); get("xrEnumerateSwapchainImages", gSwapNext.EnumerateSwapchainImages);
+    get("xrAcquireSwapchainImage", gSwapNext.AcquireSwapchainImage); get("xrWaitSwapchainImage", gSwapNext.WaitSwapchainImage);
+    get("xrReleaseSwapchainImage", gSwapNext.ReleaseSwapchainImage);
+    gSwap = gSwapNext; // our panels go through the hooks too, so the mirror can draw them
+    gSwap.CreateSwapchain = Hook_xrCreateSwapchain; gSwap.DestroySwapchain = Hook_xrDestroySwapchain;
+    gSwap.EnumerateSwapchainImages = Hook_xrEnumerateSwapchainImages;
+    gSwap.AcquireSwapchainImage = Hook_xrAcquireSwapchainImage; gSwap.ReleaseSwapchainImage = Hook_xrReleaseSwapchainImage;
+    LoadMirrorSettings(gMirrorSet);
     Log("instance created for '%s' (%s)", info->applicationInfo.applicationName, ExeName().c_str());
     return r;
 }

@@ -33,7 +33,7 @@ public class InputConv : ChoiceConverter { protected override IEnumerable<string
 public class GestureConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "press", "tap", "hold", "double_tap", "while_held" }; }
 public class BlockConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "trigger", "all" }; }
 public class BlockOpenConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "minimal", "hand", "all" }; }
-public class TypeConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "key", "sequence", "xr_input", "wheel", "back", "close", "layer", "reload", "keyboard", "page", "adjust", "screen", "controller_offsets" }; }
+public class TypeConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "key", "sequence", "xr_input", "wheel", "back", "close", "layer", "reload", "keyboard", "page", "adjust", "screen", "controller_offsets", "headset_mirror" }; }
 public class ModeConv : ChoiceConverter { protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "tap", "hold", "toggle", "on", "off", "next_monitor", "prev_monitor", "next_window", "prev_window", "choose", "next_fps", "next_place", "panel", "enable", "grab", "reset" }; }
 public class ConfirmConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "auto", "release", "stick_return", "button" }; }
 public class AnchorConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "hand", "hand_locked", "head", "head_locked" }; }
@@ -404,6 +404,7 @@ public class ActionModel
         "layer" => $"layer {Layer} {Mode}".Trim(),
         "screen" => $"screen {Mode} {Place}".Trim(),
         "controller_offsets" => $"controller offsets {Mode}".Trim(),
+        "headset_mirror" => $"headset mirror {Mode}".Trim(),
         _ => Type,
     };
 }

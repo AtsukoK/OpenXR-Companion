@@ -17,7 +17,7 @@ bool ParseInput(const std::string& s, InputId& out);
 std::string InputName(const InputId& i);
 int ParseCompName(const std::string& s); // "trigger", "primary", ... -> Comp or -1
 
-enum class ActType { None, Key, Sequence, XrInput, Wheel, Back, Close, Layer, Reload, Keyboard, Page, Adjust, Screen, Offsets };
+enum class ActType { None, Key, Sequence, XrInput, Wheel, Back, Close, Layer, Reload, Keyboard, Page, Adjust, Screen, Offsets, Mirror };
 
 struct Action {
     ActType type = ActType::None;
@@ -202,4 +202,10 @@ bool SavePlacement(const Profile& p, std::string& err);
 bool SaveScreenChoice(const Profile& p, std::string& err);
 // Controller offsets changed in the headset: write the controller_offsets section.
 bool SaveOffsets(const Profile& p, std::string& err);
+// Headset mirror window: app-wide (not per profile), in %LOCALAPPDATA%\OpenXRCompanion\headset_mirror.json,
+// shared with the editor's toolbar button.
+struct MirrorSettings { bool on = false; int eye = 0; float zoom = 1.3f; int fps = 60; };
+std::wstring MirrorSettingsPath();
+bool LoadMirrorSettings(MirrorSettings& m);
+bool SaveMirrorSettings(const MirrorSettings& m);
 std::shared_ptr<Profile> ParseProfileText(const std::string& text, std::string& err);

@@ -46,6 +46,7 @@ bool Engine::IsOn(const Action& a) const {
     case ActType::XrInput: return a.mode == "toggle" && xrToggles.count({ a.target.hand, a.target.comp }) > 0;
     case ActType::Layer: return layers.count(a.layer) > 0;
     case ActType::Screen: return (a.mode == "toggle" || a.mode == "on") && screen.on && (a.place.empty() || a.place == screen.place);
+    case ActType::Mirror: return a.mode != "off" && mirrorOn;
     case ActType::Offsets: return (a.mode == "panel" && offView.open) || ((a.mode == "enable" || a.mode == "on") && offs.enabled);
     default: return false;
     }
@@ -171,6 +172,9 @@ bool Engine::RunAction(const Action& a, int hand, int bi, bool fromWheel) {
         return false;
     case ActType::Offsets:
         OffsetsAction(a);
+        return false;
+    case ActType::Mirror:
+        mirrorAsk = a.mode == "on" ? 2 : a.mode == "off" ? 3 : 1;
         return false;
     case ActType::Adjust:
         adjust = !adjust; grab = GrabRun{};

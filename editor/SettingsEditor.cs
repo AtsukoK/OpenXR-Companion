@@ -250,6 +250,24 @@ public class SettingsEditor : EditorBase
             "Add a button with the action \"Controller offsets\" to a wheel or wrist panel (the default left wrist panel has it under More). It opens a panel with + / - buttons (hold to repeat, or point at a row and push the stick), Grab to set (hold grip, turn the controller to where it feels right, let go) and resets. Changes save by themselves." });
         RefreshOffsets();
 
+        // ---------------- headset mirror (app-wide, its own file, saved straight away)
+        var mir = new FormPanel();
+        {
+            var on = new CheckBox { Text = "Show the headset mirror window", AutoSize = true, Checked = HeadsetMirrorFile.On };
+            on.CheckedChanged += (o, e) => HeadsetMirrorFile.On = on.Checked;
+            mir.AddRow("", on, "Same as the button on the toolbar. A desktop window with what the headset shows, including the wheel, wrist panels, screen and lasers. For OBS, capture that window. Closing it turns it off. D3D11 games (Bannerlord VR, Fallout VR mods...).");
+            var eye = new ChoiceBox(new Choice[] { new("left", "Left eye"), new("right", "Right eye") }, 200) { Code = HeadsetMirrorFile.Eye };
+            eye.SelectedIndexChanged += (o, e) => HeadsetMirrorFile.Eye = eye.Code;
+            mir.AddRow("Eye", eye);
+            var zoom = new NumericUpDown { Minimum = 1, Maximum = 3, Increment = 0.05m, DecimalPlaces = 2, Width = 90, Value = (decimal)Math.Clamp(HeadsetMirrorFile.Zoom, 1, 3) };
+            zoom.ValueChanged += (o, e) => HeadsetMirrorFile.Zoom = (double)zoom.Value;
+            mir.AddRow("Zoom", zoom, "1 = the whole eye picture (very wide, blurry edges). 1.3 looks like a normal camera. It always fills the window; resize the window for a different shape.");
+            var fps = new NumericUpDown { Minimum = 0, Maximum = 240, Increment = 5, Width = 90, Value = Math.Clamp(HeadsetMirrorFile.Fps, 0, 240) };
+            fps.ValueChanged += (o, e) => HeadsetMirrorFile.Fps = (int)fps.Value;
+            mir.AddRow("Frame rate cap (fps)", fps, "0 = every headset frame. 60 is smooth for recording and costs little.");
+            mir.AddRow("", new Label { AutoSize = true, ForeColor = Color.DimGray, MaximumSize = new Size(460, 0), Text = "These apply straight away, in every game and profile (no need to save)." });
+        }
+
         // ---------------- keyboard
         var keys = new FormPanel();
         keys.AddRow("Width (m)", Num(0.2m, 1.5m, 0.02m, 2, kb.Width, v => kb.Width = v));
@@ -324,6 +342,7 @@ public class SettingsEditor : EditorBase
               Section("VR keyboard"), keys,
               Section("Screen mirror (a monitor in VR)"), scr,
               Section("Controller offsets (the game's hands and guns)"), offs,
+              Section("Headset mirror (what the headset shows, on the desktop)"), mir,
               advToggle, adv);
     }
 

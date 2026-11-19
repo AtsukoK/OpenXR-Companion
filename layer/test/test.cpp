@@ -3,6 +3,7 @@
 #include "../src/panel.h"
 #include "../src/keys.h"
 #include "../src/screen.h"
+#include "../src/mirror.h"
 #include <thread>
 #include <cstdio>
 #include <objidl.h>
@@ -739,6 +740,63 @@ int main(int argc, char** argv) {
         CHECK(e.offGrabHand < 0 && std::fabs(e.offs.o[1][0].pitch - 10.f) < 0.2f, ("offsets: letting go keeps +10 pitch, got " + std::to_string(e.offs.o[1][0].pitch)).c_str());
         Action off; off.type = ActType::Offsets; off.mode = "enable"; e.OffsetsAction(off); step(1);
         CHECK(!e.OffsetPose(1, 0, none), "offsets: turning them off gives the game the plain controllers");
+    }
+
+    // Headset mirror: the game's eye picture with a quad layer drawn where it really is.
+    {
+        ID3D11Device* dev = nullptr; ID3D11DeviceContext* ctx = nullptr;
+        D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, D3D11_SDK_VERSION, &dev, nullptr, &ctx);
+        CHECK(dev != nullptr, "mirror: test D3D11 device");
+        if (dev) {
+            auto makeTex = [&](int w, int h, DXGI_FORMAT f, uint32_t px) {
+                std::vector<uint32_t> d((size_t)w * h, px);
+                D3D11_TEXTURE2D_DESC td{}; td.Width = w; td.Height = h; td.MipLevels = 1; td.ArraySize = 1; td.Format = f; td.SampleDesc.Count = 1;
+                td.Usage = D3D11_USAGE_DEFAULT; td.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+                D3D11_SUBRESOURCE_DATA sd{ d.data(), (UINT)w * 4, 0 };
+                ID3D11Texture2D* t = nullptr; dev->CreateTexture2D(&td, &sd, &t); return t;
+            };
+            ID3D11Texture2D* eyeTex = makeTex(800, 800, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, 0xFFFF0000); // RGBA bytes: blue
+            ID3D11Texture2D* quadTex = makeTex(64, 64, DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, 0xFFFF0000);  // BGRA bytes: red
+            HeadsetMirror m; m.zoom = 1.f; m.fps = 0;
+            XrSwapchain se = (XrSwapchain)(uintptr_t)101, sq = (XrSwapchain)(uintptr_t)102; XrSpace sp = (XrSpace)(uintptr_t)7;
+            auto reg = [&](XrSwapchain sc, ID3D11Texture2D* t, int w, int h, DXGI_FORMAT f) {
+                XrSwapchainCreateInfo ci{ XR_TYPE_SWAPCHAIN_CREATE_INFO }; ci.format = f; ci.width = w; ci.height = h; ci.arraySize = 1; ci.mipCount = 1; ci.sampleCount = 1; ci.faceCount = 1;
+                m.OnCreate(sc, &ci);
+                XrSwapchainImageD3D11KHR im{ XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR }; im.texture = t;
+                m.OnImages(sc, (XrSwapchainImageBaseHeader*)&im, 1);
+                m.OnAcquire(sc, 0); m.OnRelease(sc);
+            };
+            reg(se, eyeTex, 800, 800, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
+            reg(sq, quadTex, 64, 64, DXGI_FORMAT_B8G8R8A8_UNORM_SRGB);
+            XrCompositionLayerProjectionView views[2]{ { XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW }, { XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW } };
+            for (auto& v : views) { v.pose.orientation.w = 1; v.fov = { -0.7853982f, 0.7853982f, 0.7853982f, -0.7853982f }; v.subImage.swapchain = se; v.subImage.imageRect = { {0, 0}, {800, 800} }; }
+            XrCompositionLayerProjection proj{ XR_TYPE_COMPOSITION_LAYER_PROJECTION }; proj.space = sp; proj.viewCount = 2; proj.views = views;
+            XrCompositionLayerQuad q{ XR_TYPE_COMPOSITION_LAYER_QUAD }; q.space = sp; q.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
+            q.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT; q.subImage.swapchain = sq; q.subImage.imageRect = { {0, 0}, {64, 64} };
+            q.pose.orientation.w = 1; q.pose.position = { 0, 0, -0.5f }; q.size = { 0.2f, 0.2f };
+            std::vector<const XrCompositionLayerBaseHeader*> L{ (const XrCompositionLayerBaseHeader*)&proj, (const XrCompositionLayerBaseHeader*)&q };
+            m.SetOn(true);
+            for (int i = 0; i < 200 && !m.Window(); i++) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            CHECK(m.Window() != nullptr, "mirror: the desktop window opens");
+            auto locate = [](XrSpace, XrSpace, XrTime, XrPosef&) { return false; };
+            m.Frame(dev, ctx, L, 1, locate);
+            m.grab = true; m.Frame(dev, ctx, L, 2, locate);
+            bool got = !m.grabbed.empty();
+            CHECK(got, ("mirror: a picture comes out " + std::to_string(m.grabW) + "x" + std::to_string(m.grabH)).c_str());
+            if (got) {
+                int W = m.grabW, Hh = m.grabH;
+                auto at = [&](int x, int y) { return m.grabbed[(size_t)y * W + x] & 0xFFFFFF; };
+                // quad: 0.2 m wide at 0.5 m with 45 degree half-angles -> 20% of the eye's width either side of the centre
+                int qx = (int)(W * 0.1f);
+                CHECK(at(W / 2, Hh / 2) == 0xFF0000, "mirror: the panel shows in the middle, in front of the game");
+                CHECK(at(W / 2 + qx - 6, Hh / 2) == 0xFF0000 && at(W / 2 + qx + 6, Hh / 2) == 0x0000FF, "mirror: the panel's edge is where the headset shows it");
+                CHECK(at(10, 10) == 0x0000FF, "mirror: the game's picture fills the rest");
+                SavePng(m.grabbed, W, Hh, L"mirror_test.png");
+            }
+            m.Shutdown();
+            CHECK(m.Window() == nullptr && !m.On(), "mirror: turning it off closes the window");
+            eyeTex->Release(); quadTex->Release(); ctx->Release(); dev->Release();
+        }
     }
 
     {
