@@ -87,7 +87,21 @@ public partial class MainForm : Form
     string currentFile;
     bool dirty, loading;
 
-    readonly Panel editorHost = new() { Dock = DockStyle.Fill };
+    readonly Panel editorHost = new BufferedHost { Dock = DockStyle.Fill };
+    // The page area: Windows double-buffers it as a whole (WS_EX_COMPOSITED), so a page appears in one go.
+    sealed class BufferedHost : Panel
+    {
+        protected override CreateParams CreateParams { get { var cp = base.CreateParams; cp.ExStyle |= 0x02000000; return cp; } }
+    }
+    [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr h, int msg, IntPtr w, IntPtr l);
+    [DllImport("user32.dll")] static extern bool RedrawWindow(IntPtr h, IntPtr rc, IntPtr rgn, uint flags);
+    // Stop a control (and everything in it) from painting, then paint it once when done.
+    static void Redraw(Control c, bool on)
+    {
+        if (!c.IsHandleCreated) return;
+        SendMessage(c.Handle, 0x000B /*WM_SETREDRAW*/, on ? (IntPtr)1 : IntPtr.Zero, IntPtr.Zero);
+        if (on) RedrawWindow(c.Handle, IntPtr.Zero, IntPtr.Zero, 0x0001 | 0x0004 | 0x0080 | 0x0100 | 0x0400 /*INVALIDATE|ERASE|ALLCHILDREN|UPDATENOW|FRAME*/);
+    }
     Stack<object> history = new();
     object lastTag;
     bool navigatingBack;
@@ -346,6 +360,22 @@ public partial class MainForm : Form
         sb.AppendLine($"rebuild list: {Time(() => f.BuildTree()):F0} ms");
         var item = nodes.FirstOrDefault(n => n.Tag is WheelItemModel);
         if (item != null) { f.tree.SelectedNode = item; sb.AppendLine($"move item down: {Time(() => f.MoveItem(1)):F0} ms"); sb.AppendLine($"move item up: {Time(() => f.MoveItem(-1)):F0} ms"); }
+        {   // the list must stay where it was scrolled when an item moves
+            var items = f.VisibleRows().Where(n => n.Tag is WheelItemModel).ToList();
+            if (items.Count > 3)
+            {
+                var it = items[items.Count / 2];
+                f.tree.SelectedNode = it;
+                var rows = f.VisibleRows();
+                f.tree.TopNode = rows[Math.Max(0, rows.IndexOf(it) - 4)];
+                for (int i = 0; i < 3; i++) Application.DoEvents();
+                int before = f.VisibleRows().IndexOf(f.tree.TopNode);
+                f.MoveItem(-1); for (int i = 0; i < 3; i++) Application.DoEvents();
+                int after = f.VisibleRows().IndexOf(f.tree.TopNode);
+                sb.AppendLine($"list scroll kept on move: top row {before} -> {after} {(before == after ? "OK" : "MOVED")}");
+                f.MoveItem(1);
+            }
+        }
         var bind = nodes.FirstOrDefault(n => n.Tag is BindingModel);
         if (bind != null) { f.tree.SelectedNode = bind; sb.AppendLine($"move binding: {Time(() => f.MoveItem(1)):F0} ms"); }
         sb.AppendLine($"search 'a': {Time(() => { f.search.Text = "a"; f.BuildTree(); }):F0} ms");
@@ -513,12 +543,18 @@ public partial class MainForm : Form
         else if (n?.Tag as string is "bindings_left" or "bindings_right" or "wheels") parts.Add(SectionSwitch((string)n.Tag));
         if (Theme.IsDark) foreach (var c in parts) ThemeWalker.Apply(c);
         Mark("theme");
-        editorHost.SuspendLayout();
-        editorHost.Controls.Clear();
-        foreach (var c in parts) editorHost.Controls.Add(c);
-        Mark("added");
-        editorHost.ResumeLayout();
-        Mark("layout");
+        Redraw(editorHost, false); // nothing shows until the whole page is ready
+        try
+        {
+            editorHost.SuspendLayout();
+            editorHost.Controls.Clear();
+            foreach (var c in parts) editorHost.Controls.Add(c);
+            Mark("added");
+            editorHost.ResumeLayout();
+            Mark("layout");
+        }
+        finally { Redraw(editorHost, true); }
+        Mark("painted");
         currentEditor = ed;
         if (old != null && !ReferenceEquals(old, ed)) { if (old.Contains(grid)) old.Controls.Remove(grid); old.Dispose(); }
         Mark("disposed");
@@ -980,7 +1016,9 @@ public partial class MainForm : Form
         if (Profile == null) return;
         object sel = tree.SelectedNode?.Tag;
         string q = Q;
+        int topRow = VisibleRows().IndexOf(tree.TopNode); // the list stays scrolled where it was
         tree.BeginUpdate();
+        Redraw(tree, false);
         tree.Nodes.Clear();
         var overview = tree.Nodes.Add("Overview");
         overview.Tag = "overview";
@@ -1014,7 +1052,27 @@ public partial class MainForm : Form
         RefreshNodeTexts();
         tree.EndUpdate();
         TreeNode found = Find(tree.Nodes, sel);
-        tree.SelectedNode = found ?? overview;
+        try
+        {
+            tree.SelectedNode = found ?? overview;
+            var rows = VisibleRows();
+            if (topRow >= 0 && rows.Count > 0)
+            {
+                tree.TopNode = rows[Math.Min(topRow, rows.Count - 1)];
+                // keep the selected row on screen if it moved out of view
+                if (tree.SelectedNode != null && (tree.SelectedNode.Bounds.Bottom > tree.ClientSize.Height || tree.SelectedNode.Bounds.Top < 0)) tree.SelectedNode.EnsureVisible();
+            }
+        }
+        finally { Redraw(tree, true); }
+    }
+
+    // Rows of the list as shown (children of folded rows left out), top to bottom.
+    List<TreeNode> VisibleRows()
+    {
+        var l = new List<TreeNode>();
+        void Walk(TreeNodeCollection c) { foreach (TreeNode n in c) { l.Add(n); if (n.IsExpanded) Walk(n.Nodes); } }
+        Walk(tree.Nodes);
+        return l;
     }
 
     void AddPages(TreeNode root, IEnumerable<WheelModel> pages, string q)
