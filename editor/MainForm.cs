@@ -96,11 +96,11 @@ public partial class MainForm : Form
     [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr h, int msg, IntPtr w, IntPtr l);
     [DllImport("user32.dll")] static extern bool RedrawWindow(IntPtr h, IntPtr rc, IntPtr rgn, uint flags);
     // Stop a control (and everything in it) from painting, then paint it once when done.
-    static void Redraw(Control c, bool on)
+    static void Redraw(Control c, bool on, bool erase = true)
     {
         if (!c.IsHandleCreated) return;
         SendMessage(c.Handle, 0x000B /*WM_SETREDRAW*/, on ? (IntPtr)1 : IntPtr.Zero, IntPtr.Zero);
-        if (on) RedrawWindow(c.Handle, IntPtr.Zero, IntPtr.Zero, 0x0001 | 0x0004 | 0x0080 | 0x0100 | 0x0400 /*INVALIDATE|ERASE|ALLCHILDREN|UPDATENOW|FRAME*/);
+        if (on) RedrawWindow(c.Handle, IntPtr.Zero, IntPtr.Zero, 0x0001 | (erase ? 0x0004u : 0) | 0x0080 | 0x0100 | 0x0400 /*INVALIDATE|ERASE|ALLCHILDREN|UPDATENOW|FRAME*/);
     }
     Stack<object> history = new();
     object lastTag;
@@ -1063,7 +1063,7 @@ public partial class MainForm : Form
                 if (tree.SelectedNode != null && (tree.SelectedNode.Bounds.Bottom > tree.ClientSize.Height || tree.SelectedNode.Bounds.Top < 0)) tree.SelectedNode.EnsureVisible();
             }
         }
-        finally { Redraw(tree, true); }
+        finally { Redraw(tree, true, false); } // no wipe: the double-buffered list paints over itself
     }
 
     // Rows of the list as shown (children of folded rows left out), top to bottom.

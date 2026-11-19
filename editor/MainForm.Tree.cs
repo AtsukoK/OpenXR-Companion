@@ -49,6 +49,10 @@ public partial class MainForm
     void SetupTreeLook()
     {
         tree.DrawMode = TreeViewDrawMode.OwnerDrawAll;
+        // Draw the list off-screen and show it in one go (no wipe-then-draw flicker).
+        void Buffer() => SendMessage(tree.Handle, 0x112C /*TVM_SETEXTENDEDSTYLE*/, (IntPtr)0x0004, (IntPtr)0x0004 /*TVS_EX_DOUBLEBUFFER*/);
+        if (tree.IsHandleCreated) Buffer();
+        tree.HandleCreated += (s, e) => Buffer();
         tree.ItemHeight = 46;
         tree.ShowLines = false; tree.ShowPlusMinus = false; tree.ShowRootLines = false;
         tree.FullRowSelect = true; tree.Indent = 22;
