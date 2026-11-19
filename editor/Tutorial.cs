@@ -44,6 +44,7 @@ public partial class MainForm
         B("Not now", DialogResult.Cancel);
         B("Don't ask again", DialogResult.No);
         dlg.Controls.Add(bar);
+        ThemeWalker.Apply(dlg); dlg.HandleCreated += (s, e) => ThemeWalker.TitleBar(dlg, Theme.IsDark);
         var res = dlg.ShowDialog(this);
         if (res == DialogResult.Yes) { Seen(); StartTutorial(); }
         else if (res == DialogResult.No) Seen();   // "Not now" asks again next launch

@@ -53,7 +53,7 @@ public partial class MainForm
         tree.ShowLines = false; tree.ShowPlusMinus = false; tree.ShowRootLines = false;
         tree.FullRowSelect = true; tree.Indent = 22;
         tree.BorderStyle = BorderStyle.None;
-        tree.BackColor = Color.FromArgb(248, 249, 251);
+        tree.BackColor = Theme.Surface;
         tree.DrawNode += DrawRow;
         tree.BeforeSelect += (s, e) => { if (e.Node?.Tag is AddSlot) e.Cancel = true; };
         tree.NodeMouseClick += (s, e) =>
@@ -306,13 +306,13 @@ public partial class MainForm
         bool enabled = n.Tag switch { BindingModel b => b.Enabled, WheelItemModel i => i.Enabled, _ => true };
         if (sel)
         {
-            using var b = new SolidBrush(Color.FromArgb(222, 234, 252));
+            using var b = new SolidBrush(Theme.Selected);
             using var p = RoundRect(new Rectangle(indent - 6, row.Y + 2, W - indent, row.Height - 4), 8);
             g.FillPath(b, p);
             using var a = new SolidBrush(d.accent);
             g.FillRectangle(a, indent - 6, row.Y + 8, 4, row.Height - 16);
         }
-        if (RealCount(n) > 0 && n.Tag is not ProfileModel) Chevron(g, indent - 13, row.Y + row.Height / 2, n.IsExpanded, Color.FromArgb(120, 125, 135)); // Settings always shows its pages
+        if (RealCount(n) > 0 && n.Tag is not ProfileModel) Chevron(g, indent - 13, row.Y + row.Height / 2, n.IsExpanded, Theme.Chevron); // Settings always shows its pages
         // icon (or colour swatch for items with a colour)
         var ic = new Rectangle(indent + 2, row.Y + 9, 28, 28);
         Color iconCol = enabled ? d.accent : OffC;
@@ -331,11 +331,11 @@ public partial class MainForm
             using var p = RoundRect(new Rectangle(ic.X + 7, ic.Y + 7, 14, 14), 4); g.FillPath(b, p);
         }
         int tx = ic.Right + 10, tw = W - tx - (Toggleable(n.Tag) ? 54 : 10);
-        var titleCol = enabled ? Color.FromArgb(30, 32, 36) : Color.FromArgb(150, 150, 150);
+        var titleCol = enabled ? Theme.Text : Theme.OffText;
         var flags = TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
         TextRenderer.DrawText(g, d.title, enabled ? fTitle : fTitleOff, new Rectangle(tx, row.Y + 4, tw, 20), titleCol, flags);
         if (d.sub != null)
-            TextRenderer.DrawText(g, (enabled ? "" : "Off  ·  ") + d.sub, fSub, new Rectangle(tx, row.Y + 24, tw, 18), Color.FromArgb(110, 115, 125), flags);
+            TextRenderer.DrawText(g, (enabled ? "" : "Off  ·  ") + d.sub, fSub, new Rectangle(tx, row.Y + 24, tw, 18), Theme.SubText, flags);
         // on/off dot
         if (Toggleable(n.Tag))
         {
@@ -356,7 +356,7 @@ public partial class MainForm
         TextRenderer.DrawText(g, text, fPill, r, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         return r.Right;
     }
-    static Color Darker(Color c) => Color.FromArgb(c.R * 7 / 10, c.G * 7 / 10, c.B * 7 / 10);
+    static Color Darker(Color c) => Theme.IsDark ? ThemeWalker.Lighter(c) : Color.FromArgb(c.R * 7 / 10, c.G * 7 / 10, c.B * 7 / 10); // section text: darker on light, lighter on dark
     static GraphicsPath RoundRect(Rectangle r, int d)
     {
         var p = new GraphicsPath();

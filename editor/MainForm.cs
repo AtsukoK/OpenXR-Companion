@@ -214,6 +214,19 @@ public partial class MainForm : Form
             ts.Items.Insert(0, mb);
             ts.Items.Insert(1, new ToolStripSeparator());
         }
+        {   // light / dark: Auto follows Windows
+            var tb = new ToolStripButton { Alignment = ToolStripItemAlignment.Right, DisplayStyle = ToolStripItemDisplayStyle.Text };
+            void ShowT() { tb.Text = ThemeMode.Choice switch { "dark" => "☾ Dark", "light" => "☀ Light", _ => "◐ Auto" }; tb.ToolTipText = "Light or dark look. Auto follows your Windows setting. Click to switch."; }
+            tb.Click += (s, e) =>
+            {
+                ThemeMode.Choice = ThemeMode.Choice switch { "auto" => "light", "light" => "dark", _ => "auto" };
+                ShowT(); Theme.Set(ThemeMode.IsDark);
+                ThemeWalker.Apply(this); tree.BackColor = Theme.Surface; tree.Invalidate();
+                ShowEditor(tree.SelectedNode);
+            };
+            ShowT();
+            ts.Items.Add(tb);
+        }
         AddUpdateButton(ts);
         profileBox.SelectedIndexChanged += (s, e) => { if (!loading && profileBox.SelectedItem is string f) { if (ConfirmDiscard()) LoadFile(Path.Combine(ProfilesDir, f)); } };
 
@@ -286,6 +299,8 @@ public partial class MainForm : Form
 
         UpdateLayerStatus();
         RefreshProfileList("default.json");
+        if (Theme.IsDark) ThemeWalker.Apply(this);
+        HandleCreated += (s, e) => ThemeWalker.TitleBar(this, Theme.IsDark);
     }
 
     // Headless screenshots of each editor page (for checking layout).
@@ -442,6 +457,7 @@ public partial class MainForm : Form
         if (stripHand >= 0) editorHost.Controls.Add(PanelModeStrip(stripHand, () => { MarkDirty(); BuildTree(); }));
         else if (n?.Tag as string is "bindings_left" or "bindings_right" or "wheels") editorHost.Controls.Add(SectionSwitch((string)n.Tag));
         editorHost.ResumeLayout();
+        if (Theme.IsDark) ThemeWalker.Apply(editorHost);
         currentEditor = ed;
         if (old != null && !ReferenceEquals(old, ed)) { if (old.Contains(grid)) old.Controls.Remove(grid); old.Dispose(); }
     }
@@ -677,7 +693,7 @@ public partial class MainForm : Form
     static ToolStripButton Btn(string t, Action a) { var b = new ToolStripButton(t); b.Click += (s, e) => a(); return b; }
     static Button PBtn(string t, Action a) { var b = new Button { Text = t, AutoSize = true }; b.Click += (s, e) => a(); return b; }
 
-    void SetStatus(string s, bool error = false) { statusText.Text = s; statusText.ForeColor = error ? Color.Firebrick : SystemColors.ControlText; }
+    void SetStatus(string s, bool error = false) { statusText.Text = s; statusText.ForeColor = error ? (Theme.IsDark ? Color.FromArgb(255, 125, 115) : Color.Firebrick) : (Theme.IsDark ? Theme.Text : SystemColors.ControlText); }
     void MarkDirty() { dirty = true; Text = "OpenXR Companion - Profile Editor - " + Path.GetFileName(currentFile) + " *"; }
 
     bool ConfirmDiscard()
@@ -872,6 +888,7 @@ public partial class MainForm : Form
         var seen = Directory.Exists(Path.Combine(DataDir, "logs"))
             ? Directory.GetFiles(Path.Combine(DataDir, "logs"), "*.log").Select(Path.GetFileNameWithoutExtension).ToArray() : Array.Empty<string>();
         using var dlg = new NewProfileDialog(seen);
+        ThemeWalker.Apply(dlg); dlg.HandleCreated += (s, e) => ThemeWalker.TitleBar(dlg, Theme.IsDark);
         if (dlg.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(dlg.ExeName)) return;
         string name = dlg.ExeName.Trim().ToLowerInvariant();
         if (name.EndsWith(".exe")) name = name[..^4];
@@ -1170,7 +1187,7 @@ public partial class MainForm : Form
         }
         layerStatus.Text = "  " + text;
         layerStatus.ToolTipText = "64-bit games use the main layer. 32-bit games (Fallout: New Vegas / Fallout 3 with TTWVR) use the 32-bit one in the x86 folder. Install layer sets up both.";
-        layerStatus.ForeColor = ok ? Color.ForestGreen : Color.Firebrick;
+        layerStatus.ForeColor = ok ? (Theme.IsDark ? Color.FromArgb(110, 205, 140) : Color.ForestGreen) : (Theme.IsDark ? Color.FromArgb(255, 125, 115) : Color.Firebrick);
     }
 
     void RunScript(string name)

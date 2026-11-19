@@ -53,6 +53,7 @@ public partial class MainForm
         dlg.AcceptButton = B("Use these buttons", DialogResult.OK, true);
         B("Keep my current buttons", DialogResult.Cancel);
         dlg.Controls.Add(bar);
+        ThemeWalker.Apply(dlg); dlg.HandleCreated += (s, e) => ThemeWalker.TitleBar(dlg, Theme.IsDark);
         var res = dlg.ShowDialog(this);
         try { Directory.CreateDirectory(DataDir); File.WriteAllText(ControllerFlag, DateTime.Now.ToString("s")); } catch { }
         if (res != DialogResult.OK) return;

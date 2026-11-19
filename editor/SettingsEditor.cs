@@ -216,8 +216,8 @@ public class SettingsEditor : EditorBase
             var f = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
             var bar = new TrackBar { Minimum = min * 10, Maximum = max * 10, TickFrequency = (max - min) * 10 / 8, Width = 240, SmallChange = 5, LargeChange = 50 };
             var num = new NumericUpDown { Minimum = min, Maximum = max, Increment = 0.5m, DecimalPlaces = 1, Width = 70 };
-            var minus = new Button { Text = "\u2212", Width = 30 }; var plus = new Button { Text = "+", Width = 30 };
-            var zero = new Button { Text = "0", Width = 30 };
+            var minus = new Button { Text = "\u2212", Width = 32, Height = 27 }; var plus = new Button { Text = "+", Width = 32, Height = 27 };
+            var zero = new Button { Text = "0", Width = 32, Height = 27 };
             var u = new Label { Text = unit, AutoSize = true, Padding = new Padding(0, 6, 4, 0) };
             void Apply(decimal v)
             {

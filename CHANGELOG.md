@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### New
+- **Editor redesign**: Settings is split into short pages in the list (General, Wheel look and picking, Pointing, VR keyboard, Screen mirror, Controller offsets, Headset mirror, Advanced); each section sits in a card tagged **Saved with profile** or **Applies straight away**; help moved behind (i) icons (hover or click); content centred; the search box finds settings too and highlights the matching rows.
+- **Dark mode** for the editor: Auto (follows Windows), Light or Dark from the button on the right of the toolbar, with a dark title bar and scrollbars.
+- "Created by Atsuko" in the editor's status bar.
 - **Headset mirror**: a desktop window showing what the headset shows, **including the wheel, wrist panels, mirrored screen, lasers and messages** (the game's own mirror can't show those, they're added after the game). Good for recording or streaming (capture the window in OBS) or for someone watching. One switch, always first on the editor's toolbar; also an action `headset_mirror` for wheels and wrist panels (the default left wrist panel has it under More). Closing the window turns it off. Settings > Headset mirror: eye (right by default), zoom (fills the window), **steady the picture** (irons small head shakes out of the window like a camera stabiliser, on at 0.5 by default) and a frame rate cap. Never holds the game up. D3D11 games for now.
 
 ## v0.2.6 (2026-11-19)
