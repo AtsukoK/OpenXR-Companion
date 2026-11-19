@@ -378,7 +378,7 @@ static void ReadInputsAndUpdate() {
             FILETIME ft = FileTime(MirrorSettingsPath());
             if (memcmp(&ft, &gMirrorFileTime, sizeof(ft)) != 0) { gMirrorFileTime = ft; LoadMirrorSettings(gMirrorSet); }
         }
-        gMirror.eye = gMirrorSet.eye; gMirror.zoom = gMirrorSet.zoom; gMirror.fps = gMirrorSet.fps;
+        gMirror.eye = gMirrorSet.eye; gMirror.zoom = gMirrorSet.zoom; gMirror.fps = gMirrorSet.fps; gMirror.smoothing = gMirrorSet.smoothing;
         bool want = gMirrorSet.on && gGfx.api == 11;
         if (gMirrorSet.on && gGfx.api == 12 && !gMirror.On()) {
             static bool told = false;

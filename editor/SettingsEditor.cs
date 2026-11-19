@@ -264,6 +264,9 @@ public class SettingsEditor : EditorBase
             mir.AddRow("Zoom", zoom, "1 = the whole eye picture (very wide, blurry edges). 1.3 looks like a normal camera. It always fills the window; resize the window for a different shape.");
             var fps = new NumericUpDown { Minimum = 0, Maximum = 240, Increment = 5, Width = 90, Value = Math.Clamp(HeadsetMirrorFile.Fps, 0, 240) };
             fps.ValueChanged += (o, e) => HeadsetMirrorFile.Fps = (int)fps.Value;
+            var st = new NumericUpDown { Minimum = 0, Maximum = 1, Increment = 0.05m, DecimalPlaces = 2, Width = 90, Value = (decimal)Math.Clamp(HeadsetMirrorFile.Smoothing, 0, 1) };
+            st.ValueChanged += (o, e) => HeadsetMirrorFile.Smoothing = (double)st.Value;
+            mir.AddRow("Steady the picture", st, "Smooths small head shakes out of the window (like a camera stabiliser); real head turns still follow. 0 = off (the exact headset view), 0.5 = the default, 1 = strongest. Needs some zoom (above 1) so the picture's edge stays out of view.");
             mir.AddRow("Frame rate cap (fps)", fps, "0 = every headset frame. 60 is smooth for recording and costs little.");
             mir.AddRow("", new Label { AutoSize = true, ForeColor = Color.DimGray, MaximumSize = new Size(460, 0), Text = "These apply straight away, in every game and profile (no need to save)." });
         }

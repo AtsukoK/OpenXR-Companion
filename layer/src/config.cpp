@@ -534,7 +534,8 @@ bool LoadMirrorSettings(MirrorSettings& m) {
     try {
         json j = json::parse(text, nullptr, true, true);
         Get(j, "on", m.on); Get(j, "zoom", m.zoom); Get(j, "fps", m.fps);
-        std::string e = "left"; Get(j, "eye", e); m.eye = Lower(e) == "right" ? 1 : 0;
+        std::string e = "right"; Get(j, "eye", e); m.eye = Lower(e) == "left" ? 0 : 1;
+        Get(j, "smoothing", m.smoothing); m.smoothing = std::clamp(m.smoothing, 0.f, 1.f);
         m.zoom = std::clamp(m.zoom, 1.f, 3.f); m.fps = std::clamp(m.fps, 0, 240);
         return true;
     } catch (...) { return false; }
@@ -543,7 +544,7 @@ bool SaveMirrorSettings(const MirrorSettings& m) {
     json j = json::object();
     std::string text;
     if (ReadFile(MirrorSettingsPath(), text)) { try { j = json::parse(text, nullptr, true, true); } catch (...) { j = json::object(); } }
-    j["on"] = m.on; j["eye"] = m.eye ? "right" : "left"; j["zoom"] = std::round(m.zoom * 100.f) / 100.f; j["fps"] = m.fps;
+    j["on"] = m.on; j["eye"] = m.eye ? "right" : "left"; j["zoom"] = std::round(m.zoom * 100.f) / 100.f; j["fps"] = m.fps; j["smoothing"] = std::round(m.smoothing * 100.f) / 100.f;
     std::ofstream f(MirrorSettingsPath(), std::ios::binary | std::ios::trunc);
     if (!f) return false;
     f << j.dump(2);

@@ -793,6 +793,22 @@ int main(int argc, char** argv) {
                 CHECK(at(10, 10) == 0x0000FF, "mirror: the game's picture fills the rest");
                 SavePng(m.grabbed, W, Hh, L"mirror_test.png");
             }
+            // Steadying: a 1 degree head shake moves the panel in the window much less than without it.
+            auto edgeShift = [&](float smooth) {
+                m.smoothing = smooth;
+                auto firstRed = [&]() { int W = m.grabW, y = m.grabH / 2; for (int x = 0; x < W; x++) if ((m.grabbed[(size_t)y * W + x] & 0xFFFFFF) == 0xFF0000) return x; return -1; };
+                XrTime tt = 1000000000LL;
+                for (auto& v : views) v.pose.orientation = { 0, 0, 0, 1 };
+                for (int i = 0; i < 30; i++) { tt += 11000000; m.Frame(dev, ctx, L, tt, locate); } // settle
+                m.grab = true; tt += 11000000; m.Frame(dev, ctx, L, tt, locate); int x0 = firstRed();
+                float a = 0.5f * 3.14159265f / 180.f; // turn 1 degree left
+                for (auto& v : views) v.pose.orientation = { 0, std::sin(a), 0, std::cos(a) };
+                m.grab = true; tt += 11000000; m.Frame(dev, ctx, L, tt, locate); int x1 = firstRed();
+                for (auto& v : views) v.pose.orientation = { 0, 0, 0, 1 };
+                return std::abs(x1 - x0);
+            };
+            int raw = edgeShift(0.f), steadied = edgeShift(1.f);
+            CHECK(raw > 8 && steadied * 3 < raw, ("mirror: steadying keeps a small head shake out of the picture (" + std::to_string(raw) + " px -> " + std::to_string(steadied) + " px)").c_str());
             m.Shutdown();
             CHECK(m.Window() == nullptr && !m.On(), "mirror: turning it off closes the window");
             eyeTex->Release(); quadTex->Release(); ctx->Release(); dev->Release();

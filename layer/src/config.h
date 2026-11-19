@@ -204,7 +204,7 @@ bool SaveScreenChoice(const Profile& p, std::string& err);
 bool SaveOffsets(const Profile& p, std::string& err);
 // Headset mirror window: app-wide (not per profile), in %LOCALAPPDATA%\OpenXRCompanion\headset_mirror.json,
 // shared with the editor's toolbar button.
-struct MirrorSettings { bool on = false; int eye = 0; float zoom = 1.3f; int fps = 60; };
+struct MirrorSettings { bool on = false; int eye = 1; float zoom = 1.3f; int fps = 60; float smoothing = 0.5f; };
 std::wstring MirrorSettingsPath();
 bool LoadMirrorSettings(MirrorSettings& m);
 bool SaveMirrorSettings(const MirrorSettings& m);

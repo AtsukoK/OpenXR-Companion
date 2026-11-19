@@ -24,7 +24,8 @@ public static class HeadsetMirrorFile
     static void Set(string k, JsonNode v) { var j = Read(); j[k] = v; Write(j); }
 
     public static bool On { get => Get("on", false); set => Set("on", value); }
-    public static string Eye { get => Get("eye", "left"); set => Set("eye", value); }
+    public static string Eye { get => Get("eye", "right"); set => Set("eye", value); }
     public static double Zoom { get => Get("zoom", 1.3); set => Set("zoom", Math.Round(value, 2)); }
+    public static double Smoothing { get => Get("smoothing", 0.5); set => Set("smoothing", Math.Round(value, 2)); }
     public static int Fps { get => Get("fps", 60); set => Set("fps", value); }
 }

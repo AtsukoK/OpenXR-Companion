@@ -321,14 +321,51 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
         ctx->PSSetShaderResources(0, 1, &srv);
         ctx->Draw(4, 0);
     };
-    // the eye picture, filling the window
-    const float full[4][2] = { { -1, 1 }, { 1, 1 }, { -1, -1 }, { 1, -1 } };
-    for (int i = 0; i < 4; i++) { c.P[i][0] = full[i][0]; c.P[i][1] = full[i][1]; c.P[i][2] = 0.5f; c.P[i][3] = 1; }
-    c.UV[0] = cl; c.UV[1] = ct; c.UV[2] = cl + cw; c.UV[3] = ct + ch;
-    draw(eyeSrv, 0, blendOpaque);
+    // Steadied camera: the head's real position, its direction smoothed (shakes ironed out, real turns
+    // followed). Everything, the game's picture included, is drawn as seen from it.
+    XrPosef cam = view.pose;
+    bool steady = smoothing > 0.001f;
+    if (steady) {
+        float dt = lastT && t > lastT ? (float)((t - lastT) * 1e-9) : 0.f;
+        cam.orientation = camSmooth.Apply(view.pose, dt, smoothing).orientation;
+    } else camSmooth.Reset();
+    lastT = t;
+    XrPosef eyeInv = PInv(cam);
+    // a quad (pose in the game's space, half sizes) -> clip corners for the cropped window; false = all behind
+    auto project = [&](const XrPosef& pose, float hw, float hh) {
+        XrPosef inEye = PMul(eyeInv, pose);
+        const float cs[4][2] = { { -hw, hh }, { hw, hh }, { -hw, -hh }, { hw, -hh } };
+        bool anyFront = false;
+        for (int i = 0; i < 4; i++) {
+            Vec3 p = V(inEye.position) + Rotate(inEye.orientation, { cs[i][0], cs[i][1], 0 });
+            float w = -p.z;
+            float x = (2 * p.x + (tR + tL) * p.z) / (tR - tL);
+            float y = (2 * p.y + (tU + tD) * p.z) / (tU - tD);
+            x = x / cw + w * (1 - 2 * cl - cw) / cw;   // full eye frame -> the cropped window
+            y = y / ch + w * (1 - 1 / ch + 2 * ct / ch);
+            c.P[i][0] = x; c.P[i][1] = y; c.P[i][2] = w - 0.01f; c.P[i][3] = w; // behind the eye -> clipped
+            if (w > 0.01f) anyFront = true;
+        }
+        return anyFront;
+    };
+
+    // the eye picture
+    if (!steady) { // straight copy, filling the window
+        const float full[4][2] = { { -1, 1 }, { 1, 1 }, { -1, -1 }, { 1, -1 } };
+        for (int i = 0; i < 4; i++) { c.P[i][0] = full[i][0]; c.P[i][1] = full[i][1]; c.P[i][2] = 0.5f; c.P[i][3] = 1; }
+        c.UV[0] = cl; c.UV[1] = ct; c.UV[2] = cl + cw; c.UV[3] = ct + ch;
+        draw(eyeSrv, 0, blendOpaque);
+    } else { // as a flat picture 1 m in front of the real eye, filling its field of view, seen from the steadied camera
+        const float clear[4] = { 0, 0, 0, 1 };
+        ctx->ClearRenderTargetView(rtv, clear);
+        XrPosef local{ { 0, 0, 0, 1 }, { (tL + tR) / 2, (tU + tD) / 2, -1.f } };
+        if (project(PMul(view.pose, local), (tR - tL) / 2, (tU - tD) / 2)) {
+            c.UV[0] = 0; c.UV[1] = 0; c.UV[2] = 1; c.UV[3] = 1;
+            draw(eyeSrv, 0, blendOpaque);
+        }
+    }
 
     // every quad layer after the game's picture, where it really is
-    XrPosef eyeInv = PInv(view.pose);
     std::map<uint64_t, std::pair<bool, XrPosef>> spaces;
     bool past = false;
     for (auto* L : layers) {
@@ -348,22 +385,7 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
             sp = spaces.emplace((uint64_t)q->space, std::make_pair(ok, rel)).first;
         }
         if (!sp->second.first) continue;
-        XrPosef inEye = PMul(eyeInv, PMul(sp->second.second, q->pose)); // quad pose in the eye's frame
-        float hw = q->size.width / 2, hh = q->size.height / 2;
-        const float cs[4][2] = { { -hw, hh }, { hw, hh }, { -hw, -hh }, { hw, -hh } };
-        bool anyFront = false;
-        for (int i = 0; i < 4; i++) {
-            Vec3 p = V(inEye.position) + Rotate(inEye.orientation, { cs[i][0], cs[i][1], 0 });
-            float w = -p.z;
-            float x = (2 * p.x + (tR + tL) * p.z) / (tR - tL);
-            float y = (2 * p.y + (tU + tD) * p.z) / (tU - tD);
-            // full eye frame -> the cropped window
-            x = x / cw + w * (1 - 2 * cl - cw) / cw;
-            y = y / ch + w * (1 - 1 / ch + 2 * ct / ch);
-            c.P[i][0] = x; c.P[i][1] = y; c.P[i][2] = w - 0.01f; c.P[i][3] = w; // behind the eye -> clipped
-            if (w > 0.01f) anyFront = true;
-        }
-        if (!anyFront) continue;
+        if (!project(PMul(sp->second.second, q->pose), q->size.width / 2, q->size.height / 2)) continue;
         float iw = (float)qs->second.w, ih = (float)qs->second.h;
         const XrRect2Di& r = q->subImage.imageRect;
         c.UV[0] = r.offset.x / iw; c.UV[1] = r.offset.y / ih; c.UV[2] = (r.offset.x + r.extent.width) / iw; c.UV[3] = (r.offset.y + r.extent.height) / ih;

@@ -26,7 +26,8 @@ public:
     void SetOn(bool on);              // opens / closes the window
     bool On() const { return on; }
     bool ClosedByUser();              // the window's X was clicked since the last call
-    int eye = 0;                      // 0 left, 1 right
+    int eye = 1;                      // 0 left, 1 right
+    float smoothing = 0.5f;           // steady the picture against head shake (0 = off .. 1 = strongest)
     float zoom = 1.3f;                // 1 = the whole eye picture, more = cropped in like a normal camera
     int fps = 60;                     // most frames a second the window updates (0 = every headset frame)
     void Shutdown();                  // release GPU things (session ending)
@@ -64,6 +65,7 @@ private:
     int64_t eyeFmt = 0;
     std::map<ID3D11Texture2D*, ID3D11ShaderResourceView*> srvs;
     bool failed = false;
+    PoseSmoother camSmooth; XrTime lastT = 0;
     bool InitGpu(ID3D11Device* d);
     void ReleaseGpu();
     ID3D11ShaderResourceView* Srv(ID3D11Texture2D* t, int64_t fmt);
