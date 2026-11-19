@@ -292,7 +292,7 @@ public partial class MainForm : Form
     public static void Shots(string dir)
     {
         Directory.CreateDirectory(dir);
-        var f = new MainForm { StartPosition = FormStartPosition.Manual, Location = new Point(0, 0) };
+        var f = new MainForm { StartPosition = FormStartPosition.Manual, Location = new Point(0, 0), Size = new Size(1500, 1000) };
         f.Show();
         for (int i = 0; i < 10; i++) Application.DoEvents();
         // Screenshots show the app's built-in default profile, never the user's own (nothing is saved).
@@ -345,6 +345,10 @@ public partial class MainForm : Form
         }
         Snap("00_overview", f.tree.Nodes[0]);
         Snap("1_settings", f.tree.Nodes[1]);
+        foreach (TreeNode pn in f.tree.Nodes[1].Nodes) Snap("1_settings_" + ((SettingsPage)pn.Tag).Key, pn);
+        f.search.Text = "zoom"; for (int i = 0; i < 40; i++) { Application.DoEvents(); System.Threading.Thread.Sleep(10); }
+        f.BuildTree(); Snap("1_search_zoom", f.tree.Nodes[1].Nodes.Count > 0 ? f.tree.Nodes[1].Nodes[0] : f.tree.Nodes[1]);
+        f.search.Text = ""; f.BuildTree();
         Snap("2_binding", f.bindingRoots[1].Nodes.Count > 0 ? f.bindingRoots[1].Nodes[0] : null);
         Snap("3_binding_chord", f.bindingRoots[1].Nodes.Count > 1 ? f.bindingRoots[1].Nodes[1] : null);
         Snap("4_wheel", f.wheelsRoot.Nodes.Count > 0 ? f.wheelsRoot.Nodes[0] : null);
@@ -387,7 +391,8 @@ public partial class MainForm : Form
                     var ov = new OverviewEditor(Profile, GoTo);
                     ov.Changed += Changed; ed = ov; break;
                 }
-            case ProfileModel p: { var se = new SettingsEditor(p); se.Changed += Changed; ed = se; break; }
+            case ProfileModel p: { var se = new SettingsEditor(p, -1, "general", Q); se.Changed += Changed; ed = se; break; }
+            case SettingsPage sp: { var se = new SettingsEditor(Profile, -1, sp.Key, Q); se.Changed += Changed; ed = se; break; }
             case BindingModel b: { var be = new BindingEditor(b); be.Changed += Changed; ed = be; break; }
             case "wrist0": case "wrist1": { var se = new SettingsEditor(Profile, (string)n.Tag == "wrist1" ? 1 : 0); (bool, bool) lastMirror = (Profile.WristLeft.Mirror, Profile.WristRight.Mirror); se.Changed += () => { Changed(); var m = (Profile.WristLeft.Mirror, Profile.WristRight.Mirror); if (m != lastMirror) { lastMirror = m; BuildTree(); } }; ed = se; break; }
             case WheelModel w:
@@ -426,7 +431,7 @@ public partial class MainForm : Form
             WheelModel or WheelItemModel => "Add item",
             _ => "Add",
         };
-        addBtn.Enabled = n?.Tag is not ProfileModel && n?.Tag as string != "overview";
+        addBtn.Enabled = n?.Tag is not (ProfileModel or SettingsPage) && n?.Tag as string != "overview";
         editorHost.SuspendLayout();
         editorHost.Controls.Clear();
         ed.Dock = DockStyle.Fill;
@@ -577,7 +582,7 @@ public partial class MainForm : Form
         return n?.Tag switch
         {
             "overview" => "Tip: the switches on each card turn things on or off right here. The blue buttons jump to where you edit them.",
-            ProfileModel => "Tip: these settings apply to every wheel and panel. Changes take effect in the game when you save (Ctrl+S).",
+            ProfileModel or SettingsPage => "Tip: cards tagged 'Saved with profile' take effect when you save (Ctrl+S); 'Applies straight away' ones work at once. Hover or click \u24D8 for help on a setting.",
             "bindings_left" or "bindings_right" => "Tip: click the round dot at the right of a binding to switch it on or off without deleting it. Right-click a row to duplicate, delete or move it.",
             "wheels" => "Tip: a wheel opened by a controller binding is a main wheel. Use '+ Add sub-wheel' under a wheel to make a submenu that is linked to it automatically.",
             "wrist0" or "wrist1" => "Tip: turn your wrist toward your face and look at it to show the panel. Poke a button with your other hand's finger, or point at it and pull the trigger.",
@@ -902,6 +907,9 @@ public partial class MainForm : Form
         overview.Tag = "overview";
         var settings = tree.Nodes.Add("Settings");
         settings.Tag = Profile;
+        foreach (var sp in SettingsPage.All) // its pages; while searching, only those with a matching setting
+            if (string.IsNullOrWhiteSpace(q) || Matches(q, sp.Title, sp.Sub, SettingsEditor.WordsOf(Profile, sp.Key)))
+                settings.Nodes.Add(new TreeNode(sp.Title) { Tag = sp });
         // Bindings grouped by the controller whose button fires them.
         foreach (int h in new[] { 1, 0 })
         {

@@ -77,7 +77,7 @@ public partial class MainForm
                 if (e.X < 34) Fold(e.Node); // only the arrow folds; clicking the rest of the header just selects it
                 return;
             }
-            if (RealCount(e.Node) > 0 && e.X < Indent(e.Node) + 2) Fold(e.Node); // the arrow left of a wheel or page
+            if (RealCount(e.Node) > 0 && e.Node.Tag is not ProfileModel && e.X < Indent(e.Node) + 2) Fold(e.Node); // the arrow left of a wheel or page
         };
         // no double-click / keyboard folding: only the arrows fold (code-driven changes have Action Unknown)
         tree.BeforeCollapse += (s, e) => { if (UserToggle()) e.Cancel = true; };
@@ -192,7 +192,8 @@ public partial class MainForm
         switch (n.Tag)
         {
             case "overview": return ("Overview", "What is on and off", "", SecNav, null, default);
-            case ProfileModel: return ("Settings", "Look, picking items, keyboard, colours", "", SecNav, null, default);
+            case ProfileModel: return ("Settings", string.IsNullOrWhiteSpace(Q) ? "Pick a page below" : n.Nodes.Count > 0 ? "Pages with a matching setting below" : "No setting matches", "", SecNav, null, default);
+            case SettingsPage sp: return (sp.Title, sp.Sub, sp.Icon, sp.Live ? OnC : SecNav, null, default);
             case "bindings_right":
             case "bindings_left":
                 {
@@ -311,7 +312,7 @@ public partial class MainForm
             using var a = new SolidBrush(d.accent);
             g.FillRectangle(a, indent - 6, row.Y + 8, 4, row.Height - 16);
         }
-        if (RealCount(n) > 0) Chevron(g, indent - 13, row.Y + row.Height / 2, n.IsExpanded, Color.FromArgb(120, 125, 135));
+        if (RealCount(n) > 0 && n.Tag is not ProfileModel) Chevron(g, indent - 13, row.Y + row.Height / 2, n.IsExpanded, Color.FromArgb(120, 125, 135)); // Settings always shows its pages
         // icon (or colour swatch for items with a colour)
         var ic = new Rectangle(indent + 2, row.Y + 9, 28, 28);
         Color iconCol = enabled ? d.accent : OffC;

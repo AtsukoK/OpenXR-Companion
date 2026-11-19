@@ -26,8 +26,13 @@ public class SettingsEditor : EditorBase
 
     readonly ProfileModel p;
 
-    public SettingsEditor(ProfileModel model, int wristHand = -1)
+    public readonly string Page;
+    // every word on the page (labels, tick boxes, help), for the search box
+    public string SearchText { get; private set; } = "";
+
+    public SettingsEditor(ProfileModel model, int wristHand = -1, string page = "general", string highlight = null)
     {
+        Page = page ?? "general";
         p = model;
         p.Thresholds ??= new(); p.Style ??= new(); p.Selection ??= new(); p.Keyboard ??= new(); p.Pointer ??= new(); p.WristLeft ??= new(); p.WristRight ??= new(); p.Style.Colors ??= new();
         var s = p.Style; var sel = p.Selection; var kb = p.Keyboard; var th = p.Thresholds; var col = s.Colors;
@@ -329,24 +334,103 @@ public class SettingsEditor : EditorBase
         adv.Visible = false;
         advToggle.CheckedChanged += (o, e) => adv.Visible = advToggle.Checked;
 
+        const string savedTip = "Saved with this profile: changes take effect in the game when you press Save (Ctrl+S).";
+        const string liveTip = "Applies straight away, in every game and profile. Nothing to save.";
+        Card C(string title, string glyph, bool live, params Control[] body) =>
+            new(title, glyph, live ? "Applies straight away" : "Saved with profile", live ? Theme.Live : Theme.Saved, live ? liveTip : savedTip, body);
+        BackColor = Theme.Page;
+        var pageControls = new List<Control>();
+        string pageTitle, pageHelp;
         if (wristHand >= 0)
         {
-            Stack(Title(wristHand == 1 ? "Right wrist panel" : "Left wrist panel"),
-                  FormPanel.Header("Buttons on your forearm. They appear only when you turn the forearm toward your eyes and look at it. Its pages are listed under this panel's bar in the list on the left (unfold it with the arrow); select a page to add buttons."),
-                  wrist);
-            return;
+            pageTitle = wristHand == 1 ? "Right wrist panel" : "Left wrist panel";
+            pageHelp = "Buttons on your forearm. They appear when you turn the forearm toward your eyes and look at it. Its pages are listed under this panel in the list on the left; select a page to add buttons.";
+            pageControls.Add(C("Panel", "\uE8A9", false, wrist));
         }
-        Stack(Title("Settings"),
-              FormPanel.Header("How the overlay behaves in this game. Changes apply when you save."),
-              Section("General"), general,
-              Section("Wheel position and look"), look,
-              Section("Picking items"), pick,
-              Section("Pointing (laser and fingertip)"), aim,
-              Section("VR keyboard"), keys,
-              Section("Screen mirror (a monitor in VR)"), scr,
-              Section("Controller offsets (the game's hands and guns)"), offs,
-              Section("Headset mirror (what the headset shows, on the desktop)"), mir,
-              advToggle, adv);
+        else
+        {
+            var sp = SettingsPage.ByKey(Page);
+            pageTitle = sp.Title; pageHelp = null;
+            switch (sp.Key)
+            {
+                case "wheel":
+                    pageHelp = "Where the radial wheel appears, how it looks, and how you pick an item on it.";
+                    pageControls.Add(C("Position and look", "\uE790", false, look));
+                    pageControls.Add(C("Picking items", "\uE7C9", false, pick));
+                    break;
+                case "pointing":
+                    pageHelp = "The laser you point at wheels, wrist panels and the mirrored screen with.";
+                    pageControls.Add(C("Laser and fingertip", "\uE7C9", false, aim)); break;
+                case "keyboard":
+                    pageControls.Add(C("VR keyboard", "\uE765", false, keys)); break;
+                case "screen":
+                    pageHelp = "A desktop monitor or one window, shown in VR on your wrist or in front of you.";
+                    pageControls.Add(C("Screen mirror", "\uE7F4", false, scr)); break;
+                case "offsets":
+                    pageHelp = "Turns and moves the controllers the GAME sees, for when its hands or guns point too low or too high.";
+                    pageControls.Add(C("Controller offsets", "\uE7FC", false, offs)); break;
+                case "mirror":
+                    pageHelp = "A desktop window showing what the headset shows, including the wheel, panels and lasers. Good for OBS.";
+                    pageControls.Add(C("Headset mirror", "\uE890", true, mir)); break;
+                case "advanced":
+                    adv.Visible = true;
+                    pageControls.Add(C("Advanced", "\uE90F", false, adv)); break;
+                default:
+                    pageHelp = "How the overlay behaves in this game.";
+                    pageControls.Add(C("General", "\uE713", false, general)); break;
+            }
+        }
+        var all = new List<Control> { Title(pageTitle) };
+        if (pageHelp != null) all.Add(FormPanel.Header(pageHelp));
+        foreach (var c in pageControls) { all.Add(c); all.Add(new Panel { Height = 14, Dock = DockStyle.Top, BackColor = Theme.Page }); }
+        Stack(all.ToArray());
+
+        // search text and highlighted matches
+        var sb = new System.Text.StringBuilder(pageTitle + " " + pageHelp);
+        var hits = new List<Control>();
+        string q = string.IsNullOrWhiteSpace(highlight) ? null : highlight.Trim();
+        void Walk(Control c)
+        {
+            if (c is FormPanel fp)
+                foreach (var (l, ctl, hint) in fp.Rows)
+                {
+                    string words = l.Text + " " + (ctl is CheckBox cb ? cb.Text : "") + " " + hint;
+                    sb.Append(' ').Append(words);
+                    if (q != null && words.Contains(q, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var mark = string.IsNullOrEmpty(l.Text) && ctl is CheckBox ? ctl : (Control)l;
+                        mark.BackColor = Theme.Highlight; hits.Add(mark);
+                    }
+                }
+            foreach (Control k in c.Controls) Walk(k);
+        }
+        foreach (var c in pageControls) Walk(c);
+        SearchText = sb.ToString();
+        if (hits.Count > 0) HandleCreated += (o, e) => BeginInvoke(new Action(() => ScrollControlIntoView(hits[0])));
+    }
+
+    // Content stays a comfortable width, centred, however wide the window is.
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+        int side = Math.Max(12, (ClientSize.Width - 940) / 2);
+        if (Padding.Left != side) Padding = new Padding(side, 8, side, 8);
+    }
+
+    // Words on every Settings page, for the search box (built once).
+    static Dictionary<string, string> pageWords;
+    public static string WordsOf(ProfileModel p, string key)
+    {
+        if (pageWords == null)
+        {
+            pageWords = new();
+            foreach (var sp in SettingsPage.All)
+            {
+                try { using var e = new SettingsEditor(p, -1, sp.Key); pageWords[sp.Key] = e.SearchText; }
+                catch { pageWords[sp.Key] = sp.Title; }
+            }
+        }
+        return pageWords.TryGetValue(key, out var w) ? w : "";
     }
 
     static OffsetModel Clone(OffsetModel a) => new() { Pitch = a.Pitch, Yaw = a.Yaw, Roll = a.Roll, X = a.X, Y = a.Y, Z = a.Z };
