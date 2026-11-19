@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.2.6 (2026-11-19)
 
 ### Renamed: OpenXR Hand Menus is now **OpenXR Companion**
 - It does a lot more than menus now. The layer, the editor (`OpenXRCompanionEditor.exe`) and the settings folder (`%LOCALAPPDATA%\OpenXRCompanion`) have the new name. **Your profiles are copied over by themselves** the first time either one runs.
