@@ -50,7 +50,7 @@ public static class ThemeWalker
 
     static void Walk(Control c, bool dark)
     {
-        if (c is not (WheelPreview or ArmPosePreview)) // pictures of the headset view keep their own colours
+        if (c is not (WheelPreview or ArmPosePreview) && c.Tag as string != "swatch") // pictures and colour swatches keep their own colours
         {
             if (!origs.TryGetValue(c, out var o))
             {

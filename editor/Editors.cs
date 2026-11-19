@@ -581,7 +581,7 @@ public class ActionEditor : FormPanel
         mirMode.Code = a.Type == "headset_mirror" && !string.IsNullOrEmpty(a.Mode) ? a.Mode : "toggle";
         offMode.Code = a.Type == "controller_offsets" && !string.IsNullOrEmpty(a.Mode) ? a.Mode : "panel";
         screenMon.Code = a.Monitor?.ToString() ?? "";
-        screenWin.Items.Clear(); foreach (var n in OpenWindows.Names()) screenWin.Items.Add(n);
+        screenWin.Items.Clear(); OpenWindows.FillOnOpen(screenWin);
         screenWin.Text = a.Window ?? "";
         loading = false;
         Sync();
@@ -864,7 +864,7 @@ public class ItemEditor : EditorBase
         var browse = new Button { Text = "Browse...", AutoSize = true };
         var iconRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
         iconRow.Controls.AddRange(new Control[] { icon, browse });
-        var colorBtn = new Button { Width = 120, Height = 26 };
+        var colorBtn = new Button { Width = 120, Height = 26, Tag = "swatch" };
         var colorClear = new Button { Text = "Default", AutoSize = true };
         var colorRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
         colorRow.Controls.AddRange(new Control[] { colorBtn, colorClear });

@@ -257,6 +257,21 @@ public class ScreenModel
 // Open windows with a title, for "show this window" pickers (program name first).
 public static class OpenWindows
 {
+    // Listing the programs is slow (about half a second): only do it when the list is opened.
+    public static void FillOnOpen(ComboBox cb)
+    {
+        bool filled = false;
+        cb.DropDown += (s, e) =>
+        {
+            if (filled) return;
+            filled = true;
+            string keep = cb.Text;
+            cb.BeginUpdate();
+            foreach (var n in Names()) if (!cb.Items.Contains(n)) cb.Items.Add(n);
+            cb.EndUpdate();
+            cb.Text = keep;
+        };
+    }
     public static string[] Names()
     {
         var l = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);

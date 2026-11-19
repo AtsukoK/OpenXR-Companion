@@ -303,6 +303,57 @@ public partial class MainForm : Form
         HandleCreated += (s, e) => ThemeWalker.TitleBar(this, Theme.IsDark);
     }
 
+    // Timing of the slow parts (opening each page, rebuilding the list, moving an item), on a copy of a profile.
+    public static void Perf(string profile, string outFile)
+    {
+        var sb = new StringBuilder();
+        var f = new MainForm { StartPosition = FormStartPosition.Manual, Location = new Point(0, 0), Size = new Size(1500, 1000) };
+        f.Show();
+        for (int i = 0; i < 10; i++) Application.DoEvents();
+        var copy = Path.Combine(Path.GetTempPath(), "vro_perf_profile.json");
+        File.Copy(profile, copy, true);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        f.LoadFile(copy);
+        for (int i = 0; i < 5; i++) Application.DoEvents();
+        sb.AppendLine($"load file: {sw.ElapsedMilliseconds} ms");
+        double Time(Action a) { var t = System.Diagnostics.Stopwatch.StartNew(); a(); for (int i = 0; i < 3; i++) Application.DoEvents(); f.Update(); return t.Elapsed.TotalMilliseconds; }
+        var nodes = new List<TreeNode>();
+        void All(TreeNodeCollection c) { foreach (TreeNode n in c) { if (n.Tag is not AddSlot) nodes.Add(n); All(n.Nodes); } }
+        All(f.tree.Nodes);
+        foreach (var round in new[] { "first", "again" })
+            foreach (var n in nodes)
+            {
+                PerfLog = new StringBuilder();
+                double ms = Time(() => f.tree.SelectedNode = n);
+                sb.AppendLine($"{round,-6} select {(n.Tag?.GetType().Name ?? "-"),-16} {n.Text,-34} {ms,7:F0} ms  |{PerfLog}");
+                PerfLog = null;
+            }
+        {   // building blocks, 5 times each
+            double T(Action a) { var t = System.Diagnostics.Stopwatch.StartNew(); for (int i = 0; i < 5; i++) a(); return t.Elapsed.TotalMilliseconds / 5; }
+            var w0 = f.Profile.Wheels.Values.First(); var it0 = w0.Items.First();
+            sb.AppendLine($"  new ActionEditor: {T(() => new ActionEditor(true).Dispose()):F0} ms");
+            sb.AppendLine($"  new ItemEditor: {T(() => new ItemEditor(w0, it0).Dispose()):F0} ms");
+            sb.AppendLine($"  new BindingEditor: {T(() => new BindingEditor(f.Profile.Bindings[0]).Dispose()):F0} ms");
+            sb.AppendLine($"  new SettingsEditor general: {T(() => new SettingsEditor(f.Profile).Dispose()):F0} ms");
+            sb.AppendLine($"  Monitors.Choices: {T(() => Monitors.Choices(true)):F1} ms");
+            sb.AppendLine($"  ChoiceBox(40 items): {T(() => new ChoiceBox(Enumerable.Range(0, 40).Select(i => new Choice(i.ToString(), "x" + i))).Dispose()):F1} ms");
+            sb.AppendLine($"  new KeyBox: {T(() => new KeyBox().Dispose()):F1} ms");
+            sb.AppendLine($"  new ChordEditor: {T(() => new ChordEditor().Dispose()):F1} ms");
+            var ie = new ItemEditor(w0, it0); f.editorHost.Controls.Add(ie);
+            sb.AppendLine($"  theme walk item page: {T(() => ThemeWalker.Apply(ie)):F1} ms");
+            f.editorHost.Controls.Remove(ie); ie.Dispose();
+        }
+        sb.AppendLine($"rebuild list: {Time(() => f.BuildTree()):F0} ms");
+        var item = nodes.FirstOrDefault(n => n.Tag is WheelItemModel);
+        if (item != null) { f.tree.SelectedNode = item; sb.AppendLine($"move item down: {Time(() => f.MoveItem(1)):F0} ms"); sb.AppendLine($"move item up: {Time(() => f.MoveItem(-1)):F0} ms"); }
+        var bind = nodes.FirstOrDefault(n => n.Tag is BindingModel);
+        if (bind != null) { f.tree.SelectedNode = bind; sb.AppendLine($"move binding: {Time(() => f.MoveItem(1)):F0} ms"); }
+        sb.AppendLine($"search 'a': {Time(() => { f.search.Text = "a"; f.BuildTree(); }):F0} ms");
+        sb.AppendLine($"search clear: {Time(() => { f.search.Text = ""; f.BuildTree(); }):F0} ms");
+        File.WriteAllText(outFile, sb.ToString());
+        f.dirty = false; f.Close();
+    }
+
     // Headless screenshots of each editor page (for checking layout).
     public static void Shots(string dir)
     {
@@ -394,8 +445,11 @@ public partial class MainForm : Form
     }
 
     // ------------------------------------------------------------ right-hand editor
+    internal static StringBuilder PerfLog; // --perf: where the time of a page switch goes
     void ShowEditor(TreeNode n)
     {
+        var psw = System.Diagnostics.Stopwatch.StartNew();
+        void Mark(string what) { PerfLog?.Append($" {what} {psw.Elapsed.TotalMilliseconds:F0}"); }
         var old = currentEditor;
         Control ed;
         void Changed() { MarkDirty(); RefreshNodeTexts(); }
@@ -437,6 +491,7 @@ public partial class MainForm : Form
                 break;
             default: ed = new Panel(); break;
         }
+        Mark("built");
         addBtn.Text = n?.Tag switch
         {
             "bindings_right" or "bindings_left" or BindingModel => "Add binding",
@@ -447,19 +502,26 @@ public partial class MainForm : Form
             _ => "Add",
         };
         addBtn.Enabled = n?.Tag is not (ProfileModel or SettingsPage) && n?.Tag as string != "overview";
+        // Everything for the page is made and recoloured before it goes on screen: recolouring controls
+        // that already have windows repaints each one (slow), and is visible as a flash.
+        ed.Dock = DockStyle.Fill;
+        var parts = new List<Control> { ed };
+        string tip = TipFor(n);
+        if (tip != null) parts.Add(TipBar(tip));
+        int stripHand = n?.Tag is WheelModel or WheelItemModel || n?.Tag as string is "wrist0" or "wrist1" ? WristOf(n) : -1;
+        if (stripHand >= 0) parts.Add(PanelModeStrip(stripHand, () => { MarkDirty(); BuildTree(); }));
+        else if (n?.Tag as string is "bindings_left" or "bindings_right" or "wheels") parts.Add(SectionSwitch((string)n.Tag));
+        if (Theme.IsDark) foreach (var c in parts) ThemeWalker.Apply(c);
+        Mark("theme");
         editorHost.SuspendLayout();
         editorHost.Controls.Clear();
-        ed.Dock = DockStyle.Fill;
-        editorHost.Controls.Add(ed);
-        string tip = TipFor(n);
-        if (tip != null) editorHost.Controls.Add(TipBar(tip));
-        int stripHand = n?.Tag is WheelModel or WheelItemModel || n?.Tag as string is "wrist0" or "wrist1" ? WristOf(n) : -1;
-        if (stripHand >= 0) editorHost.Controls.Add(PanelModeStrip(stripHand, () => { MarkDirty(); BuildTree(); }));
-        else if (n?.Tag as string is "bindings_left" or "bindings_right" or "wheels") editorHost.Controls.Add(SectionSwitch((string)n.Tag));
+        foreach (var c in parts) editorHost.Controls.Add(c);
+        Mark("added");
         editorHost.ResumeLayout();
-        if (Theme.IsDark) ThemeWalker.Apply(editorHost);
+        Mark("layout");
         currentEditor = ed;
         if (old != null && !ReferenceEquals(old, ed)) { if (old.Contains(grid)) old.Controls.Remove(grid); old.Dispose(); }
+        Mark("disposed");
     }
 
     // ------------------------------------------------------------ drag to reorder
