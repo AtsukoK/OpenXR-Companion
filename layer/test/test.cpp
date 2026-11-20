@@ -605,7 +605,7 @@ int main(int argc, char** argv) {
         for (int h = 0; h < 2; h++) { f.h[h].gripValid = f.h[h].aimValid = true; f.h[h].gripPose = f.h[h].aimPose = XrPosef{ {0,0,0,1}, {h ? 0.3f : -0.3f, 1.0f, -0.2f} }; }
         auto step = [&](int frames = 1) { for (int i = 0; i < frames; i++) { t += 0.011; f.t = t; e.Update(f); } };
         step(5); f.h[1].b1 = true; step(2); f.h[1].b1 = false; step(3);
-        CHECK(e.kb.visible && e.kb.barLabels.size() == 4, "dock: the keyboard has a bar with 4 buttons under it");
+        CHECK(e.kb.visible && e.kb.barLabels.size() == 5, "dock: the keyboard has a bar with 5 buttons under it");
         auto pressBar = [&](int cell) {
             int n = (int)e.kb.barLabels.size();
             Vec3 local{ ((cell + 0.5f) / n - 0.5f) * e.kb.barW, 0, 0.3f };

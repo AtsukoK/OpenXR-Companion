@@ -103,12 +103,7 @@ void Engine::KbPress(int i, int hand) {
     case KB_CTRL: kb.ctrl = !kb.ctrl; break;
     case KB_ALT: kb.alt = !kb.alt; break;
     case KB_CLOSE: CloseKeyboard(); return;
-    case KB_MOVE:
-        if (!kb.moving && prof->dock.mode == 2 && screen.shown) { Toast("Docked under the screen: use Adjust dock to place it", 3.0); break; }
-        kb.moving = !kb.moving;
-        if (kb.moving) Toast("Grab the keyboard with a grip to move it, stick = size. Press Done when finished", 4.0);
-        else { if (grab.target == 4) grab = GrabRun{}; saveRequested = true; }
-        break;
+    case KB_MOVE: KbToggleMove(); break;
     default: {
         std::string combo;
         if (kb.ctrl) combo += "Ctrl+";
@@ -247,6 +242,17 @@ void Engine::ApplyDock() {
     }
 }
 
+// Move key / bar button: grab the keyboard with a grip to place it, without Adjust mode.
+void Engine::KbToggleMove() {
+    if (!kb.moving && prof->dock.mode == 2 && screen.shown) { Toast("Docked under the screen: use Adjust dock to place it", 3.0); return; }
+    kb.moving = !kb.moving;
+    if (kb.moving) {
+        if (dockAdjust) { dockAdjust = false; if (grab.target == 5) grab = GrabRun{}; }
+        Toast("Grab the keyboard with a grip to move it, stick = size. Press Done when finished", 4.0);
+    } else { if (grab.target == 4) grab = GrabRun{}; saveRequested = true; Toast("Keyboard position saved", 2.0); }
+    kb.version++;
+}
+
 // The bar under the keyboard: dock the screen above the keys, the keys under the screen, adjust the dock, close.
 void Engine::UpdateKbBar() {
     if (!kb.visible) return;
@@ -255,9 +261,10 @@ void Engine::UpdateKbBar() {
         D.mode == 1 ? "Undock\nscreen" : "Dock screen\nabove keys",
         D.mode == 2 ? "Undock\nkeys" : "Dock keys\nunder screen",
         dockAdjust ? "Done\nadjusting" : "Adjust\ndock",
+        kb.moving ? "Done\nmoving" : "Move\nkeyboard",
         "Close\nkeyboard" };
     if (labels != kb.barLabels) { kb.barLabels = labels; kb.barVersion++; }
-    kb.barW = kb.widthM * 0.75f; kb.barH = kb.barW / 9.f;
+    kb.barW = kb.widthM * 0.9f; kb.barH = kb.barW / 10.8f;
     Vec3 up = Rotate(kb.pose.orientation, { 0, 1, 0 }), nrm = Rotate(kb.pose.orientation, { 0, 0, 1 });
     kb.barPose = { kb.pose.orientation, X(V(kb.pose.position) - up * (kb.heightM / 2 + kb.barH / 2 + 0.012f) + nrm * 0.002f) };
     int hover = -1, hand = -1;
@@ -290,9 +297,11 @@ void Engine::KbBarActivate(int cell) {
     case 2:
         if (D.mode == 0) { Toast("Dock the screen or the keys first", 2.5); break; }
         dockAdjust = !dockAdjust;
+        if (dockAdjust && kb.moving) { kb.moving = false; if (grab.target == 4) grab = GrabRun{}; }
         if (dockAdjust) Toast(D.mode == 1 ? "Grab the screen with a grip to place it (stick: size)" : "Grab the keyboard with a grip to place it", 4.0);
         else { saveRequested = true; Toast("Dock saved", 2.0); }
         break;
-    case 3: CloseKeyboard(); break;
+    case 3: KbToggleMove(); break;
+    case 4: CloseKeyboard(); break;
     }
 }

@@ -222,6 +222,7 @@ private:
     void ApplyDock();            // after the screen: put the screen above the keyboard, or the keyboard under the screen
     void UpdateKbBar();
     void KbBarActivate(int cell);
+    void KbToggleMove();
     XrPosef DockRel() const;     // the screen in the keyboard's frame
     float DockScreenWidth() const;
 public:
