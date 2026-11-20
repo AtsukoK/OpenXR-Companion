@@ -53,9 +53,14 @@ after every step. Commit after every step.
   (ParseActMode/ActModeKey; unknown text -> ActMode::Unknown, which keeps the old fall-through behaviour). Profile files unchanged.
 - 2026-11-20: dist2 refreshed with all of the above.
 
+- 2026-11-20: every profile setting the code compared as text is now an enum with a { value, "text" } table (EnumName,
+  ParseEnum/EnumKey in config.h): WheelAnchor, SelectMethod, BlockWhileOpen, ArmSide, Gesture, ConfirmMode, SelectHand,
+  BindingBlock, TextUp, PressMethod, LaserCorrection. Unknown text keeps the old behaviour (errors where it errored, else
+  the old fall-through value). No raw-string setting comparisons left outside config.cpp. dist2 refreshed.
+
 ## Status / resume here
 Done: steps 1, 2, 4 (layer, via clang-format), 6 (editor file split), 7; most of 3 (files per feature + grouped state; still one Engine class);
 part of 5 (support header + part tests; the engine-flow tests in test.cpp share one running engine, so they stay together).
 Untested in a headset. dist2 refreshed 2026-11-20 with everything above (copy this dist again after new changes).
 Possible next: Engine feature classes (Keyboard, ScreenMirror, OffsetsPanel) taking an input view (big: they share input, grab, toasts);
-other string settings (style.anchor, sel.method, blockWhileOpen, face) could become enums the same way.
+(string settings: done.)
