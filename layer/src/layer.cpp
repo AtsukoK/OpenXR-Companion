@@ -890,8 +890,9 @@ static XrResult XRAPI_CALL Hook_xrGetInstanceProcAddr(XrInstance inst, const cha
     HOOK(AttachSessionActionSets)
     HOOK(SyncActions)
     HOOK(GetActionStateBoolean)
-    HOOK(GetActionStateFloat) HOOK(GetActionStateVector2f) HOOK(WaitFrame) HOOK(EndFrame) HOOK(CreateActionSpace) HOOK(CreateReferenceSpace)
-        HOOK(DestroySpace) HOOK(LocateSpace) HOOK(LocateViews) HOOK(CreateSwapchain) HOOK(DestroySwapchain) HOOK(EnumerateSwapchainImages)
+    HOOK(GetActionStateFloat)
+    HOOK(GetActionStateVector2f) HOOK(WaitFrame) HOOK(EndFrame) HOOK(CreateActionSpace) HOOK(CreateReferenceSpace) HOOK(DestroySpace)
+        HOOK(LocateSpace) HOOK(LocateViews) HOOK(CreateSwapchain) HOOK(DestroySwapchain) HOOK(EnumerateSwapchainImages)
             HOOK(AcquireSwapchainImage) HOOK(ReleaseSwapchainImage) if (n == "xrLocateSpaces") {
         N.LocateSpaces = (PFN_xrLocateSpaces)*fn;
         *fn = (PFN_xrVoidFunction)Hook_xrLocateSpaces;

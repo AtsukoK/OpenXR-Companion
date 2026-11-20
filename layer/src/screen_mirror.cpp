@@ -99,7 +99,7 @@ void ScreenMirror::ScreenAction(const Action& a) {
         else
             turnOn();
     }
-    Log("e.screen %s: on %d place %s monitor %d fps %d", ActModeKey(m), e.screen.on, ScreenPlaceKey(e.screen.place), e.screen.monitor,
+    Log("screen %s: on %d place %s monitor %d fps %d", ActModeKey(m), e.screen.on, ScreenPlaceKey(e.screen.place), e.screen.monitor,
         e.screen.fps);
 }
 
@@ -402,7 +402,7 @@ void ScreenMirror::BuildPicker() {
         }
         run_.pickMap.push_back(-3);
         e.screen.pickLabels.push_back("Cancel");
-        e.screen.pickTitle = "Move the e.screen to";
+        e.screen.pickTitle = "Move the screen to";
         e.screen.pickHover = -1;
         e.screen.uiVersion++;
         return;
@@ -427,7 +427,7 @@ void ScreenMirror::BuildPicker() {
     }
     run_.pickMap.push_back(-3);
     e.screen.pickLabels.push_back("Close");
-    e.screen.pickTitle = n ? "Show on the e.screen" +
+    e.screen.pickTitle = n ? "Show on the screen" +
                                  (pages > 1 ? " (" + std::to_string(run_.pickPage + 1) + "/" + std::to_string(pages) + ")" : std::string())
                            : "Looking for monitors and windows...";
     e.screen.pickHover = -1;
@@ -473,7 +473,7 @@ void ScreenMirror::PickerActivate(int cell) {
         e.Toast("Screen: " + c.label.substr(0, c.label.find('\n')), 1.5);
     }
     e.screen.choiceChanged = true; // remembered as the default from now on
-    Log("e.screen picked: %s", c.label.c_str());
+    Log("screen picked: %s", c.label.c_str());
 }
 
 void ScreenMirror::BarActivate(ScreenBarButton button) {

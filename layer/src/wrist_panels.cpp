@@ -45,9 +45,9 @@ void WristLayout(int n, int cols, std::vector<Cell>& out, Cell& header) {
     }
 }
 
-bool Engine::WristPoseNow(int h, XrPosef& pose, Vec3& n) const {
-    const WristStyle& W = prof->wrist[h];
-    const HandRaw& hr = fr.h[h];
+bool WristPanels::PoseNow(int h, XrPosef& pose, Vec3& n) const {
+    const WristStyle& W = e.prof->wrist[h];
+    const HandRaw& hr = e.fr.h[h];
     if (!hr.gripValid) return false;
     if (W.pose.set) { // placed by hand in adjust mode
         pose = PMul(hr.gripPose, W.pose.p);
@@ -77,12 +77,12 @@ bool Engine::WristPoseNow(int h, XrPosef& pose, Vec3& n) const {
     return true;
 }
 
-int Engine::WristCellAt(int h, float u, float v) const {
-    const WristView& wv = wrist[h];
+int WristPanels::CellAt(int h, float u, float v) const {
+    const WristView& wv = e.wrist[h];
     if (!wv.wheel) return -1;
     std::vector<Cell> cells;
     Cell hd;
-    WristLayout((int)wv.wheel->items.size() + (wv.nested ? 1 : 0), prof->wrist[h].columns, cells, hd);
+    WristLayout((int)wv.wheel->items.size() + (wv.nested ? 1 : 0), e.prof->wrist[h].columns, cells, hd);
     for (int i = 0; i < (int)cells.size(); i++) {
         const Cell& c = cells[i];
         if (u >= c.x && u < c.x + c.w && v >= c.y && v < c.y + c.h) return i;
@@ -90,12 +90,12 @@ int Engine::WristCellAt(int h, float u, float v) const {
     return -1;
 }
 
-void Engine::WristActivate(int h, int cell, int presser) {
-    WristView& wv = wrist[h];
-    WristRun& R = wrun[h];
-    if (prof->haptics) haptics.push_back({ presser, std::min(1.f, prof->hapticAmp * 1.6f), 0.03f });
+void WristPanels::Activate(int h, int cell, int presser) {
+    WristView& wv = e.wrist[h];
+    Run& R = run_[h];
+    if (e.prof->haptics) e.haptics.push_back({ presser, std::min(1.f, e.prof->hapticAmp * 1.6f), 0.03f });
     wv.pressed = cell;
-    R.pressFlashUntil = now + 0.15;
+    R.pressFlashUntil = e.now + 0.15;
     wv.version++;
     int idx = cell - (wv.nested ? 1 : 0);
     if (idx < 0) { // the automatic Back cell
@@ -108,7 +108,7 @@ void Engine::WristActivate(int h, int cell, int presser) {
     Log("%s wrist '%s'", h ? "right" : "left", it.label.c_str());
     switch (a.type) {
     case ActType::Page: {
-        const auto& pages = prof->WristPages(h).pages;
+        const auto& pages = e.prof->WristPages(h).pages;
         auto w = pages.find(a.page);
         if (w != pages.end()) {
             R.stack.push_back(&w->second);
@@ -117,7 +117,7 @@ void Engine::WristActivate(int h, int cell, int presser) {
         return;
     }
     case ActType::Wheel: // a real radial wheel; the panels step aside while it is open
-        RunAction(a, presser, -1, false);
+        e.RunAction(a, presser, -1, false);
         return;
     case ActType::Back:
         if (R.stack.size() > 1)
@@ -130,17 +130,17 @@ void Engine::WristActivate(int h, int cell, int presser) {
         R.closedByItem = true;
         return;
     default:
-        RunAction(a, presser, -1, true);
+        e.RunAction(a, presser, -1, true);
     }
 }
 
-void Engine::UpdateWrist(int h) {
-    const WristStyle& W = prof->wrist[h];
-    const WristStyle& src = prof->WristPages(h); // whose pages are shown
-    WristView& wv = wrist[h];
-    WristRun& R = wrun[h];
+void WristPanels::Update(int h) {
+    const WristStyle& W = e.prof->wrist[h];
+    const WristStyle& src = e.prof->WristPages(h); // whose pages are shown
+    WristView& wv = e.wrist[h];
+    Run& R = run_[h];
     auto hide = [&] {
-        if (grab.target == WristGrab(h)) grab = GrabRun{};
+        if (e.grab.target == WristGrab(h)) e.grab = Engine::GrabRun{};
         if (wv.visible) {
             wv.visible = false;
             wv.hover = -1;
@@ -149,48 +149,48 @@ void Engine::UpdateWrist(int h) {
         }
     };
     auto root = src.pages.find(src.start);
-    if (!W.enabled || root == src.pages.end() || (wr.open && !adjust) || kb.visible || !fr.headValid) {
+    if (!W.enabled || root == src.pages.end() || (e.wr.open && !e.adjust) || e.kb.visible || !e.fr.headValid) {
         hide();
         R.condSince = -1;
         return;
     }
     XrPosef pose;
     Vec3 n;
-    if (!WristPoseNow(h, pose, n)) {
+    if (!PoseNow(h, pose, n)) {
         hide();
         R.condSince = -1;
         return;
     }
 
     // Is the panel turned toward the eyes and being looked at? Looser once shown, so it does not flicker.
-    Vec3 eye = V(fr.head.position), c = V(pose.position);
+    Vec3 eye = V(e.fr.head.position), c = V(pose.position);
     Vec3 toEye = eye - c;
     float dist = Len(toEye);
     toEye = Norm(toEye);
-    Vec3 fwd = Rotate(fr.head.orientation, { 0, 0, -1 });
+    Vec3 fwd = Rotate(e.fr.head.orientation, { 0, 0, -1 });
     float slack = wv.visible ? 15.f : 0.f;
     bool facing = Dot(n, toEye) >= std::cos((W.facingDeg + slack) * kDeg);
     bool looked = Dot(fwd, toEye * -1.f) >= std::cos((W.gazeDeg + slack) * kDeg);
-    bool cond = (facing && looked && dist < 0.8f) || adjust; // adjust mode: always shown
+    bool cond = (facing && looked && dist < 0.8f) || e.adjust; // adjust mode: always shown
 
     if (!cond) {
         R.condSince = -1;
         R.closedByItem = false;
     } // Close/Back on the first page needs a fresh look
     else if (R.condSince < 0)
-        R.condSince = now;
+        R.condSince = e.now;
 
     if (!wv.visible) {
-        if (cond && !R.closedByItem && ((now - R.condSince) * 1000 >= W.showMs || adjust)) {
+        if (cond && !R.closedByItem && ((e.now - R.condSince) * 1000 >= W.showMs || e.adjust)) {
             R.stack.assign(1, &root->second);
             wv = WristView{};
             wv.visible = true;
             wv.version++;
-            R.shownAt = now;
+            R.shownAt = e.now;
             R.lostSince = -1;
             R.pokeArmed = false;
             R.prevDepth = 1.f;
-            if (prof->haptics) haptics.push_back({ h, prof->hapticAmp * 0.6f, 0.02f });
+            if (e.prof->haptics) e.haptics.push_back({ h, e.prof->hapticAmp * 0.6f, 0.02f });
             Log("%s wrist panel shown", h ? "right" : "left");
         } else
             return;
@@ -200,8 +200,8 @@ void Engine::UpdateWrist(int h) {
             return;
         }
         if (!cond) {
-            if (R.lostSince < 0) R.lostSince = now;
-            if ((now - R.lostSince) * 1000 >= W.hideMs) {
+            if (R.lostSince < 0) R.lostSince = e.now;
+            if ((e.now - R.lostSince) * 1000 >= W.hideMs) {
                 hide();
                 return;
             }
@@ -211,8 +211,8 @@ void Engine::UpdateWrist(int h) {
 
     wv.pose = pose;
     wv.sizeM = W.size;
-    if (wv.adjust != adjust) {
-        wv.adjust = adjust;
+    if (wv.adjust != e.adjust) {
+        wv.adjust = e.adjust;
         wv.version++;
     }
     const Wheel* top = R.stack.back();
@@ -223,7 +223,7 @@ void Engine::UpdateWrist(int h) {
         wv.hover = -1;
         wv.version++;
     }
-    if (wv.pressed >= 0 && now > R.pressFlashUntil) {
+    if (wv.pressed >= 0 && e.now > R.pressFlashUntil) {
         wv.pressed = -1;
         wv.version++;
     }
@@ -231,7 +231,7 @@ void Engine::UpdateWrist(int h) {
         std::vector<bool> on;
         if (wv.nested) on.push_back(false); // the Back cell
         for (auto& it : wv.wheel->items)
-            on.push_back(IsOn(it.action));
+            on.push_back(e.IsOn(it.action));
         if (on != wv.on) {
             wv.on = std::move(on);
             wv.version++;
@@ -239,7 +239,7 @@ void Engine::UpdateWrist(int h) {
     }
 
     int o = 1 - h; // the pressing hand
-    const HandRaw& hr = fr.h[o];
+    const HandRaw& hr = e.fr.h[o];
     int hover = -1;
     bool canPoke = W.press != PressMethod::Point, canPoint = W.press != PressMethod::Poke;
     auto toPanel = [&](Vec3 p, float& u, float& v, float& depth) {
@@ -248,27 +248,27 @@ void Engine::UpdateWrist(int h) {
         v = 0.5f - l.y / W.size;
         depth = l.z;
     };
-    bool settled = now - R.shownAt > 0.2; // nothing fires in the first moment
+    bool settled = e.now - R.shownAt > 0.2; // nothing fires in the first moment
 
     // Adjust mode: the other hand's grip grabs the panel; it follows that hand, and its stick resizes.
-    if (grab.target == WristGrab(h) && (!adjust || !cur[o][C_GRIP][F_PRESS] || !hr.gripValid)) {
-        grab = GrabRun{};
-        if (prof->haptics) haptics.push_back({ o, prof->hapticAmp * 0.6f, 0.015f });
+    if (e.grab.target == WristGrab(h) && (!e.adjust || !e.cur[o][C_GRIP][F_PRESS] || !hr.gripValid)) {
+        e.grab = Engine::GrabRun{};
+        if (e.prof->haptics) e.haptics.push_back({ o, e.prof->hapticAmp * 0.6f, 0.015f });
     }
-    if (adjust && !grab.Active() && hr.gripValid && cur[o][C_GRIP][F_PRESS] && !prev[o][C_GRIP][F_PRESS] &&
+    if (e.adjust && !e.grab.Active() && hr.gripValid && e.cur[o][C_GRIP][F_PRESS] && !e.prev[o][C_GRIP][F_PRESS] &&
         Len(V(hr.gripPose.position) - c) < W.size * 0.7f + 0.08f)
-        StartGrab(WristGrab(h), o, pose);
-    if (grab.target == WristGrab(h)) {
-        WristStyle& Wm = prof->wrist[h];
+        e.StartGrab(WristGrab(h), o, pose);
+    if (e.grab.target == WristGrab(h)) {
+        WristStyle& Wm = e.prof->wrist[h];
         // Keeps the grabbing hand's angle; saved relative to this arm's controller.
-        Wm.pose = { true, PMul(PInv(fr.h[h].gripPose), GrabbedPose()) };
-        float dt = (float)std::clamp(now - lastNow, 0.0, 0.1);
+        Wm.pose = { true, PMul(PInv(e.fr.h[h].gripPose), e.GrabbedPose()) };
+        float dt = (float)std::clamp(e.now - e.lastNow, 0.0, 0.1);
         auto dz = [](float v) {
             return std::fabs(v) < 0.25f ? 0.f : v;
         };
         Wm.size = std::clamp(Wm.size * (1.f + dz(hr.sy) * dt * 0.8f), 0.05f, 0.4f);
         Vec3 nn;
-        if (WristPoseNow(h, pose, nn)) {
+        if (PoseNow(h, pose, nn)) {
             wv.pose = pose;
             wv.sizeM = Wm.size;
         }
@@ -281,7 +281,7 @@ void Engine::UpdateWrist(int h) {
     }
     // In adjust mode only page navigation and the Adjust button itself ("Done") can be pressed.
     auto allowed = [&](int cell) {
-        if (!adjust) return true;
+        if (!e.adjust) return true;
         int idx = cell - (wv.nested ? 1 : 0);
         if (idx < 0) return true; // the automatic Back cell
         if (idx >= (int)wv.wheel->items.size()) return false;
@@ -296,7 +296,7 @@ void Engine::UpdateWrist(int h) {
         float u, v, d;
         toPanel(tip, u, v, d);
         bool inside = u >= 0 && u <= 1 && v >= 0 && v <= 1;
-        if (inside && d > -0.04f && d < 0.05f) hover = WristCellAt(h, u, v);
+        if (inside && d > -0.04f && d < 0.05f) hover = CellAt(h, u, v);
         // Touch cursor: shows where the fingertip will land, shrinking and filling in as it gets close.
         const float kCursorRange = 0.08f; // the laser hands over to this cursor, so start it a bit early
         if (inside && d > -0.04f && d < kCursorRange) {
@@ -311,7 +311,7 @@ void Engine::UpdateWrist(int h) {
         if (!inside || d > 0.02f) R.pokeArmed = true; // pulled back out: ready for the next poke
         if (settled && inside && R.pokeArmed && R.prevDepth > 0.f && d <= 0.f && hover >= 0 && allowed(hover)) {
             R.pokeArmed = false;
-            WristActivate(h, hover, o);
+            Activate(h, hover, o);
             if (!wv.visible || R.closedByItem) {
                 hide();
                 return;
@@ -328,12 +328,12 @@ void Engine::UpdateWrist(int h) {
             if (t > 0 && t < 1.5f) {
                 float u, v, d;
                 toPanel(ro + rd * t, u, v, d);
-                hover = WristCellAt(h, u, v);
+                hover = CellAt(h, u, v);
             }
         }
-        bool trigEdge = cur[o][C_TRIGGER][F_PRESS] && !prev[o][C_TRIGGER][F_PRESS];
+        bool trigEdge = e.cur[o][C_TRIGGER][F_PRESS] && !e.prev[o][C_TRIGGER][F_PRESS];
         if (settled && trigEdge && hover >= 0 && allowed(hover)) {
-            WristActivate(h, hover, o);
+            Activate(h, hover, o);
             if (R.closedByItem) {
                 hide();
                 return;
@@ -343,6 +343,6 @@ void Engine::UpdateWrist(int h) {
     if (hover != wv.hover) {
         wv.hover = hover;
         wv.version++;
-        if (hover >= 0 && prof->haptics) haptics.push_back({ o, prof->hapticAmp * 0.5f, 0.008f });
+        if (hover >= 0 && e.prof->haptics) e.haptics.push_back({ o, e.prof->hapticAmp * 0.5f, 0.008f });
     }
 }

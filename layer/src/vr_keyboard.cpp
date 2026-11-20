@@ -337,7 +337,7 @@ void VrKeyboard::ApplyDock() {
 // Move key / bar button: grab the keyboard with a grip to place it, without Adjust mode.
 void VrKeyboard::ToggleMove() {
     if (!e.kb.moving && e.prof->dock.mode == DockMode::KeysUnderScreen && e.screen.shown) {
-        e.Toast("Docked under the e.screen: use Adjust dock to place it", 3.0);
+        e.Toast("Docked under the screen: use Adjust dock to place it", 3.0);
         return;
     }
     e.kb.moving = !e.kb.moving;
@@ -359,8 +359,8 @@ void VrKeyboard::ToggleMove() {
 void VrKeyboard::UpdateBar() {
     if (!e.kb.visible) return;
     const DockStyle& D = e.prof->dock;
-    std::vector<std::string> labels{ D.mode == DockMode::ScreenOnKeys ? "Undock\nscreen" : "Dock e.screen\nabove keys",
-                                     D.mode == DockMode::KeysUnderScreen ? "Undock\nkeys" : "Dock keys\nunder e.screen",
+    std::vector<std::string> labels{ D.mode == DockMode::ScreenOnKeys ? "Undock\nscreen" : "Dock screen\nabove keys",
+                                     D.mode == DockMode::KeysUnderScreen ? "Undock\nkeys" : "Dock keys\nunder screen",
                                      e.dockAdjust ? "Done\nadjusting" : "Adjust\ndock",
                                      e.kb.moving ? "Done\nadjusting" : "Adjust\nkeyboard", "Close\nkeyboard" };
     if (labels != e.kb.barLabels) {
@@ -422,11 +422,11 @@ void VrKeyboard::BarActivate(KbBarButton button) {
         if (D.mode != DockMode::Apart) screenOn();
         e.dockAdjust = false;
         e.saveRequested = true;
-        e.Toast(D.mode != DockMode::Apart ? "Keyboard docked under the e.screen" : "Keyboard undocked", 2.0);
+        e.Toast(D.mode != DockMode::Apart ? "Keyboard docked under the screen" : "Keyboard undocked", 2.0);
         break;
     case KbBarButton::AdjustDock:
         if (D.mode == DockMode::Apart) {
-            e.Toast("Dock the e.screen or the keys first", 2.5);
+            e.Toast("Dock the screen or the keys first", 2.5);
             break;
         }
         e.dockAdjust = !e.dockAdjust;
@@ -435,7 +435,7 @@ void VrKeyboard::BarActivate(KbBarButton button) {
             if (e.grab.target == GrabTarget::Keyboard) e.grab = Engine::GrabRun{};
         }
         if (e.dockAdjust)
-            e.Toast(D.mode == DockMode::ScreenOnKeys ? "Grab the e.screen with a grip to place it (stick: size)"
+            e.Toast(D.mode == DockMode::ScreenOnKeys ? "Grab the screen with a grip to place it (stick: size)"
                                                      : "Grab the keyboard with a grip to place it",
                     4.0);
         else {

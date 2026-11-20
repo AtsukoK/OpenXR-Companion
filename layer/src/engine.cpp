@@ -38,7 +38,7 @@ void Engine::Reset() {
     keyboard.run_.repeatKey = keyboard.run_.repeatHand = -1;
     for (int h = 0; h < 2; h++) {
         wrist[h] = WristView{};
-        wrun[h] = WristRun{};
+        wristPanels.run_[h] = {};
     }
     adjust = false;
     grab = GrabRun{};
@@ -601,8 +601,8 @@ void Engine::Update(const Frame& f) {
     UpdateAdjustFade();
     keyboard.UpdatePlacing();
     keyboard.Update();
-    UpdateWrist(0);
-    UpdateWrist(1);
+    wristPanels.Update(0);
+    wristPanels.Update(1);
     screenMirror.Update(); // places a docked screen/keyboard too, before the screen takes the pointer
     keyboard.UpdateBar();
     offsetsPanel.Update();

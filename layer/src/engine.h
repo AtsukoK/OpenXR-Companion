@@ -1,5 +1,6 @@
 #pragma once
 #include "config.h"
+#include "wrist_panels.h"
 #include "screen_mirror.h"
 #include "engine_types.h"
 #include "vr_keyboard.h"
@@ -178,6 +179,7 @@ struct PointerView {
 };
 
 class Engine {
+    friend class WristPanels;
     friend class ScreenMirror;
     friend class OffsetsPanel;
     friend class VrKeyboard;
@@ -219,6 +221,7 @@ public:
     bool IsOn(const Action& a) const;
 
 private:
+    WristPanels wristPanels{ *this };
     ScreenMirror screenMirror{ *this };
     VrKeyboard keyboard{ *this };
     OffsetsPanel offsetsPanel{ *this };
@@ -310,16 +313,4 @@ private:
     void UpdatePointers();
 
     // wrist panel
-    struct WristRun {
-        std::vector<const Wheel*> stack;
-        double condSince = -1, lostSince = -1, pressFlashUntil = 0, shownAt = 0;
-        float prevDepth = 1.f;
-        bool pokeArmed = true;
-        bool closedByItem = false;
-    };
-    WristRun wrun[2];
-    bool WristPoseNow(int h, XrPosef& pose, Vec3& normal) const;
-    void UpdateWrist(int h);
-    void WristActivate(int h, int cell, int presser);
-    int WristCellAt(int h, float u, float v) const;
 };
