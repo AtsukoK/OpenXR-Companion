@@ -283,25 +283,25 @@ void Engine::UpdateKbBar() {
     if (hand < 0 || !(cur[hand][C_TRIGGER][F_PRESS] && !prev[hand][C_TRIGGER][F_PRESS])) return;
     if (prof->haptics) haptics.push_back({ hand, prof->hapticAmp, 0.025f });
     kb.barPressed = hover; kbBarFlashUntil = now + 0.15; kb.barVersion++;
-    KbBarActivate(hover);
+    KbBarActivate((KbBarButton)hover);
 }
 
-void Engine::KbBarActivate(int cell) {
+void Engine::KbBarActivate(KbBarButton button) {
     DockStyle& D = prof->dock;
     auto screenOn = [&]() { if (!screen.on) { Action a; a.type = ActType::Screen; a.mode = "on"; ScreenAction(a); } };
-    switch (cell) {
-    case 0: D.mode = D.mode == 1 ? 0 : 1; if (D.mode) screenOn(); dockAdjust = false; saveRequested = true;
+    switch (button) {
+    case KbBarButton::DockScreen: D.mode = D.mode == 1 ? 0 : 1; if (D.mode) screenOn(); dockAdjust = false; saveRequested = true;
         Toast(D.mode ? "Screen docked above the keyboard" : "Screen undocked", 2.0); break;
-    case 1: D.mode = D.mode == 2 ? 0 : 2; if (D.mode) screenOn(); dockAdjust = false; saveRequested = true;
+    case KbBarButton::DockKeys: D.mode = D.mode == 2 ? 0 : 2; if (D.mode) screenOn(); dockAdjust = false; saveRequested = true;
         Toast(D.mode ? "Keyboard docked under the screen" : "Keyboard undocked", 2.0); break;
-    case 2:
+    case KbBarButton::AdjustDock:
         if (D.mode == 0) { Toast("Dock the screen or the keys first", 2.5); break; }
         dockAdjust = !dockAdjust;
         if (dockAdjust && kb.moving) { kb.moving = false; if (grab.target == GrabTarget::Keyboard) grab = GrabRun{}; }
         if (dockAdjust) Toast(D.mode == 1 ? "Grab the screen with a grip to place it (stick: size)" : "Grab the keyboard with a grip to place it", 4.0);
         else { saveRequested = true; Toast("Dock saved", 2.0); }
         break;
-    case 3: KbToggleMove(); break;
-    case 4: CloseKeyboard(); break;
+    case KbBarButton::AdjustKeyboard: KbToggleMove(); break;
+    case KbBarButton::Close: CloseKeyboard(); break;
     }
 }

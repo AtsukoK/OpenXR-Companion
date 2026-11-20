@@ -482,9 +482,9 @@ static void ReadInputsAndUpdate() {
         if (SaveOffsets(*gEng.prof, err)) { MarkOwnSave(); Log("controller offsets saved to %s", gEng.prof->sourceName.c_str()); }
         else { Log("offsets: save failed: %s", err.c_str()); gEng.Toast("Could not save offsets: " + err, 6.0); }
     }
-    if (gEng.mirrorAsk) { // a wheel / wrist button: switch the headset mirror, and remember it for the editor
-        int a = gEng.mirrorAsk; gEng.mirrorAsk = 0;
-        gMirrorSet.on = a == 2 ? true : a == 3 ? false : !gMirrorSet.on;
+    if (gEng.mirrorAsk != MirrorRequest::None) { // a wheel / wrist button: switch the headset mirror, and remember it for the editor
+        MirrorRequest a = gEng.mirrorAsk; gEng.mirrorAsk = MirrorRequest::None;
+        gMirrorSet.on = a == MirrorRequest::On ? true : a == MirrorRequest::Off ? false : !gMirrorSet.on;
         SaveMirrorSettings(gMirrorSet); gMirrorFileTime = FileTime(MirrorSettingsPath());
         gEng.Toast(gMirrorSet.on ? "Headset mirror ON (a window on the desktop)" : "Headset mirror off", 2.0);
     }

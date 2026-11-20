@@ -174,7 +174,7 @@ bool Engine::RunAction(const Action& a, int hand, int bi, bool fromWheel) {
         OffsetsAction(a);
         return false;
     case ActType::Mirror:
-        mirrorAsk = a.mode == "on" ? 2 : a.mode == "off" ? 3 : 1;
+        mirrorAsk = a.mode == "on" ? MirrorRequest::On : a.mode == "off" ? MirrorRequest::Off : MirrorRequest::Toggle;
         return false;
     case ActType::Adjust:
         adjust = !adjust; grab = GrabRun{};
@@ -930,7 +930,7 @@ bool Engine::PanelRay(int h, const XrPosef& pose, float w, float hgt, float& u, 
 }
 
 void Engine::OpenPicker() {
-    screen.pickOpen = true; pickPage = 0; pickMode = 0;
+    screen.pickOpen = true; pickPage = 0; pickMode = PickerMode::Source;
     screen.wantChoices = true; // the layer fills the list
     BuildPicker();
 }
@@ -940,7 +940,7 @@ static const char* kPlaces[4] = { "wrist_left", "wrist_right", "front", "head" }
 static const char* kPlaceNames[4] = { "Left wrist", "Right wrist", "In front of me\nstays where it appears", "Following my view" };
 
 void Engine::BuildPicker() {
-    if (pickMode == 1) { // where to put the screen
+    if (pickMode == PickerMode::Place) { // where to put the screen
         pickMap.clear(); screen.pickLabels.clear();
         for (int i = 0; i < 4; i++) {
             pickMap.push_back(i);
@@ -971,7 +971,7 @@ void Engine::BuildPicker() {
 void Engine::PickerActivate(int cell) {
     if (cell < 0 || cell >= (int)pickMap.size()) return;
     int k = pickMap[cell];
-    if (pickMode == 1) {
+    if (pickMode == PickerMode::Place) {
         screen.pickOpen = false; screen.uiVersion++;
         if (k >= 0 && screen.place != kPlaces[k]) {
             screen.place = kPlaces[k]; screenPlaceFront = true;
@@ -990,27 +990,27 @@ void Engine::PickerActivate(int cell) {
     Log("screen picked: %s", c.label.c_str());
 }
 
-void Engine::BarActivate(int cell) {
+void Engine::BarActivate(ScreenBarButton button) {
     Action a; a.type = ActType::Screen;
     if (adjust) { Action d; d.type = ActType::Adjust; RunAction(d, -1, -1, true); return; } // the bar is just "Done"
-    switch (cell) {
-    case 0: if (screen.pickOpen && pickMode == 0) { screen.pickOpen = false; screen.uiVersion++; } else OpenPicker(); return;
-    case 1: a.mode = "next_fps"; break;
-    case 2:
-        if (screen.pickOpen && pickMode == 1) { screen.pickOpen = false; screen.uiVersion++; return; }
-        screen.pickOpen = true; pickMode = 1; BuildPicker(); return;
-    case 4: { // adjust positions: move the screen, wheel and wrist panels by hand
+    switch (button) {
+    case ScreenBarButton::Choose: if (screen.pickOpen && pickMode == PickerMode::Source) { screen.pickOpen = false; screen.uiVersion++; } else OpenPicker(); return;
+    case ScreenBarButton::FrameRate: a.mode = "next_fps"; break;
+    case ScreenBarButton::Move:
+        if (screen.pickOpen && pickMode == PickerMode::Place) { screen.pickOpen = false; screen.uiVersion++; return; }
+        screen.pickOpen = true; pickMode = PickerMode::Place; BuildPicker(); return;
+    case ScreenBarButton::Adjust: { // adjust positions: move the screen, wheel and wrist panels by hand
         screen.pickOpen = false; screen.uiVersion++;
         Action d; d.type = ActType::Adjust; RunAction(d, -1, -1, true);
         return;
     }
-    case 3: // typing goes to the mirrored window: bring it up first
+    case ScreenBarButton::Keyboard: // typing goes to the mirrored window: bring it up first
         screen.pickOpen = false; screen.uiVersion++;
         if (screen.source == "window" && screen.hwnd) Keys::BringToFront(screen.hwnd);
         screenClicked = true; // so the game gets its window back once you're done
         OpenKeyboard(-1);
         return;
-    default: a.mode = "off"; screen.pickOpen = false; break;
+    case ScreenBarButton::Hide: a.mode = "off"; screen.pickOpen = false; break;
     }
     ScreenAction(a);
 }
@@ -1034,7 +1034,7 @@ void Engine::ScreenUi() {
     screen.pickW = std::max(sw * 0.9f, 0.36f); screen.pickH = screen.pickW * 0.95f;
     screen.pickPose = { screen.pose.orientation, X(V(screen.pose.position) + nrm * 0.03f) };
     std::string fps = screen.fps ? std::to_string(screen.fps) + " fps" : std::string("max fps");
-    bool listOpen = screen.pickOpen && pickMode == 0, moveOpen = screen.pickOpen && pickMode == 1;
+    bool listOpen = screen.pickOpen && pickMode == PickerMode::Source, moveOpen = screen.pickOpen && pickMode == PickerMode::Place;
     std::vector<std::string> bar = adjust ? std::vector<std::string>{ "Done adjusting" }
         : std::vector<std::string>{ listOpen ? "Close list" : "Choose...", "Frame rate\n" + fps, moveOpen ? "Cancel move" : "Move...", "Keyboard", "Adjust", "Hide" };
     if (bar != screen.barLabels) { screen.barLabels = bar; screen.uiVersion++; }
@@ -1076,5 +1076,5 @@ void Engine::ScreenUi() {
     if (prof->haptics) haptics.push_back({ uiHand, prof->hapticAmp, 0.025f });
     uiFlashUntil = now + 0.15;
     if (pickHover >= 0) { screen.pickPressed = pickHover; screen.uiVersion++; PickerActivate(pickHover); }
-    else if (barHover >= 0) { screen.barPressed = barHover; screen.uiVersion++; BarActivate(barHover); }
+    else if (barHover >= 0) { screen.barPressed = barHover; screen.uiVersion++; BarActivate((ScreenBarButton)barHover); }
 }

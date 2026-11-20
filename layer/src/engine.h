@@ -137,6 +137,15 @@ struct OffsetView {
 };
 
 // Things that can be grabbed with a grip and placed by hand.
+// Buttons of the bar under the mirrored screen, left to right.
+enum class ScreenBarButton { Choose, FrameRate, Move, Keyboard, Adjust, Hide };
+// What the screen picker lists: what to show (monitors, windows), or where to put the screen.
+enum class PickerMode { Source, Place };
+// Buttons of the bar under the VR keyboard, left to right.
+enum class KbBarButton { DockScreen, DockKeys, AdjustDock, AdjustKeyboard, Close };
+// What a wheel or wrist button asks of the headset mirror window (the layer does it).
+enum class MirrorRequest { None, Toggle, On, Off };
+
 enum class GrabTarget { None = -1, LeftWrist = 0, RightWrist = 1, Wheel, Screen, Keyboard, Dock };
 inline GrabTarget WristGrab(int hand) { return hand == 0 ? GrabTarget::LeftWrist : GrabTarget::RightWrist; }
 
@@ -164,7 +173,7 @@ public:
     OffsetView offView;
     OffsetStyle offs;               // live controller offsets (from the profile, changed in the headset)
     bool offsSaveRequested = false; // the layer writes offs into the profile
-    int mirrorAsk = 0;              // headset mirror window: 1 toggle, 2 on, 3 off (the layer does it)
+    MirrorRequest mirrorAsk = MirrorRequest::None; // headset mirror window (the layer does it)
     bool mirrorOn = false;          // set by the layer
     int offGrabHand = -1;           // grab-to-set running on this hand (its grip is held)
     // The pose the game's grip (kind 0) or aim (kind 1) space of a hand is moved by; false = leave it.
@@ -232,7 +241,7 @@ private:
     void UpdateAdjustKeyboard();
     void ApplyDock();            // after the screen: put the screen above the keyboard, or the keyboard under the screen
     void UpdateKbBar();
-    void KbBarActivate(int cell);
+    void KbBarActivate(KbBarButton button);
     void KbToggleMove();
     XrPosef DockRel() const;     // the screen in the keyboard's frame
     float DockScreenWidth() const;
@@ -250,13 +259,13 @@ private:
     void ScreenUi();
     bool PanelRay(int h, const XrPosef& pose, float w, float hgt, float& u, float& v) const;
     int pickPage = 0; std::vector<int> pickMap; uint64_t seenChoices = 0;
-    int pickMode = 0;           // 0 = what to show (monitors, windows), 1 = where to put it
+    PickerMode pickMode = PickerMode::Source;
     double barUntil = -1, uiFlashUntil = 0;
     int uiHand = -1;            // the hand on the bar or picker this frame
     void OpenPicker();
     void BuildPicker();
     void PickerActivate(int cell);
-    void BarActivate(int cell);
+    void BarActivate(ScreenBarButton button);
     bool ScreenRay(int h, float& u, float& v, float& t) const;
     void UpdateScreen();
     void ScreenPose();
