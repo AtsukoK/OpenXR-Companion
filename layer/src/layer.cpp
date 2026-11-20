@@ -46,8 +46,8 @@ static struct {
     PFN_xrApplyHapticFeedback ApplyHapticFeedback;
     PFN_xrGetCurrentInteractionProfile GetCurrentInteractionProfile;
 } N{};
-static XrFns gSwap;      // swapchain calls our panels use (our hooks, so the mirror sees them too)
-static XrFns gSwapNext;  // the next layer's
+static XrFns gSwap;     // swapchain calls our panels use (our hooks, so the mirror sees them too)
+static XrFns gSwapNext; // the next layer's
 static HeadsetMirror gMirror;
 static MirrorSettings gMirrorSet;
 static FILETIME gMirrorFileTime{};
@@ -58,52 +58,104 @@ static HeadSmoother gHeadSmooth;
 static FILETIME gHeadFileTime{};
 
 // ---------------------------------------------------------------- our action set
-enum OA { A_BTN1, A_BTN1T, A_BTN2, A_BTN2T, A_TRIG, A_TRIGT, A_GRIP, A_STICK, A_STICKC, A_STICKT, A_REST, A_MENU, A_GRIPPOSE, A_AIMPOSE, A_HAPTIC, A_COUNT };
-static const struct { const char* name; XrActionType type; } kActs[A_COUNT] = {
-    {"vro_btn1", XR_ACTION_TYPE_BOOLEAN_INPUT}, {"vro_btn1_touch", XR_ACTION_TYPE_BOOLEAN_INPUT},
-    {"vro_btn2", XR_ACTION_TYPE_BOOLEAN_INPUT}, {"vro_btn2_touch", XR_ACTION_TYPE_BOOLEAN_INPUT},
-    {"vro_trigger", XR_ACTION_TYPE_FLOAT_INPUT}, {"vro_trigger_touch", XR_ACTION_TYPE_BOOLEAN_INPUT},
-    {"vro_grip", XR_ACTION_TYPE_FLOAT_INPUT}, {"vro_stick", XR_ACTION_TYPE_VECTOR2F_INPUT},
-    {"vro_stick_click", XR_ACTION_TYPE_BOOLEAN_INPUT}, {"vro_stick_touch", XR_ACTION_TYPE_BOOLEAN_INPUT},
-    {"vro_thumbrest", XR_ACTION_TYPE_BOOLEAN_INPUT}, {"vro_menu", XR_ACTION_TYPE_BOOLEAN_INPUT},
-    {"vro_grip_pose", XR_ACTION_TYPE_POSE_INPUT}, {"vro_aim_pose", XR_ACTION_TYPE_POSE_INPUT},
-    {"vro_haptic", XR_ACTION_TYPE_VIBRATION_OUTPUT},
+enum OA {
+    A_BTN1,
+    A_BTN1T,
+    A_BTN2,
+    A_BTN2T,
+    A_TRIG,
+    A_TRIGT,
+    A_GRIP,
+    A_STICK,
+    A_STICKC,
+    A_STICKT,
+    A_REST,
+    A_MENU,
+    A_GRIPPOSE,
+    A_AIMPOSE,
+    A_HAPTIC,
+    A_COUNT
 };
-struct PB { int act; const char* sub; int hands; }; // hands: 1 left, 2 right, 3 both
-static const PB kCommonPoses[] = { {A_GRIPPOSE, "input/grip/pose", 3}, {A_AIMPOSE, "input/aim/pose", 3}, {A_HAPTIC, "output/haptic", 3} };
+static const struct {
+    const char* name;
+    XrActionType type;
+} kActs[A_COUNT] = {
+    { "vro_btn1", XR_ACTION_TYPE_BOOLEAN_INPUT },        { "vro_btn1_touch", XR_ACTION_TYPE_BOOLEAN_INPUT },
+    { "vro_btn2", XR_ACTION_TYPE_BOOLEAN_INPUT },        { "vro_btn2_touch", XR_ACTION_TYPE_BOOLEAN_INPUT },
+    { "vro_trigger", XR_ACTION_TYPE_FLOAT_INPUT },       { "vro_trigger_touch", XR_ACTION_TYPE_BOOLEAN_INPUT },
+    { "vro_grip", XR_ACTION_TYPE_FLOAT_INPUT },          { "vro_stick", XR_ACTION_TYPE_VECTOR2F_INPUT },
+    { "vro_stick_click", XR_ACTION_TYPE_BOOLEAN_INPUT }, { "vro_stick_touch", XR_ACTION_TYPE_BOOLEAN_INPUT },
+    { "vro_thumbrest", XR_ACTION_TYPE_BOOLEAN_INPUT },   { "vro_menu", XR_ACTION_TYPE_BOOLEAN_INPUT },
+    { "vro_grip_pose", XR_ACTION_TYPE_POSE_INPUT },      { "vro_aim_pose", XR_ACTION_TYPE_POSE_INPUT },
+    { "vro_haptic", XR_ACTION_TYPE_VIBRATION_OUTPUT },
+};
+struct PB {
+    int act;
+    const char* sub;
+    int hands;
+}; // hands: 1 left, 2 right, 3 both
+static const PB kCommonPoses[] = { { A_GRIPPOSE, "input/grip/pose", 3 },
+                                   { A_AIMPOSE, "input/aim/pose", 3 },
+                                   { A_HAPTIC, "output/haptic", 3 } };
 static const PB kTouch[] = {
-    {A_BTN1, "input/x/click", 1}, {A_BTN1T, "input/x/touch", 1}, {A_BTN2, "input/y/click", 1}, {A_BTN2T, "input/y/touch", 1}, {A_MENU, "input/menu/click", 1},
-    {A_BTN1, "input/a/click", 2}, {A_BTN1T, "input/a/touch", 2}, {A_BTN2, "input/b/click", 2}, {A_BTN2T, "input/b/touch", 2},
-    {A_TRIG, "input/trigger/value", 3}, {A_TRIGT, "input/trigger/touch", 3}, {A_GRIP, "input/squeeze/value", 3},
-    {A_STICK, "input/thumbstick", 3}, {A_STICKC, "input/thumbstick/click", 3}, {A_STICKT, "input/thumbstick/touch", 3},
-    {A_REST, "input/thumbrest/touch", 3},
+    { A_BTN1, "input/x/click", 1 },
+    { A_BTN1T, "input/x/touch", 1 },
+    { A_BTN2, "input/y/click", 1 },
+    { A_BTN2T, "input/y/touch", 1 },
+    { A_MENU, "input/menu/click", 1 },
+    { A_BTN1, "input/a/click", 2 },
+    { A_BTN1T, "input/a/touch", 2 },
+    { A_BTN2, "input/b/click", 2 },
+    { A_BTN2T, "input/b/touch", 2 },
+    { A_TRIG, "input/trigger/value", 3 },
+    { A_TRIGT, "input/trigger/touch", 3 },
+    { A_GRIP, "input/squeeze/value", 3 },
+    { A_STICK, "input/thumbstick", 3 },
+    { A_STICKC, "input/thumbstick/click", 3 },
+    { A_STICKT, "input/thumbstick/touch", 3 },
+    { A_REST, "input/thumbrest/touch", 3 },
 };
 static const PB kIndex[] = {
-    {A_BTN1, "input/a/click", 3}, {A_BTN1T, "input/a/touch", 3}, {A_BTN2, "input/b/click", 3}, {A_BTN2T, "input/b/touch", 3},
-    {A_TRIG, "input/trigger/value", 3}, {A_TRIGT, "input/trigger/touch", 3}, {A_GRIP, "input/squeeze/value", 3},
-    {A_STICK, "input/thumbstick", 3}, {A_STICKC, "input/thumbstick/click", 3}, {A_STICKT, "input/thumbstick/touch", 3},
+    { A_BTN1, "input/a/click", 3 },
+    { A_BTN1T, "input/a/touch", 3 },
+    { A_BTN2, "input/b/click", 3 },
+    { A_BTN2T, "input/b/touch", 3 },
+    { A_TRIG, "input/trigger/value", 3 },
+    { A_TRIGT, "input/trigger/touch", 3 },
+    { A_GRIP, "input/squeeze/value", 3 },
+    { A_STICK, "input/thumbstick", 3 },
+    { A_STICKC, "input/thumbstick/click", 3 },
+    { A_STICKT, "input/thumbstick/touch", 3 },
 };
 static const PB kWmr[] = {
-    {A_MENU, "input/menu/click", 3}, {A_GRIP, "input/squeeze/click", 3}, {A_TRIG, "input/trigger/value", 3},
-    {A_STICK, "input/thumbstick", 3}, {A_STICKC, "input/thumbstick/click", 3},
+    { A_MENU, "input/menu/click", 3 },  { A_GRIP, "input/squeeze/click", 3 },      { A_TRIG, "input/trigger/value", 3 },
+    { A_STICK, "input/thumbstick", 3 }, { A_STICKC, "input/thumbstick/click", 3 },
 };
 static const PB kVive[] = {
-    {A_MENU, "input/menu/click", 3}, {A_GRIP, "input/squeeze/click", 3}, {A_TRIG, "input/trigger/value", 3},
-    {A_STICK, "input/trackpad", 3}, {A_STICKC, "input/trackpad/click", 3}, {A_STICKT, "input/trackpad/touch", 3},
+    { A_MENU, "input/menu/click", 3 }, { A_GRIP, "input/squeeze/click", 3 },    { A_TRIG, "input/trigger/value", 3 },
+    { A_STICK, "input/trackpad", 3 },  { A_STICKC, "input/trackpad/click", 3 }, { A_STICKT, "input/trackpad/touch", 3 },
 };
-static const PB kSimple[] = { {A_TRIG, "input/select/click", 3}, {A_MENU, "input/menu/click", 3} };
+static const PB kSimple[] = { { A_TRIG, "input/select/click", 3 }, { A_MENU, "input/menu/click", 3 } };
 
 static std::vector<PB> ProfileTable(const std::string& p) {
     std::vector<PB> v;
-    auto add = [&](const PB* b, size_t n) { v.insert(v.end(), b, b + n); };
+    auto add = [&](const PB* b, size_t n) {
+        v.insert(v.end(), b, b + n);
+    };
     if (p == "/interaction_profiles/oculus/touch_controller" || p == "/interaction_profiles/meta/touch_controller_plus" ||
         p == "/interaction_profiles/facebook/touch_controller_pro" || p == "/interaction_profiles/meta/touch_pro_controller" ||
-        p == "/interaction_profiles/meta/touch_plus_controller") add(kTouch, std::size(kTouch));
-    else if (p == "/interaction_profiles/valve/index_controller") add(kIndex, std::size(kIndex));
-    else if (p == "/interaction_profiles/microsoft/motion_controller" || p == "/interaction_profiles/hp/mixed_reality_controller") add(kWmr, std::size(kWmr));
-    else if (p == "/interaction_profiles/htc/vive_controller") add(kVive, std::size(kVive));
-    else if (p == "/interaction_profiles/khr/simple_controller") add(kSimple, std::size(kSimple));
-    else return v;
+        p == "/interaction_profiles/meta/touch_plus_controller")
+        add(kTouch, std::size(kTouch));
+    else if (p == "/interaction_profiles/valve/index_controller")
+        add(kIndex, std::size(kIndex));
+    else if (p == "/interaction_profiles/microsoft/motion_controller" || p == "/interaction_profiles/hp/mixed_reality_controller")
+        add(kWmr, std::size(kWmr));
+    else if (p == "/interaction_profiles/htc/vive_controller")
+        add(kVive, std::size(kVive));
+    else if (p == "/interaction_profiles/khr/simple_controller")
+        add(kSimple, std::size(kSimple));
+    else
+        return v;
     add(kCommonPoses, std::size(kCommonPoses));
     return v;
 }
@@ -117,7 +169,7 @@ static bool gAttached = false;
 static int gMinPriority = INT_MAX;
 static std::set<std::string> gOurProfiles;
 
-static GameInputFilter gInput;         // what the game's button / trigger / stick actions read (under gMx)
+static GameInputFilter gInput; // what the game's button / trigger / stick actions read (under gMx)
 
 static XrSession gSess = XR_NULL_HANDLE;
 static Gfx gGfx;
@@ -126,25 +178,34 @@ static XrTime gPredTime = 0;
 
 static Engine gEng;
 static void MarkOwnSave();
-static OverlayRenderer gOverlay(gEng);   // everything we draw into the headset
+static OverlayRenderer gOverlay(gEng); // everything we draw into the headset
 
 // ---------------------------------------------------------------- controller offsets for the game
 // The game's hand pose actions (from its suggested bindings) and the spaces it makes from them.
 // Every pose the game locates for those spaces is turned / moved by the profile's offsets.
-struct PoseBind { int hand; PoseKind kind; };
+struct PoseBind {
+    int hand;
+    PoseKind kind;
+};
 static std::unordered_map<uint64_t, std::vector<PoseBind>> gPoseBinds; // action -> bindings (under gMx)
 static GameHandOffsets gHandOffsets;
-
 
 static FILETIME gCfgTimes[5]{};
 static double gLastCfgCheck = 0;
 
-static inline uint64_t H(XrAction a) { return (uint64_t)a; }
+static inline uint64_t H(XrAction a) {
+    return (uint64_t)a;
+}
 
 // ---------------------------------------------------------------- helpers
-static XrPath P(const std::string& s) { XrPath p = XR_NULL_PATH; N.StringToPath(gInst, s.c_str(), &p); return p; }
+static XrPath P(const std::string& s) {
+    XrPath p = XR_NULL_PATH;
+    N.StringToPath(gInst, s.c_str(), &p);
+    return p;
+}
 static std::string S(XrPath p) {
-    char buf[XR_MAX_PATH_LENGTH]; uint32_t n = 0;
+    char buf[XR_MAX_PATH_LENGTH];
+    uint32_t n = 0;
     if (XR_FAILED(N.PathToString(gInst, p, sizeof(buf), &n, buf))) return {};
     return buf;
 }
@@ -159,13 +220,18 @@ static void EnsureActions() {
     strcpy_s(si.localizedActionSetName, "OpenXR Companion");
     si.priority = gMinPriority == INT_MAX ? 0 : (uint32_t)gMinPriority;
     XrResult r = N.CreateActionSet(gInst, &si, &gSet);
-    if (XR_FAILED(r)) { Log("CreateActionSet failed %d", r); gSet = XR_NULL_HANDLE; return; }
+    if (XR_FAILED(r)) {
+        Log("CreateActionSet failed %d", r);
+        gSet = XR_NULL_HANDLE;
+        return;
+    }
     for (int i = 0; i < A_COUNT; i++) {
         XrActionCreateInfo ci{ XR_TYPE_ACTION_CREATE_INFO };
         strcpy_s(ci.actionName, kActs[i].name);
         strcpy_s(ci.localizedActionName, kActs[i].name);
         ci.actionType = kActs[i].type;
-        ci.countSubactionPaths = 2; ci.subactionPaths = gHandPath;
+        ci.countSubactionPaths = 2;
+        ci.subactionPaths = gHandPath;
         r = N.CreateAction(gSet, &ci, &gA[i]);
         if (XR_FAILED(r)) Log("CreateAction %s failed %d", kActs[i].name, r);
     }
@@ -173,7 +239,8 @@ static void EnsureActions() {
 }
 
 static void ReloadProfile(bool announce) {
-    std::wstring path; std::string err;
+    std::wstring path;
+    std::string err;
     auto p = LoadProfile(path, err);
     if (!p) {
         Log("config error: %s", err.c_str());
@@ -182,7 +249,8 @@ static void ReloadProfile(bool announce) {
     }
     gEng.SetProfile(p);
     gOverlay.InvalidateAll();
-    Log("loaded profile %s (%zu bindings, %zu wheels, enabled=%d)", p->sourceName.c_str(), p->bindings.size(), p->wheels.size(), p->enabled);
+    Log("loaded profile %s (%zu bindings, %zu wheels, enabled=%d)", p->sourceName.c_str(), p->bindings.size(), p->wheels.size(),
+        p->enabled);
     if (announce) gEng.Toast("OpenXR Companion: " + p->sourceName + " loaded");
 }
 
@@ -206,8 +274,9 @@ static void CheckConfigChanged() {
     if (now - gLastCfgCheck < 1.0) return;
     gLastCfgCheck = now;
     std::wstring dir = ProfilesDir();
-    FILETIME t[5] = { FileTime(dir + L"\\" + Utf8ToW(ExeName()) + L".json"), FileTime(dir + L"\\default.json"), FileTime(dir + L"\\user_defaults.json"),
-                      FileTime(ActiveProfilePath()), gEng.prof ? FileTime(dir + L"\\" + Utf8ToW(gEng.prof->sourceName)) : FILETIME{} };
+    FILETIME t[5] = { FileTime(dir + L"\\" + Utf8ToW(ExeName()) + L".json"), FileTime(dir + L"\\default.json"),
+                      FileTime(dir + L"\\user_defaults.json"), FileTime(ActiveProfilePath()),
+                      gEng.prof ? FileTime(dir + L"\\" + Utf8ToW(gEng.prof->sourceName)) : FILETIME{} };
     bool changed = memcmp(t, gCfgTimes, sizeof(t)) != 0;
     bool first = gCfgTimes[1].dwLowDateTime == 0 && gCfgTimes[1].dwHighDateTime == 0;
     memcpy(gCfgTimes, t, sizeof(t));
@@ -234,28 +303,33 @@ static void CheckInteractionProfiles(double now) {
         XrInteractionProfileState st{ XR_TYPE_INTERACTION_PROFILE_STATE };
         if (XR_FAILED(N.GetCurrentInteractionProfile(gSess, gHandPath[h], &st))) continue;
         std::string p = st.interactionProfile ? S(st.interactionProfile) : "";
-        bool touch = p.find("touch") != std::string::npos && (p.find("oculus") != std::string::npos ||
-                     p.find("meta") != std::string::npos || p.find("facebook") != std::string::npos);
-        if (touch != gTouchCtl[h]) Log("%s controller: %s%s", h ? "right" : "left", p.c_str(), touch ? " (Touch: aim correction available)" : "");
+        bool touch =
+            p.find("touch") != std::string::npos &&
+            (p.find("oculus") != std::string::npos || p.find("meta") != std::string::npos || p.find("facebook") != std::string::npos);
+        if (touch != gTouchCtl[h])
+            Log("%s controller: %s%s", h ? "right" : "left", p.c_str(), touch ? " (Touch: aim correction available)" : "");
         gTouchCtl[h] = touch;
     }
 }
-
 
 // Head smoothing settings: read when the game starts, then whenever the editor changes the file.
 static void CheckHeadSmoothingFile() {
     FILETIME hft = FileTime(HeadSmoothSettingsPath());
     if (memcmp(&hft, &gHeadFileTime, sizeof(hft)) == 0) return;
     gHeadFileTime = hft;
-    HeadSmoothSettings hs; LoadHeadSmoothSettings(hs);
+    HeadSmoothSettings hs;
+    LoadHeadSmoothSettings(hs);
     static bool firstLoad = true;
     if (firstLoad && hs.on && !hs.keepOn) { // safety: never already on when a game starts, unless asked
-        hs.on = false; SwitchOffHeadSmoothing(); gHeadFileTime = FileTime(HeadSmoothSettingsPath());
+        hs.on = false;
+        SwitchOffHeadSmoothing();
+        gHeadFileTime = FileTime(HeadSmoothSettingsPath());
         Log("head smoothing: was on, switched off at game start (keep_on is false)");
     }
     firstLoad = false;
     bool was = gHeadSmooth.SetSettings(hs);
-    Log("head smoothing: settings read: %s, mode %s, strength %.2f", hs.on ? "ON" : "off", hs.mode == 1 ? "headset" : "recording", hs.strength);
+    Log("head smoothing: settings read: %s, mode %s, strength %.2f", hs.on ? "ON" : "off", hs.mode == 1 ? "headset" : "recording",
+        hs.strength);
     if (hs.on != was) gEng.Toast(hs.on ? "Head smoothing ON (experimental: stop if you feel unwell)" : "Head smoothing off", 3.0);
 }
 
@@ -265,24 +339,41 @@ static void ReadInputsAndUpdate() {
     CheckInteractionProfiles(f.t);
     for (int h = 0; h < 2; h++) {
         auto gb = [&](int a) {
-            XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO }; gi.action = gA[a]; gi.subactionPath = gHandPath[h];
+            XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO };
+            gi.action = gA[a];
+            gi.subactionPath = gHandPath[h];
             XrActionStateBoolean s{ XR_TYPE_ACTION_STATE_BOOLEAN };
             return XR_SUCCEEDED(N.GetActionStateBoolean(gSess, &gi, &s)) && s.isActive && s.currentState;
         };
         auto gf = [&](int a) {
-            XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO }; gi.action = gA[a]; gi.subactionPath = gHandPath[h];
+            XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO };
+            gi.action = gA[a];
+            gi.subactionPath = gHandPath[h];
             XrActionStateFloat s{ XR_TYPE_ACTION_STATE_FLOAT };
             return XR_SUCCEEDED(N.GetActionStateFloat(gSess, &gi, &s)) && s.isActive ? s.currentState : 0.f;
         };
         HandRaw& r = f.h[h];
-        r.b1 = gb(A_BTN1); r.b1t = gb(A_BTN1T); r.b2 = gb(A_BTN2); r.b2t = gb(A_BTN2T);
-        r.trig = gf(A_TRIG); r.trigT = gb(A_TRIGT); r.grip = gf(A_GRIP);
+        r.b1 = gb(A_BTN1);
+        r.b1t = gb(A_BTN1T);
+        r.b2 = gb(A_BTN2);
+        r.b2t = gb(A_BTN2T);
+        r.trig = gf(A_TRIG);
+        r.trigT = gb(A_TRIGT);
+        r.grip = gf(A_GRIP);
         {
-            XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO }; gi.action = gA[A_STICK]; gi.subactionPath = gHandPath[h];
+            XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO };
+            gi.action = gA[A_STICK];
+            gi.subactionPath = gHandPath[h];
             XrActionStateVector2f s{ XR_TYPE_ACTION_STATE_VECTOR2F };
-            if (XR_SUCCEEDED(N.GetActionStateVector2f(gSess, &gi, &s)) && s.isActive) { r.sx = s.currentState.x; r.sy = s.currentState.y; }
+            if (XR_SUCCEEDED(N.GetActionStateVector2f(gSess, &gi, &s)) && s.isActive) {
+                r.sx = s.currentState.x;
+                r.sy = s.currentState.y;
+            }
         }
-        r.sc = gb(A_STICKC); r.st = gb(A_STICKT); r.rest = gb(A_REST); r.menu = gb(A_MENU);
+        r.sc = gb(A_STICKC);
+        r.st = gb(A_STICKT);
+        r.rest = gb(A_REST);
+        r.menu = gb(A_MENU);
         r.gripValid = Locate(gGripSp[h], gLocal, r.gripPose);
         r.aimValid = Locate(gAimSp[h], gLocal, r.aimPose);
         r.touchCtl = gTouchCtl[h];
@@ -292,57 +383,91 @@ static void ReadInputsAndUpdate() {
     gEng.Update(f);
 
     for (auto& hq : gEng.haptics) {
-        XrHapticActionInfo hi{ XR_TYPE_HAPTIC_ACTION_INFO }; hi.action = gA[A_HAPTIC]; hi.subactionPath = gHandPath[hq.hand];
+        XrHapticActionInfo hi{ XR_TYPE_HAPTIC_ACTION_INFO };
+        hi.action = gA[A_HAPTIC];
+        hi.subactionPath = gHandPath[hq.hand];
         XrHapticVibration v{ XR_TYPE_HAPTIC_VIBRATION };
-        v.amplitude = hq.amp; v.duration = (XrDuration)(hq.sec * 1e9); v.frequency = XR_FREQUENCY_UNSPECIFIED;
+        v.amplitude = hq.amp;
+        v.duration = (XrDuration)(hq.sec * 1e9);
+        v.frequency = XR_FREQUENCY_UNSPECIFIED;
         N.ApplyHapticFeedback(gSess, &hi, (XrHapticBaseHeader*)&v);
     }
     gEng.haptics.clear();
-    {   // what the game's controller poses are moved by, for the LocateSpace hooks
+    { // what the game's controller poses are moved by, for the LocateSpace hooks
         GameHandOffsets::Settings hs;
         hs.on = gEng.Active() && gEng.offs.enabled;
         hs.steadying = hs.on ? gEng.offs.smoothing : 0.f;
         for (int h = 0; h < 2; h++)
-            for (int k = 0; k < 2; k++) hs.has[h][k] = hs.on && gEng.OffsetPose(h, k, hs.pose[h][k]);
+            for (int k = 0; k < 2; k++)
+                hs.has[h][k] = hs.on && gEng.OffsetPose(h, k, hs.pose[h][k]);
         gHandOffsets.SetSettings(hs);
     }
     if (gEng.offsSaveRequested && gEng.prof) {
         gEng.offsSaveRequested = false;
         gEng.prof->offsets = gEng.offs;
         std::string err;
-        if (SaveOffsets(*gEng.prof, err)) { MarkOwnSave(); Log("controller offsets saved to %s", gEng.prof->sourceName.c_str()); }
-        else { Log("offsets: save failed: %s", err.c_str()); gEng.Toast("Could not save offsets: " + err, 6.0); }
+        if (SaveOffsets(*gEng.prof, err)) {
+            MarkOwnSave();
+            Log("controller offsets saved to %s", gEng.prof->sourceName.c_str());
+        } else {
+            Log("offsets: save failed: %s", err.c_str());
+            gEng.Toast("Could not save offsets: " + err, 6.0);
+        }
     }
     if (gEng.mirrorAsk != MirrorRequest::None) { // a wheel / wrist button: switch the headset mirror, and remember it for the editor
-        MirrorRequest a = gEng.mirrorAsk; gEng.mirrorAsk = MirrorRequest::None;
+        MirrorRequest a = gEng.mirrorAsk;
+        gEng.mirrorAsk = MirrorRequest::None;
         gMirrorSet.on = a == MirrorRequest::On ? true : a == MirrorRequest::Off ? false : !gMirrorSet.on;
-        SaveMirrorSettings(gMirrorSet); gMirrorFileTime = FileTime(MirrorSettingsPath());
+        SaveMirrorSettings(gMirrorSet);
+        gMirrorFileTime = FileTime(MirrorSettingsPath());
         gEng.Toast(gMirrorSet.on ? "Headset mirror ON (a window on the desktop)" : "Headset mirror off", 2.0);
     }
-    if (gMirror.ClosedByUser()) { gMirrorSet.on = false; SaveMirrorSettings(gMirrorSet); gMirrorFileTime = FileTime(MirrorSettingsPath()); }
+    if (gMirror.ClosedByUser()) {
+        gMirrorSet.on = false;
+        SaveMirrorSettings(gMirrorSet);
+        gMirrorFileTime = FileTime(MirrorSettingsPath());
+    }
     {
         double now = NowSec();
         if (now - gLastMirrorCheck > 1.0) { // the editor's button writes the file
             gLastMirrorCheck = now;
             FILETIME ft = FileTime(MirrorSettingsPath());
-            if (memcmp(&ft, &gMirrorFileTime, sizeof(ft)) != 0) { gMirrorFileTime = ft; LoadMirrorSettings(gMirrorSet); }
+            if (memcmp(&ft, &gMirrorFileTime, sizeof(ft)) != 0) {
+                gMirrorFileTime = ft;
+                LoadMirrorSettings(gMirrorSet);
+            }
             CheckHeadSmoothingFile();
         }
-        gMirror.eye = gMirrorSet.eye; gMirror.zoom = gMirrorSet.zoom; gMirror.fps = gMirrorSet.fps; gMirror.smoothing = gMirrorSet.smoothing; gMirror.onTop = gMirrorSet.onTop;
+        gMirror.eye = gMirrorSet.eye;
+        gMirror.zoom = gMirrorSet.zoom;
+        gMirror.fps = gMirrorSet.fps;
+        gMirror.smoothing = gMirrorSet.smoothing;
+        gMirror.onTop = gMirrorSet.onTop;
         bool want = gMirrorSet.on && gGfx.api == 11;
         if (gMirrorSet.on && gGfx.api == 12 && !gMirror.On()) {
             static bool told = false;
-            if (!told) { told = true; gEng.Toast("Headset mirror: this game uses D3D12, not supported yet", 4.0); }
+            if (!told) {
+                told = true;
+                gEng.Toast("Headset mirror: this game uses D3D12, not supported yet", 4.0);
+            }
         }
         gMirror.SetOn(want);
         gEng.mirrorOn = gMirrorSet.on;
     }
-    if (gEng.reloadRequested) { gEng.reloadRequested = false; ReloadProfile(true); }
+    if (gEng.reloadRequested) {
+        gEng.reloadRequested = false;
+        ReloadProfile(true);
+    }
     if (gEng.saveRequested && gEng.prof) { // leaving adjust mode: keep the new placement
         gEng.saveRequested = false;
         std::string err;
-        if (SavePlacement(*gEng.prof, err)) { MarkOwnSave(); Log("adjust: placement saved to %s", gEng.prof->sourceName.c_str()); }
-        else { Log("adjust: save failed: %s", err.c_str()); gEng.Toast("Could not save positions: " + err, 6.0); }
+        if (SavePlacement(*gEng.prof, err)) {
+            MarkOwnSave();
+            Log("adjust: placement saved to %s", gEng.prof->sourceName.c_str());
+        } else {
+            Log("adjust: save failed: %s", err.c_str());
+            gEng.Toast("Could not save positions: " + err, 6.0);
+        }
     }
 }
 
@@ -352,15 +477,23 @@ static XrResult XRAPI_CALL Hook_xrDestroyInstance(XrInstance inst) {
         std::lock_guard l(gMx);
         Keys::Shutdown();
         DrawShutdown();
-        gSet = XR_NULL_HANDLE; gAttached = false; gPoseBinds.clear(); gInput.Clear(); gOurProfiles.clear();
-        gMinPriority = INT_MAX; gInst = XR_NULL_HANDLE;
+        gSet = XR_NULL_HANDLE;
+        gAttached = false;
+        gPoseBinds.clear();
+        gInput.Clear();
+        gOurProfiles.clear();
+        gMinPriority = INT_MAX;
+        gInst = XR_NULL_HANDLE;
     }
     return N.DestroyInstance(inst);
 }
 
 static XrResult XRAPI_CALL Hook_xrCreateActionSet(XrInstance inst, const XrActionSetCreateInfo* ci, XrActionSet* set) {
     XrResult r = N.CreateActionSet(inst, ci, set);
-    if (XR_SUCCEEDED(r)) { std::lock_guard l(gMx); gMinPriority = std::min(gMinPriority, (int)ci->priority); }
+    if (XR_SUCCEEDED(r)) {
+        std::lock_guard l(gMx);
+        gMinPriority = std::min(gMinPriority, (int)ci->priority);
+    }
     return r;
 }
 
@@ -382,7 +515,8 @@ static XrResult XRAPI_CALL Hook_xrSuggestInteractionProfileBindings(XrInstance i
         if (ParseHandPosePath(bp, pb.hand, pb.kind)) {
             auto& v = gPoseBinds[H(sb->suggestedBindings[i].action)];
             bool dup = false;
-            for (auto& e : v) if (e.hand == pb.hand && e.kind == pb.kind) dup = true;
+            for (auto& e : v)
+                if (e.hand == pb.hand && e.kind == pb.kind) dup = true;
             if (!dup) v.push_back(pb);
             continue;
         }
@@ -456,7 +590,9 @@ static void DestroySessionStuff() {
     gEng.Reset();
     gMirror.Shutdown();
     gGfx.Release();
-    gSess = XR_NULL_HANDLE; gAttached = false; gPredTime = 0;
+    gSess = XR_NULL_HANDLE;
+    gAttached = false;
+    gPredTime = 0;
 }
 
 static XrResult XRAPI_CALL Hook_xrDestroySession(XrSession s) {
@@ -475,7 +611,8 @@ static XrResult XRAPI_CALL Hook_xrAttachSessionActionSets(XrSession s, const XrS
     std::vector<XrActionSet> sets(ai->actionSets, ai->actionSets + ai->countActionSets);
     sets.push_back(gSet);
     XrSessionActionSetsAttachInfo copy = *ai;
-    copy.countActionSets = (uint32_t)sets.size(); copy.actionSets = sets.data();
+    copy.countActionSets = (uint32_t)sets.size();
+    copy.actionSets = sets.data();
     XrResult r = N.AttachSessionActionSets(s, &copy);
     if (XR_FAILED(r)) {
         Log("attach with our set failed (%d), retrying without", r);
@@ -486,8 +623,10 @@ static XrResult XRAPI_CALL Hook_xrAttachSessionActionSets(XrSession s, const XrS
         XrActionSpaceCreateInfo ci{ XR_TYPE_ACTION_SPACE_CREATE_INFO };
         ci.poseInActionSpace.orientation.w = 1;
         ci.subactionPath = gHandPath[h];
-        ci.action = gA[A_GRIPPOSE]; N.CreateActionSpace(s, &ci, &gGripSp[h]);
-        ci.action = gA[A_AIMPOSE]; N.CreateActionSpace(s, &ci, &gAimSp[h]);
+        ci.action = gA[A_GRIPPOSE];
+        N.CreateActionSpace(s, &ci, &gGripSp[h]);
+        ci.action = gA[A_AIMPOSE];
+        N.CreateActionSpace(s, &ci, &gAimSp[h]);
     }
     Log("action sets attached (%u app + ours)", ai->countActionSets);
     return r;
@@ -499,7 +638,8 @@ static XrResult XRAPI_CALL Hook_xrSyncActions(XrSession s, const XrActionsSyncIn
     std::vector<XrActiveActionSet> sets(si->activeActionSets, si->activeActionSets + si->countActiveActionSets);
     sets.push_back({ gSet, XR_NULL_PATH });
     XrActionsSyncInfo copy = *si;
-    copy.countActiveActionSets = (uint32_t)sets.size(); copy.activeActionSets = sets.data();
+    copy.countActiveActionSets = (uint32_t)sets.size();
+    copy.activeActionSets = sets.data();
     XrResult r = N.SyncActions(s, &copy);
     gInput.NewSync();
     if (r == XR_SUCCESS) ReadInputsAndUpdate();
@@ -514,24 +654,37 @@ static XrResult XRAPI_CALL Hook_xrCreateActionSpace(XrSession s, const XrActionS
     auto it = gPoseBinds.find(H(ci->action));
     if (it == gPoseBinds.end() || it->second.empty()) return r;
     int hand = -1;
-    if (ci->subactionPath == gHandPath[0]) hand = 0;
-    else if (ci->subactionPath == gHandPath[1]) hand = 1;
+    if (ci->subactionPath == gHandPath[0])
+        hand = 0;
+    else if (ci->subactionPath == gHandPath[1])
+        hand = 1;
     else if (ci->subactionPath == XR_NULL_PATH) { // no hand given: only if the action is bound to one hand
         hand = it->second[0].hand;
-        for (auto& b : it->second) if (b.hand != hand) hand = -1;
+        for (auto& b : it->second)
+            if (b.hand != hand) hand = -1;
     }
-    if (hand < 0) { Log("game pose space: hand unknown, offsets not applied"); return r; }
+    if (hand < 0) {
+        Log("game pose space: hand unknown, offsets not applied");
+        return r;
+    }
     const PoseBind* bind = nullptr; // the first binding of this action on that hand
-    for (auto& b : it->second) if (b.hand == hand) { bind = &b; break; }
+    for (auto& b : it->second)
+        if (b.hand == hand) {
+            bind = &b;
+            break;
+        }
     if (!bind) return r;
     PoseKind kind = bind->kind;
     gHandOffsets.AddSpace(*sp, hand, kind);
     const XrPosef& g = ci->poseInActionSpace;
-    XrQuaternionf gq = g.orientation; float ga = 2.f * std::acos(std::min(1.f, std::fabs(gq.w))) * 57.2958f;
+    XrQuaternionf gq = g.orientation;
+    float ga = 2.f * std::acos(std::min(1.f, std::fabs(gq.w))) * 57.2958f;
     float gm = std::sqrt(g.position.x * g.position.x + g.position.y * g.position.y + g.position.z * g.position.z) * 100.f;
     if (ga > 0.5f || gm > 0.1f) // the game moves its hand point itself: our offsets turn about that point, not the controller's
-        Log("game pose space: %s %s (the game's own offset: %.1f deg, %.1f cm)", hand ? "right" : "left", kind == PoseKind::Aim ? "aim" : "grip", ga, gm);
-    else Log("game pose space: %s %s", hand ? "right" : "left", kind == PoseKind::Aim ? "aim" : "grip");
+        Log("game pose space: %s %s (the game's own offset: %.1f deg, %.1f cm)", hand ? "right" : "left",
+            kind == PoseKind::Aim ? "aim" : "grip", ga, gm);
+    else
+        Log("game pose space: %s %s", hand ? "right" : "left", kind == PoseKind::Aim ? "aim" : "grip");
     return r;
 }
 
@@ -542,7 +695,8 @@ static XrResult XRAPI_CALL Hook_xrDestroySpace(XrSpace sp) {
 }
 
 // Games that ask for the eye views in their world (most Unity / native games): steadied here.
-static XrResult XRAPI_CALL Hook_xrLocateViews(XrSession s, const XrViewLocateInfo* li, XrViewState* vs, uint32_t cap, uint32_t* cnt, XrView* views) {
+static XrResult XRAPI_CALL Hook_xrLocateViews(XrSession s, const XrViewLocateInfo* li, XrViewState* vs, uint32_t cap, uint32_t* cnt,
+                                              XrView* views) {
     XrResult r = N.LocateViews(s, li, vs, cap, cnt, views);
     if (XR_FAILED(r) || !li || !vs || !cnt || !views || cap == 0) return r;
     gHeadSmooth.OnLocateViews(*li, *vs, std::min(*cnt, cap), views);
@@ -563,21 +717,26 @@ static XrResult XRAPI_CALL Hook_xrLocateSpace(XrSpace sp, XrSpace base, XrTime t
     if (XR_FAILED(r) || !loc) return r;
     gHeadSmooth.OnLocateSpace(sp, base, t, loc->locationFlags, loc->pose);
     XrSpaceVelocity* vel = nullptr;
-    for (auto* n = (XrBaseOutStructure*)loc->next; n; n = n->next) if (n->type == XR_TYPE_SPACE_VELOCITY) vel = (XrSpaceVelocity*)n;
-    gHandOffsets.Apply(sp, base, t, loc->locationFlags, loc->pose, vel ? &vel->velocityFlags : nullptr, vel ? &vel->linearVelocity : nullptr, vel ? &vel->angularVelocity : nullptr);
+    for (auto* n = (XrBaseOutStructure*)loc->next; n; n = n->next)
+        if (n->type == XR_TYPE_SPACE_VELOCITY) vel = (XrSpaceVelocity*)n;
+    gHandOffsets.Apply(sp, base, t, loc->locationFlags, loc->pose, vel ? &vel->velocityFlags : nullptr,
+                       vel ? &vel->linearVelocity : nullptr, vel ? &vel->angularVelocity : nullptr);
     return r;
 }
 
 static void OffsetLocations(const XrSpacesLocateInfo* li, XrSpaceLocations* sl) {
     if (!li || !sl || !sl->locations) return;
     XrSpaceVelocities* vel = nullptr;
-    for (auto* n = (XrBaseOutStructure*)sl->next; n; n = n->next) if (n->type == XR_TYPE_SPACE_VELOCITIES) vel = (XrSpaceVelocities*)n;
+    for (auto* n = (XrBaseOutStructure*)sl->next; n; n = n->next)
+        if (n->type == XR_TYPE_SPACE_VELOCITIES) vel = (XrSpaceVelocities*)n;
     uint32_t n = std::min(li->spaceCount, sl->locationCount);
-    for (uint32_t i = 0; i < n; i++) gHeadSmooth.OnLocateSpace(li->spaces[i], li->baseSpace, li->time, sl->locations[i].locationFlags, sl->locations[i].pose);
+    for (uint32_t i = 0; i < n; i++)
+        gHeadSmooth.OnLocateSpace(li->spaces[i], li->baseSpace, li->time, sl->locations[i].locationFlags, sl->locations[i].pose);
     for (uint32_t i = 0; i < n; i++) {
         bool hv = vel && vel->velocities && i < vel->velocityCount;
         gHandOffsets.Apply(li->spaces[i], li->baseSpace, li->time, sl->locations[i].locationFlags, sl->locations[i].pose,
-            hv ? &vel->velocities[i].velocityFlags : nullptr, hv ? &vel->velocities[i].linearVelocity : nullptr, hv ? &vel->velocities[i].angularVelocity : nullptr);
+                           hv ? &vel->velocities[i].velocityFlags : nullptr, hv ? &vel->velocities[i].linearVelocity : nullptr,
+                           hv ? &vel->velocities[i].angularVelocity : nullptr);
     }
 }
 static XrResult XRAPI_CALL Hook_xrLocateSpaces(XrSession s, const XrSpacesLocateInfo* li, XrSpaceLocations* sl) {
@@ -630,7 +789,10 @@ static XrResult XRAPI_CALL Hook_xrGetActionStateVector2f(XrSession s, const XrAc
 
 static XrResult XRAPI_CALL Hook_xrWaitFrame(XrSession s, const XrFrameWaitInfo* wi, XrFrameState* fs) {
     XrResult r = N.WaitFrame(s, wi, fs);
-    if (XR_SUCCEEDED(r) && fs) { std::lock_guard l(gMx); gPredTime = fs->predictedDisplayTime; }
+    if (XR_SUCCEEDED(r) && fs) {
+        std::lock_guard l(gMx);
+        gPredTime = fs->predictedDisplayTime;
+    }
     return r;
 }
 
@@ -640,7 +802,8 @@ static void MirrorFrame(const std::vector<const XrCompositionLayerBaseHeader*>& 
         if (XR_FAILED(N.LocateSpace(sp, base, tt, &l))) return false; // raw: our own spaces, never the game's offsets
         const XrSpaceLocationFlags need = XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
         if ((l.locationFlags & need) != need) return false;
-        out = l.pose; return true;
+        out = l.pose;
+        return true;
     });
 }
 
@@ -676,7 +839,8 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
     std::unique_lock l(gMx);
     if (s == gSess) fi = gHeadSmooth.OnEndFrame(fi);
     if (s != gSess || !fi || !gEng.Active() || !gGfx.api) {
-        if (s == gSess && fi && gMirror.On() && gGfx.api == 11) MirrorFrame(std::vector<const XrCompositionLayerBaseHeader*>(fi->layers, fi->layers + fi->layerCount), fi->displayTime);
+        if (s == gSess && fi && gMirror.On() && gGfx.api == 11)
+            MirrorFrame(std::vector<const XrCompositionLayerBaseHeader*>(fi->layers, fi->layers + fi->layerCount), fi->displayTime);
         l.unlock();
         return N.EndFrame(s, fi);
     }
@@ -695,20 +859,33 @@ static XrResult XRAPI_CALL Hook_xrGetInstanceProcAddr(XrInstance inst, const cha
     XrResult r = gNextGipa(inst, name, fn);
     if (XR_FAILED(r) || !name) return r;
     std::string n = name;
-#define HOOK(x) if (n == "xr" #x) { *fn = (PFN_xrVoidFunction)Hook_xr##x; return r; }
-    HOOK(GetInstanceProcAddr) HOOK(DestroyInstance) HOOK(CreateSession) HOOK(DestroySession)
-    HOOK(CreateActionSet) HOOK(CreateAction) HOOK(SuggestInteractionProfileBindings) HOOK(AttachSessionActionSets)
-    HOOK(SyncActions) HOOK(GetActionStateBoolean) HOOK(GetActionStateFloat) HOOK(GetActionStateVector2f)
-    HOOK(WaitFrame) HOOK(EndFrame)
-    HOOK(CreateActionSpace) HOOK(CreateReferenceSpace) HOOK(DestroySpace) HOOK(LocateSpace) HOOK(LocateViews)
-    HOOK(CreateSwapchain) HOOK(DestroySwapchain) HOOK(EnumerateSwapchainImages) HOOK(AcquireSwapchainImage) HOOK(ReleaseSwapchainImage)
-    if (n == "xrLocateSpaces") { N.LocateSpaces = (PFN_xrLocateSpaces)*fn; *fn = (PFN_xrVoidFunction)Hook_xrLocateSpaces; return r; }
-    if (n == "xrLocateSpacesKHR") { N.LocateSpacesKHR = (PFN_xrLocateSpacesKHR)*fn; *fn = (PFN_xrVoidFunction)Hook_xrLocateSpacesKHR; return r; }
+#define HOOK(x)                                                                                                                            \
+    if (n == "xr" #x) {                                                                                                                    \
+        *fn = (PFN_xrVoidFunction)Hook_xr##x;                                                                                              \
+        return r;                                                                                                                          \
+    }
+    HOOK(GetInstanceProcAddr)
+    HOOK(DestroyInstance) HOOK(CreateSession) HOOK(DestroySession) HOOK(CreateActionSet) HOOK(CreateAction)
+        HOOK(SuggestInteractionProfileBindings) HOOK(AttachSessionActionSets) HOOK(SyncActions) HOOK(GetActionStateBoolean)
+            HOOK(GetActionStateFloat) HOOK(GetActionStateVector2f) HOOK(WaitFrame) HOOK(EndFrame) HOOK(CreateActionSpace)
+                HOOK(CreateReferenceSpace) HOOK(DestroySpace) HOOK(LocateSpace) HOOK(LocateViews) HOOK(CreateSwapchain)
+                    HOOK(DestroySwapchain) HOOK(EnumerateSwapchainImages) HOOK(AcquireSwapchainImage)
+                        HOOK(ReleaseSwapchainImage) if (n == "xrLocateSpaces") {
+        N.LocateSpaces = (PFN_xrLocateSpaces)*fn;
+        *fn = (PFN_xrVoidFunction)Hook_xrLocateSpaces;
+        return r;
+    }
+    if (n == "xrLocateSpacesKHR") {
+        N.LocateSpacesKHR = (PFN_xrLocateSpacesKHR)*fn;
+        *fn = (PFN_xrVoidFunction)Hook_xrLocateSpacesKHR;
+        return r;
+    }
 #undef HOOK
     return r;
 }
 
-static XrResult XRAPI_CALL Hook_xrCreateApiLayerInstance(const XrInstanceCreateInfo* info, const XrApiLayerCreateInfo* li, XrInstance* inst) {
+static XrResult XRAPI_CALL Hook_xrCreateApiLayerInstance(const XrInstanceCreateInfo* info, const XrApiLayerCreateInfo* li,
+                                                         XrInstance* inst) {
     LogInit();
     if (!li || !li->nextInfo) return XR_ERROR_INITIALIZATION_FAILED;
     gOverlay.onProfileSaved = MarkOwnSave;
@@ -718,39 +895,58 @@ static XrResult XRAPI_CALL Hook_xrCreateApiLayerInstance(const XrInstanceCreateI
     XrResult r = li->nextInfo->nextCreateApiLayerInstance(info, &chain, inst);
     if (XR_FAILED(r)) return r;
     gInst = *inst;
-    auto get = [&](const char* nm, auto& f) { gNextGipa(gInst, nm, (PFN_xrVoidFunction*)&f); };
-    get("xrDestroyInstance", N.DestroyInstance); get("xrCreateSession", N.CreateSession); get("xrDestroySession", N.DestroySession);
-    get("xrCreateActionSet", N.CreateActionSet); get("xrCreateAction", N.CreateAction);
+    auto get = [&](const char* nm, auto& f) {
+        gNextGipa(gInst, nm, (PFN_xrVoidFunction*)&f);
+    };
+    get("xrDestroyInstance", N.DestroyInstance);
+    get("xrCreateSession", N.CreateSession);
+    get("xrDestroySession", N.DestroySession);
+    get("xrCreateActionSet", N.CreateActionSet);
+    get("xrCreateAction", N.CreateAction);
     get("xrSuggestInteractionProfileBindings", N.SuggestInteractionProfileBindings);
-    get("xrAttachSessionActionSets", N.AttachSessionActionSets); get("xrSyncActions", N.SyncActions);
-    get("xrGetActionStateBoolean", N.GetActionStateBoolean); get("xrGetActionStateFloat", N.GetActionStateFloat);
+    get("xrAttachSessionActionSets", N.AttachSessionActionSets);
+    get("xrSyncActions", N.SyncActions);
+    get("xrGetActionStateBoolean", N.GetActionStateBoolean);
+    get("xrGetActionStateFloat", N.GetActionStateFloat);
     get("xrGetActionStateVector2f", N.GetActionStateVector2f);
-    get("xrWaitFrame", N.WaitFrame); get("xrEndFrame", N.EndFrame);
-    get("xrStringToPath", N.StringToPath); get("xrPathToString", N.PathToString);
-    get("xrCreateActionSpace", N.CreateActionSpace); get("xrCreateReferenceSpace", N.CreateReferenceSpace);
-    get("xrDestroySpace", N.DestroySpace); get("xrLocateSpace", N.LocateSpace); get("xrLocateViews", N.LocateViews);
+    get("xrWaitFrame", N.WaitFrame);
+    get("xrEndFrame", N.EndFrame);
+    get("xrStringToPath", N.StringToPath);
+    get("xrPathToString", N.PathToString);
+    get("xrCreateActionSpace", N.CreateActionSpace);
+    get("xrCreateReferenceSpace", N.CreateReferenceSpace);
+    get("xrDestroySpace", N.DestroySpace);
+    get("xrLocateSpace", N.LocateSpace);
+    get("xrLocateViews", N.LocateViews);
     get("xrApplyHapticFeedback", N.ApplyHapticFeedback);
     get("xrGetCurrentInteractionProfile", N.GetCurrentInteractionProfile);
-    get("xrEnumerateSwapchainFormats", gSwapNext.EnumerateSwapchainFormats); get("xrCreateSwapchain", gSwapNext.CreateSwapchain);
-    get("xrDestroySwapchain", gSwapNext.DestroySwapchain); get("xrEnumerateSwapchainImages", gSwapNext.EnumerateSwapchainImages);
-    get("xrAcquireSwapchainImage", gSwapNext.AcquireSwapchainImage); get("xrWaitSwapchainImage", gSwapNext.WaitSwapchainImage);
+    get("xrEnumerateSwapchainFormats", gSwapNext.EnumerateSwapchainFormats);
+    get("xrCreateSwapchain", gSwapNext.CreateSwapchain);
+    get("xrDestroySwapchain", gSwapNext.DestroySwapchain);
+    get("xrEnumerateSwapchainImages", gSwapNext.EnumerateSwapchainImages);
+    get("xrAcquireSwapchainImage", gSwapNext.AcquireSwapchainImage);
+    get("xrWaitSwapchainImage", gSwapNext.WaitSwapchainImage);
     get("xrReleaseSwapchainImage", gSwapNext.ReleaseSwapchainImage);
     gSwap = gSwapNext; // our panels go through the hooks too, so the mirror can draw them
-    gSwap.CreateSwapchain = Hook_xrCreateSwapchain; gSwap.DestroySwapchain = Hook_xrDestroySwapchain;
+    gSwap.CreateSwapchain = Hook_xrCreateSwapchain;
+    gSwap.DestroySwapchain = Hook_xrDestroySwapchain;
     gSwap.EnumerateSwapchainImages = Hook_xrEnumerateSwapchainImages;
-    gSwap.AcquireSwapchainImage = Hook_xrAcquireSwapchainImage; gSwap.ReleaseSwapchainImage = Hook_xrReleaseSwapchainImage;
+    gSwap.AcquireSwapchainImage = Hook_xrAcquireSwapchainImage;
+    gSwap.ReleaseSwapchainImage = Hook_xrReleaseSwapchainImage;
     LoadMirrorSettings(gMirrorSet);
     CheckHeadSmoothingFile();
-    Log("instance created for '%s' (%s), OpenXR Companion layer built %s %s", info->applicationInfo.applicationName, ExeName().c_str(), __DATE__, __TIME__);
+    Log("instance created for '%s' (%s), OpenXR Companion layer built %s %s", info->applicationInfo.applicationName, ExeName().c_str(),
+        __DATE__, __TIME__);
     Log("head smoothing at start: %s", gHeadSmooth.StateText().c_str());
     return r;
 }
 
-extern "C" __declspec(dllexport) XrResult XRAPI_CALL xrNegotiateLoaderApiLayerInterface(
-    const XrNegotiateLoaderInfo* li, const char* layerName, XrNegotiateApiLayerRequest* req) {
+extern "C" __declspec(dllexport) XrResult XRAPI_CALL xrNegotiateLoaderApiLayerInterface(const XrNegotiateLoaderInfo* li,
+                                                                                        const char* layerName,
+                                                                                        XrNegotiateApiLayerRequest* req) {
     if (!li || !req || li->structType != XR_LOADER_INTERFACE_STRUCT_LOADER_INFO ||
-        req->structType != XR_LOADER_INTERFACE_STRUCT_API_LAYER_REQUEST ||
-        li->minInterfaceVersion > XR_CURRENT_LOADER_API_LAYER_VERSION || li->maxInterfaceVersion < XR_CURRENT_LOADER_API_LAYER_VERSION)
+        req->structType != XR_LOADER_INTERFACE_STRUCT_API_LAYER_REQUEST || li->minInterfaceVersion > XR_CURRENT_LOADER_API_LAYER_VERSION ||
+        li->maxInterfaceVersion < XR_CURRENT_LOADER_API_LAYER_VERSION)
         return XR_ERROR_INITIALIZATION_FAILED;
     if (layerName && strcmp(layerName, LAYER_NAME) != 0) return XR_ERROR_INITIALIZATION_FAILED;
     req->layerInterfaceVersion = XR_CURRENT_LOADER_API_LAYER_VERSION;

@@ -4,7 +4,10 @@
 #include <map>
 #include <memory>
 #include <objidl.h>
-namespace Gdiplus { using std::min; using std::max; }
+namespace Gdiplus {
+using std::max;
+using std::min;
+} // namespace Gdiplus
 #include <gdiplus.h>
 
 using namespace Gdiplus;
@@ -16,15 +19,18 @@ void Gfx::Init(const void* chain) {
     for (; h; h = h->next) {
         if (h->type == XR_TYPE_GRAPHICS_BINDING_D3D11_KHR) {
             auto* b = (const XrGraphicsBindingD3D11KHR*)h;
-            d11 = b->device; d11->AddRef();
+            d11 = b->device;
+            d11->AddRef();
             d11->GetImmediateContext(&ctx);
             api = 11;
             return;
         }
         if (h->type == XR_TYPE_GRAPHICS_BINDING_D3D12_KHR) {
             auto* b = (const XrGraphicsBindingD3D12KHR*)h;
-            d12 = b->device; d12->AddRef();
-            queue = b->queue; queue->AddRef();
+            d12 = b->device;
+            d12->AddRef();
+            queue = b->queue;
+            queue->AddRef();
             for (int i = 0; i < kRing; i++) {
                 d12->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&alloc[i]));
                 if (alloc[i]) d12->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, alloc[i], nullptr, IID_PPV_ARGS(&list[i]));
@@ -39,11 +45,16 @@ void Gfx::Init(const void* chain) {
     api = 0;
 }
 void Gfx::Release() {
-    if (ctx) ctx->Release(); if (d11) d11->Release();
+    if (ctx) ctx->Release();
+    if (d11) d11->Release();
     if (fence) WaitFence(fenceVal); // nothing of ours still running on the GPU
-    for (int i = 0; i < kRing; i++) { if (list[i]) list[i]->Release(); if (alloc[i]) alloc[i]->Release(); }
+    for (int i = 0; i < kRing; i++) {
+        if (list[i]) list[i]->Release();
+        if (alloc[i]) alloc[i]->Release();
+    }
     if (fence) fence->Release();
-    if (queue) queue->Release(); if (d12) d12->Release();
+    if (queue) queue->Release();
+    if (d12) d12->Release();
     if (ev) CloseHandle(ev);
     *this = Gfx{};
 }
@@ -60,29 +71,50 @@ bool Panel::Create(XrSession s, Gfx& g, const XrFns& f, int W, int H) {
     f.EnumerateSwapchainFormats(s, 0, &n, nullptr);
     std::vector<int64_t> fmts(n);
     f.EnumerateSwapchainFormats(s, n, &n, fmts.data());
-    const int64_t pref[] = { DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM };
+    const int64_t pref[] = { DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, DXGI_FORMAT_B8G8R8A8_UNORM,
+                             DXGI_FORMAT_R8G8B8A8_UNORM };
     int64_t fmt = 0;
-    for (auto p : pref) if (std::find(fmts.begin(), fmts.end(), p) != fmts.end()) { fmt = p; break; }
-    if (!fmt) { Log("panel: no usable swapchain format"); return false; }
+    for (auto p : pref)
+        if (std::find(fmts.begin(), fmts.end(), p) != fmts.end()) {
+            fmt = p;
+            break;
+        }
+    if (!fmt) {
+        Log("panel: no usable swapchain format");
+        return false;
+    }
     swapRB = fmt == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB || fmt == DXGI_FORMAT_R8G8B8A8_UNORM;
 
     XrSwapchainCreateInfo ci{ XR_TYPE_SWAPCHAIN_CREATE_INFO };
     ci.usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT;
-    ci.format = fmt; ci.sampleCount = 1; ci.width = W; ci.height = H; ci.faceCount = 1; ci.arraySize = 1; ci.mipCount = 1;
+    ci.format = fmt;
+    ci.sampleCount = 1;
+    ci.width = W;
+    ci.height = H;
+    ci.faceCount = 1;
+    ci.arraySize = 1;
+    ci.mipCount = 1;
     XrResult r = f.CreateSwapchain(s, &ci, &sc);
-    if (XR_FAILED(r)) { Log("panel: xrCreateSwapchain failed %d", r); sc = XR_NULL_HANDLE; return false; }
-    w = W; h = H;
+    if (XR_FAILED(r)) {
+        Log("panel: xrCreateSwapchain failed %d", r);
+        sc = XR_NULL_HANDLE;
+        return false;
+    }
+    w = W;
+    h = H;
     uint32_t cnt = 0;
     f.EnumerateSwapchainImages(sc, 0, &cnt, nullptr);
     imgs.clear();
     if (g.api == 11) {
         std::vector<XrSwapchainImageD3D11KHR> im(cnt, { XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR });
         f.EnumerateSwapchainImages(sc, cnt, &cnt, (XrSwapchainImageBaseHeader*)im.data());
-        for (auto& i : im) imgs.push_back(i.texture);
+        for (auto& i : im)
+            imgs.push_back(i.texture);
     } else {
         std::vector<XrSwapchainImageD3D12KHR> im(cnt, { XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR });
         f.EnumerateSwapchainImages(sc, cnt, &cnt, (XrSwapchainImageBaseHeader*)im.data());
-        for (auto& i : im) imgs.push_back(i.texture);
+        for (auto& i : im)
+            imgs.push_back(i.texture);
     }
     Log("panel: swapchain %dx%d fmt %lld, %u images, api %d", W, H, (long long)fmt, cnt, g.api);
     return true;
@@ -94,13 +126,17 @@ bool Panel::Upload(Gfx& g, const XrFns& f, const std::vector<uint32_t>& px) {
     const uint32_t* src = px.data();
     if (swapRB) {
         tmp.resize(px.size());
-        for (size_t i = 0; i < px.size(); i++) { uint32_t c = px[i]; tmp[i] = (c & 0xFF00FF00) | ((c >> 16) & 0xFF) | ((c & 0xFF) << 16); }
+        for (size_t i = 0; i < px.size(); i++) {
+            uint32_t c = px[i];
+            tmp[i] = (c & 0xFF00FF00) | ((c >> 16) & 0xFF) | ((c & 0xFF) << 16);
+        }
         src = tmp.data();
     }
     uint32_t idx = 0;
     XrSwapchainImageAcquireInfo ai{ XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO };
     if (XR_FAILED(f.AcquireSwapchainImage(sc, &ai, &idx))) return false;
-    XrSwapchainImageWaitInfo wi{ XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO }; wi.timeout = XR_INFINITE_DURATION;
+    XrSwapchainImageWaitInfo wi{ XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
+    wi.timeout = XR_INFINITE_DURATION;
     f.WaitSwapchainImage(sc, &wi);
 
     if (g.api == 11) {
@@ -108,33 +144,53 @@ bool Panel::Upload(Gfx& g, const XrFns& f, const std::vector<uint32_t>& px) {
     } else if (g.api == 12 && g.fence) {
         auto* tex = (ID3D12Resource*)imgs[idx];
         D3D12_RESOURCE_DESC desc = tex->GetDesc();
-        D3D12_PLACED_SUBRESOURCE_FOOTPRINT fp{}; UINT64 total = 0;
+        D3D12_PLACED_SUBRESOURCE_FOOTPRINT fp{};
+        UINT64 total = 0;
         g.d12->GetCopyableFootprints(&desc, 0, 1, 0, &fp, nullptr, nullptr, &total);
         fence = g.fence;
-        int u = uploadNext; uploadNext = (uploadNext + 1) % Gfx::kRing;
+        int u = uploadNext;
+        uploadNext = (uploadNext + 1) % Gfx::kRing;
         g.WaitFence(uploadFence[u]); // this staging buffer's last copy (three uploads ago) is done
-        if (upload[u] && uploadSize[u] < total) { upload[u]->Release(); upload[u] = nullptr; }
+        if (upload[u] && uploadSize[u] < total) {
+            upload[u]->Release();
+            upload[u] = nullptr;
+        }
         if (!upload[u]) {
             D3D12_HEAP_PROPERTIES hp{ D3D12_HEAP_TYPE_UPLOAD };
             D3D12_RESOURCE_DESC bd{};
-            bd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER; bd.Width = total; bd.Height = 1; bd.DepthOrArraySize = 1;
-            bd.MipLevels = 1; bd.SampleDesc.Count = 1; bd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-            if (SUCCEEDED(g.d12->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &bd, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&upload[u])))) uploadSize[u] = total;
+            bd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+            bd.Width = total;
+            bd.Height = 1;
+            bd.DepthOrArraySize = 1;
+            bd.MipLevels = 1;
+            bd.SampleDesc.Count = 1;
+            bd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+            if (SUCCEEDED(g.d12->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &bd, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                                         IID_PPV_ARGS(&upload[u]))))
+                uploadSize[u] = total;
         }
-        int k = g.slot; g.slot = (g.slot + 1) % Gfx::kRing;
+        int k = g.slot;
+        g.slot = (g.slot + 1) % Gfx::kRing;
         g.WaitFence(g.slotFence[k]); // this command allocator's last use is done
-        uint8_t* m = nullptr; D3D12_RANGE rr{ 0, 0 };
+        uint8_t* m = nullptr;
+        D3D12_RANGE rr{ 0, 0 };
         if (upload[u] && g.alloc[k] && g.list[k] && SUCCEEDED(upload[u]->Map(0, &rr, (void**)&m)) && m) {
-            for (int y = 0; y < h; y++) memcpy(m + fp.Offset + (size_t)y * fp.Footprint.RowPitch, src + (size_t)y * w, (size_t)w * 4);
+            for (int y = 0; y < h; y++)
+                memcpy(m + fp.Offset + (size_t)y * fp.Footprint.RowPitch, src + (size_t)y * w, (size_t)w * 4);
             upload[u]->Unmap(0, nullptr);
             g.alloc[k]->Reset();
             g.list[k]->Reset(g.alloc[k], nullptr);
-            D3D12_RESOURCE_BARRIER b{}; b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-            b.Transition.pResource = tex; b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-            b.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET; b.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+            D3D12_RESOURCE_BARRIER b{};
+            b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            b.Transition.pResource = tex;
+            b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+            b.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+            b.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
             g.list[k]->ResourceBarrier(1, &b);
-            D3D12_TEXTURE_COPY_LOCATION dst{ tex, D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX }; dst.SubresourceIndex = 0;
-            D3D12_TEXTURE_COPY_LOCATION sl{ upload[u], D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT }; sl.PlacedFootprint = fp;
+            D3D12_TEXTURE_COPY_LOCATION dst{ tex, D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX };
+            dst.SubresourceIndex = 0;
+            D3D12_TEXTURE_COPY_LOCATION sl{ upload[u], D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT };
+            sl.PlacedFootprint = fp;
             g.list[k]->CopyTextureRegion(&dst, 0, 0, 0, &sl, nullptr);
             std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
             g.list[k]->ResourceBarrier(1, &b);
@@ -143,7 +199,8 @@ bool Panel::Upload(Gfx& g, const XrFns& f, const std::vector<uint32_t>& px) {
             g.queue->ExecuteCommandLists(1, lists);
             // No CPU wait: the copy is queued before the image is released, so the compositor sees it in order.
             g.queue->Signal(g.fence, ++g.fenceVal);
-            g.slotFence[k] = g.fenceVal; uploadFence[u] = g.fenceVal;
+            g.slotFence[k] = g.fenceVal;
+            uploadFence[u] = g.fenceVal;
         }
     }
     XrSwapchainImageReleaseInfo ri{ XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO };
@@ -156,12 +213,19 @@ void Panel::Destroy(const XrFns& f) {
     if (sc != XR_NULL_HANDLE && f.DestroySwapchain) f.DestroySwapchain(sc);
     sc = XR_NULL_HANDLE;
     if (fence) { // the GPU may still be copying from our staging buffers
-        UINT64 v = 0; for (auto f2 : uploadFence) v = std::max(v, f2);
+        UINT64 v = 0;
+        for (auto f2 : uploadFence)
+            v = std::max(v, f2);
         if (fence->GetCompletedValue() < v) fence->SetEventOnCompletion(v, nullptr); // nullptr event: blocks until done
     }
-    for (int i = 0; i < Gfx::kRing; i++) { if (upload[i]) upload[i]->Release(); upload[i] = nullptr; uploadFence[i] = uploadSize[i] = 0; }
+    for (int i = 0; i < Gfx::kRing; i++) {
+        if (upload[i]) upload[i]->Release();
+        upload[i] = nullptr;
+        uploadFence[i] = uploadSize[i] = 0;
+    }
     uploadNext = 0;
-    imgs.clear(); ready = false;
+    imgs.clear();
+    ready = false;
 }
 
 // ---------- drawing ----------
@@ -195,9 +259,11 @@ static Image* Icon(const std::string& path) {
 
 static void Grab(Bitmap& bmp, std::vector<uint32_t>& out, int w, int h) {
     out.resize((size_t)w * h);
-    BitmapData bd; Rect r(0, 0, w, h);
+    BitmapData bd;
+    Rect r(0, 0, w, h);
     if (bmp.LockBits(&r, ImageLockModeRead, PixelFormat32bppPARGB, &bd) == Ok) {
-        for (int y = 0; y < h; y++) memcpy(&out[(size_t)y * w], (uint8_t*)bd.Scan0 + (size_t)y * bd.Stride, (size_t)w * 4);
+        for (int y = 0; y < h; y++)
+            memcpy(&out[(size_t)y * w], (uint8_t*)bd.Scan0 + (size_t)y * bd.Stride, (size_t)w * 4);
         bmp.UnlockBits(&bd);
     }
 }
@@ -227,7 +293,9 @@ void DrawWheel(std::vector<uint32_t>& out, int S, const Profile& p, const WheelV
     float seg = n ? 360.f / n : 360.f;
     auto font = MakeFont(st, S * 0.045f * st.fontScale, FontStyleBold);
     auto smallFont = MakeFont(st, S * 0.034f * st.fontScale, FontStyleRegular);
-    StringFormat fmt; fmt.SetAlignment(StringAlignmentCenter); fmt.SetLineAlignment(StringAlignmentCenter);
+    StringFormat fmt;
+    fmt.SetAlignment(StringAlignmentCenter);
+    fmt.SetLineAlignment(StringAlignmentCenter);
     SolidBrush textB{ Color(st.text) }, accentB{ Color(st.accent) };
     Pen border(Color(st.border), 2.f);
 
@@ -307,13 +375,14 @@ void DrawToast(std::vector<uint32_t>& out, int W, int H, const std::string& text
     Pen pen(Color(st.accent), 2.f);
     g.DrawPath(&pen, &path);
     auto font = MakeFont(st, H * 0.38f, FontStyleBold);
-    StringFormat fmt; fmt.SetAlignment(StringAlignmentCenter); fmt.SetLineAlignment(StringAlignmentCenter);
+    StringFormat fmt;
+    fmt.SetAlignment(StringAlignmentCenter);
+    fmt.SetLineAlignment(StringAlignmentCenter);
     SolidBrush tb{ Color(st.text) };
     RectF rc(0, 0, (float)W, (float)H);
     g.DrawString(Utf8ToW(text).c_str(), -1, font.get(), rc, &fmt, &tb);
     Grab(bmp, out, W, H);
 }
-
 
 // Touch cursor: a ring that thickens and brightens with closeness (level 0..7), a filled dot when touching (8).
 void DrawCursor(std::vector<uint32_t>& out, int S, int level, const Style& st) {
@@ -372,7 +441,8 @@ void DrawFinger(std::vector<uint32_t>& out, int W, int H, const Style& st) {
     path.CloseFigure();
     LinearGradientBrush fill(PointF(0, top), PointF(0, bot), Color(200, 255, 255, 255), Color(40, 255, 255, 255));
     g.FillPath(&fill, &path);
-    LinearGradientBrush edgeB(PointF(0, top), PointF(0, bot), Color(230, (BYTE)(c >> 16), (BYTE)(c >> 8), (BYTE)c), Color(80, (BYTE)(c >> 16), (BYTE)(c >> 8), (BYTE)c));
+    LinearGradientBrush edgeB(PointF(0, top), PointF(0, bot), Color(230, (BYTE)(c >> 16), (BYTE)(c >> 8), (BYTE)c),
+                              Color(80, (BYTE)(c >> 16), (BYTE)(c >> 8), (BYTE)c));
     Pen edge(&edgeB, W * 0.09f);
     g.DrawPath(&edge, &path);
     Pen nail(Color(110, 255, 255, 255), W * 0.04f); // fingernail outline
@@ -408,21 +478,28 @@ void DrawKeyboard(std::vector<uint32_t>& out, int W, int Hp, const KeyboardView&
     g.SetSmoothingMode(SmoothingModeAntiAlias);
     g.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);
     g.Clear(Color(0, 0, 0, 0));
-    float uw, uh; const auto& keys = KbLayout(uw, uh);
+    float uw, uh;
+    const auto& keys = KbLayout(uw, uh);
     float pad = W * 0.006f;
     float sx = (W - 2 * pad) / uw, sy = (Hp - 2 * pad) / uh;
 
     auto roundRect = [](GraphicsPath& p, float x, float y, float w, float h, float r) {
-        p.AddArc(x, y, r, r, 180, 90); p.AddArc(x + w - r, y, r, r, 270, 90);
-        p.AddArc(x + w - r, y + h - r, r, r, 0, 90); p.AddArc(x, y + h - r, r, r, 90, 90); p.CloseFigure();
+        p.AddArc(x, y, r, r, 180, 90);
+        p.AddArc(x + w - r, y, r, r, 270, 90);
+        p.AddArc(x + w - r, y + h - r, r, r, 0, 90);
+        p.AddArc(x, y + h - r, r, r, 90, 90);
+        p.CloseFigure();
     };
-    GraphicsPath bgp; roundRect(bgp, 0, 0, (float)W - 1, (float)Hp - 1, sy * 0.5f);
+    GraphicsPath bgp;
+    roundRect(bgp, 0, 0, (float)W - 1, (float)Hp - 1, sy * 0.5f);
     SolidBrush bg{ Color(st.bg) };
     g.FillPath(&bg, &bgp);
 
     auto font = MakeFont(st, sy * 0.36f * st.fontScale, FontStyleBold);
     auto smallFont = MakeFont(st, sy * 0.26f * st.fontScale, FontStyleBold);
-    StringFormat fmt; fmt.SetAlignment(StringAlignmentCenter); fmt.SetLineAlignment(StringAlignmentCenter);
+    StringFormat fmt;
+    fmt.SetAlignment(StringAlignmentCenter);
+    fmt.SetLineAlignment(StringAlignmentCenter);
     SolidBrush textB{ Color(st.text) }, accentB{ Color(st.accent) };
     Pen border(Color(st.border), 2.f);
     bool showUpper = kb.shift != kb.caps;
@@ -432,20 +509,24 @@ void DrawKeyboard(std::vector<uint32_t>& out, int W, int Hp, const KeyboardView&
         float x = pad + k.x * sx + sx * 0.05f, y = pad + k.y * sy + sy * 0.06f;
         float w = k.w * sx - sx * 0.10f, h = k.h * sy - sy * 0.12f;
         bool hov = kb.hover[0] == i || kb.hover[1] == i;
-        bool latched = (k.kind == KB_SHIFT && kb.shift) || (k.kind == KB_CAPS && kb.caps) ||
-                       (k.kind == KB_CTRL && kb.ctrl) || (k.kind == KB_ALT && kb.alt) || (k.kind == KB_MOVE && kb.moving);
+        bool latched = (k.kind == KB_SHIFT && kb.shift) || (k.kind == KB_CAPS && kb.caps) || (k.kind == KB_CTRL && kb.ctrl) ||
+                       (k.kind == KB_ALT && kb.alt) || (k.kind == KB_MOVE && kb.moving);
         uint32_t col = st.segment;
         if (latched) col = st.accent & 0xA0FFFFFF;
         if (hov) col = st.hover;
         if (kb.pressed == i) col = 0xFFFFFFFF;
-        GraphicsPath kp; roundRect(kp, x, y, w, h, sy * 0.22f);
+        GraphicsPath kp;
+        roundRect(kp, x, y, w, h, sy * 0.22f);
         SolidBrush kbB{ Color(col) };
         g.FillPath(&kbB, &kp);
         if (hov) g.DrawPath(&border, &kp);
         std::string label = k.label;
-        if (k.letter) label = showUpper ? k.shiftLabel : k.label;
-        else if (k.kind == KB_KEY && kb.shift) label = k.shiftLabel;
-        else if (k.kind == KB_MOVE && kb.moving) label = "Done";
+        if (k.letter)
+            label = showUpper ? k.shiftLabel : k.label;
+        else if (k.kind == KB_KEY && kb.shift)
+            label = k.shiftLabel;
+        else if (k.kind == KB_MOVE && kb.moving)
+            label = "Done";
         SolidBrush darkB{ Color(0xFF101418) };
         RectF rc(x, y, w, h);
         bool big = label.size() <= 2 || (unsigned char)label[0] >= 0x80;
@@ -455,25 +536,34 @@ void DrawKeyboard(std::vector<uint32_t>& out, int W, int Hp, const KeyboardView&
     Grab(bmp, out, W, Hp);
 }
 
-void DrawList(std::vector<uint32_t>& out, int W, int H, const std::string& title, const std::vector<std::string>& labels,
-              int cols, int hover, int pressed, const Style& st) {
+void DrawList(std::vector<uint32_t>& out, int W, int H, const std::string& title, const std::vector<std::string>& labels, int cols,
+              int hover, int pressed, const Style& st) {
     EnsureGdi();
     Bitmap bmp(W, H, PixelFormat32bppPARGB);
     Graphics g(&bmp);
     g.SetSmoothingMode(SmoothingModeAntiAlias);
     g.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);
     g.Clear(Color(0, 0, 0, 0));
-    std::vector<Cell> cells; Cell hd;
+    std::vector<Cell> cells;
+    Cell hd;
     ListLayout((int)labels.size(), cols, (float)H / W, !title.empty(), cells, hd);
     auto roundRect = [](GraphicsPath& gp, float x, float y, float w, float h, float r) {
         r = std::max(1.f, std::min(r, std::min(w, h)));
-        gp.AddArc(x, y, r, r, 180, 90); gp.AddArc(x + w - r, y, r, r, 270, 90);
-        gp.AddArc(x + w - r, y + h - r, r, r, 0, 90); gp.AddArc(x, y + h - r, r, r, 90, 90); gp.CloseFigure();
+        gp.AddArc(x, y, r, r, 180, 90);
+        gp.AddArc(x + w - r, y, r, r, 270, 90);
+        gp.AddArc(x + w - r, y + h - r, r, r, 0, 90);
+        gp.AddArc(x, y + h - r, r, r, 90, 90);
+        gp.CloseFigure();
     };
-    GraphicsPath bgp; roundRect(bgp, 1, 1, W - 2.f, H - 2.f, std::min(W, H) * 0.12f);
-    SolidBrush bg{ Color(st.bg) }; g.FillPath(&bg, &bgp);
-    Pen edge(Color(st.border), 2.f); g.DrawPath(&edge, &bgp);
-    StringFormat fmt; fmt.SetAlignment(StringAlignmentCenter); fmt.SetLineAlignment(StringAlignmentCenter);
+    GraphicsPath bgp;
+    roundRect(bgp, 1, 1, W - 2.f, H - 2.f, std::min(W, H) * 0.12f);
+    SolidBrush bg{ Color(st.bg) };
+    g.FillPath(&bg, &bgp);
+    Pen edge(Color(st.border), 2.f);
+    g.DrawPath(&edge, &bgp);
+    StringFormat fmt;
+    fmt.SetAlignment(StringAlignmentCenter);
+    fmt.SetLineAlignment(StringAlignmentCenter);
     fmt.SetTrimming(StringTrimmingEllipsisCharacter);
     SolidBrush textB{ Color(st.text) }, accentB{ Color(st.accent) }, darkB{ Color(0xFF101418) };
     if (!title.empty()) {
@@ -490,8 +580,10 @@ void DrawList(std::vector<uint32_t>& out, int W, int H, const std::string& title
         float x = c.x * W, y = c.y * H, w = c.w * W, h = c.h * H;
         uint32_t col = hover == i ? st.hover : st.segment;
         if (pressed == i) col = 0xFFFFFFFF;
-        GraphicsPath cp; roundRect(cp, x, y, w, h, h * 0.25f);
-        SolidBrush cb{ Color(col) }; g.FillPath(&cb, &cp);
+        GraphicsPath cp;
+        roundRect(cp, x, y, w, h, h * 0.25f);
+        SolidBrush cb{ Color(col) };
+        g.FillPath(&cb, &cp);
         if (hover == i) g.DrawPath(&hovPen, &cp);
         const std::string& lab = labels[i];
         size_t nl = lab.find('\n');
@@ -515,24 +607,35 @@ void DrawWrist(std::vector<uint32_t>& out, int S, const Profile& p, const WristS
     g.SetSmoothingMode(SmoothingModeAntiAlias);
     g.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);
     g.Clear(Color(0, 0, 0, 0));
-    if (!v.wheel) { Grab(bmp, out, S, S); return; }
+    if (!v.wheel) {
+        Grab(bmp, out, S, S);
+        return;
+    }
     const Style& st = p.style;
     int n = (int)v.wheel->items.size() + (v.nested ? 1 : 0);
-    std::vector<Cell> cells; Cell hd;
+    std::vector<Cell> cells;
+    Cell hd;
     WristLayout(n, ws.columns, cells, hd);
     auto roundRect = [](GraphicsPath& gp, float x, float y, float w, float h, float r) {
-        gp.AddArc(x, y, r, r, 180, 90); gp.AddArc(x + w - r, y, r, r, 270, 90);
-        gp.AddArc(x + w - r, y + h - r, r, r, 0, 90); gp.AddArc(x, y + h - r, r, r, 90, 90); gp.CloseFigure();
+        gp.AddArc(x, y, r, r, 180, 90);
+        gp.AddArc(x + w - r, y, r, r, 270, 90);
+        gp.AddArc(x + w - r, y + h - r, r, r, 0, 90);
+        gp.AddArc(x, y + h - r, r, r, 90, 90);
+        gp.CloseFigure();
     };
     float bottom = hd.y + hd.h;
-    for (auto& c : cells) bottom = std::max(bottom, c.y + c.h);
-    GraphicsPath bgp; roundRect(bgp, 1, 1, S - 2.f, (bottom + 0.03f) * S - 2.f, S * 0.06f);
+    for (auto& c : cells)
+        bottom = std::max(bottom, c.y + c.h);
+    GraphicsPath bgp;
+    roundRect(bgp, 1, 1, S - 2.f, (bottom + 0.03f) * S - 2.f, S * 0.06f);
     SolidBrush bg{ Color(st.bg) };
     g.FillPath(&bg, &bgp);
     Pen edge(Color(st.border), 2.f);
     g.DrawPath(&edge, &bgp);
 
-    StringFormat fmt; fmt.SetAlignment(StringAlignmentCenter); fmt.SetLineAlignment(StringAlignmentCenter);
+    StringFormat fmt;
+    fmt.SetAlignment(StringAlignmentCenter);
+    fmt.SetLineAlignment(StringAlignmentCenter);
     SolidBrush textB{ Color(st.text) }, accentB{ Color(st.accent) }, darkB{ Color(0xFF101418) };
     auto headFont = MakeFont(st, S * 0.055f * st.fontScale, FontStyleBold);
     RectF hr(hd.x * S, hd.y * S, hd.w * S, hd.h * S);
@@ -552,7 +655,8 @@ void DrawWrist(std::vector<uint32_t>& out, int S, const Profile& p, const WristS
         if (isOn) col = st.toggled;
         if (hov) col = st.hover;
         if (v.pressed == i) col = 0xFFFFFFFF;
-        GraphicsPath cp; roundRect(cp, x, y, w, h, h * 0.22f);
+        GraphicsPath cp;
+        roundRect(cp, x, y, w, h, h * 0.22f);
         SolidBrush cb{ Color(col) };
         g.FillPath(&cb, &cp);
         if (hov) g.DrawPath(&hovPen, &cp);

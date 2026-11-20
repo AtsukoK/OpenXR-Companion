@@ -37,13 +37,16 @@ private:
     static constexpr XrTime kRecordMatchNs = 3000000; // a record within 3 ms of a frame's time matches it
     static constexpr double kStatsPeriodSec = 10.0;
 
-    struct TimedTurn { XrTime t = 0; XrQuaternionf steadied{ 0, 0, 0, 1 }; };
+    struct TimedTurn {
+        XrTime t = 0;
+        XrQuaternionf steadied{ 0, 0, 0, 1 };
+    };
     // The head, real and steadied, at one time in one space.
     struct HeadRecord {
         XrTime t = 0;
         XrSpace space = XR_NULL_HANDLE;
-        XrPosef real{ {0,0,0,1}, {0,0,0} };
-        XrPosef steadied{ {0,0,0,1}, {0,0,0} };
+        XrPosef real{ { 0, 0, 0, 1 }, { 0, 0, 0 } };
+        XrPosef steadied{ { 0, 0, 0, 1 }, { 0, 0, 0 } };
     };
     struct Stats {
         double since = 0;

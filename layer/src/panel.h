@@ -40,14 +40,15 @@ public:
     bool Create(XrSession s, Gfx& g, const XrFns& f, int w, int h);
     bool Upload(Gfx& g, const XrFns& f, const std::vector<uint32_t>& bgraPremul);
     void Destroy(const XrFns& f);
+
 private:
     bool swapRB = false;
     std::vector<void*> imgs;
-    ID3D12Resource* upload[Gfx::kRing]{};  // D3D12: one staging buffer per ring slot of this panel
+    ID3D12Resource* upload[Gfx::kRing]{}; // D3D12: one staging buffer per ring slot of this panel
     UINT64 uploadFence[Gfx::kRing]{};
     UINT64 uploadSize[Gfx::kRing]{};
     int uploadNext = 0;
-    ID3D12Fence* fence = nullptr;          // the Gfx fence (outlives the panel), for Destroy
+    ID3D12Fence* fence = nullptr; // the Gfx fence (outlives the panel), for Destroy
 };
 
 // CPU drawing (GDI+), output is premultiplied BGRA.
@@ -61,5 +62,5 @@ void DrawPointerDot(std::vector<uint32_t>& out, int size, const Style& st);
 void DrawBeam(std::vector<uint32_t>& out, int w, int h, const Style& st);
 void DrawShutdown();
 // Buttons in a grid (see ListLayout); labels may hold a second line after '\n'.
-void DrawList(std::vector<uint32_t>& out, int w, int h, const std::string& title, const std::vector<std::string>& labels,
-              int cols, int hover, int pressed, const Style& st);
+void DrawList(std::vector<uint32_t>& out, int w, int h, const std::string& title, const std::vector<std::string>& labels, int cols,
+              int hover, int pressed, const Style& st);

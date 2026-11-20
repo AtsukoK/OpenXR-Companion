@@ -1,0 +1,21 @@
+# Layer code style. Run: clang-format -i src/*.cpp src/*.h test/*.cpp
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 140
+AccessModifierOffset: -4
+AllowShortBlocksOnASingleLine: Never
+AllowShortFunctionsOnASingleLine: InlineOnly
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortLambdasOnASingleLine: Inline
+AlwaysBreakTemplateDeclarations: Yes
+BreakBeforeBraces: Attach
+PointerAlignment: Left
+SortIncludes: false
+IndentCaseLabels: false
+NamespaceIndentation: None
+Cpp11BracedListStyle: false
+SpaceBeforeCpp11BracedList: false
+FixNamespaceComments: true
+ReflowComments: false

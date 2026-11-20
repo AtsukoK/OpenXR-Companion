@@ -6,11 +6,15 @@ const char* const kKindName[2] = { "grip", "aim" };
 
 std::string FlagText(uint64_t f) {
     std::string s;
-    if (!(f & XR_SPACE_LOCATION_POSITION_VALID_BIT)) s += "position LOST";
-    else s += (f & XR_SPACE_LOCATION_POSITION_TRACKED_BIT) ? "position tracked" : "position guessed";
+    if (!(f & XR_SPACE_LOCATION_POSITION_VALID_BIT))
+        s += "position LOST";
+    else
+        s += (f & XR_SPACE_LOCATION_POSITION_TRACKED_BIT) ? "position tracked" : "position guessed";
     s += ", ";
-    if (!(f & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)) s += "angle LOST";
-    else s += (f & XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT) ? "angle tracked" : "angle guessed";
+    if (!(f & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT))
+        s += "angle LOST";
+    else
+        s += (f & XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT) ? "angle tracked" : "angle guessed";
     return s;
 }
 } // namespace
@@ -50,10 +54,9 @@ void TrackingLog::Read(int hand, int kind, XrTime t, uint64_t flags, const XrPos
         if (jump > kJumpMetres && gap < kJumpWithinSec) {
             d.jumps++;
             if (d.lines++ < kMaxLinesPerPeriod) {
-                Log("tracking: %s %s JUMPED %.0f cm in %.0f ms (from %.2f %.2f %.2f to %.2f %.2f %.2f), %s",
-                    hn, kn, jump * 100.f, gap * 1000.0,
-                    d.prev.position.x, d.prev.position.y, d.prev.position.z,
-                    raw.position.x, raw.position.y, raw.position.z, FlagText(flags).c_str());
+                Log("tracking: %s %s JUMPED %.0f cm in %.0f ms (from %.2f %.2f %.2f to %.2f %.2f %.2f), %s", hn, kn, jump * 100.f,
+                    gap * 1000.0, d.prev.position.x, d.prev.position.y, d.prev.position.z, raw.position.x, raw.position.y, raw.position.z,
+                    FlagText(flags).c_str());
             }
         }
     }
@@ -75,7 +78,10 @@ void TrackingLog::Moved(int hand, int kind, const XrPosef& raw, const XrPosef& o
 }
 
 void TrackingLog::Summary(double now) {
-    if (periodStart_ == 0) { periodStart_ = now; return; }
+    if (periodStart_ == 0) {
+        periodStart_ = now;
+        return;
+    }
     if (now - periodStart_ < kPeriodSec) return;
     periodStart_ = now;
     for (int h = 0; h < 2; h++) {
@@ -86,8 +92,8 @@ void TrackingLog::Summary(double now) {
             Log("tracking 10 s: %s %s reads %d (older time %d, not fully tracked %d, tracking changes %d, jumps %d%s); "
                 "layer moved it %.1f cm avg / %.1f max, turned %.1f deg avg / %.1f max",
                 kHandName[h], kKindName[k], d.reads, d.older, d.untracked, d.changes, d.jumps,
-                d.lines > kMaxLinesPerPeriod ? ", some lines not written" : "",
-                d.movedSum * 100.f / n, d.movedMax * 100.f, d.turnedSum / n, d.turnedMax);
+                d.lines > kMaxLinesPerPeriod ? ", some lines not written" : "", d.movedSum * 100.f / n, d.movedMax * 100.f, d.turnedSum / n,
+                d.turnedMax);
             d.ResetPeriod();
         }
     }

@@ -12,12 +12,18 @@ bool ParseGameInputPath(const std::string& path, int& hand, int& comp, InputFeat
         if (c < 0 || part == "system") return false;
         hand = h;
         comp = c;
-        if (feat == "touch") feature = InputFeature::Touch;
-        else if (feat.empty() && c == C_STICK) feature = InputFeature::Vector;
-        else if (feat == "x") feature = InputFeature::X;
-        else if (feat == "y") feature = InputFeature::Y;
-        else if (feat == "click" || feat == "value" || feat == "force" || feat.empty()) feature = InputFeature::Value;
-        else return false;
+        if (feat == "touch")
+            feature = InputFeature::Touch;
+        else if (feat.empty() && c == C_STICK)
+            feature = InputFeature::Vector;
+        else if (feat == "x")
+            feature = InputFeature::X;
+        else if (feat == "y")
+            feature = InputFeature::Y;
+        else if (feat == "click" || feat == "value" || feat == "force" || feat.empty())
+            feature = InputFeature::Value;
+        else
+            return false;
         return true;
     }
     return false;
@@ -64,8 +70,10 @@ GameInputFilter::Verdict GameInputFilter::Evaluate(const Engine& eng, XrAction a
             v.value = o;
             v.feature = b.feature;
         }
-        if (eng.Blocked(b.hand, b.comp)) blocked++;
-        else v.freeHand = b.hand;
+        if (eng.Blocked(b.hand, b.comp))
+            blocked++;
+        else
+            v.freeHand = b.hand;
     }
     v.blockedAll = bound > 0 && blocked == bound;
     v.blockedSome = blocked > 0 && blocked < bound;
@@ -107,7 +115,10 @@ struct BoolValue {
     using T = XrBool32;
     static T Zero() { return XR_FALSE; }
     static T FromOverride(const Override& o, InputFeature f) { return f == InputFeature::Touch ? o.touch : o.press; }
-    static void Floats(T v, float& a, float& b) { a = v ? 1.f : 0.f; b = 0; }
+    static void Floats(T v, float& a, float& b) {
+        a = v ? 1.f : 0.f;
+        b = 0;
+    }
 };
 struct FloatValue {
     using State = XrActionStateFloat;
@@ -116,13 +127,20 @@ struct FloatValue {
     static T Zero() { return 0.f; }
     static T FromOverride(const Override& o, InputFeature f) {
         switch (f) {
-        case InputFeature::X: return o.x;
-        case InputFeature::Y: return o.y;
-        case InputFeature::Touch: return o.touch ? 1.f : 0.f;
-        default: return o.value;
+        case InputFeature::X:
+            return o.x;
+        case InputFeature::Y:
+            return o.y;
+        case InputFeature::Touch:
+            return o.touch ? 1.f : 0.f;
+        default:
+            return o.value;
         }
     }
-    static void Floats(T v, float& a, float& b) { a = v; b = 0; }
+    static void Floats(T v, float& a, float& b) {
+        a = v;
+        b = 0;
+    }
 };
 struct VectorValue {
     using State = XrActionStateVector2f;
@@ -130,7 +148,10 @@ struct VectorValue {
     using T = XrVector2f;
     static T Zero() { return { 0, 0 }; }
     static T FromOverride(const Override& o, InputFeature) { return { o.x, o.y }; }
-    static void Floats(T v, float& a, float& b) { a = v.x; b = v.y; }
+    static void Floats(T v, float& a, float& b) {
+        a = v.x;
+        b = v.y;
+    }
 };
 
 // Shared by the three Filter overloads.
@@ -159,23 +180,29 @@ void FilterState(const Verdict& e, XrPath sub, XrTime now, typename V::State& st
 }
 } // namespace
 
-void GameInputFilter::Filter(const Engine& eng, XrAction a, XrPath sub, XrTime now, XrActionStateBoolean& st, const Requery<XrActionStateBoolean>& requery) {
+void GameInputFilter::Filter(const Engine& eng, XrAction a, XrPath sub, XrTime now, XrActionStateBoolean& st,
+                             const Requery<XrActionStateBoolean>& requery) {
     Verdict e = Evaluate(eng, a, sub);
     if (!e.any) return;
-    FilterState<BoolValue>(e, sub, now, st, e.freeHand >= 0 ? handPath_[e.freeHand] : XR_NULL_PATH, requery,
-        [&] { return CanRequery(a, e.freeHand); }, [&](float v0, float v1) { return Changed(a, sub, v0, v1); });
+    FilterState<BoolValue>(
+        e, sub, now, st, e.freeHand >= 0 ? handPath_[e.freeHand] : XR_NULL_PATH, requery, [&] { return CanRequery(a, e.freeHand); },
+        [&](float v0, float v1) { return Changed(a, sub, v0, v1); });
 }
 
-void GameInputFilter::Filter(const Engine& eng, XrAction a, XrPath sub, XrTime now, XrActionStateFloat& st, const Requery<XrActionStateFloat>& requery) {
+void GameInputFilter::Filter(const Engine& eng, XrAction a, XrPath sub, XrTime now, XrActionStateFloat& st,
+                             const Requery<XrActionStateFloat>& requery) {
     Verdict e = Evaluate(eng, a, sub);
     if (!e.any) return;
-    FilterState<FloatValue>(e, sub, now, st, e.freeHand >= 0 ? handPath_[e.freeHand] : XR_NULL_PATH, requery,
-        [&] { return CanRequery(a, e.freeHand); }, [&](float v0, float v1) { return Changed(a, sub, v0, v1); });
+    FilterState<FloatValue>(
+        e, sub, now, st, e.freeHand >= 0 ? handPath_[e.freeHand] : XR_NULL_PATH, requery, [&] { return CanRequery(a, e.freeHand); },
+        [&](float v0, float v1) { return Changed(a, sub, v0, v1); });
 }
 
-void GameInputFilter::Filter(const Engine& eng, XrAction a, XrPath sub, XrTime now, XrActionStateVector2f& st, const Requery<XrActionStateVector2f>& requery) {
+void GameInputFilter::Filter(const Engine& eng, XrAction a, XrPath sub, XrTime now, XrActionStateVector2f& st,
+                             const Requery<XrActionStateVector2f>& requery) {
     Verdict e = Evaluate(eng, a, sub);
     if (!e.any) return;
-    FilterState<VectorValue>(e, sub, now, st, e.freeHand >= 0 ? handPath_[e.freeHand] : XR_NULL_PATH, requery,
-        [&] { return CanRequery(a, e.freeHand); }, [&](float v0, float v1) { return Changed(a, sub, v0, v1); });
+    FilterState<VectorValue>(
+        e, sub, now, st, e.freeHand >= 0 ? handPath_[e.freeHand] : XR_NULL_PATH, requery, [&] { return CanRequery(a, e.freeHand); },
+        [&](float v0, float v1) { return Changed(a, sub, v0, v1); });
 }

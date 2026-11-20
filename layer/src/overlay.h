@@ -55,7 +55,10 @@ public:
     // Draws what is visible and appends its layers. Called from xrEndFrame with the layer's lock held.
     void Render(const OverlayContext& c, LayerList& layers);
     // The head in the local space, for hiding the screen when seen from behind.
-    void SetHead(const XrPosef& head, bool valid) { head_ = head; headValid_ = valid; }
+    void SetHead(const XrPosef& head, bool valid) {
+        head_ = head;
+        headValid_ = valid;
+    }
     // A new profile: redraw everything with its style.
     void InvalidateAll();
     // The session ends: free every swapchain and stop capturing.
@@ -78,7 +81,7 @@ private:
 
     Engine& eng_;
     std::vector<uint32_t> scratch_; // shared pixel buffer for redraws
-    XrPosef head_{ {0,0,0,1}, {0,0,0} };
+    XrPosef head_{ { 0, 0, 0, 1 }, { 0, 0, 0 } };
     bool headValid_ = false;
 
     // mirrored screen

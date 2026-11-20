@@ -22,9 +22,9 @@ public:
     // What the game's hand poses are moved by right now (a copy taken from the engine each frame).
     struct Settings {
         bool on = false;
-        bool has[2][2]{};      // [hand][kind]: an offset to apply
-        XrPosef pose[2][2]{};  // [hand][kind]: the offset, in the space's own frame
-        float steadying = 0;   // 0 = off
+        bool has[2][2]{};     // [hand][kind]: an offset to apply
+        XrPosef pose[2][2]{}; // [hand][kind]: the offset, in the space's own frame
+        float steadying = 0;  // 0 = off
     };
     void SetSettings(const Settings& s);
 
@@ -33,16 +33,19 @@ public:
     void Clear();
 
     // Called for every pose the game locates. Changes the pose (and linear velocity) in place.
-    void Apply(XrSpace space, XrSpace base, XrTime t, XrSpaceLocationFlags flags, XrPosef& pose,
-               const XrSpaceVelocityFlags* velocityFlags, XrVector3f* linear, const XrVector3f* angular);
+    void Apply(XrSpace space, XrSpace base, XrTime t, XrSpaceLocationFlags flags, XrPosef& pose, const XrSpaceVelocityFlags* velocityFlags,
+               XrVector3f* linear, const XrVector3f* angular);
 
 private:
-    struct HandSpace { int hand; PoseKind kind; };
+    struct HandSpace {
+        int hand;
+        PoseKind kind;
+    };
     using SpacePair = std::pair<uint64_t, uint64_t>; // (space, base)
 
     std::mutex mx_;
     Settings set_;
     std::unordered_map<uint64_t, HandSpace> spaces_;
-    std::map<SpacePair, SpaceSteady> steadiers_;     // one filter per (space, base) the game asks for
+    std::map<SpacePair, SpaceSteady> steadiers_; // one filter per (space, base) the game asks for
     TrackingLog log_;
 };

@@ -8,15 +8,24 @@
 void Engine::UpdateAdjustWheel() {
     if (grab.target == GrabTarget::Wheel && (!adjust || !wr.open)) grab = GrabRun{};
     // Adjust mode shows the main wheel by itself (again shortly after it is closed), following the hand.
-    if (adjust && wr.open) adjustClosedAt = -1;
-    else if (adjust && !kb.visible && prof->style.anchor.rfind("hand", 0) == 0) { // wheels in front of you aren't brought out: they got in the way (open one with its button to place it)
+    if (adjust && wr.open)
+        adjustClosedAt = -1;
+    else if (adjust && !kb.visible &&
+             prof->style.anchor.rfind("hand", 0) ==
+                 0) { // wheels in front of you aren't brought out: they got in the way (open one with its button to place it)
         if (adjustClosedAt < 0) adjustClosedAt = now;
         if (now - adjustClosedAt > 0.6 && !prof->wheels.empty()) {
             int hand = fr.h[1].gripValid ? 1 : 0;
-            Action a; a.type = ActType::Wheel; a.confirm = "button";
+            Action a;
+            a.type = ActType::Wheel;
+            a.confirm = "button";
             a.wheel = prof->wheels.count(hand ? "right" : "left") ? (hand ? "right" : "left") : prof->wheels.begin()->first;
             for (auto& b : prof->bindings) // prefer the wheel this hand really opens
-                if (b.enabled && b.action.type == ActType::Wheel && !b.chord.empty() && b.chord.back().hand == hand && prof->wheels.count(b.action.wheel)) { a.wheel = b.action.wheel; break; }
+                if (b.enabled && b.action.type == ActType::Wheel && !b.chord.empty() && b.chord.back().hand == hand &&
+                    prof->wheels.count(b.action.wheel)) {
+                    a.wheel = b.action.wheel;
+                    break;
+                }
             OpenWheel(a, -1, hand);
             wr.locked = false;
             adjustClosedAt = -1;
@@ -45,25 +54,31 @@ void Engine::UpdateAdjustWheel() {
 }
 
 void Engine::StartGrab(GrabTarget target, int hand, const XrPosef& obj) {
-    grab = GrabRun{}; grab.target = target; grab.hand = hand;
+    grab = GrabRun{};
+    grab.target = target;
+    grab.hand = hand;
     grab.rel = PMul(PInv(fr.h[hand].gripPose), obj);
     if (prof->haptics) haptics.push_back({ hand, prof->hapticAmp, 0.02f });
 }
-XrPosef Engine::GrabbedPose() const { return PMul(fr.h[grab.hand].gripPose, grab.rel); }
+XrPosef Engine::GrabbedPose() const {
+    return PMul(fr.h[grab.hand].gripPose, grab.rel);
+}
 
 // Adjust mode: the wheel turns see-through so it doesn't block the wrist panels or the screen you are placing.
 // Solid again when a hand comes near it (to grab it) or while it is held; fainter still while something else is held.
 void Engine::UpdateAdjustFade() {
     float want = 1.f;
     if (adjust && view.visible) {
-        if (grab.target == GrabTarget::Wheel) want = 1.f;
-        else if (grab.Active()) want = 0.12f;
+        if (grab.target == GrabTarget::Wheel)
+            want = 1.f;
+        else if (grab.Active())
+            want = 0.12f;
         else {
             float d = 1e9f;
             Vec3 c = V(view.pose.position);
             for (int h = 0; h < 2; h++) // the hand that would grab it (the opening hand carries the wheel along)
                 if (fr.h[h].gripValid && !(wr.open && h == wr.openerHand)) d = std::min(d, Len(V(fr.h[h].gripPose.position) - c));
-            float edge = view.size * 0.5f;                       // from the wheel's rim
+            float edge = view.size * 0.5f;                              // from the wheel's rim
             float t = std::clamp((d - edge - 0.08f) / 0.15f, 0.f, 1.f); // solid within 8 cm of the rim, faint 23 cm away
             want = 1.f - 0.7f * t;
         }
@@ -73,7 +88,7 @@ void Engine::UpdateAdjustFade() {
     view.alpha += (want - view.alpha) * (dt > 0 ? k : 1.f);
     if (std::fabs(view.alpha - want) < 0.01f) view.alpha = want;
     if (std::fabs(view.alpha - wheelAlphaDrawn) > 0.04f || (view.alpha != wheelAlphaDrawn && view.alpha == want)) {
-        wheelAlphaDrawn = view.alpha; view.version++;
+        wheelAlphaDrawn = view.alpha;
+        view.version++;
     }
 }
-

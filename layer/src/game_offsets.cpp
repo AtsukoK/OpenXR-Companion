@@ -35,8 +35,10 @@ void GameHandOffsets::RemoveSpace(XrSpace space) {
     uint64_t s = (uint64_t)space;
     spaces_.erase(s);
     for (auto it = steadiers_.begin(); it != steadiers_.end();) {
-        if (it->first.first == s || it->first.second == s) it = steadiers_.erase(it);
-        else ++it;
+        if (it->first.first == s || it->first.second == s)
+            it = steadiers_.erase(it);
+        else
+            ++it;
     }
 }
 
@@ -72,8 +74,7 @@ void GameHandOffsets::Apply(XrSpace space, XrSpace base, XrTime t, XrSpaceLocati
     if (offsetSpace) {
         const XrPosef& o = set_.pose[located->second.hand][(int)located->second.kind];
         // the offset point sits on a lever: its speed gains (angular velocity x lever arm)
-        bool haveVelocity = velocityFlags && linear && angular &&
-                            (*velocityFlags & XR_SPACE_VELOCITY_ANGULAR_VALID_BIT) &&
+        bool haveVelocity = velocityFlags && linear && angular && (*velocityFlags & XR_SPACE_VELOCITY_ANGULAR_VALID_BIT) &&
                             (*velocityFlags & XR_SPACE_VELOCITY_LINEAR_VALID_BIT);
         if (!offsetBase && haveVelocity) {
             Vec3 arm = Rotate(pose.orientation, V(o.position));

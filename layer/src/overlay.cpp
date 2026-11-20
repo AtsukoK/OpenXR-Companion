@@ -3,10 +3,10 @@
 
 namespace {
 // Panel picture sizes in pixels.
-constexpr int kKeyboardPx = 1500;   // width; height follows the layout
-constexpr int kBarPx = 1200;        // bars under the screen and the keyboard (width)
-constexpr int kPickerPx = 1000;     // screen picker (width)
-constexpr int kOffsetsPx = 900;     // controller offsets panel (width)
+constexpr int kKeyboardPx = 1500; // width; height follows the layout
+constexpr int kBarPx = 1200;      // bars under the screen and the keyboard (width)
+constexpr int kPickerPx = 1000;   // screen picker (width)
+constexpr int kOffsetsPx = 900;   // controller offsets panel (width)
 constexpr int kWristPx = 512;
 constexpr int kCursorPx = 128;
 constexpr int kDotPx = 64;
@@ -19,7 +19,8 @@ const XrPosef kToastPose{ { 0, 0, 0, 1 }, { 0, -0.14f, -0.6f } }; // in the head
 constexpr XrExtent2Df kToastSize{ 0.32f, 0.04f };
 
 std::string Lower(std::string s) {
-    for (auto& c : s) c = (char)tolower((unsigned char)c);
+    for (auto& c : s)
+        c = (char)tolower((unsigned char)c);
     return s;
 }
 
@@ -90,8 +91,8 @@ void OverlayRenderer::Render(const OverlayContext& c, LayerList& layers) {
 }
 
 void OverlayRenderer::InvalidateAll() {
-    for (OverlayQuad* q : { &screenBar_, &screenPicker_, &wheel_, &keyboard_, &keyboardBar_, &offsets_,
-                            &pointerDot_, &pointerBeam_, &finger_, &toast_ })
+    for (OverlayQuad* q :
+         { &screenBar_, &screenPicker_, &wheel_, &keyboard_, &keyboardBar_, &offsets_, &pointerDot_, &pointerBeam_, &finger_, &toast_ })
         q->Invalidate();
     for (int h = 0; h < 2; h++) {
         wrist_[h].Invalidate();
@@ -140,8 +141,7 @@ void OverlayRenderer::UpdateScreenSource(ScreenView& sv) {
     if (pick < 0 && !sv.windowMatch.empty()) {
         std::string match = Lower(sv.windowMatch);
         for (int i = 0; i < (int)wins.size() && pick < 0; i++) {
-            if (Lower(wins[i].title).find(match) != std::string::npos || Lower(wins[i].exe).find(match) != std::string::npos)
-                pick = i;
+            if (Lower(wins[i].title).find(match) != std::string::npos || Lower(wins[i].exe).find(match) != std::string::npos) pick = i;
         }
         if (pick < 0) eng_.Toast("Screen: no open window matches '" + sv.windowMatch + "'", 3.0);
     } else if (pick < 0 && sv.windowMatch.empty() && !wins.empty()) {
@@ -176,8 +176,8 @@ void OverlayRenderer::FillScreenChoices(ScreenView& sv) {
     for (int i = 0; i < (int)monitors.size(); i++) {
         ScreenChoice c;
         c.monitor = i + 1;
-        c.label = "Monitor " + std::to_string(i + 1) + (monitors[i].primary ? " (main)" : "") + "\n" +
-                  std::to_string(monitors[i].w) + " x " + std::to_string(monitors[i].h);
+        c.label = "Monitor " + std::to_string(i + 1) + (monitors[i].primary ? " (main)" : "") + "\n" + std::to_string(monitors[i].w) +
+                  " x " + std::to_string(monitors[i].h);
         c.current = sv.source != "window" && currentMonitor == i + 1;
         choices.push_back(c);
     }
@@ -245,8 +245,7 @@ void OverlayRenderer::RenderScreen(const OverlayContext& c, LayerList& layers) {
             eng_.Toast("Screen: " + message, 4.0);
     }
     int fw, fh;
-    if (capture_.TakeFrame(screenPixels_, fw, fh) && screen_.Ensure(c, fw, fh))
-        screen_.Raw().Upload(*c.gfx, *c.swap, screenPixels_);
+    if (capture_.TakeFrame(screenPixels_, fw, fh) && screen_.Ensure(c, fw, fh)) screen_.Raw().Upload(*c.gfx, *c.swap, screenPixels_);
 
     // a quad shows from both sides: hide the screen and its bars when the head is behind it
     bool seenFromFront = true;
@@ -255,8 +254,7 @@ void OverlayRenderer::RenderScreen(const OverlayContext& c, LayerList& layers) {
         seenFromFront = Dot(facing, V(head_.position) - V(sv.pose.position)) > 0.f;
     }
     if (!sv.poseValid || !seenFromFront) return;
-    if (screen_.Width() > 0)
-        screen_.Submit(layers, c.local, sv.pose, { sv.widthM, sv.widthM * screen_.Height() / screen_.Width() });
+    if (screen_.Width() > 0) screen_.Submit(layers, c.local, sv.pose, { sv.widthM, sv.widthM * screen_.Height() / screen_.Width() });
 
     const Style& st = eng_.prof->style;
     if (sv.barVisible) {
@@ -329,9 +327,8 @@ void OverlayRenderer::RenderWrists(const OverlayContext& c, LayerList& layers) {
         // touch cursor on top of the panel: redrawn when its look changes, moved every frame
         if (!wrist_[h].Ready() || !wv.cursor) continue;
         if (cursor_[h].Ensure(c, kCursorPx, kCursorPx)) {
-            cursor_[h].Redraw(c, (uint64_t)wv.cursorLevel, scratch_, [&](std::vector<uint32_t>& px) {
-                DrawCursor(px, kCursorPx, wv.cursorLevel, p.style);
-            });
+            cursor_[h].Redraw(c, (uint64_t)wv.cursorLevel, scratch_,
+                              [&](std::vector<uint32_t>& px) { DrawCursor(px, kCursorPx, wv.cursorLevel, p.style); });
         }
         cursor_[h].Submit(layers, c.local, wv.cursorPose, { wv.cursorSize, wv.cursorSize });
     }
@@ -386,9 +383,8 @@ void OverlayRenderer::RenderPointers(const OverlayContext& c, LayerList& layers)
 void OverlayRenderer::RenderToast(const OverlayContext& c, LayerList& layers) {
     if (NowSec() >= eng_.toastUntil || !c.view) return;
     if (toast_.Ensure(c, kToastW, kToastH)) {
-        toast_.Redraw(c, eng_.toastVersion, scratch_, [&](std::vector<uint32_t>& px) {
-            DrawToast(px, kToastW, kToastH, eng_.toast, eng_.prof->style);
-        });
+        toast_.Redraw(c, eng_.toastVersion, scratch_,
+                      [&](std::vector<uint32_t>& px) { DrawToast(px, kToastW, kToastH, eng_.toast, eng_.prof->style); });
     }
     toast_.Submit(layers, c.view, kToastPose, kToastSize);
 }

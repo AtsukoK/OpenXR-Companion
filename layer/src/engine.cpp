@@ -9,11 +9,23 @@ void Engine::SetProfile(std::shared_ptr<Profile> p) {
     if (prof) Keys::SetFocusWindow(prof->focusWindow);
     if (prof) { // the editor's screen settings apply on every (re)load; on/off survives a reload
         const ScreenStyle& S = prof->screen;
-        screen.place = S.place; screen.monitor = S.monitor; screen.fps = S.fps;
-        if (S.source == "window" && screen.source != "window") { screen.source = "window"; screen.windowMatch = S.window; screen.windowTitle = S.windowTitle; screen.windowStep = 0; screen.windowAsk++; }
-        else if (S.source == "monitor") screen.source = "monitor";
-        if (!screenInit) { screen.on = S.startOn; screenPlaceFront = screen.on; screenInit = true; }
-        else if (screen.on) screenPlaceFront = true;
+        screen.place = S.place;
+        screen.monitor = S.monitor;
+        screen.fps = S.fps;
+        if (S.source == "window" && screen.source != "window") {
+            screen.source = "window";
+            screen.windowMatch = S.window;
+            screen.windowTitle = S.windowTitle;
+            screen.windowStep = 0;
+            screen.windowAsk++;
+        } else if (S.source == "monitor")
+            screen.source = "monitor";
+        if (!screenInit) {
+            screen.on = S.startOn;
+            screenPlaceFront = screen.on;
+            screenInit = true;
+        } else if (screen.on)
+            screenPlaceFront = true;
         offs = prof->offsets; // controller offsets: the file's values (also after the editor saves)
         offSel = offs.linkHands ? 2 : (offSel == 2 ? 1 : offSel);
         offKind = offs.aimSame ? 2 : (offKind == 2 ? 0 : offKind);
@@ -22,37 +34,63 @@ void Engine::SetProfile(std::shared_ptr<Profile> p) {
 
 void Engine::Reset() {
     if (wr.open) CloseWheel();
-    kb = KeyboardView{}; kbRepeatKey = kbRepeatHand = -1;
-    for (int h = 0; h < 2; h++) { wrist[h] = WristView{}; wrun[h] = WristRun{}; }
-    adjust = false; grab = GrabRun{}; adjustClosedAt = -1;
-    offView.open = false; offView.version++; offGrabArmed = false; offGrabHand = -1; offUiHand = -1; offSaveAt = -1;
+    kb = KeyboardView{};
+    kbRepeatKey = kbRepeatHand = -1;
+    for (int h = 0; h < 2; h++) {
+        wrist[h] = WristView{};
+        wrun[h] = WristRun{};
+    }
+    adjust = false;
+    grab = GrabRun{};
+    adjustClosedAt = -1;
+    offView.open = false;
+    offView.version++;
+    offGrabArmed = false;
+    offGrabHand = -1;
+    offUiHand = -1;
+    offSaveAt = -1;
     if (mouseL) Keys::MouseButton(0, false);
     if (mouseR) Keys::MouseButton(1, false);
-    mouseL = mouseR = false; screen.hoverHand = -1;
+    mouseL = mouseR = false;
+    screen.hoverHand = -1;
     Keys::ReleaseAll();
     keyToggles.clear();
-    xrToggles.clear(); xrHolds.clear(); pulses.clear();
+    xrToggles.clear();
+    xrHolds.clear();
+    pulses.clear();
     layers.clear();
-    for (auto& b : bs) b = BState{};
+    for (auto& b : bs)
+        b = BState{};
     memset(blockOut, 0, sizeof(blockOut));
-    for (auto& h : ovOut) for (auto& o : h) o = Override{};
+    for (auto& h : ovOut)
+        for (auto& o : h)
+            o = Override{};
 }
 
 bool Engine::IsOn(const Action& a) const {
     switch (a.type) {
-    case ActType::Key: return a.mode == "toggle" && keyToggles.count(a.keys) > 0;
-    case ActType::XrInput: return a.mode == "toggle" && xrToggles.count({ a.target.hand, a.target.comp }) > 0;
-    case ActType::Layer: return layers.count(a.layer) > 0;
-    case ActType::Screen: return (a.mode == "toggle" || a.mode == "on") && screen.on && (a.place.empty() || a.place == screen.place);
-    case ActType::Mirror: return a.mode != "off" && mirrorOn;
-    case ActType::Offsets: return (a.mode == "panel" && offView.open) || ((a.mode == "enable" || a.mode == "on") && offs.enabled);
-    default: return false;
+    case ActType::Key:
+        return a.mode == "toggle" && keyToggles.count(a.keys) > 0;
+    case ActType::XrInput:
+        return a.mode == "toggle" && xrToggles.count({ a.target.hand, a.target.comp }) > 0;
+    case ActType::Layer:
+        return layers.count(a.layer) > 0;
+    case ActType::Screen:
+        return (a.mode == "toggle" || a.mode == "on") && screen.on && (a.place.empty() || a.place == screen.place);
+    case ActType::Mirror:
+        return a.mode != "off" && mirrorOn;
+    case ActType::Offsets:
+        return (a.mode == "panel" && offView.open) || ((a.mode == "enable" || a.mode == "on") && offs.enabled);
+    default:
+        return false;
     }
 }
 
 void Engine::Toast(const std::string& s, double sec) {
     if (prof && !prof->notifications) return;
-    toast = s; toastUntil = NowSec() + sec; toastVersion++;
+    toast = s;
+    toastUntil = NowSec() + sec;
+    toastVersion++;
 }
 
 void Engine::ComputeDown() {
@@ -61,9 +99,13 @@ void Engine::ComputeDown() {
     const Profile& p = *prof;
     for (int h = 0; h < 2; h++) {
         const HandRaw& r = fr.h[h];
-        auto hyst = [&](int c, int f, bool cond_on, bool cond_hold) { cur[h][c][f] = prev[h][c][f] ? cond_hold : cond_on; };
-        cur[h][C_BTN1][F_PRESS] = r.b1; cur[h][C_BTN1][F_TOUCH] = r.b1t || r.b1;
-        cur[h][C_BTN2][F_PRESS] = r.b2; cur[h][C_BTN2][F_TOUCH] = r.b2t || r.b2;
+        auto hyst = [&](int c, int f, bool cond_on, bool cond_hold) {
+            cur[h][c][f] = prev[h][c][f] ? cond_hold : cond_on;
+        };
+        cur[h][C_BTN1][F_PRESS] = r.b1;
+        cur[h][C_BTN1][F_TOUCH] = r.b1t || r.b1;
+        cur[h][C_BTN2][F_PRESS] = r.b2;
+        cur[h][C_BTN2][F_TOUCH] = r.b2t || r.b2;
         hyst(C_TRIGGER, F_PRESS, r.trig > p.pressOn, r.trig > p.pressOff);
         cur[h][C_TRIGGER][F_TOUCH] = r.trigT || cur[h][C_TRIGGER][F_PRESS];
         hyst(C_GRIP, F_PRESS, r.grip > p.pressOn, r.grip > p.pressOff);
@@ -82,29 +124,55 @@ void Engine::ComputeDown() {
 bool Engine::CompActive(int h, int c) const {
     const HandRaw& r = fr.h[h];
     switch (c) {
-    case C_TRIGGER: return r.trig > prof->pressOff * 0.5f;
-    case C_GRIP: return r.grip > prof->pressOff * 0.5f;
-    case C_STICK: return r.sc || std::sqrt(r.sx * r.sx + r.sy * r.sy) > 0.25f;
-    case C_THUMBREST: return false;
-    default: return cur[h][c][F_PRESS];
+    case C_TRIGGER:
+        return r.trig > prof->pressOff * 0.5f;
+    case C_GRIP:
+        return r.grip > prof->pressOff * 0.5f;
+    case C_STICK:
+        return r.sc || std::sqrt(r.sx * r.sx + r.sy * r.sy) > 0.25f;
+    case C_THUMBREST:
+        return false;
+    default:
+        return cur[h][c][F_PRESS];
     }
 }
 
 bool Engine::LayersOk(const Binding& b) const {
-    for (auto& l : b.layers) if (!layers.count(l)) return false;
-    for (auto& l : b.notLayers) if (layers.count(l)) return false;
+    for (auto& l : b.layers)
+        if (!layers.count(l)) return false;
+    for (auto& l : b.notLayers)
+        if (layers.count(l)) return false;
     return true;
 }
 
 Override Engine::MakeOv(const InputId& t) {
-    Override o; o.on = true;
+    Override o;
+    o.on = true;
     switch (t.feat) {
-    case F_PRESS: o.press = true; o.touch = true; o.value = 1; break;
-    case F_TOUCH: o.touch = true; break;
-    case F_UP: o.y = 1; o.touch = true; break;
-    case F_DOWN: o.y = -1; o.touch = true; break;
-    case F_LEFT: o.x = -1; o.touch = true; break;
-    case F_RIGHT: o.x = 1; o.touch = true; break;
+    case F_PRESS:
+        o.press = true;
+        o.touch = true;
+        o.value = 1;
+        break;
+    case F_TOUCH:
+        o.touch = true;
+        break;
+    case F_UP:
+        o.y = 1;
+        o.touch = true;
+        break;
+    case F_DOWN:
+        o.y = -1;
+        o.touch = true;
+        break;
+    case F_LEFT:
+        o.x = -1;
+        o.touch = true;
+        break;
+    case F_RIGHT:
+        o.x = 1;
+        o.touch = true;
+        break;
     }
     return o;
 }
@@ -112,7 +180,10 @@ Override Engine::MakeOv(const InputId& t) {
 void Engine::SetLayer(const std::string& l, bool on) {
     bool had = layers.count(l) > 0;
     if (on == had) return;
-    if (on) layers.insert(l); else layers.erase(l);
+    if (on)
+        layers.insert(l);
+    else
+        layers.erase(l);
     Log("layer %s %s", l.c_str(), on ? "on" : "off");
     Toast("Layer " + l + (on ? " ON" : " off"), 1.2);
 }
@@ -123,11 +194,19 @@ bool Engine::RunAction(const Action& a, int hand, int bi, bool fromWheel) {
     switch (a.type) {
     case ActType::Key:
         if (a.mode == "toggle") {
-            if (keyToggles.count(a.keys)) { keyToggles.erase(a.keys); Keys::Up(a.keys); }
-            else { keyToggles.insert(a.keys); Keys::Down(a.keys); }
+            if (keyToggles.count(a.keys)) {
+                keyToggles.erase(a.keys);
+                Keys::Up(a.keys);
+            } else {
+                keyToggles.insert(a.keys);
+                Keys::Down(a.keys);
+            }
             return false;
         }
-        if (hold) { Keys::Down(a.keys); return true; }
+        if (hold) {
+            Keys::Down(a.keys);
+            return true;
+        }
         Keys::Tap(a.keys, a.tapMs);
         return false;
     case ActType::Sequence:
@@ -136,25 +215,48 @@ bool Engine::RunAction(const Action& a, int hand, int bi, bool fromWheel) {
     case ActType::XrInput: {
         auto key = std::make_pair(a.target.hand, a.target.comp);
         if (a.mode == "toggle") {
-            if (xrToggles.count(key)) xrToggles.erase(key); else xrToggles[key] = MakeOv(a.target);
+            if (xrToggles.count(key))
+                xrToggles.erase(key);
+            else
+                xrToggles[key] = MakeOv(a.target);
             return false;
         }
-        if (hold) { xrHolds[bi] = { key, MakeOv(a.target) }; return true; }
+        if (hold) {
+            xrHolds[bi] = { key, MakeOv(a.target) };
+            return true;
+        }
         pulses.push_back({ a.target.hand, a.target.comp, MakeOv(a.target), now + std::max(a.tapMs, 30) / 1000.0 });
         return false;
     }
     case ActType::Layer:
-        if (a.mode == "hold" && !fromWheel) { SetLayer(a.layer, true); return true; }
-        if (a.mode == "on") SetLayer(a.layer, true);
-        else if (a.mode == "off") SetLayer(a.layer, false);
-        else SetLayer(a.layer, !layers.count(a.layer));
+        if (a.mode == "hold" && !fromWheel) {
+            SetLayer(a.layer, true);
+            return true;
+        }
+        if (a.mode == "on")
+            SetLayer(a.layer, true);
+        else if (a.mode == "off")
+            SetLayer(a.layer, false);
+        else
+            SetLayer(a.layer, !layers.count(a.layer));
         return false;
     case ActType::Wheel:
-        if (fromWheel) { auto it = prof->wheels.find(a.wheel); if (it != prof->wheels.end()) PushWheel(&it->second); return false; }
+        if (fromWheel) {
+            auto it = prof->wheels.find(a.wheel);
+            if (it != prof->wheels.end()) PushWheel(&it->second);
+            return false;
+        }
         OpenWheel(a, bi, hand);
         return wr.open && wr.confirm == "release";
     case ActType::Back:
-        if (wr.open) { if (wr.stack.size() > 1) { wr.stack.pop_back(); wr.hovered = -1; Dirty(); } else CloseWheel(); }
+        if (wr.open) {
+            if (wr.stack.size() > 1) {
+                wr.stack.pop_back();
+                wr.hovered = -1;
+                Dirty();
+            } else
+                CloseWheel();
+        }
         return false;
     case ActType::Close:
         if (wr.open) CloseWheel();
@@ -175,9 +277,15 @@ bool Engine::RunAction(const Action& a, int hand, int bi, bool fromWheel) {
         mirrorAsk = a.mode == "on" ? MirrorRequest::On : a.mode == "off" ? MirrorRequest::Off : MirrorRequest::Toggle;
         return false;
     case ActType::Adjust:
-        adjust = !adjust; grab = GrabRun{};
-        if (adjust) Toast("Adjust: grip to move, stick to resize", 4.0);
-        else { saveRequested = true; Toast("Positions saved", 2.0); if (wr.open) CloseWheel(); }
+        adjust = !adjust;
+        grab = GrabRun{};
+        if (adjust)
+            Toast("Adjust: grip to move, stick to resize", 4.0);
+        else {
+            saveRequested = true;
+            Toast("Positions saved", 2.0);
+            if (wr.open) CloseWheel();
+        }
         Log("adjust mode %s", adjust ? "on" : "off");
         return false;
     default:
@@ -187,15 +295,25 @@ bool Engine::RunAction(const Action& a, int hand, int bi, bool fromWheel) {
 
 void Engine::EndAction(const Action& a, int bi) {
     switch (a.type) {
-    case ActType::Key: Keys::Up(a.keys); break;
-    case ActType::XrInput: xrHolds.erase(bi); break;
-    case ActType::Layer: SetLayer(a.layer, false); break;
+    case ActType::Key:
+        Keys::Up(a.keys);
+        break;
+    case ActType::XrInput:
+        xrHolds.erase(bi);
+        break;
+    case ActType::Layer:
+        SetLayer(a.layer, false);
+        break;
     case ActType::Wheel:
         if (wr.open && wr.opener == bi && wr.confirm == "release") {
-            if (wr.hovered >= 0) Select(wr.hovered); else CloseWheel();
+            if (wr.hovered >= 0)
+                Select(wr.hovered);
+            else
+                CloseWheel();
         }
         break;
-    default: break;
+    default:
+        break;
     }
 }
 
@@ -206,13 +324,18 @@ void Engine::Fire(int bi) {
     Log("fire '%s' (%s)", b.name.c_str(), b.chordText.c_str());
     bool holds = RunAction(b.action, b.chord.back().hand, bi, false);
     bool wantsEnd = holds && (b.gesture == "press" || b.gesture == "hold" || b.gesture == "while_held");
-    if (wantsEnd) s.needEnd = true;
-    else if (holds) EndAction(b.action, bi);
+    if (wantsEnd)
+        s.needEnd = true;
+    else if (holds)
+        EndAction(b.action, bi);
 }
 
 void Engine::EndB(int bi) {
     BState& s = bs[bi];
-    if (s.needEnd) { s.needEnd = false; EndAction(prof->bindings[bi].action, bi); }
+    if (s.needEnd) {
+        s.needEnd = false;
+        EndAction(prof->bindings[bi].action, bi);
+    }
 }
 
 void Engine::ProcessBindings() {
@@ -232,8 +355,7 @@ void Engine::ProcessBindings() {
                     if (j != i && bs[j].fired && bs[j].armTime == s.armTime && B[j].chord.back() == trig) otherFired = true;
                 if (!otherFired) Fire(i);
             }
-            if (b.gesture == "hold" && !s.fired && b.tapPassthrough)
-                pulses.push_back({ trig.hand, trig.comp, MakeOv(trig), now + 0.08 });
+            if (b.gesture == "hold" && !s.fired && b.tapPassthrough) pulses.push_back({ trig.hand, trig.comp, MakeOv(trig), now + 0.08 });
             EndB(i);
             continue;
         }
@@ -244,8 +366,8 @@ void Engine::ProcessBindings() {
     // (Thumbrest and menu report touch and press as the same thing, so they're left alone.)
     for (int i = 0; i < (int)B.size(); i++) {
         const InputId& t = B[i].chord.back();
-        if (B[i].gesture == "double_tap" && t.feat == F_TOUCH && t.comp != C_THUMBREST && t.comp != C_MENU
-            && cur[t.hand][t.comp][F_PRESS]) bs[i].lastTap = -1;
+        if (B[i].gesture == "double_tap" && t.feat == F_TOUCH && t.comp != C_THUMBREST && t.comp != C_MENU && cur[t.hand][t.comp][F_PRESS])
+            bs[i].lastTap = -1;
     }
     // New presses: arm the most specific matching bindings.
     std::vector<int> cand;
@@ -255,10 +377,12 @@ void Engine::ProcessBindings() {
         const InputId& trig = b.chord.back();
         if (!Pressed(trig)) continue;
         if (wr.open && b.action.type != ActType::Wheel && b.action.type != ActType::Keyboard && b.action.type != ActType::Adjust) continue;
-        if (kb.visible && b.action.type != ActType::Keyboard && b.action.type != ActType::Adjust) continue; // adjust: place the open keyboard
+        if (kb.visible && b.action.type != ActType::Keyboard && b.action.type != ActType::Adjust)
+            continue; // adjust: place the open keyboard
         if (!LayersOk(b)) continue;
         bool others = true;
-        for (size_t k = 0; k + 1 < b.chord.size(); k++) if (!Down(b.chord[k])) others = false;
+        for (size_t k = 0; k + 1 < b.chord.size(); k++)
+            if (!Down(b.chord[k])) others = false;
         if (others) cand.push_back(i);
     }
     // Group by trigger, keep max specificity per trigger.
@@ -272,11 +396,17 @@ void Engine::ProcessBindings() {
         }
         if (!best) continue;
         BState& s = bs[i];
-        s.armed = true; s.armTime = now; s.fired = false;
-        if (b.gesture == "press" || b.gesture == "while_held") Fire(i);
+        s.armed = true;
+        s.armTime = now;
+        s.fired = false;
+        if (b.gesture == "press" || b.gesture == "while_held")
+            Fire(i);
         else if (b.gesture == "double_tap") {
-            if (s.lastTap >= 0 && (now - s.lastTap) * 1000 <= b.doubleTapMs) { s.lastTap = -1; Fire(i); }
-            else s.lastTap = now;
+            if (s.lastTap >= 0 && (now - s.lastTap) * 1000 <= b.doubleTapMs) {
+                s.lastTap = -1;
+                Fire(i);
+            } else
+                s.lastTap = now;
         }
     }
 }
@@ -284,18 +414,23 @@ void Engine::ProcessBindings() {
 // Laser pointers: for each controller, the nearest pointable surface it is aimed at.
 void Engine::UpdatePointers() {
     for (int h = 0; h < 2; h++) {
-        PointerView& P = pointer[h]; P.on = false; P.finger = false; P.dot = true;
+        PointerView& P = pointer[h];
+        P.on = false;
+        P.finger = false;
+        P.dot = true;
         const HandRaw& hr = fr.h[h];
         if (!hr.aimValid || !fr.headValid) continue;
         Vec3 o = V(hr.aimPose.position), d = Rotate(hr.aimPose.orientation, { 0, 0, -1 });
         Vec3 eye = V(fr.head.position);
         // A quad standing along the ray, turned to face the eye (used by the beam and the finger).
         auto alongRay = [&](Vec3 mid, Vec3 fallbackN) {
-            Vec3 toEye = eye - mid; toEye = toEye - d * Dot(toEye, d);
+            Vec3 toEye = eye - mid;
+            toEye = toEye - d * Dot(toEye, d);
             Vec3 z = Len(toEye) > 1e-4f ? Norm(toEye) : fallbackN;
             return XrPosef{ QuatFromBasis(Cross(d, z), d, z), X(mid) };
         };
-        float best = 1e9f; XrQuaternionf bestQ{ 0,0,0,1 };
+        float best = 1e9f;
+        XrQuaternionf bestQ{ 0, 0, 0, 1 };
         // Ray against a square/rect surface (half sizes in metres, with a little margin).
         auto test = [&](const XrPosef& pose, float hw, float hh) {
             Vec3 c = V(pose.position), n = Rotate(pose.orientation, { 0, 0, 1 });
@@ -305,12 +440,14 @@ void Engine::UpdatePointers() {
             if (t <= 0.01f || t > 3.f || t >= best) return;
             Vec3 l = RotateInv(pose.orientation, (o + d * t) - c);
             if (std::fabs(l.x) > hw * 1.1f || std::fabs(l.y) > hh * 1.1f) return;
-            best = t; bestQ = pose.orientation;
+            best = t;
+            bestQ = pose.orientation;
         };
         if (wr.open && h == wr.selHand && (prof->sel.method == "point" || prof->sel.method == "both"))
             test(wr.pose, prof->style.radius, prof->style.radius);
         if (kb.visible) test(kb.pose, kb.widthM / 2, kb.heightM / 2);
-        if (screen.interactive && screen.hoverHand == h) test(screen.pose, screen.widthM / 2 * 1.2f, screen.widthM * screen.aspect / 2 * 1.2f);
+        if (screen.interactive && screen.hoverHand == h)
+            test(screen.pose, screen.widthM / 2 * 1.2f, screen.widthM * screen.aspect / 2 * 1.2f);
         if (uiHand == h && screen.pickOpen) test(screen.pickPose, screen.pickW / 2, screen.pickH / 2);
         if (uiHand == h && screen.barVisible) test(screen.barPose, screen.barW / 2, screen.barH / 2);
         if (offView.open && h != offGrabHand) test(offView.pose, offView.w / 2, offView.h / 2);
@@ -319,13 +456,14 @@ void Engine::UpdatePointers() {
         bool wristUp = wv.visible && grab.target != WristGrab(panel);
         float dPanel = wristUp ? Len(V(wv.pose.position) - o) : 1e9f;
         // The laser stays until the touch cursor actually takes over (no gap where neither shows).
-        if (wristUp && prof->wrist[panel].press != "poke" && !wv.cursor)
-            test(wv.pose, wv.sizeM / 2, wv.sizeM / 2);
+        if (wristUp && prof->wrist[panel].press != "poke" && !wv.cursor) test(wv.pose, wv.sizeM / 2, wv.sizeM / 2);
         // Fingertip silhouette: where the poke tip is, so you can find your "finger" before it reaches the panel.
         if (wristUp && prof->pointer.finger && dPanel < 0.5f) { // on every panel: it also shows where the laser starts
             const float len = 0.09f;
             Vec3 tip = o + d * 0.015f; // same tip as the poke test in UpdateWrist
-            P.finger = true; P.fingerLen = len; P.fingerW = 0.024f;
+            P.finger = true;
+            P.fingerLen = len;
+            P.fingerW = 0.024f;
             P.fingerPose = alongRay(tip - d * (len * 0.5f), Rotate(wv.pose.orientation, { 0, 0, 1 }));
         }
         if (best > 1e8f) {
@@ -333,7 +471,8 @@ void Engine::UpdatePointers() {
             // so the ray can be found and steered onto the panel. Hidden while the touch cursor shows.
             if (!(wristUp && prof->pointer.guide && prof->wrist[panel].press != "poke" && !wv.cursor && dPanel < 0.8f)) continue;
             float len = std::clamp(dPanel * 1.3f, 0.12f, 0.6f);
-            P.on = true; P.dot = false;
+            P.on = true;
+            P.dot = false;
             P.beamPose = alongRay(o + d * (len * 0.5f), d * -1.f);
             P.beamLen = len;
             continue;
@@ -353,26 +492,44 @@ void Engine::ComputeBlocks() {
     for (int i = 0; i < (int)bs.size(); i++) {
         if (!bs[i].armed) continue;
         const Binding& b = prof->bindings[i];
-        if (b.block == "trigger") { auto& t = b.chord.back(); want[t.hand][t.comp] = true; }
-        else if (b.block == "all") for (auto& t : b.chord) want[t.hand][t.comp] = true;
+        if (b.block == "trigger") {
+            auto& t = b.chord.back();
+            want[t.hand][t.comp] = true;
+        } else if (b.block == "all")
+            for (auto& t : b.chord)
+                want[t.hand][t.comp] = true;
     }
     if (wr.open) {
         const std::string& m = prof->blockWhileOpen;
-        if (m == "all") { for (auto& h : want) for (auto& c : h) c = true; }
-        else if (m == "hand") { for (int c = 0; c < C_COUNT; c++) want[wr.selHand][c] = want[wr.openerHand][c] = true; }
-        else if (m == "minimal") {
+        if (m == "all") {
+            for (auto& h : want)
+                for (auto& c : h)
+                    c = true;
+        } else if (m == "hand") {
+            for (int c = 0; c < C_COUNT; c++)
+                want[wr.selHand][c] = want[wr.openerHand][c] = true;
+        } else if (m == "minimal") {
             want[wr.selHand][C_STICK] = true;
             if (prof->sel.confirmComp >= 0) want[wr.selHand][prof->sel.confirmComp] = true;
             if (prof->sel.cancelComp >= 0) want[wr.selHand][prof->sel.cancelComp] = true;
         }
     }
-    if (kb.visible) for (auto& h : want) for (auto& c : h) c = true;
-    if (dockAdjust) { want[0][C_GRIP] = want[1][C_GRIP] = true; if (grab.hand >= 0) want[grab.hand][C_STICK] = true; }
+    if (kb.visible)
+        for (auto& h : want)
+            for (auto& c : h)
+                c = true;
+    if (dockAdjust) {
+        want[0][C_GRIP] = want[1][C_GRIP] = true;
+        if (grab.hand >= 0) want[grab.hand][C_STICK] = true;
+    }
     if (adjust) { // the grips move things around; the grabbing hand's stick resizes
         want[0][C_GRIP] = want[1][C_GRIP] = true;
         if (grab.hand >= 0) want[grab.hand][C_STICK] = true;
     }
-    if (screen.hoverHand >= 0) { int h = screen.hoverHand; want[h][C_TRIGGER] = want[h][C_BTN1] = want[h][C_STICK] = true; }
+    if (screen.hoverHand >= 0) {
+        int h = screen.hoverHand;
+        want[h][C_TRIGGER] = want[h][C_BTN1] = want[h][C_STICK] = true;
+    }
     if (uiHand >= 0) want[uiHand][C_TRIGGER] = true;
     if (offUiHand >= 0) want[offUiHand][C_TRIGGER] = want[offUiHand][C_STICK] = true;
     if (offGrabArmed || offGrabHand >= 0) want[0][C_GRIP] = want[1][C_GRIP] = true; // grab-to-set uses the grips
@@ -381,19 +538,32 @@ void Engine::ComputeBlocks() {
     for (int h = 0; h < 2; h++)
         for (int c = 0; c < C_COUNT; c++) {
             // Once blocked, stay blocked until the part is let go so the game never sees a half press.
-            if (want[h][c]) sticky[h][c] = true;
-            else if (sticky[h][c] && !CompActive(h, c)) sticky[h][c] = false;
+            if (want[h][c])
+                sticky[h][c] = true;
+            else if (sticky[h][c] && !CompActive(h, c))
+                sticky[h][c] = false;
             blockOut[h][c] = sticky[h][c];
         }
-    for (auto& h : ovOut) for (auto& o : h) o = Override{};
+    for (auto& h : ovOut)
+        for (auto& o : h)
+            o = Override{};
     pulses.erase(std::remove_if(pulses.begin(), pulses.end(), [&](const Pulse& p) { return p.until < now; }), pulses.end());
-    for (auto& p : pulses) ovOut[p.hand][p.comp] = p.o;
-    for (auto& [k, o] : xrToggles) ovOut[k.first][k.second] = o;
-    for (auto& [bi, ko] : xrHolds) ovOut[ko.first.first][ko.first.second] = ko.second;
+    for (auto& p : pulses)
+        ovOut[p.hand][p.comp] = p.o;
+    for (auto& [k, o] : xrToggles)
+        ovOut[k.first][k.second] = o;
+    for (auto& [bi, ko] : xrHolds)
+        ovOut[ko.first.first][ko.first.second] = ko.second;
 }
 
 void Engine::Update(const Frame& f) {
-    if (!Active()) { memset(blockOut, 0, sizeof(blockOut)); for (auto& h : ovOut) for (auto& o : h) o = Override{}; return; }
+    if (!Active()) {
+        memset(blockOut, 0, sizeof(blockOut));
+        for (auto& h : ovOut)
+            for (auto& o : h)
+                o = Override{};
+        return;
+    }
     fr = f;
     now = f.t;
     // Pointer correction: turn the aim ray down and move its start toward the index finger.
@@ -415,7 +585,10 @@ void Engine::Update(const Frame& f) {
         float dt = (float)std::clamp(f.t - lastNow, 0.0, 0.25);
         for (int h = 0; h < 2; h++) {
             HandRaw& hr = fr.h[h];
-            if (!hr.aimValid) { aimSmooth[h].Reset(); continue; }
+            if (!hr.aimValid) {
+                aimSmooth[h].Reset();
+                continue;
+            }
             hr.aimPose = aimSmooth[h].Apply(hr.aimPose, dt, P.smoothing);
         }
     }
@@ -438,14 +611,23 @@ void Engine::Update(const Frame& f) {
     view.visible = wr.open;
     if (wr.open) {
         const Wheel* w = wr.stack.back();
-        if (view.wheel != w || view.hovered != wr.hovered) { view.wheel = w; view.hovered = wr.hovered; Dirty(); }
+        if (view.wheel != w || view.hovered != wr.hovered) {
+            view.wheel = w;
+            view.hovered = wr.hovered;
+            Dirty();
+        }
         std::string crumb;
-        for (size_t i = 0; i < wr.stack.size(); i++) crumb += (i ? " > " : "") + wr.stack[i]->title;
+        for (size_t i = 0; i < wr.stack.size(); i++)
+            crumb += (i ? " > " : "") + wr.stack[i]->title;
         view.crumb = crumb;
         view.pose = wr.pose;
         std::vector<bool> on;
-        for (auto& it : w->items) on.push_back(IsOn(it.action));
-        if (on != view.on) { view.on = std::move(on); Dirty(); }
+        for (auto& it : w->items)
+            on.push_back(IsOn(it.action));
+        if (on != view.on) {
+            view.on = std::move(on);
+            Dirty();
+        }
         view.size = prof->style.radius * 2.f;
     }
 }

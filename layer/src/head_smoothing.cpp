@@ -1,7 +1,9 @@
 #include "head_smoothing.h"
 
 namespace {
-float AngleDeg(const XrQuaternionf& q) { return 2.f * std::acos(std::min(1.f, std::fabs(q.w))) * 57.2958f; }
+float AngleDeg(const XrQuaternionf& q) {
+    return 2.f * std::acos(std::min(1.f, std::fabs(q.w))) * 57.2958f;
+}
 
 XrQuaternionf Blend(XrQuaternionf a, XrQuaternionf b, float k) {
     if (a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w < 0) b = { -b.x, -b.y, -b.z, -b.w };
@@ -10,9 +12,13 @@ XrQuaternionf Blend(XrQuaternionf a, XrQuaternionf b, float k) {
     return l > 1e-6f ? XrQuaternionf{ q.x / l, q.y / l, q.z / l, q.w / l } : a;
 }
 
-bool IsProjection(const XrCompositionLayerBaseHeader* h) { return h && h->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION; }
+bool IsProjection(const XrCompositionLayerBaseHeader* h) {
+    return h && h->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION;
+}
 
-const char* ModeName(int mode) { return mode == 1 ? "headset" : "recording"; }
+const char* ModeName(int mode) {
+    return mode == 1 ? "headset" : "recording";
+}
 } // namespace
 
 void HeadSmoother::Stats::Reset(double now) {
@@ -55,7 +61,8 @@ void HeadSmoother::Stop() {
     }
     cam_.Reset();
     lastT_ = 0;
-    for (auto& h : history_) h = TimedTurn{};
+    for (auto& h : history_)
+        h = TimedTurn{};
 }
 
 // The steadied direction for a time. The game may ask for several times per frame (Unreal's game and
@@ -92,8 +99,8 @@ bool HeadSmoother::Step(XrTime t, const XrQuaternionf& real, XrQuaternionf& turn
         if (!inUseLogged_) {
             inUseLogged_ = true;
             stats_.Reset(NowSec());
-            Log("head smoothing: in use, mode %s, strength %.2f (about %.2f s of camera lag)",
-                ModeName(set_.mode), set_.strength, 0.12f * set_.strength);
+            Log("head smoothing: in use, mode %s, strength %.2f (about %.2f s of camera lag)", ModeName(set_.mode), set_.strength,
+                0.12f * set_.strength);
         }
         float lag = AngleDeg(QMul(steadied, QInv(real)));
         stats_.lagSum += lag;
@@ -110,12 +117,13 @@ void HeadSmoother::LogStatsIfDue() {
     if (now - stats_.since <= kStatsPeriodSec || stats_.lagN == 0) return;
     std::string frames;
     if (set_.mode == 1) {
-        frames = " ; frames shown as steadied: " + std::to_string(stats_.framesFixed) +
-                 ", not matched: " + std::to_string(stats_.framesMissed);
+        frames =
+            " ; frames shown as steadied: " + std::to_string(stats_.framesFixed) + ", not matched: " + std::to_string(stats_.framesMissed);
     }
-    Log("head smoothing: last 10 s the camera trailed your head by %.1f deg on average, %.1f deg at most%s",
-        stats_.lagSum / stats_.lagN, stats_.lagMax, frames.c_str());
-    Log("head smoothing: calls in 10 s: eye views in world %d, eye views relative to head %d, head reads %d, frames %d (no head record for %d)",
+    Log("head smoothing: last 10 s the camera trailed your head by %.1f deg on average, %.1f deg at most%s", stats_.lagSum / stats_.lagN,
+        stats_.lagMax, frames.c_str());
+    Log("head smoothing: calls in 10 s: eye views in world %d, eye views relative to head %d, head reads %d, frames %d (no head record for "
+        "%d)",
         stats_.viewsWorld, stats_.viewsHead, stats_.headReads, stats_.frames, stats_.framesNoRecord);
     stats_.Reset(now);
 }
@@ -145,7 +153,8 @@ void HeadSmoother::OnLocateViews(const XrViewLocateInfo& info, const XrViewState
     if (!(state.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT) || count == 0) return;
 
     Vec3 centre{};
-    for (uint32_t i = 0; i < count; i++) centre = centre + V(views[i].pose.position);
+    for (uint32_t i = 0; i < count; i++)
+        centre = centre + V(views[i].pose.position);
     centre = centre * (1.f / count);
 
     XrQuaternionf turn;
@@ -222,10 +231,13 @@ const XrFrameEndInfo* HeadSmoother::OnEndFrame(const XrFrameEndInfo* fi) {
         for (const auto& h : records_) {
             if (!h.t || h.space != src->space) continue;
             XrTime d = h.t > fi->displayTime ? h.t - fi->displayTime : fi->displayTime - h.t;
-            if (d <= best) { best = d; rec = &h; }
+            if (d <= best) {
+                best = d;
+                rec = &h;
+            }
         }
         if (!rec) stats_.framesNoRecord++;
-        XrPosef steadiedToReal = rec ? PMul(rec->real, PInv(rec->steadied)) : XrPosef{ {0,0,0,1}, {0,0,0} };
+        XrPosef steadiedToReal = rec ? PMul(rec->real, PInv(rec->steadied)) : XrPosef{ { 0, 0, 0, 1 }, { 0, 0, 0 } };
         for (uint32_t k = 0; k < src->viewCount; k++) {
             XrCompositionLayerProjectionView& v = outViews_[vi++];
             v = src->views[k];
