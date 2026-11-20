@@ -196,6 +196,9 @@ public static class Theme
     public static bool IsDark { get; private set; }
     public static Color Page, Card, CardBorder, Text, SubText, Link, Heading, Live, Saved, Highlight;
     public static Color Input, Button, Bar, Surface, Selected, Chevron, OffText;
+    public static Color InputBack => IsDark ? Input : SystemColors.Window;
+    public static Color ErrorBack => IsDark ? Color.FromArgb(90, 40, 40) : Color.MistyRose;
+    public static Color RecordBack => IsDark ? Color.FromArgb(85, 75, 30) : Color.LightYellow;
     static Theme() => Set(false);
     public static void Set(bool dark)
     {
@@ -379,12 +382,12 @@ public class KeyBox : FlowLayoutPanel
     {
         if (Recording) return;
         var err = Native.CheckKeys(text.Text, false);
-        text.BackColor = err == null ? SystemColors.Window : Color.MistyRose;
+        text.BackColor = err == null ? Theme.InputBack : Theme.ErrorBack;
         tip.SetToolTip(text, err == null ? null : "Unknown bind: " + err);
     }
 
-    void StartRecording() { Recording = true; lastMod = null; rec.Text = "Press a key..."; text.BackColor = Color.LightYellow; text.Focus(); }
-    void StopRecording() { if (!Recording) return; Recording = false; rec.Text = "Record key"; text.BackColor = SystemColors.Window; Check(); }
+    void StartRecording() { Recording = true; lastMod = null; rec.Text = "Press a key..."; text.BackColor = Theme.RecordBack; text.Focus(); }
+    void StopRecording() { if (!Recording) return; Recording = false; rec.Text = "Record key"; text.BackColor = Theme.InputBack; Check(); }
 
     void OnKey(object s, KeyEventArgs e)
     {
@@ -527,7 +530,7 @@ public class ActionEditor : FormPanel
         steps.TextChanged += (s, e) =>
         {
             var err = Native.CheckKeys(string.Join("; ", steps.Text.Split((char)10).Select(x => x.Trim((char)13))), true);
-            steps.BackColor = err == null ? SystemColors.Window : Color.MistyRose;
+            steps.BackColor = err == null ? Theme.InputBack : Theme.ErrorBack;
             stepsTip.SetToolTip(steps, err == null ? null : "Unknown bind: " + err);
         };
         steps.TextChanged += (s, e) => { if (!loading) { a.Steps = steps.Text.Replace("\r\n", "; ").Replace("\n", "; "); Fire(); } };
