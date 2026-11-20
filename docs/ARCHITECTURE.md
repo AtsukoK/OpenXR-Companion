@@ -26,7 +26,11 @@ checks their timestamps about once a second and reloads what changed.
    |    `- panel.cpp                 Panel (one swapchain), Gfx (D3D11 / D3D12), GDI+ drawing of each element
    |    `- screen.cpp, wincap.cpp    ScreenCapture: monitors and windows, on its own thread
    engine.cpp                        Engine: input in, menus and actions out (no OpenXR or graphics calls)
-    `- keyboard.cpp, wrist.cpp, offsets.cpp   the VR keyboard + docking, wrist panels, the offsets panel
+    `- wheel.cpp, adjust.cpp         the wheel, Adjust mode (grabbing things to place them)
+    `- vr_keyboard.cpp               VrKeyboard: the VR keyboard and docking it with the screen
+    `- screen_mirror.cpp             ScreenMirror: where the mirrored screen sits, pointing at it, its bar and picker
+    `- wrist_panels.cpp              WristPanels: the buttons on each forearm
+    `- offsets_panel.cpp             OffsetsPanel: the controller offsets panel
     `- config.cpp                    profiles and settings files (JSON), atomic saves
     `- keys.cpp                      key presses and mouse input sent to Windows, on a worker thread
    mirror.cpp                        HeadsetMirror: the desktop window that shows one eye
@@ -43,6 +47,10 @@ directly. Each frame the layer fills a `Frame` (buttons, sticks, grip and aim po
   (`WheelView`, `KeyboardView`, `WristView`, `ScreenView`, `OffsetView`, `PointerView`);
 - queues requests for the layer to carry out: haptics, saving the profile (`saveRequested`, `offsSaveRequested`),
   the headset mirror (`mirrorAsk`), toasts.
+
+Each feature (`VrKeyboard`, `ScreenMirror`, `WristPanels`, `OffsetsPanel`) is its own class that owns its state and
+logic. The engine holds one of each, calls them from `Update`, and they reach shared things (input, grabbing, toasts,
+the views) through a reference to the engine, which lists them as friends.
 
 Views carry a `version` that changes when their look changes, so the overlay only redraws a picture when needed.
 

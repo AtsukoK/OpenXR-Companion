@@ -185,38 +185,47 @@ class Engine {
     friend class VrKeyboard;
 
 public:
-    void ScreenAction(const Action& a);  // screen on/off, monitor, frame rate, place
-    void OffsetsAction(const Action& a); // panel, enable, on, off, grab, reset
-    bool OffsetPose(int hand, int kind, XrPosef& out) const;
+    // ---------------- driving it (the layer, once per frame)
+    void SetProfile(std::shared_ptr<Profile> p);
+    void Reset();
+    void Update(const Frame& f);
+    bool Active() const { return prof && prof->enabled; }
     std::shared_ptr<Profile> prof;
+
+    // ---------------- what the game should see
+    bool Blocked(int hand, int comp) const { return blockOut[hand][comp]; } // held back for a menu
+    const Override& Ov(int hand, int comp) const { return ovOut[hand][comp]; } // pushed into the game by a binding
+    // The pose the game's grip (kind 0) or aim (kind 1) space of a hand is moved by; false = leave it.
+    bool OffsetPose(int hand, int kind, XrPosef& out) const;
+    OffsetStyle offs; // live controller offsets (from the profile, changed in the headset)
+
+    // ---------------- what the overlay draws (each view has a version that changes with its look)
     WheelView view;
     KeyboardView kb;
     WristView wrist[2];     // [0] left forearm, [1] right forearm
     PointerView pointer[2]; // per controller
     ScreenView screen;
     OffsetView offView;
-    OffsetStyle offs;                              // live controller offsets (from the profile, changed in the headset)
-    bool offsSaveRequested = false;                // the layer writes offs into the profile
-    MirrorRequest mirrorAsk = MirrorRequest::None; // headset mirror window (the layer does it)
-    bool mirrorOn = false;                         // set by the layer
-    int offGrabHand = -1;                          // grab-to-set running on this hand (its grip is held)
-    // The pose the game's grip (kind 0) or aim (kind 1) space of a hand is moved by; false = leave it.
     std::string toast;
     uint64_t toastVersion = 0;
     double toastUntil = 0;
+
+    // ---------------- requests the layer carries out
     std::vector<HapticReq> haptics;
     bool reloadRequested = false;
-    // Adjust mode: grab wrist panels / an open wheel with the grip to move them, stick to resize.
-    bool adjust = false;
-    bool saveRequested = false; // leaving adjust mode: the layer writes the placement to the profile
+    bool saveRequested = false;                    // leaving adjust mode: write the placement to the profile
+    bool offsSaveRequested = false;                // write offs into the profile
+    MirrorRequest mirrorAsk = MirrorRequest::None; // the headset mirror window
+    bool mirrorOn = false;                         // set by the layer
 
-    void SetProfile(std::shared_ptr<Profile> p);
-    void Reset();
-    void Update(const Frame& f);
-    bool Blocked(int hand, int comp) const { return blockOut[hand][comp]; }
-    const Override& Ov(int hand, int comp) const { return ovOut[hand][comp]; }
+    // ---------------- state other parts read
+    bool adjust = false;  // Adjust mode: grab wrist panels, wheels, the screen and the keyboard to place them
+    int offGrabHand = -1; // grab-to-set running on this hand (its grip is held)
+
+    // ---------------- actions and helpers used by the feature classes
+    void ScreenAction(const Action& a);  // screen on/off, monitor, frame rate, place
+    void OffsetsAction(const Action& a); // panel, enable, on, off, grab, reset
     void Toast(const std::string& s, double sec = 2.0);
-    bool Active() const { return prof && prof->enabled; }
     // Is this action a toggle that is currently on? (key toggle, game input toggle, layer)
     bool IsOn(const Action& a) const;
 
