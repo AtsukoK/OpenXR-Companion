@@ -34,3 +34,18 @@ after every step. Commit after every step.
   (window by name/step, picker list, remembering the choice) lives there too (UpdateScreenSource, FillScreenChoices).
   New test renders through it on a WARP D3D11 device with pretend swapchains. layer.cpp now 868 lines.
   NOT yet tried in a headset. Next: input hooks (Evaluate/GetActionState*) + action set setup -> own file; then Engine split (step 3).
+- 2026-11-20: docs/ARCHITECTURE.md written (modules, threads, locks, tests).
+- 2026-11-20: engine.cpp split by feature: screen_ui.cpp (mirrored screen), wheel.cpp, adjust.cpp; engine.cpp 1080 -> ~450 lines.
+  Still one Engine class (engine.h); step 3 proper (feature classes) not done.
+- 2026-11-20: editor split: MainForm.cs -> MainForm.{Editor,List,Files,DragDrop,Pages,Helpers,Install}.cs + NewProfileDialog.cs;
+  Editors.cs -> Choices, FormControls, Theme, EditorBase, KeyBox, ActionEditor, BindingEditor, WheelPreview, WheelEditor.
+  Editor builds and opens (6 s smoke start). Full build_all OK, tests 0 failures.
+
+## Status / resume here
+Done: steps 1, 2 (layer.cpp 1465 -> ~870), 6 (file split), 7. Untested in a headset.
+Left: step 3 (Engine feature classes: group private state per feature in engine.h, e.g. KeyboardRun/ScreenRun/OffsetsRun,
+then classes with an input view), step 4 (dense one-liners: config.cpp, panel.cpp, keyboard.cpp, wrist.cpp, offsets.cpp,
+input hooks in layer.cpp), step 5 (test.cpp ~1400 lines -> per-feature files with shared helpers),
+layer.cpp input hooks (Evaluate / GetActionState* / EnsureActions) -> game_input.cpp.
+To try it: dist in this folder is NOT registered; copy the dist DLLs over G:/Claude/VR Radial Overlay/dist (both x86 and 64)
+or register this dist with the editor's Install layer, after the user agrees.
