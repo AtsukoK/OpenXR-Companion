@@ -16,7 +16,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
         "/EXPORT:xrNegotiateLoaderApiLayerInterface=_xrNegotiateLoaderApiLayerInterface@12")
 endif()
 
-add_executable(vro_test test/test.cpp
+add_executable(vro_test test/test.cpp test/test_parts.cpp
     src/engine.cpp src/screen_ui.cpp src/wheel.cpp src/adjust.cpp src/keyboard.cpp src/wrist.cpp src/config.cpp src/keys.cpp src/panel.cpp src/common.cpp src/screen.cpp src/wincap.cpp src/offsets.cpp src/mirror.cpp src/tracking_log.cpp src/head_smoothing.cpp src/game_offsets.cpp src/overlay.cpp src/game_input.cpp)
 target_include_directories(vro_test PRIVATE
     ${CMAKE_SOURCE_DIR}/../third_party/openxr-sdk/include
