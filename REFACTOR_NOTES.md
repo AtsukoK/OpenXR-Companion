@@ -47,9 +47,15 @@ after every step. Commit after every step.
 - 2026-11-20: engine.h private state grouped per feature: KeyboardRun kbRun, ScreenRun scr, OffsetsRun off (fields renamed).
 - 2026-11-20: tests: test_support.h (CHECK, fails, SavePng), test_parts.cpp (game offsets, overlay, game input). 201 checks pass.
 
+- 2026-11-21: layer.cpp globals grouped: OurActions gOurs, SessionState gSession, WatchedFiles gFiles.
+- 2026-11-21: editor: .editorconfig + `dotnet format whitespace` (one statement per line); converter classes laid out. Editor smoke-started OK.
+- 2026-11-21: enums instead of strings: ScreenPlace + ScreenSource (config.h, ScreenPlaceKey/ParseScreenPlace), ActMode
+  (ParseActMode/ActModeKey; unknown text -> ActMode::Unknown, which keeps the old fall-through behaviour). Profile files unchanged.
+- 2026-11-21: dist2 refreshed with all of the above.
+
 ## Status / resume here
 Done: steps 1, 2, 4 (layer, via clang-format), 6 (editor file split), 7; most of 3 (files per feature + grouped state; still one Engine class);
 part of 5 (support header + part tests; the engine-flow tests in test.cpp share one running engine, so they stay together).
-Untested in a headset. dist2 refreshed 2026-11-20 22:59 with everything above (copy this dist again after new changes).
-Possible next: Engine feature classes (Keyboard, ScreenMirror, OffsetsPanel) taking an input view; editor dense one-liners (C#, by hand);
-layer.cpp globals into a LayerState struct.
+Untested in a headset. dist2 refreshed 2026-11-21 with everything above (copy this dist again after new changes).
+Possible next: Engine feature classes (Keyboard, ScreenMirror, OffsetsPanel) taking an input view (big: they share input, grab, toasts);
+other string settings (style.anchor, sel.method, blockWhileOpen, face) could become enums the same way.
