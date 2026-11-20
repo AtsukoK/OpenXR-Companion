@@ -3,7 +3,7 @@
 ## v0.2.10 (2026-11-21)
 
 ### Changed
-- **Better optimized and better organized code.** The layer and the editor were restructured for speed and readability; nothing changes in how the app works. Uploads in D3D12 games no longer wait for the GPU, and the layer does less work on the game's threads. Settings are saved safely (a crash can't leave a half-written profile).
+- **Better optimized and better organized code.** The layer and the editor were restructured: each feature in its own class and file, named settings instead of loose text, one statement per line. Nothing changes in how the app works.
 
 ## v0.2.9 (2026-11-20)
 
