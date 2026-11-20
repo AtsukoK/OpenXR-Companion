@@ -864,7 +864,7 @@ void Engine::ScreenInteract() {
     const ScreenStyle& S = prof->screen;
     bool onWrist = screen.place == "wrist_left" || screen.place == "wrist_right";
     int wh = screen.place == "wrist_left" ? 0 : 1;
-    screen.interactive = S.interact && screen.on && screen.poseValid && !adjust && !wr.open && !kb.visible && screen.monW > 0;
+    screen.interactive = S.interact && screen.on && screen.poseValid && !adjust && !wr.open && !(kb.visible && kbOpenTime > now - 0.25) && screen.monW > 0; // works next to the open keyboard too
     ScreenUi();
     if (uiHand >= 0 || screen.pickOpen) screen.interactive = false; // the bar or the picker has the laser
     int hand = -1; float hu = 0, hv = 0;
@@ -872,6 +872,7 @@ void Engine::ScreenInteract() {
         int order[2] = { screen.hoverHand >= 0 ? screen.hoverHand : 1, screen.hoverHand >= 0 ? 1 - screen.hoverHand : 0 };
         for (int g : order) {
             if (onWrist && g == wh) continue; // the arm it sits on can't point at it
+            if (kb.visible && kb.hover[g] >= 0 && !(g == screen.hoverHand && (mouseL || mouseR))) continue; // pointing at a key: the keyboard has it
             float u, v, t;
             if (!ScreenRay(g, u, v, t)) continue;
             bool held = g == screen.hoverHand && (mouseL || mouseR); // dragging keeps going past the edge
