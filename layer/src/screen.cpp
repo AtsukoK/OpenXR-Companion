@@ -147,7 +147,7 @@ bool ScreenCapture::TakeFrame(std::vector<uint32_t>& out, int& w, int& h) {
     if (!d) return false;
     std::lock_guard l(d->mx);
     if (!d->fresh) return false;
-    out = d->px; w = d->w; h = d->h; d->fresh = false;
+    out.swap(d->px); w = d->w; h = d->h; d->fresh = false; // a swap, not an 8 MB copy on the game's render thread
     return true;
 }
 
