@@ -41,11 +41,15 @@ after every step. Commit after every step.
   Editors.cs -> Choices, FormControls, Theme, EditorBase, KeyBox, ActionEditor, BindingEditor, WheelPreview, WheelEditor.
   Editor builds and opens (6 s smoke start). Full build_all OK, tests 0 failures.
 
+- 2026-11-20: dist2 made in the main folder (G:/Claude/VR Radial Overlay/dist2) from the build before the items below, for the user to try.
+- 2026-11-20: game_input.h/.cpp: GameInputFilter (button/trigger/stick filtering, InputFeature), tests. layer.cpp ~760 lines before format.
+- 2026-11-20: layer/.clang-format added and applied to layer src + tests (one statement per line; no code changes).
+- 2026-11-20: engine.h private state grouped per feature: KeyboardRun kbRun, ScreenRun scr, OffsetsRun off (fields renamed).
+- 2026-11-20: tests: test_support.h (CHECK, fails, SavePng), test_parts.cpp (game offsets, overlay, game input). 201 checks pass.
+
 ## Status / resume here
-Done: steps 1, 2 (layer.cpp 1465 -> ~870), 6 (file split), 7. Untested in a headset.
-Left: step 3 (Engine feature classes: group private state per feature in engine.h, e.g. KeyboardRun/ScreenRun/OffsetsRun,
-then classes with an input view), step 4 (dense one-liners: config.cpp, panel.cpp, keyboard.cpp, wrist.cpp, offsets.cpp,
-input hooks in layer.cpp), step 5 (test.cpp ~1400 lines -> per-feature files with shared helpers),
-layer.cpp input hooks (Evaluate / GetActionState* / EnsureActions) -> game_input.cpp.
-To try it: dist in this folder is NOT registered; copy the dist DLLs over G:/Claude/VR Radial Overlay/dist (both x86 and 64)
-or register this dist with the editor's Install layer, after the user agrees.
+Done: steps 1, 2, 4 (layer, via clang-format), 6 (editor file split), 7; most of 3 (files per feature + grouped state; still one Engine class);
+part of 5 (support header + part tests; the engine-flow tests in test.cpp share one running engine, so they stay together).
+Untested in a headset. dist2 is OLDER than the last 5 commits; refresh it (copy this dist) when the user is not running it.
+Possible next: Engine feature classes (Keyboard, ScreenMirror, OffsetsPanel) taking an input view; editor dense one-liners (C#, by hand);
+layer.cpp globals into a LayerState struct.
