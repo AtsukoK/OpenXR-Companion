@@ -1383,17 +1383,17 @@ int main(int argc, char** argv) {
         Action tg;
         tg.type = ActType::Screen;
         tg.mode = "toggle";
-        tg.place = "wrist_left";
+        tg.place = ScreenPlace::WristLeft;
         CHECK(!e.screen.on, "screen: off at start (start_on false)");
         e.ScreenAction(tg);
         step();
-        CHECK(e.screen.on && e.screen.place == "wrist_left" && e.screen.poseValid && e.IsOn(tg),
+        CHECK(e.screen.on && e.screen.place == ScreenPlace::WristLeft && e.screen.poseValid && e.IsOn(tg),
               "screen: wrist button turns it on, on the left wrist");
         Action fr2 = tg;
-        fr2.place = "front";
+        fr2.place = ScreenPlace::Front;
         e.ScreenAction(fr2);
         step();
-        CHECK(e.screen.on && e.screen.place == "front" && e.screen.poseValid && !e.IsOn(tg) && e.IsOn(fr2),
+        CHECK(e.screen.on && e.screen.place == ScreenPlace::Front && e.screen.poseValid && !e.IsOn(tg) && e.IsOn(fr2),
               "screen: a button for another place moves it there");
         CHECK(e.screen.pose.position.z < -0.5f, "screen: front is placed in front of the head");
         e.ScreenAction(fr2);
@@ -1424,9 +1424,9 @@ int main(int argc, char** argv) {
         Action np;
         np.type = ActType::Screen;
         np.mode = "next_place";
-        e.screen.place = "head";
+        e.screen.place = ScreenPlace::Head;
         e.ScreenAction(np);
-        CHECK(e.screen.place == "wrist_left", "screen: next place cycles head -> left wrist");
+        CHECK(e.screen.place == ScreenPlace::WristLeft, "screen: next place cycles head -> left wrist");
         std::string perr;
         auto bad = ParseProfileText(R"({"bindings":[{"name":"x","input":"left.x","action":{"type":"screen","place":"ceiling"}}]})", perr);
         CHECK(!bad, "screen: unknown place is a profile error");
@@ -1434,7 +1434,7 @@ int main(int argc, char** argv) {
     // ---------------- mirrored screen: adjust mode
     {
         auto q = ParseProfileText(DefaultProfileJson(), err);
-        q->screen.place = "front";
+        q->screen.place = ScreenPlace::Front;
         q->screen.distance = 0.9f;
         q->screen.below = 0.05f;
         q->screen.width = 0.8f;
@@ -1509,7 +1509,7 @@ int main(int argc, char** argv) {
     {
         Keys::SetDryRun(true);
         auto q = ParseProfileText(DefaultProfileJson(), err);
-        q->screen.place = "front";
+        q->screen.place = ScreenPlace::Front;
         q->screen.distance = 1.0f;
         q->screen.below = 0.f;
         q->screen.width = 1.0f;
@@ -1593,7 +1593,7 @@ int main(int argc, char** argv) {
         nw.mode = "next_window";
         uint64_t ask0 = e.screen.windowAsk;
         e.ScreenAction(nw);
-        CHECK(e.screen.on && e.screen.source == "window" && e.screen.windowStep == 1 && e.screen.windowAsk == ask0 + 1,
+        CHECK(e.screen.on && e.screen.source == ScreenSource::Window && e.screen.windowStep == 1 && e.screen.windowAsk == ask0 + 1,
               "screen window: next window switches to windows and asks for the next one");
         nw.mode = "prev_window";
         e.ScreenAction(nw);
@@ -1603,16 +1603,17 @@ int main(int argc, char** argv) {
         nm.mode = "next_monitor";
         e.screen.monitorCount = 2;
         e.ScreenAction(nm);
-        CHECK(e.screen.source == "monitor", "screen window: next monitor goes back to monitors");
+        CHECK(e.screen.source == ScreenSource::Monitor, "screen window: next monitor goes back to monitors");
         Action sw;
         sw.type = ActType::Screen;
         sw.mode = "on";
         sw.window = "chrome";
         e.ScreenAction(sw);
-        CHECK(e.screen.source == "window" && e.screen.windowMatch == "chrome", "screen window: a button can show a window by name");
+        CHECK(e.screen.source == ScreenSource::Window && e.screen.windowMatch == "chrome",
+              "screen window: a button can show a window by name");
         std::string perr;
         auto pj = ParseProfileText(R"({"screen":{"source":"window","window":"discord"}})", perr);
-        CHECK(pj && pj->screen.source == "window" && pj->screen.window == "discord",
+        CHECK(pj && pj->screen.source == ScreenSource::Window && pj->screen.window == "discord",
               "screen window: profile can start on a window by name");
     }
     // ---------------- mirrored screen: real window capture on this PC
@@ -1677,7 +1678,7 @@ int main(int argc, char** argv) {
     {
         Keys::SetDryRun(true);
         auto q = ParseProfileText(DefaultProfileJson(), err);
-        q->screen.place = "front";
+        q->screen.place = ScreenPlace::Front;
         q->screen.distance = 1.0f;
         q->screen.below = 0.f;
         q->screen.width = 1.0f;
@@ -1764,7 +1765,7 @@ int main(int argc, char** argv) {
         step(2);
         f.h[1].trig = 0.f;
         step(2);
-        CHECK(!e.screen.pickOpen && e.screen.source == "window" && e.screen.hwnd == 1002,
+        CHECK(!e.screen.pickOpen && e.screen.source == ScreenSource::Window && e.screen.hwnd == 1002,
               "screen picker: picking a window shows that window");
         // keyboard button
         f.h[1].aimPose.position = { 0.f, 1.6f, -0.2f };
@@ -1804,7 +1805,7 @@ int main(int argc, char** argv) {
         step(2);
         f.h[1].trig = 0.f;
         step(2);
-        CHECK(!e.screen.pickOpen && e.screen.place == "front", "screen bar: Cancel leaves it where it was");
+        CHECK(!e.screen.pickOpen && e.screen.place == ScreenPlace::Front, "screen bar: Cancel leaves it where it was");
         f.h[1].aimPose.position = { 0.f, 1.6f, -0.2f };
         step(2);
         ListLayout(6, 6, e.screen.barH / e.screen.barW, false, cells, hd);
@@ -1821,7 +1822,7 @@ int main(int argc, char** argv) {
         step(2);
         f.h[1].trig = 0.f;
         step(2);
-        CHECK(e.screen.place == "head", "screen bar: picking 'Following my view' moves it there");
+        CHECK(e.screen.place == ScreenPlace::Head, "screen bar: picking 'Following my view' moves it there");
         // Adjust: turns adjust mode on; the bar becomes one Done button
         float bw0 = e.screen.barW;
         f.h[1].aimPose.position = X(V(e.screen.pose.position) + Vec3{ 0, 0, 0.5f });
@@ -1856,8 +1857,8 @@ int main(int argc, char** argv) {
         }
         auto q = ParseProfileText(DefaultProfileJson(), err);
         q->sourceName = "vro_choice_test.json";
-        CHECK(q->screen.source == "monitor", "screen choice: the default is a monitor");
-        q->screen.source = "window";
+        CHECK(q->screen.source == ScreenSource::Monitor, "screen choice: the default is a monitor");
+        q->screen.source = ScreenSource::Window;
         q->screen.window = "chrome";
         q->screen.windowTitle = "Chat - Twitch";
         std::string serr;
@@ -1868,14 +1869,14 @@ int main(int argc, char** argv) {
         ss << in.rdbuf();
         in.close();
         auto back = ParseProfileText(ss.str(), err);
-        CHECK(ok && back && back->screen.source == "window" && back->screen.window == "chrome" &&
+        CHECK(ok && back && back->screen.source == ScreenSource::Window && back->screen.window == "chrome" &&
                   back->screen.windowTitle == "Chat - Twitch" && back->wheels.size() == q->wheels.size(),
               "screen choice: a picked window is saved as the default and the rest of the profile is kept");
         Engine e;
         e.SetProfile(back);
-        CHECK(e.screen.source == "window" && e.screen.windowMatch == "chrome" && e.screen.windowTitle == "Chat - Twitch",
+        CHECK(e.screen.source == ScreenSource::Window && e.screen.windowMatch == "chrome" && e.screen.windowTitle == "Chat - Twitch",
               "screen choice: the next start asks for that same window");
-        q->screen.source = "monitor";
+        q->screen.source = ScreenSource::Monitor;
         q->screen.monitor = 2;
         SaveScreenChoice(*q, serr);
         std::ifstream in2(path, std::ios::binary);
@@ -1883,7 +1884,7 @@ int main(int argc, char** argv) {
         s2 << in2.rdbuf();
         in2.close();
         auto back2 = ParseProfileText(s2.str(), err);
-        CHECK(back2 && back2->screen.source == "monitor" && back2->screen.monitor == 2,
+        CHECK(back2 && back2->screen.source == ScreenSource::Monitor && back2->screen.monitor == 2,
               "screen choice: a picked monitor is saved as the default");
         Action nm;
         nm.type = ActType::Screen;
@@ -1897,7 +1898,7 @@ int main(int argc, char** argv) {
     {
         auto run = [&](float strength, float& jitter, float& lagAfter) {
             auto q = ParseProfileText(DefaultProfileJson(), err);
-            q->screen.place = "wrist_left";
+            q->screen.place = ScreenPlace::WristLeft;
             q->screen.smoothing = strength;
             Engine e;
             e.SetProfile(q);

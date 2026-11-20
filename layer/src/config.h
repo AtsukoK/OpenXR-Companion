@@ -2,6 +2,7 @@
 #include "common.h"
 #include <map>
 #include <memory>
+#include <optional>
 
 // Physical controller parts. BTN1 = A (right) / X (left), BTN2 = B / Y.
 enum Comp { C_BTN1, C_BTN2, C_TRIGGER, C_GRIP, C_STICK, C_THUMBREST, C_MENU, C_COUNT };
@@ -19,6 +20,22 @@ int ParseCompName(const std::string& s); // "trigger", "primary", ... -> Comp or
 
 enum class ActType { None, Key, Sequence, XrInput, Wheel, Back, Close, Layer, Reload, Keyboard, Page, Adjust, Screen, Offsets, Mirror };
 
+// Where the mirrored screen is shown.
+enum class ScreenPlace { WristLeft, WristRight, Front /* stays where it appears */, Head /* follows the view */ };
+constexpr ScreenPlace kScreenPlaces[] = { ScreenPlace::WristLeft, ScreenPlace::WristRight, ScreenPlace::Front, ScreenPlace::Head };
+// The text used in profile files: wrist_left, wrist_right, front, head.
+const char* ScreenPlaceKey(ScreenPlace p);
+bool ParseScreenPlace(const std::string& key, ScreenPlace& out);
+inline bool IsWristPlace(ScreenPlace p) {
+    return p == ScreenPlace::WristLeft || p == ScreenPlace::WristRight;
+}
+inline int WristHandOf(ScreenPlace p) {
+    return p == ScreenPlace::WristLeft ? 0 : 1;
+}
+
+// What the mirrored screen shows: a whole monitor or one window.
+enum class ScreenSource { Monitor, Window };
+
 struct Action {
     ActType type = ActType::None;
     std::string keys;         // key: "Ctrl+S"
@@ -31,9 +48,9 @@ struct Action {
     std::string page;             // page: wrist panel page name
     InputId target;               // xr_input: game input to fake
     // screen: mode toggle|on|off|next_monitor|prev_monitor|next_fps|next_place
-    std::string place;  // screen: where to show it when turned on (empty = the profile's place)
-    std::string window; // screen: show the first window whose title or program contains this
-    int monitor = -1;   // screen: which monitor when turned on (-1 = keep, 0 = main, 1..N left to right)
+    std::optional<ScreenPlace> place; // screen: where to show it when turned on (none = the profile's place)
+    std::string window;               // screen: show the first window whose title or program contains this
+    int monitor = -1;                 // screen: which monitor when turned on (-1 = keep, 0 = main, 1..N left to right)
 };
 
 struct Binding {
@@ -148,13 +165,13 @@ struct PointerStyle {
 
 // A desktop monitor shown in VR (mirrored with Desktop Duplication).
 struct ScreenStyle {
-    int monitor = 0;                                // 0 = the main monitor, 1..N = monitors from left to right
-    std::string source = "monitor";                 // monitor | window
+    int monitor = 0; // 0 = the main monitor, 1..N = monitors from left to right
+    ScreenSource source = ScreenSource::Monitor;
     std::string window;                             // source window: the first window whose title or program name contains this
     std::string windowTitle;                        // remembered from the last pick: a window with exactly this title wins
     int fps = 30;                                   // capture rate cap; 0 = as fast as the headset draws
     std::vector<int> fpsSteps{ 10, 15, 30, 60, 0 }; // what "next frame rate" cycles through
-    std::string place = "wrist_left";               // wrist_left|wrist_right|front|head
+    ScreenPlace place = ScreenPlace::WristLeft;
     // on a forearm
     float wristWidth = 0.16f, towardElbow = 0.14f, lift = 0.03f, side = 0.f, rotateDeg = 0.f;
     std::string face = "back"; // back = watch side, inner = palm side
@@ -164,7 +181,7 @@ struct ScreenStyle {
     float opacity = 1.f;
     bool cursor = true;                    // draw the mouse pointer
     bool startOn = false;                  // shown when the game starts
-    std::map<std::string, FreePose> poses; // per place, placed by hand in adjust mode
+    std::map<std::string, FreePose> poses; // per place (ScreenPlaceKey), placed by hand in adjust mode
     bool interact = true;                  // point at it to move the mouse, trigger = left click, A/X = right click, stick = scroll
     bool refocus = true;                   // give the game its window back after clicking on the desktop
     float barScale = 0.7f;                 // size of the button bar under the screen

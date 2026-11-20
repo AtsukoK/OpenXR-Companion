@@ -102,10 +102,10 @@ struct ScreenChoice {
 // Mirrored desktop monitor. The engine decides if and where; the layer captures and draws it.
 struct ScreenView {
     bool on = false;
-    bool shown = false;               // on, or adjust mode (shown so it can be moved)
-    std::string place = "wrist_left"; // wrist_left|wrist_right|front|head
-    int monitor = 0;                  // 0 = main, 1..N left to right
-    int fps = 30;                     // 0 = every headset frame
+    bool shown = false; // on, or adjust mode (shown so it can be moved)
+    ScreenPlace place = ScreenPlace::WristLeft;
+    int monitor = 0; // 0 = main, 1..N left to right
+    int fps = 30;    // 0 = every headset frame
     XrPosef pose{ { 0, 0, 0, 1 }, { 0, 0, 0 } };
     float widthM = 0.16f;
     bool poseValid = false;
@@ -113,14 +113,14 @@ struct ScreenView {
     int monitorCount = 0, primaryIndex = 1;
     int monX = 0, monY = 0, monW = 0, monH = 0; // the shown monitor or window on the desktop (pixels)
     // Showing one window instead of a monitor. The engine asks, the layer picks the window.
-    std::string source = "monitor"; // monitor | window
-    int windowStep = 0;             // asked: +1 next / -1 previous window (layer clears it)
-    std::string windowMatch;        // asked: a window whose title or program contains this (layer clears it)
-    uint64_t windowAsk = 0;         // bumped on every ask
-    uintptr_t hwnd = 0;             // the window shown (set by the layer)
-    std::string windowTitle;        // asked with windowMatch: prefer a window with exactly this title
-    bool choiceChanged = false;     // picked in the headset: the layer saves it as the new default
-    float aspect = 9.f / 16.f;      // picture height / width
+    ScreenSource source = ScreenSource::Monitor;
+    int windowStep = 0;         // asked: +1 next / -1 previous window (layer clears it)
+    std::string windowMatch;    // asked: a window whose title or program contains this (layer clears it)
+    uint64_t windowAsk = 0;     // bumped on every ask
+    uintptr_t hwnd = 0;         // the window shown (set by the layer)
+    std::string windowTitle;    // asked with windowMatch: prefer a window with exactly this title
+    bool choiceChanged = false; // picked in the headset: the layer saves it as the new default
+    float aspect = 9.f / 16.f;  // picture height / width
     // Pointing at it: which hand moves the mouse (-1 = none), and whether pointing works right now.
     int hoverHand = -1;
     bool interactive = false;

@@ -162,15 +162,18 @@ static Action ParseAction(const json& j, const std::string& ctx) {
     Get(j, "confirm", a.confirm);
     a.confirm = Lower(a.confirm);
     Get(j, "layer", a.layer);
-    Get(j, "place", a.place);
-    a.place = Lower(a.place);
+    std::string place;
+    Get(j, "place", place);
+    place = Lower(place);
     Get(j, "monitor", a.monitor);
     Get(j, "window", a.window);
     if (a.mode.empty()) a.mode = "tap";
     if (a.type == ActType::Screen && (a.mode == "tap" || a.mode == "hold")) a.mode = "toggle";
-    if (a.type == ActType::Screen && !a.place.empty() && a.place != "wrist_left" && a.place != "wrist_right" && a.place != "front" &&
-        a.place != "head")
-        throw std::runtime_error(ctx + ": screen place must be wrist_left, wrist_right, front or head");
+    if (a.type == ActType::Screen && !place.empty()) {
+        ScreenPlace sp;
+        if (!ParseScreenPlace(place, sp)) throw std::runtime_error(ctx + ": screen place must be wrist_left, wrist_right, front or head");
+        a.place = sp;
+    }
     if (a.type == ActType::Mirror) {
         if (a.mode == "tap" || a.mode == "hold") a.mode = "toggle";
         if (a.mode != "toggle" && a.mode != "on" && a.mode != "off")
@@ -356,9 +359,9 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
         auto& S = p->screen;
         Get(k, "monitor", S.monitor);
         Get(k, "fps", S.fps);
-        Get(k, "source", S.source);
-        S.source = Lower(S.source);
-        if (S.source != "window") S.source = "monitor";
+        std::string source;
+        Get(k, "source", source);
+        S.source = Lower(source) == "window" ? ScreenSource::Window : ScreenSource::Monitor;
         Get(k, "window", S.window);
         Get(k, "window_title", S.windowTitle);
         if (k.contains("fps_steps") && k["fps_steps"].is_array()) {
@@ -367,9 +370,9 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
                 if (v.is_number()) S.fpsSteps.push_back(std::clamp(v.get<int>(), 0, 240));
             if (S.fpsSteps.empty()) S.fpsSteps = { 10, 15, 30, 60, 0 };
         }
-        Get(k, "place", S.place);
-        S.place = Lower(S.place);
-        if (S.place != "wrist_left" && S.place != "wrist_right" && S.place != "front" && S.place != "head") S.place = "wrist_left";
+        std::string place;
+        Get(k, "place", place);
+        if (!ParseScreenPlace(Lower(place), S.place)) S.place = ScreenPlace::WristLeft;
         Get(k, "wrist_width_m", S.wristWidth);
         Get(k, "toward_elbow_m", S.towardElbow);
         Get(k, "lift_m", S.lift);
@@ -799,9 +802,9 @@ bool SaveScreenChoice(const Profile& p, std::string& err) {
         json j = json::parse(text, nullptr, true, true);
         json& sc = j["screen"];
         const ScreenStyle& S = p.screen;
-        sc["source"] = S.source;
+        sc["source"] = S.source == ScreenSource::Window ? "window" : "monitor";
         sc["monitor"] = S.monitor;
-        if (S.source == "window") {
+        if (S.source == ScreenSource::Window) {
             sc["window"] = S.window;
             sc["window_title"] = S.windowTitle;
         } else {
@@ -1105,4 +1108,28 @@ extern "C" __declspec(dllexport) int vro_check_keys(const char* text, int seq, c
     bool ok = seq ? Keys::ValidateSequence(text ? text : "", e) : Keys::Validate(text ? text : "", e);
     if (errLen > 0) strncpy_s(err, errLen, ok ? "" : e.c_str(), _TRUNCATE);
     return ok ? 1 : 0;
+}
+
+const char* ScreenPlaceKey(ScreenPlace p) {
+    switch (p) {
+    case ScreenPlace::WristLeft:
+        return "wrist_left";
+    case ScreenPlace::WristRight:
+        return "wrist_right";
+    case ScreenPlace::Front:
+        return "front";
+    case ScreenPlace::Head:
+        return "head";
+    }
+    return "wrist_left";
+}
+
+bool ParseScreenPlace(const std::string& key, ScreenPlace& out) {
+    for (ScreenPlace p : kScreenPlaces) {
+        if (key == ScreenPlaceKey(p)) {
+            out = p;
+            return true;
+        }
+    }
+    return false;
 }

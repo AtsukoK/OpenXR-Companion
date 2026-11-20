@@ -88,8 +88,8 @@ void TestGameHandOffsets() { // game hand offsets (GameHandOffsets): only regist
 
 void TestOverlay() { // overlay: what is visible ends up as quad layers in the frame, nothing when hidden, swapchains freed at the end
     ID3D11DeviceContext* ctx = nullptr;
-    D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, D3D11_SDK_VERSION,
-                      &fake11::dev, nullptr, &ctx);
+    D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, D3D11_SDK_VERSION, &fake11::dev,
+                      nullptr, &ctx);
     if (!fake11::dev) {
         printf("skip: overlay (no D3D11 WARP device)\n");
     } else {
@@ -152,8 +152,7 @@ void TestGameInputFilter() { // game input filter: path parsing, values pass thr
           "game input: right trigger value parses");
     CHECK(ParseGameInputPath("/user/hand/left/input/thumbstick", hand, comp, f) && hand == 0 && f == InputFeature::Vector,
           "game input: a bare thumbstick path is the 2D value");
-    CHECK(!ParseGameInputPath("/user/hand/left/input/system/click", hand, comp, f),
-          "game input: the system button is not ours to change");
+    CHECK(!ParseGameInputPath("/user/hand/left/input/system/click", hand, comp, f), "game input: the system button is not ours to change");
     std::string err;
     Engine e;
     e.SetProfile(ParseProfileText(DefaultProfileJson(), err));

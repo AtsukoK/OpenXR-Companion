@@ -12,14 +12,14 @@ void Engine::SetProfile(std::shared_ptr<Profile> p) {
         screen.place = S.place;
         screen.monitor = S.monitor;
         screen.fps = S.fps;
-        if (S.source == "window" && screen.source != "window") {
-            screen.source = "window";
+        if (S.source == ScreenSource::Window && screen.source != ScreenSource::Window) {
+            screen.source = ScreenSource::Window;
             screen.windowMatch = S.window;
             screen.windowTitle = S.windowTitle;
             screen.windowStep = 0;
             screen.windowAsk++;
-        } else if (S.source == "monitor")
-            screen.source = "monitor";
+        } else if (S.source == ScreenSource::Monitor)
+            screen.source = ScreenSource::Monitor;
         if (!scr.init) {
             screen.on = S.startOn;
             scr.placeFront = screen.on;
@@ -76,7 +76,7 @@ bool Engine::IsOn(const Action& a) const {
     case ActType::Layer:
         return layers.count(a.layer) > 0;
     case ActType::Screen:
-        return (a.mode == "toggle" || a.mode == "on") && screen.on && (a.place.empty() || a.place == screen.place);
+        return (a.mode == "toggle" || a.mode == "on") && screen.on && (!a.place || *a.place == screen.place);
     case ActType::Mirror:
         return a.mode != "off" && mirrorOn;
     case ActType::Offsets:

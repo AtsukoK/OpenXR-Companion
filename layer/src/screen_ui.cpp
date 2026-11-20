@@ -6,20 +6,30 @@
 #include <algorithm>
 
 // ------------------------------------------------------------ mirrored screen
-static const char* PlaceName(const std::string& p) {
-    return p == "wrist_left" ? "left wrist" : p == "wrist_right" ? "right wrist" : p == "front" ? "in front of you" : "following your view";
+static const char* PlaceName(ScreenPlace p) {
+    switch (p) {
+    case ScreenPlace::WristLeft:
+        return "left wrist";
+    case ScreenPlace::WristRight:
+        return "right wrist";
+    case ScreenPlace::Front:
+        return "in front of you";
+    case ScreenPlace::Head:
+        return "following your view";
+    }
+    return "";
 }
 
 void Engine::ScreenAction(const Action& a) {
     const std::string& m = a.mode;
     auto turnOn = [&] {
-        if (!a.place.empty()) screen.place = a.place;
+        if (a.place) screen.place = *a.place;
         if (a.monitor >= 0) {
             screen.monitor = a.monitor;
-            screen.source = "monitor";
+            screen.source = ScreenSource::Monitor;
         }
         if (!a.window.empty()) {
-            screen.source = "window";
+            screen.source = ScreenSource::Window;
             screen.windowMatch = a.window;
             screen.windowStep = 0;
             screen.windowAsk++;
@@ -40,10 +50,10 @@ void Engine::ScreenAction(const Action& a) {
         int n = std::max(1, screen.monitorCount);
         int cur = screen.monitor == 0 ? screen.primaryIndex : screen.monitor;
         cur = m == "next_monitor" ? cur % n + 1 : (cur + n - 2) % n + 1;
-        if (screen.source == "window")
+        if (screen.source == ScreenSource::Window)
             cur = screen.monitor == 0 ? screen.primaryIndex : screen.monitor; // back to monitors: start where it was
         screen.monitor = cur;
-        screen.source = "monitor";
+        screen.source = ScreenSource::Monitor;
         screen.choiceChanged = true;
         if (!screen.on) {
             screen.on = true;
@@ -51,7 +61,7 @@ void Engine::ScreenAction(const Action& a) {
         }
         Toast("Screen: monitor " + std::to_string(cur) + " of " + std::to_string(n), 1.5);
     } else if (m == "next_window" || m == "prev_window") {
-        screen.source = "window";
+        screen.source = ScreenSource::Window;
         screen.windowStep = m == "next_window" ? 1 : -1;
         screen.windowMatch.clear();
         screen.windowAsk++;
@@ -75,21 +85,21 @@ void Engine::ScreenAction(const Action& a) {
         screen.fps = st.empty() ? 30 : st[(i + 1) % st.size()]; // not in the list: starts at the first
         Toast(screen.fps ? "Screen: " + std::to_string(screen.fps) + " fps" : std::string("Screen: every frame"), 1.5);
     } else if (m == "next_place") {
-        static const char* order[] = { "wrist_left", "wrist_right", "front", "head" };
+        const int n = (int)std::size(kScreenPlaces);
         int i = 0;
-        while (i < 4 && screen.place != order[i])
+        while (i < n && screen.place != kScreenPlaces[i])
             i++;
-        screen.place = order[(i + 1) % 4];
+        screen.place = kScreenPlaces[(i + 1) % n];
         screen.on = true;
         scr.placeFront = true;
         Toast(std::string("Screen: ") + PlaceName(screen.place), 1.5);
     } else { // toggle: the same button with another place moves it there instead of turning it off
-        if (screen.on && (a.place.empty() || a.place == screen.place))
+        if (screen.on && (!a.place || *a.place == screen.place))
             turnOff();
         else
             turnOn();
     }
-    Log("screen %s: on %d place %s monitor %d fps %d", m.c_str(), screen.on, screen.place.c_str(), screen.monitor, screen.fps);
+    Log("screen %s: on %d place %s monitor %d fps %d", m.c_str(), screen.on, ScreenPlaceKey(screen.place), screen.monitor, screen.fps);
 }
 
 void Engine::UpdateScreen() {
@@ -105,7 +115,7 @@ void Engine::UpdateScreen() {
     }
     ScreenStyle& S = prof->screen;
     ScreenPose();
-    if (screen.poseValid && screen.place != "front" && grab.target != GrabTarget::Screen) {
+    if (screen.poseValid && screen.place != ScreenPlace::Front && grab.target != GrabTarget::Screen) {
         float dt = (float)std::clamp(now - lastNow, 0.0, 0.25);
         screen.pose = screenSmooth.Apply(screen.pose, dt, S.smoothing);
     } else
@@ -116,8 +126,8 @@ void Engine::UpdateScreen() {
     if (kb.visible && prof->dock.mode != DockMode::Apart) return; // docked: Adjust dock (on the keyboard's bar) places it
 
     // Adjust mode: a grip near the screen grabs it; it keeps the hand's angle, the stick resizes.
-    bool onWrist = screen.place == "wrist_left" || screen.place == "wrist_right";
-    int wh = screen.place == "wrist_left" ? 0 : 1;
+    bool onWrist = IsWristPlace(screen.place);
+    int wh = WristHandOf(screen.place);
     Vec3 c = V(screen.pose.position);
     if (!grab.Active()) {
         for (int g = 0; g < 2; g++) {
@@ -146,11 +156,11 @@ void Engine::UpdateScreen() {
     if (onWrist) {
         if (!fr.h[wh].gripValid) return;
         frame = fr.h[wh].gripPose;
-    } else if (screen.place == "head")
+    } else if (screen.place == ScreenPlace::Head)
         frame = fr.head;
     else
         frame = scr.frontFrame;
-    S.poses[screen.place] = { true, PMul(PInv(frame), obj) };
+    S.poses[ScreenPlaceKey(screen.place)] = { true, PMul(PInv(frame), obj) };
     if (onWrist)
         S.wristWidth = std::clamp(S.wristWidth * (1.f + dz(hr.sy) * dt * 0.8f), 0.04f, 0.6f);
     else
@@ -162,14 +172,14 @@ void Engine::ScreenPose() {
     screen.poseValid = false;
     const ScreenStyle& S = prof->screen;
     if (scr.placeFront && fr.headValid) scr.frontFrame = YawFrame(fr.head);
-    auto fp = S.poses.find(screen.place);
+    auto fp = S.poses.find(ScreenPlaceKey(screen.place));
     if (fp != S.poses.end() && fp->second.set) { // placed by hand in adjust mode
-        bool onWrist = screen.place == "wrist_left" || screen.place == "wrist_right";
-        int wh = screen.place == "wrist_left" ? 0 : 1;
+        bool onWrist = IsWristPlace(screen.place);
+        int wh = WristHandOf(screen.place);
         if (onWrist) {
             if (!fr.h[wh].gripValid) return;
             screen.pose = PMul(fr.h[wh].gripPose, fp->second.p);
-        } else if (screen.place == "head") {
+        } else if (screen.place == ScreenPlace::Head) {
             if (!fr.headValid) return;
             screen.pose = PMul(fr.head, fp->second.p);
         } else {
@@ -183,8 +193,8 @@ void Engine::ScreenPose() {
         screen.poseValid = true;
         return;
     }
-    if (screen.place == "wrist_left" || screen.place == "wrist_right") {
-        int h = screen.place == "wrist_left" ? 0 : 1;
+    if (IsWristPlace(screen.place)) {
+        int h = WristHandOf(screen.place);
         const HandRaw& hr = fr.h[h];
         if (!hr.gripValid) return;
         const XrQuaternionf& q = hr.gripPose.orientation;
@@ -205,7 +215,7 @@ void Engine::ScreenPose() {
     }
     if (!fr.headValid) return;
     const XrPosef& hp = fr.head;
-    if (screen.place == "head") {
+    if (screen.place == ScreenPlace::Head) {
         Vec3 fwd = Rotate(hp.orientation, { 0, 0, -1 }), up = Rotate(hp.orientation, { 0, 1, 0 });
         screen.pose = { hp.orientation, X(V(hp.position) + fwd * S.distance - up * S.below) };
         screen.widthM = S.width;
@@ -251,8 +261,8 @@ bool Engine::ScreenRay(int h, float& u, float& v, float& t) const {
 void Engine::ScreenInteract() {
     const ScreenStyle& S = prof->screen;
     bool dockedToKb = kb.visible && prof->dock.mode == DockMode::ScreenOnKeys; // it sits above the keyboard then, not on the arm
-    bool onWrist = !dockedToKb && (screen.place == "wrist_left" || screen.place == "wrist_right");
-    int wh = screen.place == "wrist_left" ? 0 : 1;
+    bool onWrist = !dockedToKb && (IsWristPlace(screen.place));
+    int wh = WristHandOf(screen.place);
     screen.interactive = S.interact && screen.on && screen.poseValid && !adjust && !wr.open &&
                          !(kb.visible && kbRun.openTime > now - 0.25) && screen.monW > 0; // works next to the open keyboard too
     ScreenUi();
@@ -316,7 +326,7 @@ void Engine::ScreenInteract() {
     // buttons: press only on a fresh press while pointing, so a held game trigger doesn't click
     bool trig = cur[hand][C_TRIGGER][F_PRESS], trigEdge = trig && !prev[hand][C_TRIGGER][F_PRESS];
     bool b1 = cur[hand][C_BTN1][F_PRESS], b1Edge = b1 && !prev[hand][C_BTN1][F_PRESS];
-    if ((trigEdge || b1Edge) && screen.source == "window" && screen.hwnd) Keys::BringToFront(screen.hwnd);
+    if ((trigEdge || b1Edge) && screen.source == ScreenSource::Window && screen.hwnd) Keys::BringToFront(screen.hwnd);
     if (trigEdge && !scr.mouseL) {
         Keys::MouseButton(0, true);
         scr.mouseL = true;
@@ -377,7 +387,7 @@ void Engine::OpenPicker() {
 }
 
 // The picker's cells for the current page: choices, then page buttons and Close.
-static const char* kPlaces[4] = { "wrist_left", "wrist_right", "front", "head" };
+// Picker labels, in the order of kScreenPlaces.
 static const char* kPlaceNames[4] = { "Left wrist", "Right wrist", "In front of me\nstays where it appears", "Following my view" };
 
 void Engine::BuildPicker() {
@@ -386,7 +396,7 @@ void Engine::BuildPicker() {
         screen.pickLabels.clear();
         for (int i = 0; i < 4; i++) {
             scr.pickMap.push_back(i);
-            screen.pickLabels.push_back((screen.place == kPlaces[i] ? "\xE2\x80\xA2 " : "") + std::string(kPlaceNames[i]));
+            screen.pickLabels.push_back((screen.place == kScreenPlaces[i] ? "\xE2\x80\xA2 " : "") + std::string(kPlaceNames[i]));
         }
         scr.pickMap.push_back(-3);
         screen.pickLabels.push_back("Cancel");
@@ -428,8 +438,8 @@ void Engine::PickerActivate(int cell) {
     if (scr.pickMode == PickerMode::Place) {
         screen.pickOpen = false;
         screen.uiVersion++;
-        if (k >= 0 && screen.place != kPlaces[k]) {
-            screen.place = kPlaces[k];
+        if (k >= 0 && screen.place != kScreenPlaces[k]) {
+            screen.place = kScreenPlaces[k];
             scr.placeFront = true;
             Toast(std::string("Screen: ") + kPlaceNames[k], 1.5);
         }
@@ -450,13 +460,13 @@ void Engine::PickerActivate(int cell) {
     if (k == -3) return;
     const ScreenChoice& c = screen.choices[k];
     if (c.hwnd) {
-        screen.source = "window";
+        screen.source = ScreenSource::Window;
         screen.hwnd = c.hwnd;
         screen.windowStep = 0;
         screen.windowMatch.clear();
         screen.windowAsk++;
     } else {
-        screen.source = "monitor";
+        screen.source = ScreenSource::Monitor;
         screen.monitor = c.monitor;
         Toast("Screen: " + c.label.substr(0, c.label.find('\n')), 1.5);
     }
@@ -505,7 +515,7 @@ void Engine::BarActivate(ScreenBarButton button) {
     case ScreenBarButton::Keyboard: // typing goes to the mirrored window: bring it up first
         screen.pickOpen = false;
         screen.uiVersion++;
-        if (screen.source == "window" && screen.hwnd) Keys::BringToFront(screen.hwnd);
+        if (screen.source == ScreenSource::Window && screen.hwnd) Keys::BringToFront(screen.hwnd);
         scr.clicked = true; // so the game gets its window back once you're done
         OpenKeyboard(-1);
         return;
@@ -560,8 +570,8 @@ void Engine::ScreenUi() {
         screen.uiVersion++;
     }
 
-    bool onWrist = screen.place == "wrist_left" || screen.place == "wrist_right";
-    int wh = screen.place == "wrist_left" ? 0 : 1;
+    bool onWrist = IsWristPlace(screen.place);
+    int wh = WristHandOf(screen.place);
     int barHover = -1, pickHover = -1;
     bool pointedAt = false;
     for (int g = 0; g < 2; g++) {

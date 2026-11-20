@@ -124,7 +124,7 @@ void OverlayRenderer::StopScreen(const OverlayContext& c) {
 // The engine asked for another window (next / previous / by name), or the shown one closed.
 void OverlayRenderer::UpdateScreenSource(ScreenView& sv) {
     bool asked = sv.windowAsk != windowAskSeen_;
-    if (sv.source != "window") return;
+    if (sv.source != ScreenSource::Window) return;
     if (!asked && IsWindow((HWND)sv.hwnd) && !capture_.WindowGone()) return;
     windowAskSeen_ = sv.windowAsk;
 
@@ -155,7 +155,7 @@ void OverlayRenderer::UpdateScreenSource(ScreenView& sv) {
 
     if (pick < 0) { // nothing to show: back to the monitor
         if (wins.empty()) eng_.Toast("Screen: no window to show", 2.5);
-        sv.source = "monitor";
+        sv.source = ScreenSource::Monitor;
         sv.hwnd = 0;
         return;
     }
@@ -178,14 +178,14 @@ void OverlayRenderer::FillScreenChoices(ScreenView& sv) {
         c.monitor = i + 1;
         c.label = "Monitor " + std::to_string(i + 1) + (monitors[i].primary ? " (main)" : "") + "\n" + std::to_string(monitors[i].w) +
                   " x " + std::to_string(monitors[i].h);
-        c.current = sv.source != "window" && currentMonitor == i + 1;
+        c.current = sv.source != ScreenSource::Window && currentMonitor == i + 1;
         choices.push_back(c);
     }
     for (auto& w : ScreenCapture::Windows()) {
         ScreenChoice c;
         c.hwnd = w.hwnd;
         c.label = WithoutExtension(w.exe) + "\n" + Shorten(w.title, 60);
-        c.current = sv.source == "window" && sv.hwnd == w.hwnd;
+        c.current = sv.source == ScreenSource::Window && sv.hwnd == w.hwnd;
         choices.push_back(c);
     }
     sv.choices = std::move(choices);
@@ -206,7 +206,7 @@ void OverlayRenderer::RenderScreen(const OverlayContext& c, LayerList& layers) {
         sv.choiceChanged = false;
         ScreenStyle& saved = eng_.prof->screen;
         saved.source = sv.source;
-        if (sv.source == "window") {
+        if (sv.source == ScreenSource::Window) {
             saved.window = pickedExe_;
             saved.windowTitle = pickedTitle_;
         } else {
@@ -215,12 +215,13 @@ void OverlayRenderer::RenderScreen(const OverlayContext& c, LayerList& layers) {
         std::string err;
         if (SaveScreenChoice(*eng_.prof, err)) {
             if (onProfileSaved) onProfileSaved();
-            Log("screen: remembered %s", sv.source == "window" ? pickedTitle_.c_str() : ("monitor " + std::to_string(sv.monitor)).c_str());
+            Log("screen: remembered %s",
+                sv.source == ScreenSource::Window ? pickedTitle_.c_str() : ("monitor " + std::to_string(sv.monitor)).c_str());
         } else {
             Log("screen: could not remember the choice: %s", err.c_str());
         }
     }
-    if (sv.source != "window") sv.hwnd = 0;
+    if (sv.source != ScreenSource::Window) sv.hwnd = 0;
     if (sv.wantChoices) {
         sv.wantChoices = false;
         FillScreenChoices(sv);
