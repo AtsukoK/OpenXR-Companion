@@ -26,3 +26,15 @@ Next to review: engine.cpp, panel.cpp (CPU raster per redraw), mirror.cpp (D3D o
 - [x] screen TakeFrame swaps instead of copying 8 MB per frame
 Reviewed OK (no change): engine.cpp per-frame logic, mirror.cpp (fps-limited, SRV cache, SwapDeviceContextState, Present DO_NOT_WAIT), screen capture thread.
 Next: config.cpp parse/save robustness, keys.cpp (SendInput/focus), wrist/keyboard/offsets per-frame, editor (Updater, file writes), then build zip.
+- [x] atomic saves (temp + replace) for all profile/settings writes, layer (WriteFileAtomic in config.cpp) and editor (AtomicFile.cs)
+- [x] Grab to set: arming expires after 5 s without a grip (3 new tests)
+- [x] ZIP: release/OpenXRCompanion-optimize-20261120.zip (layer 64+32, single-file editor). 0 test failures.
+
+## STATUS 2026-11-20 16:17: optimize zip built, untested in headset. Main folder (test zip g) untouched.
+Not done / ideas left (none urgent):
+  * offsets ignore the game's poseInActionSpace (now logged: "the game's own offset: X deg, Y cm"); fix only if a game shows one
+  * pose action bound to grip in one profile, aim in another -> first kind wins
+  * our action set priority fixed at creation (game set created later with lower priority could be outranked)
+  * steadying leaves velocities raw
+  * not reviewed in depth: keys.cpp, wrist.cpp, keyboard.cpp, editor UI code, Updater.cs
+To merge into main later: git -C "G:/Claude/VR Radial Overlay" merge optimize (after main's work is committed), or cherry-pick.
