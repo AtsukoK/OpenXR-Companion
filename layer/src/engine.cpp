@@ -257,7 +257,7 @@ void Engine::ProcessBindings() {
         const InputId& trig = b.chord.back();
         if (!Pressed(trig)) continue;
         if (wr.open && b.action.type != ActType::Wheel && b.action.type != ActType::Keyboard && b.action.type != ActType::Adjust) continue;
-        if (kb.visible && b.action.type != ActType::Keyboard) continue;
+        if (kb.visible && b.action.type != ActType::Keyboard && b.action.type != ActType::Adjust) continue; // adjust: place the open keyboard
         if (!LayersOk(b)) continue;
         bool others = true;
         for (size_t k = 0; k + 1 < b.chord.size(); k++) if (!Down(b.chord[k])) others = false;
@@ -288,7 +288,7 @@ void Engine::UpdateAdjustWheel() {
     if (grab.target == 2 && (!adjust || !wr.open)) grab = GrabRun{};
     // Adjust mode shows the main wheel by itself (again shortly after it is closed), following the hand.
     if (adjust && wr.open) adjustClosedAt = -1;
-    else if (adjust && !kb.visible) {
+    else if (adjust && !kb.visible && prof->style.anchor.rfind("hand", 0) == 0) { // wheels in front of you aren't brought out: they got in the way (open one with its button to place it)
         if (adjustClosedAt < 0) adjustClosedAt = now;
         if (now - adjustClosedAt > 0.6 && !prof->wheels.empty()) {
             int hand = fr.h[1].gripValid ? 1 : 0;
@@ -413,7 +413,7 @@ void Engine::Select(int idx) {
     Log("select '%s'", it.label.c_str());
     if (prof->haptics) haptics.push_back({ wr.selHand, std::min(1.f, prof->hapticAmp * 1.6f), 0.04f });
     if (it.action.type == ActType::Wheel || it.action.type == ActType::Back) { RunAction(it.action, wr.selHand, -1, true); return; }
-    if (adjust && it.action.type != ActType::Adjust && it.action.type != ActType::Close) return; // adjust mode: only finishing works
+    if (adjust && it.action.type != ActType::Adjust && it.action.type != ActType::Close && it.action.type != ActType::Keyboard) return; // adjust mode: finishing, or the keyboard to place it
     RunAction(it.action, wr.selHand, -1, true);
     if (wr.open && (prof->sel.closeAfterSelect || it.action.type == ActType::Close)) CloseWheel();
     else Dirty();
@@ -577,6 +577,7 @@ void Engine::ComputeBlocks() {
         }
     }
     if (kb.visible) for (auto& h : want) for (auto& c : h) c = true;
+    if (dockAdjust) { want[0][C_GRIP] = want[1][C_GRIP] = true; if (grab.hand >= 0) want[grab.hand][C_STICK] = true; }
     if (adjust) { // the grips move things around; the grabbing hand's stick resizes
         want[0][C_GRIP] = want[1][C_GRIP] = true;
         if (grab.hand >= 0) want[grab.hand][C_STICK] = true;
@@ -599,6 +600,32 @@ void Engine::ComputeBlocks() {
     for (auto& p : pulses) ovOut[p.hand][p.comp] = p.o;
     for (auto& [k, o] : xrToggles) ovOut[k.first][k.second] = o;
     for (auto& [bi, ko] : xrHolds) ovOut[ko.first.first][ko.first.second] = ko.second;
+}
+
+// Adjust mode: the wheel turns see-through so it doesn't block the wrist panels or the screen you are placing.
+// Solid again when a hand comes near it (to grab it) or while it is held; fainter still while something else is held.
+void Engine::UpdateAdjustFade() {
+    float want = 1.f;
+    if (adjust && view.visible) {
+        if (grab.target == 2) want = 1.f;
+        else if (grab.target >= 0) want = 0.12f;
+        else {
+            float d = 1e9f;
+            Vec3 c = V(view.pose.position);
+            for (int h = 0; h < 2; h++) // the hand that would grab it (the opening hand carries the wheel along)
+                if (fr.h[h].gripValid && !(wr.open && h == wr.openerHand)) d = std::min(d, Len(V(fr.h[h].gripPose.position) - c));
+            float edge = view.size * 0.5f;                       // from the wheel's rim
+            float t = std::clamp((d - edge - 0.08f) / 0.15f, 0.f, 1.f); // solid within 8 cm of the rim, faint 23 cm away
+            want = 1.f - 0.7f * t;
+        }
+    }
+    float dt = (float)std::clamp(now - lastNow, 0.0, 0.1);
+    float k = std::min(1.f, dt * 12.f); // about a tenth of a second to fade
+    view.alpha += (want - view.alpha) * (dt > 0 ? k : 1.f);
+    if (std::fabs(view.alpha - want) < 0.01f) view.alpha = want;
+    if (std::fabs(view.alpha - wheelAlphaDrawn) > 0.04f || (view.alpha != wheelAlphaDrawn && view.alpha == want)) {
+        wheelAlphaDrawn = view.alpha; view.version++;
+    }
 }
 
 void Engine::Update(const Frame& f) {
@@ -632,10 +659,14 @@ void Engine::Update(const Frame& f) {
     ProcessBindings();
     UpdateWheel();
     UpdateAdjustWheel();
+    UpdateAdjustFade();
+    UpdateAdjustKeyboard();
     UpdateKeyboard();
     UpdateWrist(0);
     UpdateWrist(1);
     UpdateScreen();
+    ApplyDock();
+    UpdateKbBar();
     UpdateOffsets();
     ComputeBlocks();
     UpdatePointers();
@@ -721,6 +752,7 @@ void Engine::UpdateScreen() {
     } else screenSmooth.Reset();
     ScreenInteract();
     if (!adjust || !screen.poseValid || (grab.target >= 0 && grab.target != 3)) return;
+    if (kb.visible && prof->dock.mode != 0) return; // docked: Adjust dock (on the keyboard's bar) places it
 
     // Adjust mode: a grip near the screen grabs it; it keeps the hand's angle, the stick resizes.
     bool onWrist = screen.place == "wrist_left" || screen.place == "wrist_right";

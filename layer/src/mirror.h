@@ -28,6 +28,8 @@ public:
     bool ClosedByUser();              // the window's X was clicked since the last call
     int eye = 1;                      // 0 left, 1 right
     float smoothing = 0.5f;           // steady the picture against head shake (0 = off .. 1 = strongest)
+    bool onTop = false;               // keep the window above other windows (it never takes focus either way)
+    bool topApplied = false;
     float zoom = 1.3f;                // 1 = the whole eye picture, more = cropped in like a normal camera
     int fps = 60;                     // most frames a second the window updates (0 = every headset frame)
     void Shutdown();                  // release GPU things (session ending)

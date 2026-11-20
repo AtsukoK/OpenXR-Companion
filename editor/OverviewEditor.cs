@@ -12,7 +12,7 @@ public class OverviewEditor : EditorBase
     {
         p = model; go = goTo;
         Stack(Title("Overview"),
-              FormPanel.Header("What is switched on right now. Click a switch to change it, or a blue button to jump to its details (Back returns here). Remember to Save (Ctrl+S)."),
+              FormPanel.Header("What is switched on right now, and how you open it in the headset. Click Turn on / Turn off to switch it, or a blue button to jump to its details (Back returns here). Remember to Save (Ctrl+S)."),
               cards);
         Build();
     }
@@ -28,7 +28,7 @@ public class OverviewEditor : EditorBase
         {
             var c = Card("Overlay for this game", p.Enabled ? "ON" : "OFF", p.Enabled ? On : Off,
                 "Everything below only works while this is on.", null, MiniPics.Headset(96, 72, p.Enabled));
-            c.Body.Controls.Add(Switch("Overlay is on", p.Enabled, v => p.Enabled = v));
+            c.Body.Controls.Add(Switch("Overlay", p.Enabled, v => p.Enabled = v));
             c.Go("Settings (look, picking items)", () => go(p));
         }
 
@@ -40,11 +40,11 @@ public class OverviewEditor : EditorBase
             string title = hand == "right" ? "Right controller wheel" : "Left controller wheel";
             var c = Card(title, any ? "ON" : "OFF", any ? On : Off,
                 openers.Count == 0 ? $"No binding opens a wheel from the {hand} controller. Add one under Bindings (action: Open a wheel)."
-                                   : "Radial menus opened by these buttons:",
+                                   : "How to open it in the headset:",
                 openers.FirstOrDefault() ?? (object)"bindings",
                 MiniPics.Wheel(96, 72, hand == "left" ? 0 : 1, openers.Select(b => p.Wheels.GetValueOrDefault(b.Action.Wheel ?? "")).FirstOrDefault(w => w != null), any));
             foreach (var b in openers)
-                c.Body.Controls.Add(Switch($"{InputText.Friendly(b.Input)}  {GestureWord(b)}  ->  wheel '{b.Action.Wheel}'", b.Enabled, v => b.Enabled = v));
+                c.Body.Controls.Add(Switch(HowTo(b), b.Enabled, v => b.Enabled = v, $"opens wheel '{b.Action.Wheel}'"));
             foreach (var wn in openers.Select(b => b.Action.Wheel).Distinct())
                 if (wn != null && p.Wheels.TryGetValue(wn, out var wheel)) c.Go($"Edit wheel '{wn}'", () => go(wheel));
             foreach (var b in openers) c.Go(openers.Count > 1 ? $"Edit binding '{b.Name}'" : "Edit the button that opens it", () => go(b));
@@ -75,6 +75,8 @@ public class OverviewEditor : EditorBase
                 Fire(); BeginInvoke(Build);
             };
             c.Body.Controls.Add(mode);
+            if (wm.Enabled)
+                c.Body.Controls.Add(How($"How to open: turn your {side.ToLower()} forearm toward your face and look at it. Press with your {other} hand (poke, or point and pull the trigger)."));
             string tag = h == 0 ? "wrist0" : "wrist1";
             c.Go("Panel settings (size, side, text)", () => go(tag));
             if (src.Pages.TryGetValue(src.Start ?? "", out var fp)) c.Go(wm.Mirror ? $"Edit the {other} panel's buttons" : "Edit its buttons", () => go(fp));
@@ -87,10 +89,11 @@ public class OverviewEditor : EditorBase
                 .SelectMany(w => w.Items).Count(i => i.Enabled && i.Action?.Type == "keyboard");
             bool any = openers.Any(b => b.Enabled) || fromMenus > 0;
             var c = Card("VR keyboard", any ? "ON" : "OFF", any ? On : Off,
-                fromMenus > 0 ? $"Also opened by {fromMenus} wheel or wrist button(s)." : "Point and pull the trigger to type.",
+                openers.Count + fromMenus > 0 ? "How to open it in the headset:" : "Nothing opens it yet. Add a Keyboard button to a wheel or wrist panel, or a binding.",
                 openers.FirstOrDefault() ?? (object)"bindings", MiniPics.Keyboard(96, 72, any));
             foreach (var b in openers)
-                c.Body.Controls.Add(Switch($"{InputText.Friendly(b.Input)}  {GestureWord(b)}", b.Enabled, v => b.Enabled = v));
+                c.Body.Controls.Add(Switch(HowTo(b), b.Enabled, v => b.Enabled = v));
+            foreach (var where in MenuButtons("keyboard")) c.Body.Controls.Add(How("\u2022 " + where));
             foreach (var b in openers) c.Go("Edit the button that opens it", () => go(b));
             c.Go("Keyboard size and position", () => go(p));
         }
@@ -102,20 +105,86 @@ public class OverviewEditor : EditorBase
             var c = Card("Other bindings", $"{on} of {rest.Count} on", on > 0 ? On : Off,
                 "Keys, macros, layers and game inputs on controller buttons.", rest.FirstOrDefault() ?? (object)"bindings", MiniPics.Controllers(96, 72, on > 0));
             foreach (var b in rest)
-                c.Body.Controls.Add(Switch(b.Name, b.Enabled, v => b.Enabled = v));
+                c.Body.Controls.Add(Switch(b.Name, b.Enabled, v => b.Enabled = v, HowTo(b)));
             c.Go("Go to Bindings", () => go("bindings"));
         }
+        // Tools on the menus (no switch: they are buttons on wheels and wrist panels)
+        {
+            var tools = new (string type, string name, Func<ActionModel, bool> match)[]
+            {
+                ("adjust", "Move things by hand (Adjust / Calibrate Positions)", a => true),
+                ("screen", "Screen mirror (a monitor or window in VR)", a => a.Mode is null or "toggle" or "on"),
+                ("controller_offsets", "Controller offsets", a => true),
+                ("headset_mirror", "Headset mirror (desktop window)", a => true),
+            };
+            var c = Card("Tools on your menus", "", On, "Where to find them in the headset:", null, null);
+            foreach (var (type, name, match) in tools)
+            {
+                var where = MenuButtons(type, match);
+                c.Body.Controls.Add(new Label { Text = name, AutoSize = true, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), Margin = new Padding(0, 6, 0, 0) });
+                if (where.Count == 0) c.Body.Controls.Add(How("not on any wheel or wrist panel yet (add a button with this action)"));
+                foreach (var w in where.Take(3)) c.Body.Controls.Add(How("\u2022 " + w));
+            }
+        }
         cards.ResumeLayout();
+        if (Theme.IsDark) ThemeWalker.Apply(cards); // rebuilt cards start in light colours
     }
+
+    // "Double-tap Right Thumbrest" (+ the layer it needs)
+    static string HowTo(BindingModel b)
+    {
+        string verb = b.Gesture switch { "double_tap" => "Double-tap", "hold" => "Hold", "while_held" => "Hold", "tap" => "Tap", _ => "Press" };
+        string s = verb + " " + InputText.Friendly(b.Input);
+        if (!string.IsNullOrWhiteSpace(b.Layers)) s += " (while layer " + b.Layers + " is on)";
+        return s;
+    }
+
+    // Where buttons with this action sit: "Left wrist panel > More: Controller offsets", "Wheel 'right' > More...: Keyboard"
+    List<string> MenuButtons(string type, Func<ActionModel, bool> match = null)
+    {
+        var list = new List<string>();
+        void Scan(string where, IEnumerable<WheelModel> pages)
+        {
+            foreach (var w in pages)
+                foreach (var i in w.Items)
+                    if (i.Enabled && i.Action?.Type == type && (match == null || match(i.Action)))
+                        list.Add($"{where}, page '{w.Title ?? w.Name}': {i.Label}");
+        }
+        for (int h = 0; h < 2; h++)
+        {
+            var wm = p.WristFor(h);
+            if (wm.Enabled && !wm.Mirror) Scan(h == 0 ? "Left wrist panel" : "Right wrist panel", wm.Pages.Values);
+        }
+        foreach (var w in p.Wheels.Values)
+            foreach (var i in w.Items)
+                if (i.Enabled && i.Action?.Type == type && (match == null || match(i.Action)))
+                    list.Add($"Wheel '{w.Title ?? w.Name}': {i.Label}");
+        return list;
+    }
+
+    static Label How(string text) => new() { Text = text, AutoSize = true, MaximumSize = new Size(560, 0), Margin = new Padding(2, 2, 2, 2) };
 
     static string GestureWord(BindingModel b) =>
         Choices.Gestures.FirstOrDefault(c => c.Code == b.Gesture)?.Text.Split(' ')[0].ToLowerInvariant() ?? b.Gesture;
 
-    CheckBox Switch(string text, bool value, Action<bool> set)
+    static readonly Color SwitchOn = Color.FromArgb(46, 158, 91), SwitchOff = Color.FromArgb(200, 60, 55);
+    Control Switch(string text, bool value, Action<bool> set, string detail = null)
     {
-        var c = new CheckBox { Text = text, AutoSize = true, Checked = value, Margin = new Padding(2, 2, 2, 2) };
-        c.CheckedChanged += (s, e) => { set(c.Checked); Fire(); BeginInvoke(Build); };
-        return c;
+        var row = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, Margin = new Padding(0, 2, 0, 2) };
+        var b = new Button
+        {
+            Text = value ? "Turn off" : "Turn on", Width = 76, Height = 26, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Tag = "swatch", // the theme leaves its colours alone
+            BackColor = value ? SwitchOff : SwitchOn, // the colour of what a click does: red = turn off, green = turn on ForeColor = Color.White, Font = new Font("Segoe UI", 9f, FontStyle.Bold), Margin = new Padding(0, 0, 10, 0),
+        };
+        b.FlatAppearance.BorderSize = 0;
+        b.Click += (s, e) => { set(!value); Fire(); BeginInvoke(Build); };
+        new ToolTip().SetToolTip(b, value ? "It is on: click to turn it off" : "It is off: click to turn it on");
+        row.Controls.Add(b);
+        var words = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = new Padding(0, 0, 0, 0) };
+        words.Controls.Add(new Label { Text = text, AutoSize = true, MaximumSize = new Size(480, 0), Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), Margin = new Padding(0, detail == null ? 5 : 0, 0, 0) });
+        if (detail != null) words.Controls.Add(new Label { Text = detail, AutoSize = true, MaximumSize = new Size(480, 0), Margin = new Padding(0, 0, 0, 0) });
+        row.Controls.Add(words);
+        return row;
     }
 
     class CardPanel : Panel
@@ -137,7 +206,7 @@ public class OverviewEditor : EditorBase
         var inner = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Dock = DockStyle.Fill, Padding = new Padding(10, 0, 0, 0) };
         var head = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
         head.Controls.Add(new Label { Text = title, AutoSize = true, Font = new Font("Segoe UI", 12f, FontStyle.Bold), Margin = new Padding(0, 2, 10, 0) });
-        head.Controls.Add(new Label { Text = " " + state + " ", AutoSize = true, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), ForeColor = Color.White, BackColor = color, Margin = new Padding(0, 5, 10, 0), Padding = new Padding(4, 2, 4, 2) });
+        if (state != "") head.Controls.Add(new Label { Text = " " + state + " ", AutoSize = true, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), ForeColor = Color.White, BackColor = color, Margin = new Padding(0, 5, 10, 0), Padding = new Padding(4, 2, 4, 2) });
         _ = editTarget; // buttons are added per card below
         inner.Controls.Add(head);
         inner.Controls.Add(new Label { Text = desc, AutoSize = true, MaximumSize = new Size(580, 0), ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 4, 0, 4) });

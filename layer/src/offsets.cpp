@@ -91,9 +91,10 @@ void Engine::OpenOffsets() {
     if (!fr.headValid) return;
     offView.open = true;
     XrPosef frame = YawFrame(fr.head);
-    // a little below eye level, tilted back so it faces the eyes
-    XrPosef local{ AxisQ(1, 0, 0, 12.f), { 0, -0.18f, -0.55f } };
+    // a little below eye level, turned to face the eyes exactly (the old fixed tilt leaned the top toward you)
+    XrPosef local{ { 0, 0, 0, 1 }, { 0, -0.18f, -0.55f } };
     offView.pose = PMul(frame, local);
+    offView.pose.orientation = BillboardTo(V(offView.pose.position), V(fr.head.position));
     offView.w = 0.42f; offView.h = 0.52f; offView.cols = 3;
     offRepeatCell = -1;
     BuildOffsetPanel();

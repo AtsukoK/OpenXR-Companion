@@ -1,4 +1,5 @@
 #include <sstream>
+#include <filesystem>
 #include <fstream>
 #include "../src/panel.h"
 #include "../src/keys.h"
@@ -21,6 +22,126 @@ static void SavePng(const std::vector<uint32_t>& px, int w, int h, const wchar_t
     std::vector<BYTE> buf(sz); auto* enc = (ImageCodecInfo*)buf.data(); GetImageEncoders(n, sz, enc);
     for (UINT i = 0; i < n; i++) if (wcscmp(enc[i].MimeType, L"image/png") == 0) png = enc[i].Clsid;
     bmp.Save(path, &png);
+}
+
+
+// ---------------------------------------------------------------- a pretend OpenXR runtime under the real layer DLL
+#include <openxr/openxr_loader_negotiation.h>
+namespace fakert {
+    static XrQuaternionf head{ 0, 0, 0, 1 };                 // the real head (yaw only here)
+    static float (*yawAt)(XrTime) = nullptr;                 // or: the head turning over time
+    static std::map<uint64_t, XrReferenceSpaceType> spaces;
+    static uint64_t nextHandle = 100;
+    static XrPosef submitted[2]; static bool gotFrame = false;
+    static XrResult XRAPI_CALL Ok() { return XR_SUCCESS; }
+    static XrResult XRAPI_CALL CreateInstance(const XrInstanceCreateInfo*, const XrApiLayerCreateInfo*, XrInstance* i) { *i = (XrInstance)(uintptr_t)1; return XR_SUCCESS; }
+    static XrResult XRAPI_CALL CreateSession(XrInstance, const XrSessionCreateInfo*, XrSession* s) { *s = (XrSession)(uintptr_t)2; return XR_SUCCESS; }
+    static XrResult XRAPI_CALL CreateReferenceSpace(XrSession, const XrReferenceSpaceCreateInfo* ci, XrSpace* sp) { uint64_t h = nextHandle++; spaces[h] = ci->referenceSpaceType; *sp = (XrSpace)(uintptr_t)h; return XR_SUCCESS; }
+    static XrResult XRAPI_CALL CreateHandle(void*, const void*, uint64_t* out) { *out = nextHandle++; return XR_SUCCESS; }
+    static XrResult XRAPI_CALL StringToPath(XrInstance, const char*, XrPath* p) { *p = nextHandle++; return XR_SUCCESS; }
+    static XrResult XRAPI_CALL LocateSpace(XrSpace sp, XrSpace, XrTime t, XrSpaceLocation* loc) {
+        loc->locationFlags = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT | XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
+        bool view = spaces.count((uint64_t)sp) && spaces[(uint64_t)sp] == XR_REFERENCE_SPACE_TYPE_VIEW;
+        XrQuaternionf h = head;
+        if (yawAt) { float y = yawAt(t) * 0.0087266f; h = { 0, std::sin(y), 0, std::cos(y) }; }
+        loc->pose = view ? XrPosef{ h, { 0, 1.6f, 0 } } : XrPosef{ { 0, 0, 0, 1 }, { 0, 0, 0 } };
+        return XR_SUCCESS;
+    }
+    static XrResult XRAPI_CALL LocateViews(XrSession, const XrViewLocateInfo* li, XrViewState* vs, uint32_t cap, uint32_t* cnt, XrView* v) {
+        *cnt = 2; if (cap < 2) return XR_SUCCESS;
+        vs->viewStateFlags = XR_VIEW_STATE_ORIENTATION_VALID_BIT | XR_VIEW_STATE_POSITION_VALID_BIT;
+        bool rel = spaces.count((uint64_t)li->space) && spaces[(uint64_t)li->space] == XR_REFERENCE_SPACE_TYPE_VIEW;
+        for (int i = 0; i < 2; i++) {
+            Vec3 eye{ i ? 0.032f : -0.032f, 0, 0 };
+            v[i].pose = rel ? XrPosef{ { 0, 0, 0, 1 }, X(eye) } : XrPosef{ head, X(Vec3{ 0, 1.6f, 0 } + Rotate(head, eye)) };
+            v[i].fov = { -0.8f, 0.8f, 0.8f, -0.8f };
+        }
+        return XR_SUCCESS;
+    }
+    static XrResult XRAPI_CALL EndFrame(XrSession, const XrFrameEndInfo* fi) {
+        for (uint32_t i = 0; i < fi->layerCount; i++)
+            if (fi->layers[i]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION) {
+                auto* p = (const XrCompositionLayerProjection*)fi->layers[i];
+                for (uint32_t k = 0; k < p->viewCount && k < 2; k++) submitted[k] = p->views[k].pose;
+                gotFrame = true;
+            }
+        return XR_SUCCESS;
+    }
+    static XrResult XRAPI_CALL Gipa(XrInstance, const char* n, PFN_xrVoidFunction* fn) {
+        std::string s = n;
+        if (s == "xrCreateSession") *fn = (PFN_xrVoidFunction)CreateSession;
+        else if (s == "xrCreateReferenceSpace") *fn = (PFN_xrVoidFunction)CreateReferenceSpace;
+        else if (s == "xrLocateSpace") *fn = (PFN_xrVoidFunction)LocateSpace;
+        else if (s == "xrLocateViews") *fn = (PFN_xrVoidFunction)LocateViews;
+        else if (s == "xrEndFrame") *fn = (PFN_xrVoidFunction)EndFrame;
+        else if (s == "xrStringToPath") *fn = (PFN_xrVoidFunction)StringToPath;
+        else if (s == "xrCreateActionSet" || s == "xrCreateAction" || s == "xrCreateActionSpace") *fn = (PFN_xrVoidFunction)CreateHandle;
+        else *fn = (PFN_xrVoidFunction)Ok;
+        return XR_SUCCESS;
+    }
+}
+static float YawDeg(const XrQuaternionf& q) { return 2.f * std::atan2(q.y, q.w) * 57.2958f; }
+
+// Runs the real layer DLL over the pretend runtime, the way an Unreal game (head on its own) or a Unity game (eye views in
+// the world) asks for the head; turns 90 degrees at once; returns the yaw the game got and the yaw the headset was given.
+static bool RunHeadSmoothingThroughLayer(bool unrealStyle, XrTime startT, std::vector<float>& gameYaw, std::vector<float>& shownYaw, std::string& why, bool twoThreads = false) {
+    wchar_t exe[MAX_PATH]; GetModuleFileNameW(nullptr, exe, MAX_PATH);
+    std::wstring dir = exe; dir = dir.substr(0, dir.find_last_of(L"\\/"));
+    HMODULE dll = LoadLibraryW((dir + L"\\OpenXRCompanion.dll").c_str());
+    if (!dll) { why = "OpenXRCompanion.dll not found next to the tests"; return false; }
+    auto negotiate = (PFN_xrNegotiateLoaderApiLayerInterface)GetProcAddress(dll, "xrNegotiateLoaderApiLayerInterface");
+    XrNegotiateLoaderInfo li{ XR_LOADER_INTERFACE_STRUCT_LOADER_INFO, XR_LOADER_INFO_STRUCT_VERSION, sizeof(XrNegotiateLoaderInfo),
+                              XR_CURRENT_LOADER_API_LAYER_VERSION, XR_CURRENT_LOADER_API_LAYER_VERSION, XR_CURRENT_API_VERSION, XR_CURRENT_API_VERSION };
+    XrNegotiateApiLayerRequest rq{ XR_LOADER_INTERFACE_STRUCT_API_LAYER_REQUEST, XR_API_LAYER_INFO_STRUCT_VERSION, sizeof(XrNegotiateApiLayerRequest) };
+    if (!negotiate || XR_FAILED(negotiate(&li, nullptr, &rq))) { why = "negotiation failed"; return false; }
+    XrApiLayerNextInfo next{ XR_LOADER_INTERFACE_STRUCT_API_LAYER_NEXT_INFO, XR_API_LAYER_NEXT_INFO_STRUCT_VERSION, sizeof(XrApiLayerNextInfo) };
+    strcpy_s(next.layerName, "XR_APILAYER_NOVENDOR_openxr_companion");
+    next.nextGetInstanceProcAddr = fakert::Gipa; next.nextCreateApiLayerInstance = fakert::CreateInstance; next.next = nullptr;
+    XrApiLayerCreateInfo ci{ XR_LOADER_INTERFACE_STRUCT_API_LAYER_CREATE_INFO, XR_API_LAYER_CREATE_INFO_STRUCT_VERSION, sizeof(XrApiLayerCreateInfo) };
+    ci.nextInfo = &next;
+    XrInstanceCreateInfo ii{ XR_TYPE_INSTANCE_CREATE_INFO }; strcpy_s(ii.applicationInfo.applicationName, "fake game");
+    XrInstance inst;
+    if (XR_FAILED(rq.createApiLayerInstance(&ii, &ci, &inst))) { why = "instance failed"; return false; }
+    auto get = [&](const char* n) { PFN_xrVoidFunction f = nullptr; rq.getInstanceProcAddr(inst, n, &f); return f; };
+    auto createSession = (PFN_xrCreateSession)get("xrCreateSession");
+    auto createRef = (PFN_xrCreateReferenceSpace)get("xrCreateReferenceSpace");
+    auto locateSpace = (PFN_xrLocateSpace)get("xrLocateSpace");
+    auto locateViews = (PFN_xrLocateViews)get("xrLocateViews");
+    auto endFrame = (PFN_xrEndFrame)get("xrEndFrame");
+    XrSessionCreateInfo sc{ XR_TYPE_SESSION_CREATE_INFO }; XrSession sess;
+    createSession(inst, &sc, &sess);
+    XrReferenceSpaceCreateInfo rs{ XR_TYPE_REFERENCE_SPACE_CREATE_INFO }; rs.poseInReferenceSpace.orientation.w = 1;
+    rs.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_STAGE; XrSpace world; createRef(sess, &rs, &world);
+    rs.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_VIEW; XrSpace headSp; createRef(sess, &rs, &headSp);
+    XrTime t = startT; const XrTime step = 11111111; // 90 fps
+    for (int frame = 0; frame < 330; frame++, t += step) {
+        float yaw = frame < 150 ? 0.f : 90.f; // settle first, then turn
+        fakert::head = { 0, std::sin(yaw * 0.0087266f), 0, std::cos(yaw * 0.0087266f) };
+        XrPosef eyes[2];
+        if (unrealStyle) { // the head on its own, the eyes relative to it
+            if (twoThreads && frame % 3 != 0) { XrSpaceLocation ahead{ XR_TYPE_SPACE_LOCATION }; locateSpace(headSp, world, t + step, &ahead); } // the game thread already asks for the next frame
+            XrSpaceLocation loc{ XR_TYPE_SPACE_LOCATION }; locateSpace(headSp, world, t, &loc);
+            XrViewLocateInfo vl{ XR_TYPE_VIEW_LOCATE_INFO }; vl.viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO; vl.displayTime = t; vl.space = headSp;
+            XrViewState vs{ XR_TYPE_VIEW_STATE }; XrView v[2]{ { XR_TYPE_VIEW }, { XR_TYPE_VIEW } }; uint32_t n;
+            locateViews(sess, &vl, &vs, 2, &n, v);
+            for (int k = 0; k < 2; k++) eyes[k] = PMul(loc.pose, v[k].pose);
+            gameYaw.push_back(YawDeg(loc.pose.orientation));
+        } else { // the eye views in the world
+            XrViewLocateInfo vl{ XR_TYPE_VIEW_LOCATE_INFO }; vl.viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO; vl.displayTime = t; vl.space = world;
+            XrViewState vs{ XR_TYPE_VIEW_STATE }; XrView v[2]{ { XR_TYPE_VIEW }, { XR_TYPE_VIEW } }; uint32_t n;
+            locateViews(sess, &vl, &vs, 2, &n, v);
+            for (int k = 0; k < 2; k++) eyes[k] = v[k].pose;
+            gameYaw.push_back(YawDeg(v[0].pose.orientation));
+        }
+        XrCompositionLayerProjectionView pv[2]{ { XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW }, { XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW } };
+        for (int k = 0; k < 2; k++) { pv[k].pose = eyes[k]; pv[k].fov = { -0.8f, 0.8f, 0.8f, -0.8f }; }
+        XrCompositionLayerProjection pl{ XR_TYPE_COMPOSITION_LAYER_PROJECTION }; pl.space = world; pl.viewCount = 2; pl.views = pv;
+        const XrCompositionLayerBaseHeader* lay[1] = { (const XrCompositionLayerBaseHeader*)&pl };
+        XrFrameEndInfo fe{ XR_TYPE_FRAME_END_INFO }; fe.displayTime = t; fe.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE; fe.layerCount = 1; fe.layers = lay;
+        fakert::gotFrame = false; endFrame(sess, &fe);
+        shownYaw.push_back(fakert::gotFrame ? YawDeg(fakert::submitted[0].orientation) : -999.f);
+    }
+    return true;
 }
 
 int main(int argc, char** argv) {
@@ -293,6 +414,7 @@ int main(int argc, char** argv) {
         InputId ai; ParseInput("left.x", ai); ab.chord.push_back(ai);
         ab.gesture = "press"; ab.block = "trigger"; ab.action.type = ActType::Adjust;
         q->bindings.push_back(ab);
+        q->style.anchor = "hand_locked"; // a wheel at the hand is brought out in adjust mode (one in front of you is not)
         float elbow0 = q->wrist[0].towardElbow, size0 = q->wrist[0].size, down0 = q->style.headDown, dist0 = q->style.distance, rad0 = q->style.radius;
         Engine e; e.SetProfile(q);
         Frame f; double t = 0;
@@ -331,16 +453,113 @@ int main(int argc, char** argv) {
         step(70);
         CHECK(e.view.visible && e.wrist[0].visible, "adjust: the main wheel shows by itself, next to the wrist panels");
         Vec3 wc = V(e.view.pose.position);
+        { XrVector3f k0 = f.h[0].gripPose.position, k1 = f.h[1].gripPose.position; // hands well away from the wheel
+          f.h[0].gripPose.position = X(wc + Vec3{ -0.6f, -0.3f, 0 }); f.h[1].gripPose.position = X(wc + Vec3{ 0.6f, -0.3f, 0 }); step(20);
+          f.h[0].gripPose.position = k0; f.h[1].gripPose.position = k1; }
+        CHECK(e.view.alpha < 0.4f, ("adjust: the wheel is see-through while no hand is near it, alpha " + std::to_string(e.view.alpha)).c_str());
         f.h[0].gripPose.position = X(wc); step(2);
         f.h[0].grip = 1; step(2);
         f.h[0].gripPose.position = X(wc + Vec3{ 0, 0.05f, 0 }); f.h[0].sy = -1; step(10); f.h[0].sy = 0;
         CHECK(q->style.poses.count(q->style.anchor) && q->style.poses[q->style.anchor].set && std::fabs(V(e.view.pose.position).y - (wc.y + 0.05f)) < 0.004f,
               "adjust: dragging the wheel up raises it and keeps that spot");
+        step(30); CHECK(e.view.alpha > 0.95f, ("adjust: the wheel is solid while it is held, alpha " + std::to_string(e.view.alpha)).c_str());
         (void)down0; (void)dist0;
         CHECK(q->style.radius < rad0, "adjust: stick down while holding makes the wheel smaller");
         f.h[0].grip = 0; step(3);
         f.h[0].b1 = true; step(2); f.h[0].b1 = false; step(3);
         CHECK(!e.adjust && e.saveRequested && !e.view.visible, "adjust: using it again leaves adjust mode, closes the wheel and asks to save");
+    }
+
+    // Adjust mode with the wheel in front of you: it is not brought out by itself (it got in the way)
+    {
+        auto q = ParseProfileText(DefaultProfileJson(), err);
+        Binding ab; ab.name = "adjust"; ab.chordText = "left.x";
+        InputId ai; ParseInput("left.x", ai); ab.chord.push_back(ai);
+        ab.gesture = "press"; ab.block = "trigger"; ab.action.type = ActType::Adjust;
+        q->bindings.push_back(ab);
+        q->style.anchor = "head_locked";
+        Engine e; e.SetProfile(q);
+        Frame f; double t = 0;
+        f.headValid = true; f.head = XrPosef{ {0,0,0,1}, {0, 1.6f, 0} };
+        for (int h = 0; h < 2; h++) { f.h[h].gripValid = f.h[h].aimValid = true; f.h[h].gripPose = f.h[h].aimPose = XrPosef{ {0,0,0,1}, {h ? 0.3f : -0.3f, 1.0f, -0.2f} }; }
+        auto step = [&](int frames = 1) { for (int i = 0; i < frames; i++) { t += 0.011; f.t = t; e.Update(f); } };
+        step(5); f.h[0].b1 = true; step(2); f.h[0].b1 = false; step(100);
+        CHECK(e.adjust && !e.view.visible, "adjust: a wheel set to appear in front of you is not brought out by itself");
+    }
+
+    // Adjust mode: the keyboard can be grabbed and placed; next time it opens there (relative to where you face)
+    {
+        auto q = ParseProfileText(DefaultProfileJson(), err);
+        auto bind = [&](const char* in, ActType t) {
+            Binding ab; ab.name = in; ab.chordText = in; InputId ai; ParseInput(in, ai); ab.chord.push_back(ai);
+            ab.gesture = "press"; ab.block = "trigger"; ab.action.type = t; q->bindings.push_back(ab);
+        };
+        bind("left.x", ActType::Adjust); bind("right.a", ActType::Keyboard);
+        Engine e; e.SetProfile(q);
+        Frame f; double t = 0;
+        f.headValid = true; f.head = XrPosef{ {0,0,0,1}, {0, 1.6f, 0} };
+        for (int h = 0; h < 2; h++) { f.h[h].gripValid = f.h[h].aimValid = true; f.h[h].gripPose = f.h[h].aimPose = XrPosef{ {0,0,0,1}, {h ? 0.3f : -0.3f, 1.0f, -0.2f} }; }
+        auto step = [&](int frames = 1) { for (int i = 0; i < frames; i++) { t += 0.011; f.t = t; e.Update(f); } };
+        step(5);
+        f.h[1].b1 = true; step(2); f.h[1].b1 = false; step(3);
+        Vec3 k0 = V(e.kb.pose.position);
+        CHECK(e.kb.visible && std::fabs(k0.z + 0.45f) < 0.02f && std::fabs(k0.y - 1.3f) < 0.02f, "keyboard: by default it opens 0.45 m ahead and 0.3 m below the eyes");
+        f.h[0].b1 = true; step(2); f.h[0].b1 = false; step(3);
+        CHECK(e.adjust && e.kb.visible, "keyboard: adjust mode can be switched on while it is open, and it stays open");
+        f.h[1].gripPose.position = X(k0); step(2);
+        f.h[1].grip = 1; step(2);
+        f.h[1].gripPose.position = X(k0 + Vec3{ 0.1f, 0.15f, 0 }); step(5);
+        Vec3 k1 = V(e.kb.pose.position);
+        CHECK(std::fabs(k1.x - (k0.x + 0.1f)) < 0.005f && std::fabs(k1.y - (k0.y + 0.15f)) < 0.005f && q->kb.pose.set, "keyboard: grabbed in adjust mode it follows the hand and keeps that spot");
+        f.h[1].grip = 0; step(3);
+        f.h[1].b1 = true; step(2); f.h[1].b1 = false; step(3); // close
+        f.h[0].b1 = true; step(2); f.h[0].b1 = false; step(3); // leave adjust
+        f.head = XrPosef{ {0, std::sin(0.785398f), 0, std::cos(0.785398f)}, {0, 1.6f, 0} }; // face 90 degrees left
+        f.h[1].b1 = true; step(2); f.h[1].b1 = false; step(3);
+        Vec3 k2 = V(e.kb.pose.position);
+        CHECK(e.kb.visible && std::fabs(k2.x - (k0.z + 0.0f)) < 0.02f && std::fabs(k2.y - 1.45f) < 0.02f && std::fabs(k2.z + 0.1f) < 0.02f,
+              ("keyboard: the placed spot turns with you (" + std::to_string(k2.x) + ", " + std::to_string(k2.y) + ", " + std::to_string(k2.z) + ")").c_str());
+    }
+
+    // Docking: the bar under the keyboard puts the screen above the keys (or the keys under the screen); Adjust dock moves it
+    {
+        auto q = ParseProfileText(DefaultProfileJson(), err);
+        Binding ab; ab.name = "kb"; ab.chordText = "right.a"; InputId ai; ParseInput("right.a", ai); ab.chord.push_back(ai);
+        ab.gesture = "press"; ab.block = "trigger"; ab.action.type = ActType::Keyboard; q->bindings.push_back(ab);
+        Engine e; e.SetProfile(q);
+        Frame f; double t = 0;
+        f.headValid = true; f.head = XrPosef{ {0,0,0,1}, {0, 1.6f, 0} };
+        for (int h = 0; h < 2; h++) { f.h[h].gripValid = f.h[h].aimValid = true; f.h[h].gripPose = f.h[h].aimPose = XrPosef{ {0,0,0,1}, {h ? 0.3f : -0.3f, 1.0f, -0.2f} }; }
+        auto step = [&](int frames = 1) { for (int i = 0; i < frames; i++) { t += 0.011; f.t = t; e.Update(f); } };
+        step(5); f.h[1].b1 = true; step(2); f.h[1].b1 = false; step(3);
+        CHECK(e.kb.visible && e.kb.barLabels.size() == 4, "dock: the keyboard has a bar with 4 buttons under it");
+        auto pressBar = [&](int cell) {
+            int n = (int)e.kb.barLabels.size();
+            Vec3 local{ ((cell + 0.5f) / n - 0.5f) * e.kb.barW, 0, 0.3f };
+            f.h[0].aimPose = XrPosef{ e.kb.barPose.orientation, X(V(e.kb.barPose.position) + Rotate(e.kb.barPose.orientation, local)) };
+            step(2); f.h[0].trig = 1; step(2); f.h[0].trig = 0; step(2);
+            f.h[0].aimPose = XrPosef{ {0,0,0,1}, {-0.3f, 1.0f, -0.2f} }; step(2);
+        };
+        pressBar(0);
+        Vec3 up = Rotate(e.kb.pose.orientation, { 0, 1, 0 });
+        float above = Dot(V(e.screen.pose.position) - V(e.kb.pose.position), up);
+        CHECK(q->dock.mode == 1 && e.screen.on && e.screen.poseValid && above > e.kb.heightM / 2, "dock: 'Dock screen above keys' turns the screen on and puts it above the keyboard");
+        CHECK(std::fabs(e.screen.widthM - e.kb.widthM) < 0.001f, "dock: the docked screen is as wide as the keyboard by default");
+        pressBar(2);
+        CHECK(e.dockAdjust, "dock: 'Adjust dock' starts placing the docked screen");
+        Vec3 s0 = V(e.screen.pose.position);
+        f.h[1].gripPose.position = X(s0); step(2); f.h[1].grip = 1; step(2);
+        f.h[1].gripPose.position = X(s0 + Vec3{ 0.2f, 0.05f, 0 }); step(5);
+        f.h[1].grip = 0; step(3);
+        Vec3 s1 = V(e.screen.pose.position);
+        CHECK(q->dock.pose.set && std::fabs(s1.x - (s0.x + 0.2f)) < 0.01f, "dock: the docked screen can be grabbed and stays where it was put");
+        pressBar(2);
+        CHECK(!e.dockAdjust, "dock: 'Done adjusting' ends it");
+        pressBar(1);
+        XrPosef rel = PMul(PInv(e.kb.pose), e.screen.pose);
+        CHECK(q->dock.mode == 2 && Len(V(rel.position) - V(q->dock.pose.p.position)) < 0.01f, "dock: 'Dock keys under screen' keeps the same spacing, the keyboard following the screen");
+        pressBar(1);
+        CHECK(q->dock.mode == 0, "dock: pressing it again undocks");
     }
 
     // Adjust mode saving: write the placement into a (temporary) profile file and read it back.
@@ -351,6 +570,8 @@ int main(int argc, char** argv) {
         q->sourceName = "vro_save_test.json";
         q->style.handUp = 0.17f; q->style.radius = 0.15f; q->wrist[0].towardElbow = 0.2f; q->wrist[0].side = -0.01f; q->wrist[1].size = 0.13f;
         q->wrist[0].textUp = "custom"; q->wrist[0].rotateDeg = 33.f;
+        q->dock.mode = 2; q->dock.pose = { true, XrPosef{ {0,0,0,1}, {0.01f, 0.2f, -0.03f} } }; q->dock.width = 0.7f;
+        q->kb.pose = { true, XrPosef{ {0,0,0,1}, {0.1f, -0.25f, -0.4f} } };
         std::string serr;
         bool ok = SavePlacement(*q, serr);
         std::ifstream in(path, std::ios::binary); std::stringstream ss; ss << in.rdbuf(); in.close();
@@ -359,7 +580,127 @@ int main(int argc, char** argv) {
               && std::fabs(back->wrist[0].towardElbow - 0.2f) < 1e-4f && std::fabs(back->wrist[0].side + 0.01f) < 1e-4f
               && std::fabs(back->wrist[1].size - 0.13f) < 1e-4f && back->wrist[0].textUp == "custom" && std::fabs(back->wrist[0].rotateDeg - 33.f) < 0.1f && back->wheels.size() == q->wheels.size(),
               ("adjust: positions are saved to the profile file and the rest is kept " + serr).c_str());
+        CHECK(back && back->dock.mode == 2 && back->dock.pose.set && std::fabs(back->dock.pose.p.position.y - 0.2f) < 0.002f && std::fabs(back->dock.width - 0.7f) < 0.002f
+              && back->kb.pose.set && std::fabs(back->kb.pose.p.position.z + 0.4f) < 0.002f, "adjust: the keyboard spot and the dock are saved too");
         DeleteFileW(path.c_str());
+    }
+
+
+    // ---------------- head smoothing through the real layer DLL and a pretend runtime (Unreal-style and Unity-style games)
+    {
+        wchar_t tmp[MAX_PATH]; GetTempPathW(MAX_PATH, tmp);
+        std::wstring td = std::wstring(tmp) + L"vro_head_layer_test";
+        std::error_code fec; std::filesystem::remove_all(td, fec); std::filesystem::create_directories(td, fec);
+        _wputenv_s(L"OPENXR_COMPANION_TEST_DATA", td.c_str());
+        { std::ofstream o(td + L"\\head_smoothing.json"); o << "{ \"on\": true, \"keep_on\": true, \"mode\": \"headset\", \"strength\": 5 }"; }
+        std::vector<float> game, shown; std::string why;
+        bool ran = RunHeadSmoothingThroughLayer(true, 1000000000, game, shown, why);
+        CHECK(ran, ("head smoothing (layer): the real layer runs over a pretend runtime " + why).c_str());
+        if (ran) {
+            float g = game[150 + 27], sh = shown[150 + 27]; // 0.3 s after a sudden 90 degree turn
+            CHECK(g > 3.f && g < 60.f, ("head smoothing (layer, Unreal-style head): the game's camera trails the turn, " + std::to_string(g) + " deg of 90 after 0.3 s").c_str());
+            CHECK(std::fabs(sh - 90.f) < 0.5f, ("head smoothing (layer, Unreal-style head): 'in the headset' hands the headset the real head (" + std::to_string(sh) + " deg)").c_str());
+            CHECK(game.back() > 85.f, ("head smoothing (layer, Unreal-style head): the camera catches up (" + std::to_string(game.back()) + " deg after 2 s)").c_str());
+        }
+        game.clear(); shown.clear();
+        ran = RunHeadSmoothingThroughLayer(false, 1000000000 + 400 * 11111111LL, game, shown, why);
+        if (ran) {
+            float g = game[150 + 27], sh = shown[150 + 27];
+            CHECK(g > 3.f && g < 60.f, ("head smoothing (layer, Unity-style eye views): the game's camera trails the turn, " + std::to_string(g) + " deg").c_str());
+            CHECK(std::fabs(sh - 90.f) < 0.5f, ("head smoothing (layer, Unity-style eye views): 'in the headset' hands the headset the real head (" + std::to_string(sh) + " deg)").c_str());
+        }
+        // Unreal asks for the head at two times per frame (render thread: this frame, game thread: the next), in an
+        // uneven order; with the head turning steadily the camera must stay smooth (no jitter)
+        fakert::yawAt = [](XrTime tt) { return (float)((tt % 100000000000LL) * 1e-9) * 60.f; }; // 60 deg/s
+        game.clear(); shown.clear();
+        ran = RunHeadSmoothingThroughLayer(true, 1000000000 + 800 * 11111111LL, game, shown, why, true);
+        fakert::yawAt = nullptr;
+        if (ran) {
+            float worst = 0;
+            auto wrap = [](float d) { while (d > 180.f) d -= 360.f; while (d < -180.f) d += 360.f; return d; };
+            for (size_t i = 200; i + 2 < game.size(); i++) worst = std::max(worst, std::fabs(wrap(game[i + 2] - game[i + 1]) - wrap(game[i + 1] - game[i])));
+            CHECK(worst < 0.05f, ("head smoothing (layer, Unreal two threads): no jitter while turning, worst wobble " + std::to_string(worst) + " deg").c_str());
+        }
+        _wputenv_s(L"OPENXR_COMPANION_TEST_DATA", L"");
+    }
+
+    // ---------------- head smoothing: a heavy camera (same smoothing for every movement, eases in and out)
+    {
+        auto yawOf = [](const XrQuaternionf& q) { return 2.f * std::atan2(q.y, q.w) * 57.2958f; };
+        XrQuaternionf turned{ 0, std::sin(0.785398f), 0, std::cos(0.785398f) }; // 90 degrees
+        auto run = [&](float strength, float secs, std::vector<float>* trace = nullptr) {
+            HeavyCam c; float dt = 1.f / 90.f;
+            c.Apply({ 0, 0, 0, 1 }, dt, strength);
+            float y = 0;
+            for (int i = 0; i < (int)(secs / dt); i++) { y = yawOf(c.Apply(turned, dt, strength)); if (trace) trace->push_back(y); }
+            return y;
+        };
+        std::vector<float> tr; run(5.f, 4.f, &tr);
+        bool monotonic = true; for (size_t i = 1; i < tr.size(); i++) if (tr[i] + 1e-3f < tr[i - 1] || tr[i] > 90.01f) monotonic = false;
+        float first = tr[0], third = tr[9], half = tr[(size_t)(0.6f * 90)];
+        CHECK(first < 0.5f && tr[2] - tr[1] > tr[1] - tr[0], ("head smoothing: eases into a sudden 90 deg turn (first frame " + std::to_string(first) + " deg)").c_str());
+        CHECK(half > 20.f && half < 60.f, ("head smoothing: strength 5 is a heavy camera, about half way after 0.6 s (" + std::to_string(half) + " deg)").c_str());
+        CHECK(tr.back() > 89.f && monotonic, "head smoothing: settles on the new direction with no overshoot");
+        CHECK(run(10.f, 0.6f) < run(5.f, 0.6f) && run(5.f, 0.6f) < run(1.f, 0.6f), "head smoothing: higher strength = heavier");
+        (void)third;
+    }
+
+    // ---------------- standard default.json vs user_defaults.json (in a throwaway settings folder)
+    {
+        wchar_t tmp[MAX_PATH]; GetTempPathW(MAX_PATH, tmp);
+        std::wstring td = std::wstring(tmp) + L"vro_defaults_test";
+        std::error_code fec; std::filesystem::remove_all(td, fec);
+        _wputenv_s(L"OPENXR_COMPANION_TEST_DATA", td.c_str());
+        std::wstring pd = ProfilesDir(), def = pd + L"\\default.json", user = pd + L"\\user_defaults.json";
+        auto slurp = [](const std::wstring& p) { std::ifstream i(p, std::ios::binary); std::stringstream s; s << i.rdbuf(); return s.str(); };
+        auto exists = [](const std::wstring& p) { return GetFileAttributesW(p.c_str()) != INVALID_FILE_ATTRIBUTES; };
+        // an old, edited default.json
+        std::string edited = std::string(DefaultProfileJson()).replace(std::string(DefaultProfileJson()).find("\"haptics\": true"), 15, "\"haptics\": false");
+        { std::ofstream o(def, std::ios::binary); o << edited; }
+        std::wstring used; std::string lerr;
+        auto lp = LoadProfile(used, lerr);
+        CHECK(exists(user) && slurp(user) == edited, "defaults: an edited default.json is kept as user_defaults.json");
+        CHECK(ActiveProfileName() == "user_defaults.json", "defaults: the moved user_defaults.json becomes the selected profile");
+        CHECK(slurp(def) == DefaultProfileJson(), "defaults: default.json becomes the built-in standard");
+        CHECK(lp && lp->sourceName == "user_defaults.json" && !lp->haptics, "defaults: games use user_defaults.json when it exists");
+        // the split happens once: a later edit of default.json is replaced by the standard, not moved again
+        DeleteFileW(user.c_str());
+        { std::ofstream o(def, std::ios::binary); o << edited; }
+        lp = LoadProfile(used, lerr);
+        CHECK(!exists(user) && slurp(def) == DefaultProfileJson() && lp && lp->sourceName == "default.json", "defaults: without user_defaults.json games use the standard, refreshed each start");
+        // a save by the layer (offsets) on the standard goes to user_defaults.json
+        lp->offsets.o[1][0].pitch = 12.f;
+        std::string serr;
+        bool sok = SaveOffsets(*lp, serr);
+        auto back = ParseProfileText(slurp(user), lerr);
+        CHECK(sok && lp->sourceName == "user_defaults.json" && back && std::fabs(back->offsets.o[1][0].pitch - 12.f) < 0.05f && slurp(def) == DefaultProfileJson(),
+              ("defaults: a save from the headset goes to user_defaults.json, default.json stays standard " + serr).c_str());
+        // the profile selected in the editor always wins, even over a profile named after the game
+        { std::ofstream o(pd + L"\\other.json", std::ios::binary); o << DefaultProfileJson(); }
+        { std::ofstream o(pd + L"\\" + Utf8ToW(ExeName()) + L".json", std::ios::binary); o << DefaultProfileJson(); }
+        SetActiveProfileName("other.json");
+        lp = LoadProfile(used, lerr);
+        CHECK(lp && lp->sourceName == "other.json", "profiles: the selected profile is used, even when the game has its own");
+        SetActiveProfileName("gone.json");
+        lp = LoadProfile(used, lerr);
+        CHECK(lp && _stricmp(lp->sourceName.c_str(), (ExeName() + ".json").c_str()) == 0, "profiles: a selected profile that no longer exists falls back to the game's own");
+        DeleteFileW((pd + L"\\" + Utf8ToW(ExeName()) + L".json").c_str());
+        // a headset save on the standard while user_defaults.json exists: a new profile, and it becomes the selected one
+        SetActiveProfileName("default.json");
+        std::string userBefore = slurp(user);
+        lp = LoadProfile(used, lerr);
+        lp->offsets.o[1][0].pitch = 7.f;
+        sok = SaveOffsets(*lp, serr);
+        CHECK(sok && lp->sourceName == "user_defaults 2.json" && slurp(user) == userBefore && ActiveProfileName() == "user_defaults 2.json"
+              && slurp(def) == DefaultProfileJson(), "defaults: a headset save on the standard never replaces user_defaults.json; it makes user_defaults 2.json and selects it");
+        // an unedited old default.json is not moved
+        std::filesystem::remove_all(td, fec);
+        ProfilesDir();
+        { std::ofstream o(def, std::ios::binary); o << DefaultProfileJson(); }
+        lp = LoadProfile(used, lerr);
+        CHECK(!exists(user) && lp && lp->sourceName == "default.json", "defaults: an unchanged default.json stays the standard");
+        _wputenv_s(L"OPENXR_COMPANION_TEST_DATA", L"");
+        std::filesystem::remove_all(td, fec);
     }
 
     // ---------------- mirrored screen: actions
@@ -654,6 +995,36 @@ int main(int argc, char** argv) {
         XrPosef r = ps.Apply(a, 0.011f, 0.f); r = ps.Apply(XrPosef{ {0,0,0,1}, {0.05f,0,0} }, 0.011f, 0.f);
         CHECK(std::fabs(r.position.x - 0.05f) < 1e-6f, "steady: 0 = off, no smoothing at all");
     }
+    // ---------------- game-wide hand steadying: untracked poses, several times per frame
+    {
+        const uint64_t ok = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR_SPACE_LOCATION_POSITION_VALID_BIT |
+                            XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT | XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
+        const uint64_t lost = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT; // position not valid
+        XrTime t = 1000000000; const XrTime fr = 11000000;
+        auto hand = [](float x) { return XrPosef{ {0,0,0,1}, {x, 1.f, -0.3f} }; };
+        // 1) tracking lost with a junk (zero) position: passed through, never blended into the hand
+        SpaceSteady s;
+        for (int i = 0; i < 50; i++) s.Step(t += fr, hand(0.3f), ok, 0.5f);
+        XrPosef junk{ {0,0,0,1}, {0,0,0} };
+        XrPosef o = s.Step(t += fr, junk, lost, 0.5f);
+        CHECK(o.position.x == 0.f && o.position.y == 0.f, "hand steadying: an untracked pose is passed through untouched");
+        o = s.Step(t += fr, hand(0.3f), ok, 0.5f);
+        CHECK(std::fabs(o.position.x - 0.3f) < 1e-5f && std::fabs(o.position.y - 1.f) < 1e-5f,
+              "hand steadying: after tracking returns the hand is right where it is (no stretch from the lost pose)");
+        // 2) two reads per frame (now + predicted): the older time gets a steadied answer too, no raw/steadied flip
+        SpaceSteady a;
+        float worst = 0.f; XrTime tt = 1000000000;
+        for (int i = 0; i < 200; i++) {
+            tt += fr;
+            float xPred = 0.3f + 0.5f * (float)(tt * 1e-9); // hand moving 0.5 m/s
+            float xNow = xPred - 0.5f * 0.02f;               // the same hand 20 ms earlier
+            XrPosef pr = a.Step(tt, hand(xPred), ok, 0.5f);
+            XrPosef nw = a.Step(tt - 20000000, hand(xNow), ok, 0.5f);
+            if (i > 50) worst = std::max(worst, std::fabs((pr.position.x - xPred) - (nw.position.x - xNow)));
+        }
+        char b[160]; snprintf(b, sizeof b, "hand steadying: the earlier read gets the same steadying (difference %.2f mm)", worst * 1000);
+        CHECK(worst < 0.002f, b);
+    }
     // ---------------- hand-placed positions are saved and read back
     {
         std::wstring path = ProfilesDir() + L"\\vro_pose_test.json";
@@ -699,6 +1070,11 @@ int main(int argc, char** argv) {
         Action pa; pa.type = ActType::Offsets; pa.mode = "panel";
         e.OffsetsAction(pa); step(2);
         CHECK(e.offView.open && e.offView.labels.size() == 27, "offsets: the panel opens with its 27 buttons");
+        {
+            Vec3 n = Rotate(e.offView.pose.orientation, { 0, 0, 1 }), toEye = Norm(V(f.head.position) - V(e.offView.pose.position));
+            Vec3 upv = Rotate(e.offView.pose.orientation, { 0, 1, 0 });
+            CHECK(n.x * toEye.x + n.y * toEye.y + n.z * toEye.z > 0.999f && upv.z < 0.f, "offsets: the panel faces the eyes, its top leaning away (not toward you)");
+        }
         auto aimAt = [&](int cell) {
             std::vector<Cell> cells; Cell hd;
             ListLayout((int)e.offView.labels.size(), e.offView.cols, e.offView.h / e.offView.w, true, cells, hd);

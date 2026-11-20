@@ -33,6 +33,7 @@ struct WheelView {
     float size = 0.24f;
     std::vector<bool> on;   // per item: its toggle is currently on
     uint64_t version = 0;
+    float alpha = 1.f;      // see-through while adjusting other things (1 = solid)
 };
 // Keyboard layout in key units (one letter key = 1x1).
 enum KbKind { KB_KEY, KB_SHIFT, KB_CAPS, KB_CTRL, KB_ALT, KB_CLOSE };
@@ -47,6 +48,12 @@ struct KeyboardView {
     int pressed = -1;
     bool shift = false, caps = false, ctrl = false, alt = false;
     uint64_t version = 0;
+    // button bar under the keyboard: docking with the screen
+    XrPosef barPose{ {0,0,0,1}, {0,0,0} };
+    float barW = 0.4f, barH = 0.05f;
+    std::vector<std::string> barLabels;
+    int barHover = -1, barPressed = -1;
+    uint64_t barVersion = 0;
 };
 
 // Wrist panel: buttons on the forearm, shown when you turn it toward your eyes and look at it.
@@ -201,7 +208,7 @@ private:
     std::vector<Pulse> pulses;
     WheelRun wr;
     double now = 0, lastNow = 0;
-    struct GrabRun { int target = -1; int hand = -1; Vec3 off; XrPosef rel{ {0,0,0,1}, {0,0,0} }; }; // target: 0/1 wrist panel, 2 wheel, 3 screen
+    struct GrabRun { int target = -1; int hand = -1; Vec3 off; XrPosef rel{ {0,0,0,1}, {0,0,0} }; }; // target: 0/1 wrist panel, 2 wheel, 3 screen, 4 keyboard, 5 the docked one (Adjust dock)
     // grabbing: the thing keeps the position and angle it had in the grabbing hand
     void StartGrab(int target, int hand, const XrPosef& obj);
     XrPosef GrabbedPose() const;
@@ -209,6 +216,19 @@ private:
     GrabRun grab;
     double adjustClosedAt = -1;
     void UpdateAdjustWheel();
+    void UpdateAdjustFade();
+    void UpdateAdjustKeyboard();
+    void ApplyDock();            // after the screen: put the screen above the keyboard, or the keyboard under the screen
+    void UpdateKbBar();
+    void KbBarActivate(int cell);
+    XrPosef DockRel() const;     // the screen in the keyboard's frame
+    float DockScreenWidth() const;
+public:
+    bool dockAdjust = false;     // "Adjust dock": grab the docked one to set where it sits
+private:
+    double kbBarFlashUntil = 0;
+    XrPosef kbFrame{ {0,0,0,1}, {0,0,0} }; // the head (turned like the head) when the keyboard opened
+    float wheelAlphaDrawn = 1.f;
     bool screenInit = false, screenPlaceFront = false;
     XrPosef screenFrontPose{ {0,0,0,1}, {0,0,0} }, screenFrontFrame{ {0,0,0,1}, {0,0,0} };
     bool mouseL = false, mouseR = false, screenClicked = false;

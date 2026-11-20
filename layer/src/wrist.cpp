@@ -217,7 +217,7 @@ void Engine::UpdateWrist(int h) {
         if (idx < 0) return true; // the automatic Back cell
         if (idx >= (int)wv.wheel->items.size()) return false;
         ActType t = wv.wheel->items[idx].action.type;
-        return t == ActType::Adjust || t == ActType::Page || t == ActType::Back;
+        return t == ActType::Adjust || t == ActType::Page || t == ActType::Back || t == ActType::Keyboard;
     };
 
     // Poke: the tip of the other controller pushes through the panel surface.

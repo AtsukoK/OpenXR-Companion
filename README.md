@@ -2,9 +2,23 @@
 
 *by Atsuko*
 
-Hand tools for any OpenXR game: radial wheels, wrist panels, button combos, a VR keyboard, your desktop or any window mirrored into VR, controller offsets that fix how the game's hands and guns point, and steadying for shaky hands. (Formerly *OpenXR Hand Menus*.) It's an OpenXR API layer, so it works under Virtual Desktop (VDXR), SteamVR OpenXR, Meta Link, Pimax and other runtimes without patching the game or the runtime, the same way OpenXR Toolkit loads. A desktop editor sets everything up, with per-game profiles.
+Hand tools for any OpenXR game: radial wheels, wrist panels, button combos, a VR keyboard, your desktop or any window mirrored into VR, a headset mirror window for recording and streaming, controller offsets that fix how the game's hands and guns point, and steadying for shaky hands. (Formerly *OpenXR Hand Menus*.) It's an OpenXR API layer, so it works under Virtual Desktop (VDXR), SteamVR OpenXR, Meta Link, Pimax and other runtimes without patching the game or the runtime, the same way OpenXR Toolkit loads. A desktop editor sets everything up, with as many profiles as you like; the one you select is the one your games use.
 
 **[Download the latest release](https://github.com/AtsukoK/OpenXR-Companion/releases/latest)** · **[My other work and support on Patreon](https://www.patreon.com/cw/AtsukoK)** · **[Buy me a coffee on Ko-fi](https://ko-fi.com/atsukok)**
+
+## What it does
+
+| Feature | In short |
+|---|---|
+| [Radial wheels](#quick-start) | Menus that open from a controller button; pick with the stick or by pointing. Sub-wheels, key presses, macros, toggles. |
+| [Wrist panels](#the-default-left-wrist-panel) | Buttons on your forearm that appear when you look at it. |
+| [Bindings and combos](#using-the-editor) | Any controller button, double tap, hold or combo can press keys, run macros, open wheels or switch layers. |
+| [VR keyboard](#quick-start) | Type into the game or a mirrored window. |
+| [Screen mirror](#screen-mirror-a-monitor-or-window-in-vr) | A monitor or one window on your wrist or in front of you, usable with the laser like a mouse. |
+| [Headset mirror](#headset-mirror-what-the-headset-shows-on-your-monitor) | A desktop window with what the headset shows, overlays included. For OBS or someone watching. |
+| [Controller offsets](#controller-offsets-fix-how-the-games-hands-point) | Fix how the game's hands and guns point, per game. |
+| [Steadying](#steadying-for-shaky-hands) | Smooths the laser, the wrist screen and the game's hands for shaky hands. |
+| [Experimental](#experimental-features) | Hidden, off by default: head smoothing for using the headset as a camera (can cause motion sickness). |
 
 ## Screenshots
 
@@ -28,18 +42,41 @@ Hand tools for any OpenXR game: radial wheels, wrist panels, button combos, a VR
 2. Run `OpenXRCompanionEditor.exe`. The first time, it asks which controllers you use, so it can pick the buttons that open the wheels, and offers a two-minute tour.
 3. Click **Install layer** in the toolbar (needs admin, because OpenXR layers are registered under HKLM). The toolbar then shows "Layer: installed".
 4. Start any OpenXR game. A message at the bottom of your view, "OpenXR Companion: default.json loaded", means the layer is running.
-5. Change things in the editor and save (Ctrl+S). A running game reloads the profile within a second.
+5. Change things in the editor and save (Ctrl+S). A running game reloads the profile within a second. **The profile you select in the editor's Profile list is the one your games use** (a running game switches within a second). Your changes to the standard profile are saved as `user_defaults.json`, so updates never overwrite them.
 
-## 32-bit games (Fallout: New Vegas, Fallout 3, Tale of Two Wastelands with TTWVR)
+### Updating
+
+When a new version is out, an orange **Update available** button appears at the top right of the editor. Click it and choose **Yes**: the editor downloads the release from GitHub, checks it against GitHub's checksum, keeps your current version in a `_previous_version` folder, swaps the files and restarts. Your profiles and settings are not touched. Close your VR games first; a game that is running keeps the old version until you restart it. (Or download the zip and extract it over the old folder, as before.)
+
+### 32-bit games (Fallout: New Vegas, Fallout 3, Tale of Two Wastelands with TTWVR)
 
 32-bit games load only 32-bit OpenXR layers, from a separate registry list. The zip has a 32-bit copy of the layer in the `x86` folder, and the editor's **Install layer** button installs it together with the 64-bit one (one admin prompt). The toolbar shows "Layer: installed (+ 32-bit)" when both are set up.
 
 1. Install as above (the editor is the same for both).
 2. Click **Install layer** in the editor. That's all. (Without the editor: right-click `x86\install.ps1` > **Run with PowerShell** as admin, or from an admin PowerShell: `powershell -ExecutionPolicy Bypass -File x86\install.ps1`). It registers `x86\XR_APILAYER_NOVENDOR_openxr_companion.json` under `HKLM\SOFTWARE\WOW6432Node\Khronos\OpenXR\1\ApiLayers\Implicit`.
-3. Start the game. "OpenXR Companion: default.json loaded" at the bottom of your view means it is running. Both builds share the same profiles, so a per-game profile for New Vegas is `profiles\FalloutNV.json`.
+3. Start the game. "OpenXR Companion: default.json loaded" at the bottom of your view means it is running. Both builds share the same profiles and use the one selected in the editor.
 4. **Uninstall layer** removes both (or run `x86\uninstall.ps1` as admin).
 
 Tested with TTWVR on Virtual Desktop (VDXR).
+
+## Quick start
+
+- **Open a wheel**: depends on the controllers you picked in the editor (**Controllers** button). Quest, Rift and Pico: double-tap that hand's thumbrest. Index, Pimax and Bigscreen: double-click that hand's thumbstick. WMR, HP Reverb and Vive: hold that hand's menu button. Pick an item by pushing the stick toward it and letting it spring back, or by pointing at it and pulling the trigger.
+- **Wrist panels**: turn your wrist toward your face and look at it. Poke a button with your other hand (a ring shows where you'll touch), or point at it and pull the trigger.
+- **Put things where you like them**: left wrist panel > More > **Calibrate Positions**. Grab a wheel, a wrist panel, the screen or the VR keyboard (open it with its Keyboard button first) with your other hand's grip and move it; the stick resizes it. Press it again to save.
+- **Change anything** in the editor and save (Ctrl+S). A running game picks it up within a second.
+
+### The default left wrist panel
+
+New profiles start with the tools you need to set things up close at hand:
+
+| Page | Buttons |
+|---|---|
+| Main | Quick save, Pause, **Monitor** (your screen on your wrist), Keyboard, More |
+| More | Quick load, Reload profile, **Calibrate Positions** (move wheels, panels and the screen by hand), **Controller offsets**, **Headset mirror**, **Screen options** |
+| Screen options | On my wrist, In front of me, Next monitor, Choose window, Frame rate, Move it, Screen off |
+
+Older profiles keep their own panels; add any of these buttons in the editor.
 
 ## Using the editor
 
@@ -57,6 +94,10 @@ The editor opens on the **Overview**: one card per feature, with a switch to tur
 
 **Wrist panels** can be off, have their own pages, or mirror the other arm. Set the side of the arm, the text direction and the size here, or move them by hand in the headset with **Adjust positions**.
 
+**Settings** is split into short pages in the list: General, Wheel look and picking, Pointing, VR keyboard, Screen mirror, Controller offsets, Headset mirror and Advanced. Each section is a card tagged **Saved with profile** (press Save) or **Applies straight away**. Hover or click an (i) icon for help. The search box at the top finds settings as well as items. The button on the right of the toolbar switches between **Dark** (the default), **Light** and **Auto** (follows Windows).
+
+![Search: typing "zoom" lists only the Headset mirror page and highlights its matching settings](docs/images/editor-search.png)
+
 ![Wrist panel page: off / own pages / mirror, first page, side of the arm and text direction](docs/images/editor-wrist-panel.png)
 
 ## Screen mirror (a monitor or window in VR)
@@ -67,7 +108,7 @@ Shows one of your monitors, or a single window (a browser, Discord, a video, a T
 
 ### Getting started
 
-1. Turn it on with a **Screen** button. The default profile has a page of them on the left wrist panel: **More > Screen**. You can also add a button with the action **Mirror a monitor** to any wheel or wrist panel.
+1. Turn it on with a **Screen** button. The default left wrist panel has **Monitor** on its first page and a page of screen buttons under **More > Screen options**. You can also add a button with the action **Mirror a monitor** to any wheel or wrist panel.
 2. Point at the screen. A button bar appears under it.
 3. Press **Choose...** and pick a monitor or window from the list.
 
@@ -99,6 +140,10 @@ Point at the screen and the bar appears just under it. It stays for 2 seconds af
 | **Keyboard** | Opens the VR keyboard and brings the mirrored window to the front, so typing goes into it. Click the text box first (for example a chat box), then press Keyboard. The game doesn't take the focus back until you close the keyboard. |
 | **Adjust** | Turns on Adjust positions: grab the screen (or the wheel, or a wrist panel) with a grip and put it anywhere, at any angle; the stick resizes it. The bar becomes one **Done adjusting** button, which saves. |
 | **Hide** | Turns the screen off. |
+
+### Typing into it: dock the keyboard
+
+Open the VR keyboard. The bar under it has **Dock screen above keys** (the screen sits just above the keyboard and moves with it) and **Dock keys under screen** (the keyboard follows the screen), so you don't have to hold your wrist up while typing. **Adjust dock** lets you grab the docked one with a grip and put it where you like (the stick changes the docked screen's size); press it again to save. Your choice is remembered, and Settings > VR keyboard has it too.
 
 ### Using the desktop on it
 
@@ -135,17 +180,77 @@ Point at the screen and the bar appears just under it. It stays for 2 seconds af
 - Protected video (some streaming apps) shows black; that is a Windows rule. Mirroring the monitor the game itself is on can show black or a frozen picture.
 - Lowest frame rate cap is 1 fps.
 
-## Files and switching it off
+## Headset mirror (what the headset shows, on your monitor)
+
+A desktop window showing what the headset shows, **including the wheel, wrist panels, mirrored screen, lasers and messages** (a game's own mirror can't show those, because they're added after the game). Good for recording or streaming (capture the window in OBS) or for someone watching.
+
+- Turn it on with the first button on the editor's toolbar, or the **Headset mirror** button on the left wrist panel (More). Closing the window turns it off.
+- **Settings > Headset mirror**: which eye (right by default), **zoom** (1.3 looks like a normal camera; the picture always fills the window, so resize the window for another shape), **steady the picture** (irons small head shakes out of the window like a camera stabiliser; 0.5 by default; the view in the headset is not changed) and a **frame rate cap** (60 is smooth and cheap).
+- **Always on top of other windows** keeps it above the game on your monitor. The mirror never takes focus from the game, even when you click, move or resize it, so the game keeps your keyboard and controller input. Use borderless or windowed mode in the game; exclusive fullscreen can still cover it.
+- It never holds the game up. D3D11 games for now.
+
+![Settings > Headset mirror: show the window, always on top, eye, zoom, steady the picture, frame rate cap](docs/images/editor-headset-mirror.png)
+
+## Controller offsets (fix how the game's hands point)
+
+Turns and moves the controllers the **game** sees (its hands, guns and its own laser), for games whose hands point too low on Quest controllers or that have no pitch setting. Works in any OpenXR game, and each game's profile keeps its own numbers.
+
+- **In the headset**: press **Controller offsets** on the left wrist panel (More). The panel has + / - buttons for pitch, yaw, roll and up/down, left/right, forward/back (hold to repeat, or point at a row and push the stick like a slider). Press a value to reset it. **Grab to set**: hold grip and turn the controller until the game's hand feels right, then let go. Changes save by themselves.
+- **In the editor**: Settings > Controller offsets has the same values as sliders, for both hands mirrored or each hand on its own, and for the grip and aim poses together or apart. One tick turns it all off.
+- **Steady the game's hands** (off by default) smooths the hands and guns in the game for shaky hands.
+
+![Settings > Controller offsets: hand and pose choice, sliders for pitch, yaw, roll and position, reset buttons, steady the game's hands](docs/images/editor-controller-offsets.png)
+
+## Steadying for shaky hands
+
+All off by default; 0.5 is a good start. Each one holds still through small shakes but follows straight away when you really move.
+
+| Setting | What it steadies |
+|---|---|
+| Settings > Pointing > **Steady the laser** | the laser, and the mouse on a mirrored screen |
+| Settings > Screen mirror > **Steady the screen** | a screen on your wrist or following your view |
+| Settings > Controller offsets > **Steady the game's hands** | the hands and guns in the game |
+| Settings > Headset mirror > **Steady the picture** | the headset mirror window only (on at 0.5) |
+
+## Experimental features
+
+> ⚠ **Motion sickness warning.** These can make you feel sick, sometimes quickly. They are hidden and off by default.
+
+To see them, tick **Settings > Advanced > Show experimental features**. An **Experimental** page then appears under Settings.
+
+- **Head smoothing** steadies the direction the game looks from, like a camera stabiliser, for using the headset as a camera. The head's position isn't changed.
+  - **For recording** (the default): the game's own desktop view and recordings are steadied, but the headset corrects back to your real head, so the world still feels solid. The picture's edge can show briefly in the headset during shakes.
+  - **⚠ In the headset too**: you see the steadied picture yourself, so the world moves a little with your head. Much more likely to make you sick.
+  - **Strength** 0 to 100: how heavy the camera is. Every movement is smoothed the same way, easing into and out of turns like a weighted camera rig: about 0.12 s of lag per step (2 = smooth, 5 = heavy, 10 = very heavy, up to 100 = 12 s for slow drifting shots). Above about 1 is meant for **For recording**.
+  - Turning it on asks you to confirm. It **switches itself off every time a game starts**, unless you tick **Keep it on when a game starts**.
+  - Works in games that render from the views OpenXR gives them (most do).
+
+![Settings > Experimental: a motion sickness warning above the head smoothing switch, where it applies, keep it on, and strength](docs/images/editor-experimental.png)
+
+## Files, switching it off and problems
 
 Turn it off for one game with `enabled: false` in that game's profile. Remove it entirely with **Uninstall layer**. Setting the environment variable `DISABLE_XR_APILAYER_NOVENDOR_openxr_companion=1` also disables it.
 
 Files live in `%LOCALAPPDATA%\OpenXRCompanion\`:
-- `profiles\default.json` is used by every game that has no profile of its own.
-- `profiles\<exe name>.json` is a per-game profile (for example `profiles\bannerlord.json`).
+- `profiles\default.json` is the **standard** profile. It is refreshed with every release, so new defaults reach everyone.
+- `profiles\user_defaults.json` holds **your own** defaults. The editor creates it the first time you save changes to the standard (changes made in the headset, like controller offsets or placement, go there too). If you already have one, it is never replaced: changes to the standard are saved as a new profile, `user_defaults 2.json`, after a warning.
+- Any other `profiles\*.json` is a profile of your own (**New game profile...** makes one).
+- `active_profile.txt` names the profile selected in the editor. **Games always use the selected profile.** If none is selected (or it was deleted), a profile named after the game's exe is used (for example `profiles\bannerlord.json`), then `user_defaults.json`, then `default.json`.
 - `profiles\icons\*.png` holds optional item icons.
+- `headset_mirror.json` and `head_smoothing.json` hold the headset mirror and head smoothing settings (for every game).
 - `logs\<exe name>.log` is one log per game, and is the first place to look when something doesn't work.
 
-## Concepts
+**Reporting a problem:** open a [GitHub issue](https://github.com/AtsukoK/OpenXR-Companion/issues) with what you did and what happened, your headset and runtime (Virtual Desktop, SteamVR, Link...), the game, and the log (`logs\<game>.log`; the editor's **Logs** button opens the folder).
+
+### Limits
+- OpenXR games only. Games that use the SteamVR (OpenVR) API or the Oculus LibOVR API never load OpenXR layers.
+- The wheel is drawn for D3D11 and D3D12 games. Vulkan or OpenGL games still get the bindings, chords and layers, but no visible wheel.
+- Keys go to the foreground window. If a game ignores them, try `focus_game_window: true`.
+- Multiplayer games with anti-cheat may object to any injected layer.
+
+## Profile reference (for editing the JSON by hand)
+
+Everything here can be set in the editor; this is for people who prefer the files.
 
 **Inputs** are written `hand.part[.feature]`:
 
@@ -176,6 +281,12 @@ Files live in `%LOCALAPPDATA%\OpenXRCompanion\`:
 | `back`, `close` | | wheel navigation |
 | `layer` | `layer`, `mode` hold/toggle/on/off | |
 | `reload` | | reload the profile |
+| `page` | `page` name | opens another page of a wrist panel |
+| `keyboard` | | opens the VR keyboard |
+| `adjust` | | Adjust positions (move wheels, wrist panels and the screen by hand) |
+| `screen` | `mode` toggle/on/off/choose/next_monitor/next_fps/next_place, `place`, `monitor`, `window` | the screen mirror |
+| `controller_offsets` | `mode` panel | opens the controller offsets panel |
+| `headset_mirror` | `mode` toggle/on/off | the headset mirror window |
 
 **Wheel confirm modes**
 - `stick_return`: push the stick toward an item and let it spring back. This is the default for thumbrest or touch openers, because your thumb leaves the thumbrest to use the stick.
@@ -185,12 +296,6 @@ Files live in `%LOCALAPPDATA%\OpenXRCompanion\`:
 
 **Placement** (`style.anchor`): `head_locked` (default; appears in front of you, 0.70 m away, and stays put), `head` (follows your view), `hand_locked` (appears above the opening hand and stays put), or `hand` (follows the hand). The wheel always turns to face you. `selection.method` is `both` by default (stick or pointer); `thumbstick` or `point` allow only one.
 
-## Limits
-- OpenXR games only. Games that use the SteamVR (OpenVR) API or the Oculus LibOVR API never load OpenXR layers.
-- The wheel is drawn for D3D11 and D3D12 games. Vulkan or OpenGL games still get the bindings, chords and layers, but no visible wheel.
-- Keys go to the foreground window. If a game ignores them, try `focus_game_window: true`.
-- Multiplayer games with anti-cheat may object to any injected layer.
-
 ## Building
 
 Needs Visual Studio Build Tools (C++ with CMake) and the .NET 10 SDK.
@@ -199,7 +304,7 @@ Needs Visual Studio Build Tools (C++ with CMake) and the .NET 10 SDK.
 - Editor: `dotnet publish editor/OpenXRCompanionEditor.csproj -c Release -o editor/bin/publish`
 - `build_all.ps1` does both and fills `dist\` (it uses the author's local tool paths in `layer\build.bat`).
 
-`layeruildro_test.exe` runs the offline engine tests. The GitHub Actions workflow builds the same tester package on every push.
+`layer\build\vro_test.exe` runs the offline engine tests. The GitHub Actions workflow builds the same tester package on every push.
 
 ## Support
 

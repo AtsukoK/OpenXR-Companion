@@ -35,6 +35,7 @@ static struct {
     PFN_xrCreateReferenceSpace CreateReferenceSpace;
     PFN_xrDestroySpace DestroySpace;
     PFN_xrLocateSpace LocateSpace;
+    PFN_xrLocateViews LocateViews;
     PFN_xrLocateSpaces LocateSpaces;
     PFN_xrLocateSpacesKHR LocateSpacesKHR;
     PFN_xrApplyHapticFeedback ApplyHapticFeedback;
@@ -46,6 +47,26 @@ static HeadsetMirror gMirror;
 static MirrorSettings gMirrorSet;
 static FILETIME gMirrorFileTime{};
 static double gLastMirrorCheck = -10;
+
+// ---------------------------------------------------------------- head smoothing (experimental)
+// The game is handed a steadied head (direction only; position stays real). In "headset" mode the
+// frame is then submitted with the real head pose, so the compositor shows the steadied picture as is.
+static std::mutex gHeadMx;
+static HeadSmoothSettings gHeadSet;
+static FILETIME gHeadFileTime{};
+static HeavyCam gHeadSm;
+static XrTime gHeadLastT = 0;
+static XrQuaternionf gHeadD{ 0, 0, 0, 1 }; // steadied * inverse(real) for gHeadLastT
+struct HeadRec { XrTime t = 0; XrSpace space = XR_NULL_HANDLE; XrPosef real{ {0,0,0,1}, {0,0,0} }, sm{ {0,0,0,1}, {0,0,0} }; }; // the head, real and steadied, in that space
+static HeadRec gHeadRecs[8];
+static int gHeadRecNext = 0;
+static std::set<uint64_t> gViewSpaces;                // the game's VIEW reference spaces (its head)
+// diagnostics (head smoothing): how this game asks for its head, counted per 10 s
+static int gDiagViewsWorld = 0, gDiagViewsHead = 0, gDiagHeadLocates = 0, gDiagFrames = 0, gDiagFrameNoRec = 0;
+static bool gDiagSaidViews[2] = {}, gDiagSaidLocate = false, gDiagSaidFrame = false;
+static bool gHeadLogged = false;                      // "in use" written for this run of it
+static double gHeadStatT = 0; static float gHeadLagSum = 0, gHeadLagMax = 0; static int gHeadLagN = 0;
+static int gHeadSwapOk = 0, gHeadSwapMiss = 0;
 
 // ---------------------------------------------------------------- our action set
 enum OA { A_BTN1, A_BTN1T, A_BTN2, A_BTN2T, A_TRIG, A_TRIGT, A_GRIP, A_STICK, A_STICKC, A_STICKT, A_REST, A_MENU, A_GRIPPOSE, A_AIMPOSE, A_HAPTIC, A_COUNT };
@@ -128,6 +149,7 @@ static void MarkOwnSave();
 static Panel gBarPanel, gPickPanel; static uint64_t gDrawnBar = ~0ull, gDrawnPick = ~0ull;
 static Panel gScreenPanel; static ScreenCapture gCap; static std::vector<uint32_t> gScreenPix; static uint64_t gScreenMsgVer = 0;
 static uint64_t gDrawnKb = ~0ull;
+static Panel gKbBarPanel; static uint64_t gDrawnKbBar = ~0ull;
 static uint64_t gDrawnWheel = ~0ull, gDrawnToast = ~0ull;
 static int gWheelTex = 0;
 static std::vector<uint32_t> gPix;
@@ -142,7 +164,7 @@ struct OffSnap { bool on = false; bool has[2][2]{}; XrPosef o[2][2]{}; float smo
 static std::mutex gOffMx;                  // own lock: the game may locate from its render thread
 static std::unordered_map<uint64_t, GameSpace> gGameSpaces;
 static OffSnap gOff;
-struct SpaceSmooth { PoseSmoother f; XrTime t = 0; XrPosef out{}; };
+struct SpaceSmooth { SpaceSteady st; };
 static std::map<std::pair<uint64_t, uint64_t>, SpaceSmooth> gSpaceSmooth;
 static Panel gOffPanel; static uint64_t gDrawnOff = ~0ull;
 
@@ -159,9 +181,80 @@ static bool ParsePosePath(const std::string& s, PoseBind& b) {
 }
 
 // Move one located pose: space' = space * Os, base' = base * Ob  ->  pose' = inv(Ob) * pose * Os.
+// Tracking diagnostics for the game's hand poses (grip/aim, located in a world space), under gOffMx.
+// Logs tracking state changes and big jumps at once; every 10 s a summary of reads and of how far
+// our offsets + steadying moved each hand (so a log from a glitch shows whether the layer moved it).
+struct TrackDiag {
+    uint64_t lastFlags = ~0ull; bool havePrev = false; XrPosef prev{}; XrTime prevT = 0;
+    int reads = 0, older = 0, untracked = 0, jumps = 0;
+    float movedSum = 0, movedMax = 0, turnedSum = 0, turnedMax = 0; int movedN = 0;
+};
+static TrackDiag gTrackDiag[2][2]; static double gTrackDiagT = 0;
+static const char* kHandName[2] = { "left", "right" }; static const char* kKindName[2] = { "grip", "aim" };
+static std::string FlagText(uint64_t f) {
+    std::string s;
+    s += (f & XR_SPACE_LOCATION_POSITION_VALID_BIT) ? (f & XR_SPACE_LOCATION_POSITION_TRACKED_BIT ? "position tracked" : "position guessed") : "position LOST";
+    s += ", ";
+    s += (f & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) ? (f & XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT ? "angle tracked" : "angle guessed") : "angle LOST";
+    return s;
+}
+static void TrackDiagRaw(const GameSpace& g, XrTime t, uint64_t flags, const XrPosef& raw) {
+    TrackDiag& d = gTrackDiag[g.hand][g.kind];
+    const char* hn = kHandName[g.hand]; const char* kn = kKindName[g.kind];
+    d.reads++;
+    const uint64_t full = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR_SPACE_LOCATION_POSITION_VALID_BIT |
+                          XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT | XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
+    if ((flags & full) != full) d.untracked++;
+    if (flags != d.lastFlags) {
+        if (d.lastFlags != ~0ull) Log("tracking: %s %s now %s", hn, kn, FlagText(flags).c_str());
+        else Log("tracking: %s %s first read: %s", hn, kn, FlagText(flags).c_str());
+        d.lastFlags = flags;
+    }
+    if (t < d.prevT) d.older++;
+    bool posOk = (flags & XR_SPACE_LOCATION_POSITION_VALID_BIT) != 0;
+    if (posOk && t > d.prevT) {
+        if (d.havePrev) {
+            float jump = Len(V(raw.position) - V(d.prev.position));
+            double gap = (t - d.prevT) * 1e-9;
+            if (jump > 0.2f && gap < 0.1) {
+                d.jumps++;
+                Log("tracking: %s %s JUMPED %.0f cm in %.0f ms (from %.2f %.2f %.2f to %.2f %.2f %.2f), %s", hn, kn, jump * 100.f, gap * 1000.0,
+                    d.prev.position.x, d.prev.position.y, d.prev.position.z, raw.position.x, raw.position.y, raw.position.z, FlagText(flags).c_str());
+            }
+        }
+        d.prev = raw; d.prevT = t; d.havePrev = true;
+    }
+}
+static void TrackDiagMoved(const GameSpace& g, const XrPosef& raw, const XrPosef& out) {
+    TrackDiag& d = gTrackDiag[g.hand][g.kind];
+    float m = Len(V(out.position) - V(raw.position));
+    XrQuaternionf dq = QMul(out.orientation, QInv(raw.orientation));
+    float a = 2.f * std::acos(std::min(1.f, std::fabs(dq.w))) * 57.2958f;
+    d.movedSum += m; d.movedMax = std::max(d.movedMax, m); d.turnedSum += a; d.turnedMax = std::max(d.turnedMax, a); d.movedN++;
+}
+static void TrackDiagSummary() {
+    double now = NowSec();
+    if (!gTrackDiagT) { gTrackDiagT = now; return; }
+    if (now - gTrackDiagT < 10.0) return;
+    gTrackDiagT = now;
+    for (int h = 0; h < 2; h++) for (int k = 0; k < 2; k++) {
+        TrackDiag& d = gTrackDiag[h][k];
+        if (!d.reads) continue;
+        float n = (float)std::max(1, d.movedN);
+        Log("tracking 10 s: %s %s reads %d (older time %d, not fully tracked %d, jumps %d); layer moved it %.1f cm avg / %.1f max, turned %.1f deg avg / %.1f max",
+            kHandName[h], kKindName[k], d.reads, d.older, d.untracked, d.jumps, d.movedSum * 100.f / n, d.movedMax * 100.f, d.turnedSum / n, d.turnedMax);
+        d.reads = d.older = d.untracked = d.jumps = d.movedN = 0; d.movedSum = d.movedMax = d.turnedSum = d.turnedMax = 0;
+    }
+}
+
 static void OffsetLocation(XrSpace space, XrSpace base, XrTime t, XrSpaceLocationFlags& flags, XrPosef& pose, XrSpaceVelocityFlags* vflags, XrVector3f* lin, XrVector3f* ang) {
-    if (!(flags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)) return;
     std::lock_guard l(gOffMx);
+    {
+        auto is = gGameSpaces.find((uint64_t)space);
+        if (is != gGameSpaces.end() && !gGameSpaces.count((uint64_t)base)) TrackDiagRaw(is->second, t, flags, pose);
+        TrackDiagSummary();
+    }
+    if (!(flags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)) return;
     if (!gOff.on || gGameSpaces.empty()) return;
     auto is = gGameSpaces.find((uint64_t)space), ib = gGameSpaces.find((uint64_t)base);
     bool hs = is != gGameSpaces.end() && gOff.has[is->second.hand][is->second.kind];
@@ -181,16 +274,16 @@ static void OffsetLocation(XrSpace space, XrSpace base, XrTime t, XrSpaceLocatio
     if (hb) p = PMul(PInv(gOff.o[ib->second.hand][ib->second.kind]), p);
     if (smooth) {
         SpaceSmooth& ss = gSpaceSmooth[{ (uint64_t)space, (uint64_t)base }];
-        if (ss.t && t == ss.t) p = ss.out;                    // asked again for the same time
-        else if (t > ss.t) { float dt = ss.t ? (float)((t - ss.t) * 1e-9) : 0.f; ss.out = ss.f.Apply(p, dt, gOff.smooth); ss.t = t; p = ss.out; }
+        p = ss.st.Step(t, p, flags, gOff.smooth); // untracked poses pass through and restart the filter
     }
+    if (is != gGameSpaces.end() && ib == gGameSpaces.end()) TrackDiagMoved(is->second, pose, p);
     pose = p;
 }
 
 struct Track { uint64_t sync = ~0ull; float prev[2]{}, cur[2]{}; };
 static std::unordered_map<uint64_t, Track> gTrack;
 
-static FILETIME gCfgTimes[2]{};
+static FILETIME gCfgTimes[5]{};
 static double gLastCfgCheck = 0;
 
 static inline uint64_t H(XrAction a) { return (uint64_t)a; }
@@ -270,6 +363,9 @@ static void MarkOwnSave() {
     std::wstring dir = ProfilesDir();
     gCfgTimes[0] = FileTime(dir + L"\\" + Utf8ToW(ExeName()) + L".json");
     gCfgTimes[1] = FileTime(dir + L"\\default.json");
+    gCfgTimes[2] = FileTime(dir + L"\\user_defaults.json");
+    gCfgTimes[3] = FileTime(ActiveProfilePath());
+    gCfgTimes[4] = gEng.prof ? FileTime(dir + L"\\" + Utf8ToW(gEng.prof->sourceName)) : FILETIME{};
 }
 
 static void CheckConfigChanged() {
@@ -277,7 +373,8 @@ static void CheckConfigChanged() {
     if (now - gLastCfgCheck < 1.0) return;
     gLastCfgCheck = now;
     std::wstring dir = ProfilesDir();
-    FILETIME t[2] = { FileTime(dir + L"\\" + Utf8ToW(ExeName()) + L".json"), FileTime(dir + L"\\default.json") };
+    FILETIME t[5] = { FileTime(dir + L"\\" + Utf8ToW(ExeName()) + L".json"), FileTime(dir + L"\\default.json"), FileTime(dir + L"\\user_defaults.json"),
+                      FileTime(ActiveProfilePath()), gEng.prof ? FileTime(dir + L"\\" + Utf8ToW(gEng.prof->sourceName)) : FILETIME{} };
     bool changed = memcmp(t, gCfgTimes, sizeof(t)) != 0;
     bool first = gCfgTimes[1].dwLowDateTime == 0 && gCfgTimes[1].dwHighDateTime == 0;
     memcpy(gCfgTimes, t, sizeof(t));
@@ -312,6 +409,23 @@ static void CheckInteractionProfiles(double now) {
 }
 
 static XrPosef gHeadNow{ {0,0,0,1}, {0,0,0} }; static bool gHeadNowValid = false; // head in gLocal, last update
+
+// Head smoothing settings: read when the game starts, then whenever the editor changes the file.
+static void CheckHeadSmoothingFile() {
+    FILETIME hft = FileTime(HeadSmoothSettingsPath());
+    if (memcmp(&hft, &gHeadFileTime, sizeof(hft)) == 0) return;
+    gHeadFileTime = hft;
+    HeadSmoothSettings hs; LoadHeadSmoothSettings(hs);
+    static bool firstLoad = true;
+    if (firstLoad && hs.on && !hs.keepOn) { // safety: never already on when a game starts, unless asked
+        hs.on = false; SwitchOffHeadSmoothing(); gHeadFileTime = FileTime(HeadSmoothSettingsPath());
+        Log("head smoothing: was on, switched off at game start (keep_on is false)");
+    }
+    firstLoad = false;
+    bool was; { std::lock_guard hl(gHeadMx); was = gHeadSet.on; gHeadSet = hs; }
+    Log("head smoothing: settings read: %s, mode %s, strength %.2f", hs.on ? "ON" : "off", hs.mode == 1 ? "headset" : "recording", hs.strength);
+    if (hs.on != was) gEng.Toast(hs.on ? "Head smoothing ON (experimental: stop if you feel unwell)" : "Head smoothing off", 3.0);
+}
 
 static void ReadInputsAndUpdate() {
     Frame f;
@@ -380,8 +494,9 @@ static void ReadInputsAndUpdate() {
             gLastMirrorCheck = now;
             FILETIME ft = FileTime(MirrorSettingsPath());
             if (memcmp(&ft, &gMirrorFileTime, sizeof(ft)) != 0) { gMirrorFileTime = ft; LoadMirrorSettings(gMirrorSet); }
+            CheckHeadSmoothingFile();
         }
-        gMirror.eye = gMirrorSet.eye; gMirror.zoom = gMirrorSet.zoom; gMirror.fps = gMirrorSet.fps; gMirror.smoothing = gMirrorSet.smoothing;
+        gMirror.eye = gMirrorSet.eye; gMirror.zoom = gMirrorSet.zoom; gMirror.fps = gMirrorSet.fps; gMirror.smoothing = gMirrorSet.smoothing; gMirror.onTop = gMirrorSet.onTop;
         bool want = gMirrorSet.on && gGfx.api == 11;
         if (gMirrorSet.on && gGfx.api == 12 && !gMirror.On()) {
             static bool told = false;
@@ -489,7 +604,7 @@ static XrResult XRAPI_CALL Hook_xrCreateSession(XrInstance inst, const XrSession
 }
 
 static void DestroySessionStuff() {
-    gWheelPanel.Destroy(gSwap); gToastPanel.Destroy(gSwap); gKbPanel.Destroy(gSwap); gDrawnKb = ~0ull; for (int h = 0; h < 2; h++) { gWristPanel[h].Destroy(gSwap); gDrawnWrist[h] = ~0ull; gCursorPanel[h].Destroy(gSwap); gDrawnCursor[h] = -1; } gDotPanel.Destroy(gSwap); gBeamPanel.Destroy(gSwap); gDrawnPointer = false; gFingerPanel.Destroy(gSwap); gDrawnFinger = false; gScreenPanel.Destroy(gSwap); gCap.Stop(); gBarPanel.Destroy(gSwap); gPickPanel.Destroy(gSwap); gDrawnBar = gDrawnPick = ~0ull; gOffPanel.Destroy(gSwap); gDrawnOff = ~0ull;
+    gWheelPanel.Destroy(gSwap); gToastPanel.Destroy(gSwap); gKbPanel.Destroy(gSwap); gDrawnKb = ~0ull; gKbBarPanel.Destroy(gSwap); gDrawnKbBar = ~0ull; for (int h = 0; h < 2; h++) { gWristPanel[h].Destroy(gSwap); gDrawnWrist[h] = ~0ull; gCursorPanel[h].Destroy(gSwap); gDrawnCursor[h] = -1; } gDotPanel.Destroy(gSwap); gBeamPanel.Destroy(gSwap); gDrawnPointer = false; gFingerPanel.Destroy(gSwap); gDrawnFinger = false; gScreenPanel.Destroy(gSwap); gCap.Stop(); gBarPanel.Destroy(gSwap); gPickPanel.Destroy(gSwap); gDrawnBar = gDrawnPick = ~0ull; gOffPanel.Destroy(gSwap); gDrawnOff = ~0ull;
     { std::lock_guard o(gOffMx); gGameSpaces.clear(); gSpaceSmooth.clear(); gOff = OffSnap{}; }
     for (int h = 0; h < 2; h++) {
         if (gGripSp[h]) N.DestroySpace(gGripSp[h]);
@@ -583,12 +698,175 @@ static XrResult XRAPI_CALL Hook_xrDestroySpace(XrSpace sp) {
         for (auto it = gSpaceSmooth.begin(); it != gSpaceSmooth.end();)
             if (it->first.first == (uint64_t)sp || it->first.second == (uint64_t)sp) it = gSpaceSmooth.erase(it); else ++it;
     }
+    { std::lock_guard hl(gHeadMx); gViewSpaces.erase((uint64_t)sp); }
     return N.DestroySpace(sp);
+}
+
+// One step of the heavy camera for the head at time t: returns the turn from the real head to the steadied one.
+// Called with gHeadMx held. false = head smoothing is off.
+// The steadied direction for each recent time (the game asks for several times per frame, e.g. Unreal's
+// game and render threads): an older time gets the camera it had then, not the newest one.
+struct HeadHist { XrTime t = 0; XrQuaternionf sm{ 0,0,0,1 }; };
+static HeadHist gHeadHist[64]; static int gHeadHistNext = 0;
+static XrQuaternionf HeadAt(XrTime t, const XrQuaternionf& fallback) {
+    const HeadHist *lo = nullptr, *hi = nullptr; // the nearest times before and after t
+    for (auto& h : gHeadHist) {
+        if (!h.t) continue;
+        if (h.t <= t && (!lo || h.t > lo->t)) lo = &h;
+        if (h.t >= t && (!hi || h.t < hi->t)) hi = &h;
+    }
+    if (lo && hi && hi->t > lo->t) { // in between two: blend by time
+        float k = (float)(t - lo->t) / (float)(hi->t - lo->t);
+        XrQuaternionf a = lo->sm, b = hi->sm;
+        if (a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w < 0) b = { -b.x, -b.y, -b.z, -b.w };
+        XrQuaternionf q{ a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k, a.z + (b.z - a.z) * k, a.w + (b.w - a.w) * k };
+        float l = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+        return l > 1e-6f ? XrQuaternionf{ q.x / l, q.y / l, q.z / l, q.w / l } : a;
+    }
+    if (lo) return lo->sm;
+    if (hi) return hi->sm;
+    return fallback;
+}
+static bool HeadStep(XrTime t, const XrQuaternionf& real, XrQuaternionf& D) {
+    if (!gHeadSet.on || gHeadSet.strength <= 0.001f) {
+        if (gHeadLogged) { Log("head smoothing: stopped"); gHeadLogged = false; }
+        gHeadSm.Reset(); gHeadLastT = 0; gHeadD = { 0, 0, 0, 1 }; for (auto& h : gHeadHist) h = HeadHist{}; return false;
+    }
+    if (t > gHeadLastT) { // a newer time: one step (asked again for the same or an older time: the same turn)
+        float dt = gHeadLastT && t > gHeadLastT ? std::min(0.1f, (float)((t - gHeadLastT) * 1e-9)) : 0.f;
+        XrQuaternionf sm = gHeadSm.Apply(real, dt, gHeadSet.strength);
+        gHeadD = QMul(sm, QInv(real));
+        gHeadLastT = t;
+        gHeadHist[gHeadHistNext] = { t, sm }; gHeadHistNext = (gHeadHistNext + 1) % 64;
+        if (!gHeadLogged) { gHeadLogged = true; gHeadStatT = NowSec(); Log("head smoothing: in use, mode %s, strength %.2f (about %.2f s of camera lag)", gHeadSet.mode == 1 ? "headset" : "recording", gHeadSet.strength, 0.12f * gHeadSet.strength); }
+        float lag = 2.f * std::acos(std::min(1.f, std::fabs(gHeadD.w))) * 57.2958f;
+        gHeadLagSum += lag; gHeadLagMax = std::max(gHeadLagMax, lag); gHeadLagN++;
+        if (NowSec() - gHeadStatT > 10.0 && gHeadLagN > 0) {
+            Log("head smoothing: last 10 s the camera trailed your head by %.1f deg on average, %.1f deg at most%s", gHeadLagSum / gHeadLagN, gHeadLagMax,
+                gHeadSet.mode == 1 ? (" ; frames shown as steadied: " + std::to_string(gHeadSwapOk) + ", not matched: " + std::to_string(gHeadSwapMiss)).c_str() : "");
+            Log("head smoothing: calls in 10 s: eye views in world %d, eye views relative to head %d, head reads %d, frames %d (no head record for %d)",
+                gDiagViewsWorld, gDiagViewsHead, gDiagHeadLocates, gDiagFrames, gDiagFrameNoRec);
+            gHeadStatT = NowSec(); gHeadLagSum = gHeadLagMax = 0; gHeadLagN = 0; gHeadSwapOk = gHeadSwapMiss = 0;
+            gDiagViewsWorld = gDiagViewsHead = gDiagHeadLocates = gDiagFrames = gDiagFrameNoRec = 0;
+        }
+    }
+    D = QMul(HeadAt(t, real), QInv(real)); // the camera for this time, whatever the real head is in this call
+    return true;
+}
+static void HeadRecord(XrTime t, XrSpace space, const XrPosef& real, const XrPosef& sm) {
+    if (gHeadSet.mode != 1) return;
+    int last = (gHeadRecNext + 7) % 8;
+    HeadRec& r = (gHeadRecs[last].t == t && gHeadRecs[last].space == space) ? gHeadRecs[last] : gHeadRecs[gHeadRecNext];
+    if (&r == &gHeadRecs[gHeadRecNext]) gHeadRecNext = (gHeadRecNext + 1) % 8;
+    r.t = t; r.space = space; r.real = real; r.sm = sm;
+}
+
+// Games that ask for the eye views in their world (most Unity / native games): steady them here.
+static XrResult XRAPI_CALL Hook_xrLocateViews(XrSession s, const XrViewLocateInfo* li, XrViewState* vs, uint32_t cap, uint32_t* cnt, XrView* views) {
+    XrResult r = N.LocateViews(s, li, vs, cap, cnt, views);
+    if (XR_FAILED(r) || !li || !vs || !cnt || !views || cap == 0) return r;
+    std::lock_guard hl(gHeadMx);
+    bool rel = gViewSpaces.count((uint64_t)li->space) > 0;
+    if (gHeadSet.on) {
+        (rel ? gDiagViewsHead : gDiagViewsWorld)++;
+        if (!gDiagSaidViews[rel]) { gDiagSaidViews[rel] = true; Log("head smoothing: the game asks for its eye views %s", rel ? "relative to its head (Unreal style)" : "in its world"); }
+    }
+    if (rel) return r; // eyes relative to the head (Unreal): the head itself is steadied in LocateSpace
+    if (!(vs->viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT)) return r;
+    uint32_t n = std::min(*cnt, cap);
+    if (n == 0) return r;
+    Vec3 c{};
+    for (uint32_t i = 0; i < n; i++) c = c + V(views[i].pose.position);
+    c = c * (1.f / n);
+    XrQuaternionf D;
+    if (!HeadStep(li->displayTime, views[0].pose.orientation, D)) return r;
+    XrPosef realHead{ views[0].pose.orientation, X(c) }, smHead{ QMul(D, views[0].pose.orientation), X(c) };
+    for (uint32_t i = 0; i < n; i++) {
+        XrPosef& p = views[i].pose;
+        Vec3 off = Rotate(D, V(p.position) - c);
+        p.orientation = QMul(D, p.orientation);
+        p.position = X(c + off);
+    }
+    HeadRecord(li->displayTime, li->space, realHead, smHead);
+    return r;
+}
+
+// Games that read the head (their VIEW space) on its own and the eyes relative to it (Unreal): steady the head here.
+static void HeadLocation(XrSpace space, XrSpace base, XrTime t, XrSpaceLocationFlags flags, XrPosef& pose) {
+    if (!(flags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)) return;
+    std::lock_guard hl(gHeadMx);
+    if (!gViewSpaces.count((uint64_t)space) || gViewSpaces.count((uint64_t)base)) return;
+    if (gHeadSet.on) { gDiagHeadLocates++; if (!gDiagSaidLocate) { gDiagSaidLocate = true; Log("head smoothing: the game reads its head on its own (Unreal style): steadying it there"); } }
+    XrQuaternionf D;
+    if (!HeadStep(t, pose.orientation, D)) return;
+    XrPosef real = pose;
+    pose.orientation = QMul(D, pose.orientation);
+    HeadRecord(t, base, real, pose);
+}
+
+// "headset" mode: hand the compositor the real head pose for views the game rendered from the steadied one.
+static const XrFrameEndInfo* HeadSmoothEndFrame(const XrFrameEndInfo* fi) {
+    static XrFrameEndInfo out;
+    static std::vector<XrCompositionLayerProjection> projs;
+    static std::vector<XrCompositionLayerProjectionView> pviews;
+    static std::vector<const XrCompositionLayerBaseHeader*> ptrs;
+    std::lock_guard hl(gHeadMx);
+    if (gHeadSet.on && fi) {
+        gDiagFrames++;
+        for (uint32_t i = 0; i < fi->layerCount; i++) if (fi->layers[i] && fi->layers[i]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION && !gDiagSaidFrame) {
+            gDiagSaidFrame = true;
+            auto* pl = (const XrCompositionLayerProjection*)fi->layers[i];
+            Log("head smoothing: the game hands in its frames in space %llx (%s), %u views", (unsigned long long)(uint64_t)pl->space,
+                gViewSpaces.count((uint64_t)pl->space) ? "its head space" : "a world space", pl->viewCount);
+        }
+    }
+    if (!gHeadSet.on || gHeadSet.mode != 1 || !fi) return fi;
+    size_t nv = 0, np = 0;
+    for (uint32_t i = 0; i < fi->layerCount; i++) if (fi->layers[i] && fi->layers[i]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION) {
+        np++; nv += ((const XrCompositionLayerProjection*)fi->layers[i])->viewCount;
+    }
+    if (!np) return fi;
+    projs.assign(np, {}); pviews.assign(nv, {}); ptrs.assign(fi->layers, fi->layers + fi->layerCount);
+    bool changed = false; size_t pi = 0, vi = 0;
+    for (uint32_t i = 0; i < fi->layerCount; i++) {
+        if (!fi->layers[i] || fi->layers[i]->type != XR_TYPE_COMPOSITION_LAYER_PROJECTION) continue;
+        auto* src = (const XrCompositionLayerProjection*)fi->layers[i];
+        XrCompositionLayerProjection& p = projs[pi++];
+        p = *src; p.views = pviews.data() + vi;
+        const HeadRec* rec = nullptr; XrTime best = 3000000; // within 3 ms of the frame's time
+        for (auto& h : gHeadRecs) {
+            if (!h.t || h.space != src->space) continue;
+            XrTime d = h.t > fi->displayTime ? h.t - fi->displayTime : fi->displayTime - h.t;
+            if (d <= best) { best = d; rec = &h; }
+        }
+        if (!rec) gDiagFrameNoRec++;
+        XrPosef fix = rec ? PMul(rec->real, PInv(rec->sm)) : XrPosef{ {0,0,0,1}, {0,0,0} }; // steadied head -> real head
+        for (uint32_t k = 0; k < src->viewCount; k++) {
+            XrCompositionLayerProjectionView& v = pviews[vi++];
+            v = src->views[k];
+            if (rec) { v.pose = PMul(fix, v.pose); changed = true; }
+        }
+        ptrs[i] = (const XrCompositionLayerBaseHeader*)&p;
+    }
+    if (changed) gHeadSwapOk++; else gHeadSwapMiss++;
+    if (!changed) return fi;
+    out = *fi; out.layers = ptrs.data();
+    return &out;
+}
+
+static XrResult XRAPI_CALL Hook_xrCreateReferenceSpace(XrSession s, const XrReferenceSpaceCreateInfo* ci, XrSpace* sp) {
+    XrResult r = N.CreateReferenceSpace(s, ci, sp);
+    if (XR_SUCCEEDED(r) && ci && sp && ci->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_VIEW) {
+        std::lock_guard hl(gHeadMx); gViewSpaces.insert((uint64_t)*sp);
+        Log("game made a VIEW space (its head): head smoothing steadies it there too");
+    }
+    return r;
 }
 
 static XrResult XRAPI_CALL Hook_xrLocateSpace(XrSpace sp, XrSpace base, XrTime t, XrSpaceLocation* loc) {
     XrResult r = N.LocateSpace(sp, base, t, loc);
     if (XR_FAILED(r) || !loc) return r;
+    HeadLocation(sp, base, t, loc->locationFlags, loc->pose);
     XrSpaceVelocity* vel = nullptr;
     for (auto* n = (XrBaseOutStructure*)loc->next; n; n = n->next) if (n->type == XR_TYPE_SPACE_VELOCITY) vel = (XrSpaceVelocity*)n;
     OffsetLocation(sp, base, t, loc->locationFlags, loc->pose, vel ? &vel->velocityFlags : nullptr, vel ? &vel->linearVelocity : nullptr, vel ? &vel->angularVelocity : nullptr);
@@ -600,6 +878,7 @@ static void OffsetLocations(const XrSpacesLocateInfo* li, XrSpaceLocations* sl) 
     XrSpaceVelocities* vel = nullptr;
     for (auto* n = (XrBaseOutStructure*)sl->next; n; n = n->next) if (n->type == XR_TYPE_SPACE_VELOCITIES) vel = (XrSpaceVelocities*)n;
     uint32_t n = std::min(li->spaceCount, sl->locationCount);
+    for (uint32_t i = 0; i < n; i++) HeadLocation(li->spaces[i], li->baseSpace, li->time, sl->locations[i].locationFlags, sl->locations[i].pose);
     for (uint32_t i = 0; i < n; i++) {
         bool hv = vel && vel->velocities && i < vel->velocityCount;
         OffsetLocation(li->spaces[i], li->baseSpace, li->time, sl->locations[i].locationFlags, sl->locations[i].pose,
@@ -777,12 +1056,13 @@ static XrResult XRAPI_CALL Hook_xrReleaseSwapchainImage(XrSwapchain sc, const Xr
 
 static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi) {
     std::lock_guard l(gMx);
+    if (s == gSess) fi = HeadSmoothEndFrame(fi);
     if (s != gSess || !fi || !gEng.Active() || !gGfx.api) {
         if (s == gSess && fi && gMirror.On() && gGfx.api == 11) MirrorFrame(std::vector<const XrCompositionLayerBaseHeader*>(fi->layers, fi->layers + fi->layerCount), fi->displayTime);
         return N.EndFrame(s, fi);
     }
     std::vector<const XrCompositionLayerBaseHeader*> layers(fi->layers, fi->layers + fi->layerCount);
-    XrCompositionLayerQuad wq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, tq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, kq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, rq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, cq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, pq[4]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, fq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } };
+    XrCompositionLayerQuad kbq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, wq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, tq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, kq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, rq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, cq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, pq[4]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, fq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } };
     const Profile& p = *gEng.prof;
     XrCompositionLayerQuad sq{ XR_TYPE_COMPOSITION_LAYER_QUAD };
 
@@ -916,6 +1196,13 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
         if (!gWheelPanel.sc && gWheelPanel.Create(gSess, gGfx, gSwap, tex, tex)) gWheelTex = tex;
         if (gWheelPanel.sc && gDrawnWheel != gEng.view.version) {
             DrawWheel(gPix, tex, p, gEng.view);
+            if (gEng.view.alpha < 0.999f) { // see-through (premultiplied: scale every channel)
+                uint32_t a = (uint32_t)(std::min(std::max(gEng.view.alpha, 0.f), 1.f) * 256.f);
+                for (auto& px : gPix) {
+                    uint32_t rb = ((px & 0x00FF00FFu) * a >> 8) & 0x00FF00FFu, ga = (((px >> 8) & 0x00FF00FFu) * a) & 0xFF00FF00u;
+                    px = rb | ga;
+                }
+            }
             if (gWheelPanel.Upload(gGfx, gSwap, gPix)) gDrawnWheel = gEng.view.version;
         }
         if (gWheelPanel.ready) {
@@ -947,6 +1234,22 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
             kq.pose = gEng.kb.pose;
             kq.size = { gEng.kb.widthM, gEng.kb.heightM };
             layers.push_back((const XrCompositionLayerBaseHeader*)&kq);
+        }
+        { // the docking bar under it
+            const KeyboardView& K = gEng.kb;
+            const int BW = 1200, BH = std::max(40, (int)(BW * K.barH / K.barW));
+            if (gKbBarPanel.sc && (gKbBarPanel.w != BW || gKbBarPanel.h != BH)) { gKbBarPanel.Destroy(gSwap); gDrawnKbBar = ~0ull; }
+            if (!gKbBarPanel.sc) gKbBarPanel.Create(gSess, gGfx, gSwap, BW, BH);
+            if (gKbBarPanel.sc && gDrawnKbBar != K.barVersion && !K.barLabels.empty()) {
+                std::vector<uint32_t> px; DrawList(px, BW, BH, "", K.barLabels, (int)K.barLabels.size(), K.barHover, K.barPressed, p.style);
+                if (gKbBarPanel.Upload(gGfx, gSwap, px)) gDrawnKbBar = K.barVersion;
+            }
+            if (gKbBarPanel.ready) {
+                kbq.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT; kbq.space = gLocal; kbq.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
+                kbq.subImage.swapchain = gKbBarPanel.sc; kbq.subImage.imageRect = { {0, 0}, {BW, BH} };
+                kbq.pose = K.barPose; kbq.size = { K.barW, K.barH };
+                layers.push_back((const XrCompositionLayerBaseHeader*)&kbq);
+            }
         }
     }
     for (int h = 0; h < 2; h++) {
@@ -1092,7 +1395,7 @@ static XrResult XRAPI_CALL Hook_xrGetInstanceProcAddr(XrInstance inst, const cha
     HOOK(CreateActionSet) HOOK(CreateAction) HOOK(SuggestInteractionProfileBindings) HOOK(AttachSessionActionSets)
     HOOK(SyncActions) HOOK(GetActionStateBoolean) HOOK(GetActionStateFloat) HOOK(GetActionStateVector2f)
     HOOK(WaitFrame) HOOK(EndFrame)
-    HOOK(CreateActionSpace) HOOK(DestroySpace) HOOK(LocateSpace)
+    HOOK(CreateActionSpace) HOOK(CreateReferenceSpace) HOOK(DestroySpace) HOOK(LocateSpace) HOOK(LocateViews)
     HOOK(CreateSwapchain) HOOK(DestroySwapchain) HOOK(EnumerateSwapchainImages) HOOK(AcquireSwapchainImage) HOOK(ReleaseSwapchainImage)
     if (n == "xrLocateSpaces") { N.LocateSpaces = (PFN_xrLocateSpaces)*fn; *fn = (PFN_xrVoidFunction)Hook_xrLocateSpaces; return r; }
     if (n == "xrLocateSpacesKHR") { N.LocateSpacesKHR = (PFN_xrLocateSpacesKHR)*fn; *fn = (PFN_xrVoidFunction)Hook_xrLocateSpacesKHR; return r; }
@@ -1119,7 +1422,7 @@ static XrResult XRAPI_CALL Hook_xrCreateApiLayerInstance(const XrInstanceCreateI
     get("xrWaitFrame", N.WaitFrame); get("xrEndFrame", N.EndFrame);
     get("xrStringToPath", N.StringToPath); get("xrPathToString", N.PathToString);
     get("xrCreateActionSpace", N.CreateActionSpace); get("xrCreateReferenceSpace", N.CreateReferenceSpace);
-    get("xrDestroySpace", N.DestroySpace); get("xrLocateSpace", N.LocateSpace);
+    get("xrDestroySpace", N.DestroySpace); get("xrLocateSpace", N.LocateSpace); get("xrLocateViews", N.LocateViews);
     get("xrApplyHapticFeedback", N.ApplyHapticFeedback);
     get("xrGetCurrentInteractionProfile", N.GetCurrentInteractionProfile);
     get("xrEnumerateSwapchainFormats", gSwapNext.EnumerateSwapchainFormats); get("xrCreateSwapchain", gSwapNext.CreateSwapchain);
@@ -1131,7 +1434,9 @@ static XrResult XRAPI_CALL Hook_xrCreateApiLayerInstance(const XrInstanceCreateI
     gSwap.EnumerateSwapchainImages = Hook_xrEnumerateSwapchainImages;
     gSwap.AcquireSwapchainImage = Hook_xrAcquireSwapchainImage; gSwap.ReleaseSwapchainImage = Hook_xrReleaseSwapchainImage;
     LoadMirrorSettings(gMirrorSet);
-    Log("instance created for '%s' (%s)", info->applicationInfo.applicationName, ExeName().c_str());
+    CheckHeadSmoothingFile();
+    Log("instance created for '%s' (%s), OpenXR Companion layer built %s %s", info->applicationInfo.applicationName, ExeName().c_str(), __DATE__, __TIME__);
+    { std::lock_guard hl(gHeadMx); Log("head smoothing at start: %s", gHeadSet.on ? (gHeadSet.mode == 1 ? "on, in the headset" : "on, for recording") : "off (switch it on in the editor while the game runs, or tick Keep it on)"); }
     return r;
 }
 

@@ -13,6 +13,7 @@
 #include <vector>
 #include <mutex>
 #include <cmath>
+#include <algorithm>
 #include <cstdint>
 
 void Log(const char* fmt, ...);
@@ -47,10 +48,46 @@ XrPosef YawFrame(const XrPosef& head);              // head position, turned onl
 // Steadies a pose that shakes a little (hand tremor) without lagging behind real movement:
 // a one-euro filter. Nearly still = smoothed hard; moving on purpose = follows quickly.
 // strength 0 = off, 1 = strongest.
+// A heavy camera: two smoothing stages in a row, the same for every movement (no speeding up on fast turns),
+// so it eases into and out of every turn like a weighted camera rig. Time constant = 0.12 s per strength step.
+struct HeavyCam {
+    bool init = false; XrQuaternionf a{ 0,0,0,1 }, b{ 0,0,0,1 };
+    void Reset() { init = false; }
+    static XrQuaternionf Toward(XrQuaternionf from, XrQuaternionf to, float k) {
+        if (from.x * to.x + from.y * to.y + from.z * to.z + from.w * to.w < 0) to = { -to.x, -to.y, -to.z, -to.w };
+        XrQuaternionf q{ from.x + (to.x - from.x) * k, from.y + (to.y - from.y) * k, from.z + (to.z - from.z) * k, from.w + (to.w - from.w) * k };
+        float l = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+        return l > 1e-6f ? XrQuaternionf{ q.x / l, q.y / l, q.z / l, q.w / l } : to;
+    }
+    XrQuaternionf Apply(const XrQuaternionf& in, float dt, float strength) {
+        if (!init || dt <= 0.f || dt > 0.5f) { a = b = in; init = true; return in; }
+        float tau = 0.12f * strength * 0.5f;              // each stage gets half
+        float k = 1.f - std::exp(-dt / std::max(tau, 1e-3f));
+        a = Toward(a, in, k); b = Toward(b, a, k);
+        return b;
+    }
+};
+
 struct PoseSmoother {
     bool init = false;
     XrPosef s{ {0,0,0,1}, {0,0,0} }, last{ {0,0,0,1}, {0,0,0} };
     float speed = 0, turn = 0; // filtered m/s and rad/s
     void Reset() { init = false; }
     XrPosef Apply(const XrPosef& in, float dt, float strength);
+};
+
+// Game-wide steadying of one game hand space (grip or aim), as the game reads it at time t.
+// Only fully tracked poses are steadied; anything else passes through untouched and restarts the filter,
+// so a lost or inferred controller never drags the steadied hand toward a stale or zero position.
+// The game may ask for several times per frame (e.g. now and the predicted display time): each time gets
+// the steadied answer it had (the correction recorded for the nearest time, applied to the raw pose),
+// so the hand never flips between a raw and a steadied pose.
+struct SpaceSteady {
+    PoseSmoother f;
+    XrTime last = 0;
+    struct Rec { XrTime t = 0; XrQuaternionf dq{ 0,0,0,1 }; XrVector3f dp{ 0,0,0 }; };
+    Rec hist[16]; int next = 0;
+    void Reset() { f.Reset(); last = 0; for (auto& h : hist) h = Rec{}; }
+    // returns the pose to hand the game; flags = the runtime's location flags
+    XrPosef Step(XrTime t, const XrPosef& raw, uint64_t flags, float strength);
 };

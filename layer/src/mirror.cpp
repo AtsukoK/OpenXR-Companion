@@ -84,11 +84,12 @@ void HeadsetMirror::StartWindow() {
         RegisterClassExW(&wc);
         RECT r{ 0, 0, 1280, 720 };
         AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
-        HWND h = CreateWindowExW(0, kClass, L"OpenXR Companion - Headset mirror", WS_OVERLAPPEDWINDOW,
+        HWND h = CreateWindowExW(WS_EX_NOACTIVATE | WS_EX_APPWINDOW, kClass, L"OpenXR Companion - Headset mirror", WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT, CW_USEDEFAULT, r.right - r.left, r.bottom - r.top, nullptr, nullptr, wc.hInstance, nullptr);
         if (!h) { Log("mirror: window failed %lu", GetLastError()); return 1; }
         RECT cr; GetClientRect(h, &cr); self->clientW = std::max(1L, cr.right); self->clientH = std::max(1L, cr.bottom);
         ShowWindow(h, SW_SHOWNOACTIVATE); // don't take the keyboard from the game
+        self->topApplied = false; // Frame applies on-top to the new window
         self->hwnd = h;
         MSG m;
         while (GetMessageW(&m, nullptr, 0, 0) > 0) { TranslateMessage(&m); DispatchMessageW(&m); }
@@ -235,6 +236,10 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
     if (fps > 0) { double now = NowSec(); if (now - lastFrame < 1.0 / fps - 0.002) return; lastFrame = now; }
     HWND h = hwnd;
     if (!h) return;
+    if (onTop != topApplied) { // async: never wait on the window thread from the game's frame
+        topApplied = onTop;
+        SetWindowPos(h, onTop ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
+    }
     if (!InitGpu(d)) { failed = true; return; }
     std::lock_guard l(mx);
 

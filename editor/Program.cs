@@ -18,6 +18,21 @@ static class Program
                 " update=" + (r != null && r.Value.ver > MainForm.AppVersion));
             return 0;
         }
+        if (args.Length == 2 && args[0] == "--update-now") // updates this folder from the latest release without asking (tests, scripts)
+        {
+            try
+            {
+                var why = Updater.CantUpdateReason();
+                if (why != null) { File.WriteAllText(args[1], "refused: " + why); return 2; }
+                var r = Updater.LatestAsync().GetAwaiter().GetResult();
+                Updater.RunAsync(r, (p, t) => { }).GetAwaiter().GetResult();
+                File.WriteAllText(args[1], "updated to " + r.Tag + " from v" + MainForm.AppVersion.ToString(3));
+                return 0;
+            }
+            catch (Exception ex) { File.WriteAllText(args[1], "failed: " + ex.Message); return 1; }
+        }
+        Updater.CleanUp();
+        WheelScrollFix.Install();
         Application.Run(new MainForm());
         return 0;
     }

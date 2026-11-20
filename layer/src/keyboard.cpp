@@ -52,10 +52,14 @@ void Engine::OpenKeyboard(int bi) {
     kb.widthM = prof->kb.width;
     kb.heightM = prof->kb.width * uh / uw;
     Vec3 head = V(fr.head.position);
-    Vec3 f = Rotate(fr.head.orientation, { 0, 0, -1 }); f.y = 0; f = Norm(f);
-    Vec3 c = head + f * prof->kb.distance - Vec3{ 0, prof->kb.below, 0 };
-    kb.pose.position = X(c);
-    kb.pose.orientation = BillboardTo(c, head); // faces the eyes, so it tilts up like a desk
+    kbFrame = YawFrame(fr.head);
+    if (prof->kb.pose.set) kb.pose = PMul(kbFrame, prof->kb.pose.p); // placed by hand in adjust mode
+    else {
+        Vec3 f = Rotate(fr.head.orientation, { 0, 0, -1 }); f.y = 0; f = Norm(f);
+        Vec3 c = head + f * prof->kb.distance - Vec3{ 0, prof->kb.below, 0 };
+        kb.pose.position = X(c);
+        kb.pose.orientation = BillboardTo(c, head); // faces the eyes, so it tilts up like a desk
+    }
     kbOpenTime = now; kbOpener = bi; kbRepeatKey = -1;
     Log("keyboard open");
     kb.version++;
@@ -112,8 +116,43 @@ void Engine::KbPress(int i, int hand) {
     kb.version++;
 }
 
+// Adjust mode: grab the keyboard with a grip and put it anywhere; the grabbing hand's stick changes its width.
+void Engine::UpdateAdjustKeyboard() {
+    if (grab.target == 4 && (!adjust || !kb.visible)) grab = GrabRun{};
+    if (!adjust || !kb.visible || (grab.target >= 0 && grab.target != 4)) return;
+    if (prof->dock.mode == 2 && screen.shown) return; // docked under the screen: Adjust dock places it
+    if (grab.target < 0) {
+        for (int h = 0; h < 2; h++) {
+            const HandRaw& hr = fr.h[h];
+            if (!hr.gripValid || !cur[h][C_GRIP][F_PRESS] || prev[h][C_GRIP][F_PRESS]) continue;
+            Vec3 l = RotateInv(kb.pose.orientation, V(hr.gripPose.position) - V(kb.pose.position));
+            if (std::fabs(l.x) < kb.widthM / 2 + 0.06f && std::fabs(l.y) < kb.heightM / 2 + 0.06f && std::fabs(l.z) < 0.12f) { StartGrab(4, h, kb.pose); return; }
+        }
+        return;
+    }
+    const HandRaw& hr = fr.h[grab.hand];
+    if (!cur[grab.hand][C_GRIP][F_PRESS] || !hr.gripValid) {
+        if (prof->haptics) haptics.push_back({ grab.hand, prof->hapticAmp * 0.6f, 0.015f });
+        grab = GrabRun{};
+        return;
+    }
+    kb.pose = GrabbedPose();
+    prof->kb.pose = { true, PMul(PInv(kbFrame), kb.pose) };
+    float dt = (float)std::clamp(now - lastNow, 0.0, 0.1);
+    if (std::fabs(hr.sy) > 0.2f) {
+        float uw, uh; KbLayout(uw, uh);
+        prof->kb.width = std::clamp(prof->kb.width * (1.f + hr.sy * dt * 0.8f), 0.2f, 1.5f);
+        kb.widthM = prof->kb.width; kb.heightM = kb.widthM * uh / uw;
+    }
+    kb.version++;
+}
+
 void Engine::UpdateKeyboard() {
     if (!kb.visible) return;
+    if (adjust) { // being placed: no typing
+        if (kb.hover[0] != -1 || kb.hover[1] != -1) { kb.hover[0] = kb.hover[1] = -1; kb.version++; }
+        return;
+    }
     for (int h = 0; h < 2; h++) {
         int hit = KbHit(h);
         if (hit != kb.hover[h]) {
@@ -138,4 +177,112 @@ void Engine::UpdateKeyboard() {
         if (kbRepeatHand == h && (!down || kb.hover[h] != kbRepeatKey)) kbRepeatKey = kbRepeatHand = -1;
     }
     if (kbRepeatKey >= 0 && now >= kbNextRepeat) { KbPress(kbRepeatKey, kbRepeatHand); kbNextRepeat = now + 0.06; }
+}
+
+// ---------------------------------------------------------------- docking with the mirrored screen
+float Engine::DockScreenWidth() const {
+    if (prof->dock.mode == 1) return prof->dock.width > 0 ? prof->dock.width : kb.widthM;
+    return screen.widthM;
+}
+// Default: the screen's bottom edge 3 cm above the keyboard's top edge, turned 25 degrees more upright than the keys.
+XrPosef Engine::DockRel() const {
+    if (prof->dock.pose.set) return prof->dock.pose.p;
+    float a = 25.f * 3.14159265f / 180.f * 0.5f;
+    XrQuaternionf q{ std::sin(a), 0, 0, std::cos(a) };
+    float sh = DockScreenWidth() * screen.aspect;
+    Vec3 p = Vec3{ 0, kb.heightM / 2 + 0.03f, 0 } + Rotate(q, { 0, sh / 2, 0 });
+    return { q, X(p) };
+}
+
+void Engine::ApplyDock() {
+    DockStyle& D = prof->dock;
+    if (!kb.visible) { dockAdjust = false; if (grab.target == 5) grab = GrabRun{}; return; }
+    if (D.mode == 0 || !screen.shown || !screen.poseValid) { if (grab.target == 5) grab = GrabRun{}; return; }
+    XrPosef rel = DockRel();
+    if (D.mode == 1) { screen.pose = PMul(kb.pose, rel); screen.widthM = DockScreenWidth(); }
+    else kb.pose = PMul(screen.pose, PInv(rel));
+    if (!dockAdjust || (grab.target >= 0 && grab.target != 5)) return;
+
+    // Adjust dock: grab the one that follows (the screen, or the keyboard) and put it where you like.
+    if (grab.target < 0) {
+        for (int h = 0; h < 2; h++) {
+            const HandRaw& hr = fr.h[h];
+            if (!hr.gripValid || !cur[h][C_GRIP][F_PRESS] || prev[h][C_GRIP][F_PRESS]) continue;
+            Vec3 gp = V(hr.gripPose.position);
+            bool isClose = false;
+            if (D.mode == 1) isClose = Len(gp - V(screen.pose.position)) < screen.widthM * 0.6f + 0.08f;
+            else {
+                Vec3 l = RotateInv(kb.pose.orientation, gp - V(kb.pose.position));
+                isClose = std::fabs(l.x) < kb.widthM / 2 + 0.06f && std::fabs(l.y) < kb.heightM / 2 + 0.06f && std::fabs(l.z) < 0.12f;
+            }
+            if (isClose) { StartGrab(5, h, D.mode == 1 ? screen.pose : kb.pose); return; }
+        }
+        return;
+    }
+    const HandRaw& hr = fr.h[grab.hand];
+    if (!cur[grab.hand][C_GRIP][F_PRESS] || !hr.gripValid) {
+        if (prof->haptics) haptics.push_back({ grab.hand, prof->hapticAmp * 0.6f, 0.015f });
+        grab = GrabRun{}; saveRequested = true;
+        return;
+    }
+    XrPosef obj = GrabbedPose();
+    float dt = (float)std::clamp(now - lastNow, 0.0, 0.1);
+    if (D.mode == 1) {
+        if (std::fabs(hr.sy) > 0.25f) D.width = std::clamp(DockScreenWidth() * (1.f + hr.sy * dt * 0.8f), 0.1f, 3.f);
+        screen.pose = obj; screen.widthM = DockScreenWidth();
+        D.pose = { true, PMul(PInv(kb.pose), obj) };
+    } else {
+        kb.pose = obj;
+        D.pose = { true, PMul(PInv(obj), screen.pose) };
+    }
+}
+
+// The bar under the keyboard: dock the screen above the keys, the keys under the screen, adjust the dock, close.
+void Engine::UpdateKbBar() {
+    if (!kb.visible) return;
+    const DockStyle& D = prof->dock;
+    std::vector<std::string> labels{
+        D.mode == 1 ? "Undock\nscreen" : "Dock screen\nabove keys",
+        D.mode == 2 ? "Undock\nkeys" : "Dock keys\nunder screen",
+        dockAdjust ? "Done\nadjusting" : "Adjust\ndock",
+        "Close\nkeyboard" };
+    if (labels != kb.barLabels) { kb.barLabels = labels; kb.barVersion++; }
+    kb.barW = kb.widthM * 0.75f; kb.barH = kb.barW / 9.f;
+    Vec3 up = Rotate(kb.pose.orientation, { 0, 1, 0 }), nrm = Rotate(kb.pose.orientation, { 0, 0, 1 });
+    kb.barPose = { kb.pose.orientation, X(V(kb.pose.position) - up * (kb.heightM / 2 + kb.barH / 2 + 0.012f) + nrm * 0.002f) };
+    int hover = -1, hand = -1;
+    for (int h = 0; h < 2 && hover < 0; h++) {
+        float u, v;
+        if (!PanelRay(h, kb.barPose, kb.barW, kb.barH, u, v)) continue;
+        int n = (int)kb.barLabels.size();
+        int c = (int)(u * n);
+        if (c >= 0 && c < n && v >= 0 && v <= 1) { hover = c; hand = h; }
+    }
+    if (hover != kb.barHover) {
+        if (hover >= 0 && prof->haptics) haptics.push_back({ hand, prof->hapticAmp * 0.4f, 0.01f });
+        kb.barHover = hover; kb.barVersion++;
+    }
+    if (kb.barPressed >= 0 && now > kbBarFlashUntil) { kb.barPressed = -1; kb.barVersion++; }
+    if (hand < 0 || !(cur[hand][C_TRIGGER][F_PRESS] && !prev[hand][C_TRIGGER][F_PRESS])) return;
+    if (prof->haptics) haptics.push_back({ hand, prof->hapticAmp, 0.025f });
+    kb.barPressed = hover; kbBarFlashUntil = now + 0.15; kb.barVersion++;
+    KbBarActivate(hover);
+}
+
+void Engine::KbBarActivate(int cell) {
+    DockStyle& D = prof->dock;
+    auto screenOn = [&]() { if (!screen.on) { Action a; a.type = ActType::Screen; a.mode = "on"; ScreenAction(a); } };
+    switch (cell) {
+    case 0: D.mode = D.mode == 1 ? 0 : 1; if (D.mode) screenOn(); dockAdjust = false; saveRequested = true;
+        Toast(D.mode ? "Screen docked above the keyboard" : "Screen undocked", 2.0); break;
+    case 1: D.mode = D.mode == 2 ? 0 : 2; if (D.mode) screenOn(); dockAdjust = false; saveRequested = true;
+        Toast(D.mode ? "Keyboard docked under the screen" : "Keyboard undocked", 2.0); break;
+    case 2:
+        if (D.mode == 0) { Toast("Dock the screen or the keys first", 2.5); break; }
+        dockAdjust = !dockAdjust;
+        if (dockAdjust) Toast(D.mode == 1 ? "Grab the screen with a grip to place it (stick: size)" : "Grab the keyboard with a grip to place it", 4.0);
+        else { saveRequested = true; Toast("Dock saved", 2.0); }
+        break;
+    case 3: CloseKeyboard(); break;
+    }
 }

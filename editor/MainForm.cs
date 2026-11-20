@@ -40,6 +40,10 @@ static class Native
         }
         catch { return null; }
     }
+    [DllImport("OpenXRCompanion.dll", CallingConvention = CallingConvention.Cdecl)]
+    static extern void vro_prepare_defaults();
+    // default.json = the built-in standard (refreshed); an older changed one becomes user_defaults.json (once).
+    public static void PrepareDefaults() { try { vro_prepare_defaults(); } catch { } }
     public static string DefaultProfile()
     {
         try { return Marshal.PtrToStringUTF8(vro_default_profile()); } catch { return null; }
@@ -242,7 +246,7 @@ public partial class MainForm : Form
             ts.Items.Add(tb);
         }
         AddUpdateButton(ts);
-        profileBox.SelectedIndexChanged += (s, e) => { if (!loading && profileBox.SelectedItem is string f) { if (ConfirmDiscard()) LoadFile(Path.Combine(ProfilesDir, f)); } };
+        profileBox.SelectedIndexChanged += (s, e) => { if (!loading && profileBox.SelectedItem is string f) { if (ConfirmDiscard()) { LoadFile(Path.Combine(ProfilesDir, f)); ActiveProfile = f; SetStatus("Games now use " + f + " (a running game switches within a second).", false); } } };
 
         var left = new Panel { Dock = DockStyle.Fill };
         addBtn.Click += (s, e) => Add();
@@ -312,9 +316,31 @@ public partial class MainForm : Form
         FormClosing += (s, e) => { if (!ConfirmDiscard()) e.Cancel = true; };
 
         UpdateLayerStatus();
-        RefreshProfileList("default.json");
+        Native.PrepareDefaults(); // before choosing: this may move an edited default.json to user_defaults.json (and select it)
+        RefreshProfileList(ActiveProfile);
         if (Theme.IsDark) ThemeWalker.Apply(this);
         HandleCreated += (s, e) => ThemeWalker.TitleBar(this, Theme.IsDark);
+        Shown += (s, e) => ShowDefaultsMovedNotice();
+    }
+
+    // Once, after the update that split default.json: tell the user their own bindings moved to user_defaults.json.
+    // The layer (or this editor) leaves the notice file when it moves an edited default.json.
+    void ShowDefaultsMovedNotice()
+    {
+        string notice = Path.Combine(ProfilesDir, ".defaults_moved_notice");
+        if (Environment.GetCommandLineArgs().Length > 1 && Environment.GetCommandLineArgs()[1] != "--updated") return; // tests and screenshots
+        if (!File.Exists(notice)) return;
+        bool selected = string.Equals(Path.GetFileName(currentFile), UserDefaultsFile, StringComparison.OrdinalIgnoreCase);
+        MessageBox.Show(this,
+            "Your own settings have moved to a new profile: user_defaults.json\n\n" +
+            "Your default.json had your own bindings and changes in it. To keep them safe from future updates, they are now in user_defaults.json, exactly as they were. Nothing was lost.\n\n" +
+            (selected ? "user_defaults.json is now your selected profile, and your games use it" : "Select user_defaults.json in the profile list and your games use it") +
+            ", so everything works as before.\n\n" +
+            "default.json is now the standard profile. It updates with each new version, so you can always look at or go back to the standard setup. " +
+            "If you save changes while default.json is open, they go to a profile of your own; default.json itself is never changed.\n\n" +
+            "The profile you select in the editor is always the one your games use. To use the standard, select default.json.",
+            "Your settings moved to user_defaults.json", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        try { File.Delete(notice); } catch { }
     }
 
     // Timing of the slow parts (opening each page, rebuilding the list, moving an item), on a copy of a profile.
@@ -805,17 +831,33 @@ public partial class MainForm : Form
     }
 
     // ------------------------------------------------------------ files
+    const string StandardFile = "default.json", UserDefaultsFile = "user_defaults.json";
+    static bool IsStandard(string path) => string.Equals(Path.GetFileName(path), StandardFile, StringComparison.OrdinalIgnoreCase);
+    // What games without their own profile use: the user's defaults if there are any, else the standard.
+    internal static string StartProfile => File.Exists(Path.Combine(ProfilesDir, UserDefaultsFile)) ? UserDefaultsFile : StandardFile;
+    // The profile selected here is the one games use (active_profile.txt, read by the layer).
+    static string ActiveFile => Path.Combine(DataDir, "active_profile.txt");
+    internal static string ActiveProfile
+    {
+        get { try { var n = File.ReadAllText(ActiveFile).Trim(); if (n.Length > 0 && File.Exists(Path.Combine(ProfilesDir, n))) return n; } catch { } return StartProfile; }
+        set { try { Directory.CreateDirectory(DataDir); File.WriteAllText(ActiveFile, value); } catch { } }
+    }
+
     void RefreshProfileList(string select)
     {
-        string def = Path.Combine(ProfilesDir, "default.json");
+        Native.PrepareDefaults();
+        string def = Path.Combine(ProfilesDir, StandardFile);
         if (!File.Exists(def)) File.WriteAllText(def, Native.DefaultProfile() ?? "{}");
+        if (!File.Exists(Path.Combine(ProfilesDir, select))) select = StartProfile;
         loading = true;
         profileBox.Items.Clear();
-        foreach (var f in Directory.GetFiles(ProfilesDir, "*.json").Select(Path.GetFileName).OrderBy(f => f != "default.json").ThenBy(f => f))
+        foreach (var f in Directory.GetFiles(ProfilesDir, "*.json").Select(Path.GetFileName)
+                     .OrderBy(f => f != StandardFile).ThenBy(f => f != UserDefaultsFile).ThenBy(f => f))
             profileBox.Items.Add(f);
         profileBox.SelectedItem = select;
         loading = false;
         LoadFile(Path.Combine(ProfilesDir, select));
+        ActiveProfile = select; // what is selected is what games use
     }
 
     void LoadFile(string path)
@@ -845,7 +887,11 @@ public partial class MainForm : Form
             Text = "OpenXR Companion - Profile Editor - " + Path.GetFileName(path);
             BuildTree();
             var err = Native.Validate(File.ReadAllText(path));
-            SetStatus(err == null ? "Loaded " + path : "Loaded, but the layer reports: " + err, err != null);
+            if (err == null && IsStandard(path))
+                SetStatus("default.json is the standard profile (it updates with each release), and your games now use it. Changes you save go to user_defaults.json (or a new profile if you have one).", false);
+            else if (err == null && string.Equals(Path.GetFileName(path), UserDefaultsFile, StringComparison.OrdinalIgnoreCase))
+                SetStatus("user_defaults.json: your own defaults, and the profile your games now use. Select default.json to use the standard instead.", false);
+            else SetStatus(err == null ? "Loaded " + path : "Loaded, but the layer reports: " + err, err != null);
         }
         catch (Exception e)
         {
@@ -971,9 +1017,41 @@ public partial class MainForm : Form
         var err = Native.Validate(json);
         if (err != null && MessageBox.Show(this, "The layer would reject this profile:\n\n" + err + "\n\nSave anyway? (the game keeps the last good version until fixed)", "Problem", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
             return false;
+        bool forked = false;
+        if (IsStandard(currentFile)) // never into the standard profile: your changes become user_defaults.json
+        {
+            string user = Path.Combine(ProfilesDir, UserDefaultsFile);
+            if (File.Exists(user)) // never replace the user's own defaults: a new profile instead
+            {
+                string name = "user_defaults 2.json";
+                for (int i = 3; File.Exists(Path.Combine(ProfilesDir, name)); i++) name = "user_defaults " + i + ".json";
+                if (MessageBox.Show(this,
+                        "You changed default.json, the standard profile. It stays as it is, and you already have your own user_defaults.json, which won't be replaced.\n\n" +
+                        "These changes will be saved as a new profile: " + name + "\n\n" +
+                        "The new profile becomes the selected one, so your games use it. Pick user_defaults.json in the profile list to go back to it.",
+                        "Saving changes to the standard profile", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK) return false;
+                user = Path.Combine(ProfilesDir, name);
+            }
+            currentFile = user; forked = true;
+        }
         File.WriteAllText(currentFile, json);
         NoteFileTime();
         dirty = false;
+        if (forked)
+        {
+            string saved = Path.GetFileName(currentFile);
+            ActiveProfile = saved;
+            bool isUser = string.Equals(saved, UserDefaultsFile, StringComparison.OrdinalIgnoreCase);
+            loading = true;
+            if (!profileBox.Items.Contains(saved)) profileBox.Items.Insert(Math.Min(isUser ? 1 : profileBox.Items.Count, profileBox.Items.Count), saved);
+            profileBox.SelectedItem = saved;
+            loading = false;
+            Text = "OpenXR Companion - Profile Editor - " + saved;
+            SetStatus(isUser ? "Saved as user_defaults.json (your own defaults; default.json stays the standard). A running game switches to it within a second."
+                             : "Saved as the new profile " + saved + ", now the selected profile that games use. default.json and your user_defaults.json are unchanged.", false);
+            BuildTree();
+            return true;
+        }
         Text = "OpenXR Companion - Profile Editor - " + Path.GetFileName(currentFile);
         SetStatus(err == null ? "Saved. A running game reloads it within a second." : "Saved with errors: " + err, err != null);
         BuildTree();
@@ -992,17 +1070,20 @@ public partial class MainForm : Form
         if (name.EndsWith(".exe")) name = name[..^4];
         string path = Path.Combine(ProfilesDir, name + ".json");
         if (File.Exists(path)) { MessageBox.Show(this, "A profile for " + name + " already exists."); RefreshProfileList(name + ".json"); return; }
-        File.Copy(dlg.CopyFrom != null ? Path.Combine(ProfilesDir, dlg.CopyFrom) : Path.Combine(ProfilesDir, "default.json"), path);
+        File.Copy(Path.Combine(ProfilesDir, dlg.CopyFrom ?? StartProfile), path);
         RefreshProfileList(name + ".json");
     }
 
     void DeleteProfile()
     {
-        if (Path.GetFileName(currentFile) == "default.json") { MessageBox.Show(this, "default.json is used for every game without its own profile and can't be deleted."); return; }
-        if (MessageBox.Show(this, "Delete " + Path.GetFileName(currentFile) + "? The game will fall back to default.json.", "Delete", MessageBoxButtons.YesNo) != DialogResult.Yes) return;
+        if (IsStandard(currentFile)) { MessageBox.Show(this, "default.json is the standard profile and can't be deleted."); return; }
+        bool userDefs = string.Equals(Path.GetFileName(currentFile), UserDefaultsFile, StringComparison.OrdinalIgnoreCase);
+        if (MessageBox.Show(this, userDefs
+                ? "Delete user_defaults.json? Your games switch to the standard default.json."
+                : "Delete " + Path.GetFileName(currentFile) + "? Your games switch to " + StartProfile + ".", "Delete", MessageBoxButtons.YesNo) != DialogResult.Yes) return;
         File.Delete(currentFile);
         dirty = false;
-        RefreshProfileList("default.json");
+        RefreshProfileList(ActiveProfile);
     }
 
     // ------------------------------------------------------------ tree
@@ -1010,6 +1091,7 @@ public partial class MainForm : Form
     TreeNode wheelsRoot;
     readonly TreeNode[] wristRoots = new TreeNode[2];
 
+    public void RebuildList() => BuildTree();
     void BuildTree()
     {
         subDepth.Clear();
@@ -1025,7 +1107,7 @@ public partial class MainForm : Form
         var settings = tree.Nodes.Add("Settings");
         settings.Tag = Profile;
         foreach (var sp in SettingsPage.All) // its pages; while searching, only those with a matching setting
-            if (string.IsNullOrWhiteSpace(q) || Matches(q, sp.Title, sp.Sub, SettingsEditor.WordsOf(Profile, sp.Key)))
+            if ((sp.Key != "experimental" || HeadSmoothingFile.ShowPage || HeadSmoothingFile.On) && (string.IsNullOrWhiteSpace(q) || Matches(q, sp.Title, sp.Sub, SettingsEditor.WordsOf(Profile, sp.Key))))
                 settings.Nodes.Add(new TreeNode(sp.Title) { Tag = sp });
         // Bindings grouped by the controller whose button fires them.
         foreach (int h in new[] { 1, 0 })
@@ -1359,7 +1441,7 @@ class NewProfileDialog : Form
         t.Controls.Add(new Label { Text = "Start from:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 1);
         foreach (var f in Directory.GetFiles(MainForm.ProfilesPath, "*.json"))
             copy.Items.Add(Path.GetFileName(f));
-        copy.SelectedItem = "default.json";
+        copy.SelectedItem = MainForm.StartProfile;
         t.Controls.Add(copy, 1, 1);
         t.Controls.Add(new Label { Text = "Games the layer has already seen are in the list (from its logs).", AutoSize = true, ForeColor = Color.DimGray }, 1, 2);
         var ok = new Button { Text = "Create", DialogResult = DialogResult.OK, AutoSize = true };

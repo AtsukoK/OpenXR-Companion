@@ -84,11 +84,18 @@ struct Selection {
     int autoCloseMs = 0;
 };
 
+// Docking the mirrored screen and the VR keyboard together (set from the bar under the keyboard).
+struct DockStyle {
+    int mode = 0;            // 0 apart, 1 the screen sits above the keyboard, 2 the keyboard sits under the screen
+    FreePose pose;           // the screen in the keyboard's frame, when set by hand (Adjust dock)
+    float width = 0.f;       // screen width while docked to the keyboard (0 = as wide as the keyboard)
+};
 struct KbStyle {
     float width = 0.56f;     // metres
     float distance = 0.42f;  // in front of the head when opened
     float below = 0.30f;     // below eye level
     bool closeOnEnter = false;
+    FreePose pose;           // placed by hand in adjust mode: relative to the head (turned like the head) when it opens
 };
 
 struct WristStyle {
@@ -173,7 +180,7 @@ struct OffsetStyle {
 };
 
 struct Profile {
-    std::string sourceName;
+    mutable std::string sourceName; // a save into default.json moves the profile to user_defaults.json
     PointerStyle pointer;
     OffsetStyle offsets;
     bool enabled = true;
@@ -185,6 +192,7 @@ struct Profile {
     Style style;
     Selection sel;
     KbStyle kb;
+    DockStyle dock;
     ScreenStyle screen;
     WristStyle wrist[2];            // [0] left forearm, [1] right forearm; each is pressed by the other hand
     // The panel whose pages a forearm shows (either one can mirror the other, not both).
@@ -193,7 +201,11 @@ struct Profile {
     std::map<std::string, Wheel> wheels;
 };
 
-// Loads <exe>.json from the profiles folder, else default.json (written with a sample if missing).
+void PrepareDefaults();
+std::wstring ActiveProfilePath();   // <data>\\active_profile.txt: the profile selected in the editor
+std::string ActiveProfileName();     // "" = none / invalid
+void SetActiveProfileName(const std::string& n); // default.json = the built-in standard; a changed old one becomes user_defaults.json
+// Loads <exe>.json from the profiles folder, else user_defaults.json, else default.json (written with a sample if missing).
 std::shared_ptr<Profile> LoadProfile(std::wstring& pathOut, std::string& err);
 const char* DefaultProfileJson();
 // Adjust mode: write the wheel and wrist panel placement of p back into its profile file.
@@ -204,7 +216,13 @@ bool SaveScreenChoice(const Profile& p, std::string& err);
 bool SaveOffsets(const Profile& p, std::string& err);
 // Headset mirror window: app-wide (not per profile), in %LOCALAPPDATA%\OpenXRCompanion\headset_mirror.json,
 // shared with the editor's toolbar button.
-struct MirrorSettings { bool on = false; int eye = 1; float zoom = 1.3f; int fps = 60; float smoothing = 0.5f; };
+struct MirrorSettings { bool on = false; int eye = 1; float zoom = 1.3f; int fps = 60; float smoothing = 0.5f; bool onTop = false; };
+// Head smoothing (experimental, motion sickness risk): steadies the head the GAME renders from.
+// mode 0 = for recording (the headset still shows a steady world), 1 = in the headset too.
+struct HeadSmoothSettings { bool on = false; int mode = 0; float strength = 0.5f; bool keepOn = false; };
+bool LoadHeadSmoothSettings(HeadSmoothSettings& h);
+void SwitchOffHeadSmoothing(); // writes "on": false, keeps the rest
+std::wstring HeadSmoothSettingsPath();
 std::wstring MirrorSettingsPath();
 bool LoadMirrorSettings(MirrorSettings& m);
 bool SaveMirrorSettings(const MirrorSettings& m);

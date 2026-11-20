@@ -1,4 +1,4 @@
-namespace OpenXRCompanionEditor;
+﻿namespace OpenXRCompanionEditor;
 
 public class SettingsEditor : EditorBase
 {
@@ -7,7 +7,7 @@ public class SettingsEditor : EditorBase
         new("hand", "Everything on the hand(s) using the wheel"), new("minimal", "Only the stick and the confirm / back buttons"),
         new("all", "Both controllers completely"), new("none", "Nothing, the game still sees every button"),
     };
-    static readonly Choice[] Anchors =
+    internal static readonly Choice[] Anchors =
     {
         new("hand_locked", "Above my hand, stays where it opened"), new("hand", "Above my hand, follows my hand"),
         new("head_locked", "In front of me, stays where it opened"), new("head", "In front of me, follows my view"),
@@ -226,11 +226,12 @@ public class SettingsEditor : EditorBase
         void OffRow(string label, string unit, int min, int max, Func<OffsetModel, float> get, Action<OffsetModel, float> set, string hint)
         {
             var f = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
-            var bar = new TrackBar { Minimum = min * 10, Maximum = max * 10, TickFrequency = (max - min) * 10 / 8, Width = 240, SmallChange = 5, LargeChange = 50 };
-            var num = new NumericUpDown { Minimum = min, Maximum = max, Increment = 0.5m, DecimalPlaces = 1, Width = 70 };
-            var minus = new Button { Text = "\u2212", Width = 32, Height = 27 }; var plus = new Button { Text = "+", Width = 32, Height = 27 };
-            var zero = new Button { Text = "0", Width = 32, Height = 27 };
-            var u = new Label { Text = unit, AutoSize = true, Padding = new Padding(0, 6, 4, 0) };
+            var bar = new TrackBar { Minimum = min * 10, Maximum = max * 10, TickFrequency = (max - min) * 10 / 8, Width = 210, SmallChange = 5, LargeChange = 50, Margin = new Padding(4, 6, 4, 0) };
+            var num = new NumericUpDown { Minimum = min, Maximum = max, Increment = 0.5m, DecimalPlaces = 1, Width = 70, Margin = new Padding(6, 9, 4, 0) };
+            var minus = new Button { Text = "\u2212", Width = 32, Height = 27, Margin = new Padding(0, 8, 0, 0) }; var plus = new Button { Text = "+", Width = 32, Height = 27, Margin = new Padding(0, 8, 0, 0) };
+            var zero = new Button { Text = "0", Width = 32, Height = 27, Margin = new Padding(4, 8, 0, 0) };
+            FormPanel.Tips.SetToolTip(zero, "Set back to 0");
+            var u = new Label { Text = unit, AutoSize = false, Width = 34, Height = 27, TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(0, 8, 0, 0) };
             void Apply(decimal v)
             {
                 if (offLoading) return;
@@ -275,6 +276,9 @@ public class SettingsEditor : EditorBase
             var on = new CheckBox { Text = "Show the headset mirror window", AutoSize = true, Checked = HeadsetMirrorFile.On };
             on.CheckedChanged += (o, e) => HeadsetMirrorFile.On = on.Checked;
             mir.AddRow("", on, "Same as the button on the toolbar. A desktop window with what the headset shows, including the wheel, wrist panels, screen and lasers. For OBS, capture that window. Closing it turns it off. D3D11 games (Bannerlord VR, Fallout VR mods...).");
+            var top = new CheckBox { Text = "Always on top of other windows", AutoSize = true, Checked = HeadsetMirrorFile.OnTop };
+            top.CheckedChanged += (o, e) => HeadsetMirrorFile.OnTop = top.Checked;
+            mir.AddRow("", top, "Keeps the mirror above the game on your monitor, e.g. to record or show it. The mirror never takes focus from the game, even when you click or move it, so the game keeps getting your input.");
             var eye = new ChoiceBox(new Choice[] { new("left", "Left eye"), new("right", "Right eye") }, 200) { Code = HeadsetMirrorFile.Eye };
             eye.SelectedIndexChanged += (o, e) => HeadsetMirrorFile.Eye = eye.Code;
             mir.AddRow("Eye", eye);
@@ -291,13 +295,55 @@ public class SettingsEditor : EditorBase
         }
 
         }
+        // ---------------- experimental (app-wide, its own file, saved straight away)
+        var exp = new FormPanel();
+        if (Want("experimental")) { // only the shown page is built
+        {
+            var warn = new Label { AutoSize = true, ForeColor = Color.FromArgb(0xD9, 0x48, 0x2B), Font = new Font("Segoe UI", 10f, FontStyle.Bold), MaximumSize = new Size(560, 0),
+                Text = "⚠ ⚠ MOTION SICKNESS WARNING ⚠ ⚠\n" +
+                       "Head smoothing makes the game's view lag slightly behind your real head. In VR that mismatch can cause nausea, dizziness or headaches, quickly and without warning.\n" +
+                       "• Start with \"For recording\" and a low strength.\n" +
+                       "• Take the headset off at the first sign of feeling unwell, and don't use it if you are prone to motion sickness.\n" +
+                       "• It switches itself off whenever a game starts (unless you tick Keep it on below)." };
+            exp.AddRow("", warn);
+            var on = new CheckBox { Text = "⚠ Smooth the head (off by default)", AutoSize = true, Checked = HeadSmoothingFile.On };
+            on.CheckedChanged += (o, e) =>
+            {
+                if (on.Checked && !HeadSmoothingFile.On && MessageBox.Show(FindForm(),
+                        "Head smoothing can cause motion sickness: nausea, dizziness or headaches, sometimes quickly.\n\n" +
+                        "Start with \"For recording\" and a low strength, and take the headset off at the first sign of feeling unwell.\n\nTurn it on?",
+                        "⚠ Experimental: head smoothing", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+                { on.Checked = false; return; }
+                HeadSmoothingFile.On = on.Checked;
+            };
+            exp.AddRow("", on, "Steadies the direction the GAME looks from, like a camera stabiliser, so small head shakes don't show. Real turns still follow. Position isn't changed. For using the headset as a camera.");
+            var mode = new ChoiceBox(new Choice[] {
+                new("recording", "For recording (the headset view stays normal)"),
+                new("headset", "⚠ In the headset too (highest sickness risk)") }, 340) { Code = HeadSmoothingFile.Mode };
+            mode.SelectedIndexChanged += (o, e) => HeadSmoothingFile.Mode = mode.Code;
+            exp.AddRow("Where", mode, "For recording: the game's own desktop view and recordings are steadied; the headset corrects back to your real head, so the world still feels solid (the picture's edge can show briefly during shakes). In the headset too: you see the steadied picture yourself; the world moves a little with your head. Much more likely to make you feel sick.");
+            var st = new NumericUpDown { Minimum = 0, Maximum = 100, Increment = 0.5m, DecimalPlaces = 2, Width = 90, Value = (decimal)Math.Clamp(HeadSmoothingFile.Strength, 0, 100) };
+            st.ValueChanged += (o, e) => HeadSmoothingFile.Strength = (double)st.Value;
+            var keep = new CheckBox { Text = "Keep it on when a game starts", AutoSize = true, Checked = HeadSmoothingFile.KeepOn };
+            keep.CheckedChanged += (o, e) => HeadSmoothingFile.KeepOn = keep.Checked;
+            exp.AddRow("", keep, "Off (the default): head smoothing switches itself off every time a game starts, so you never put the headset on with it already running. Turn it on again here while the game runs.");
+            exp.AddRow("Strength", st, "How heavy the camera is. It smooths every movement the same way, easing into and out of turns like a weighted camera: about 0.12 s of lag per step, so 0.5 = light, 2 = smooth, 5 = heavy (0.6 s), 10 = very heavy (1.2 s), up to 100 (12 s, for slow drifting shots). ⚠ In the headset, anything above about 1 is very likely to make you sick; use For recording.");
+            exp.AddRow("", new Label { AutoSize = true, ForeColor = Color.DimGray, MaximumSize = new Size(460, 0), Text = "These apply straight away, in every game and profile (no need to save)." });
+        }
+        }
         // ---------------- keyboard
         var keys = new FormPanel();
         if (Want("keyboard")) { // only the shown page is built
+        keys.AddRow("Placed by hand", ResetPose(() => kb.Pose != null, () => kb.Pose = null),
+            "Adjust positions in the headset (Calibrate Positions): open the keyboard, grab it with a grip and put it anywhere; the stick changes its width. That spot replaces the distance and height numbers below.");
         keys.AddRow("Width (m)", Num(0.2m, 1.5m, 0.02m, 2, kb.Width, v => kb.Width = v));
         keys.AddRow("Distance in front (m)", Num(0.2m, 1.5m, 0.02m, 2, kb.Distance, v => kb.Distance = v));
         keys.AddRow("Below eye level (m)", Num(-0.3m, 0.8m, 0.02m, 2, kb.Below, v => kb.Below = v));
         keys.AddRow("", Check("Close the keyboard after Enter (handy for chat boxes)", kb.CloseOnEnter, v => kb.CloseOnEnter = v));
+        keys.AddRow("Screen docking", Pick(new Choice[] { new("none", "Apart (each in its own place)"), new("screen_to_keyboard", "The screen sits above the keyboard"), new("keyboard_to_screen", "The keyboard sits under the screen") },
+            p.Dock?.Mode ?? "none", v => { p.Dock ??= new DockModel(); p.Dock.Mode = v; }),
+            "Easier typing into a mirrored window: the two move together. Also on the bar under the keyboard in the headset (Dock screen above keys / Dock keys under screen), where 'Adjust dock' lets you grab the docked one and put it where you like.");
+        keys.AddRow("Dock placed by hand", ResetPose(() => p.Dock?.Pose != null, () => { if (p.Dock != null) { p.Dock.Pose = null; p.Dock.Width = 0; } }, "No, the default spot (screen just above the keys)", "Back to the default spot"));
 
         }
         // ---------------- wrist panel
@@ -350,6 +396,16 @@ public class SettingsEditor : EditorBase
         adv.AddRow("Centre circle size", Num(0.15m, 0.7m, 0.02m, 2, s.InnerRatio, v => s.InnerRatio = v));
         adv.AddRow("Gap between segments (deg)", Num(0, 10, 0.5m, 1, s.GapDeg, v => s.GapDeg = v));
         adv.AddRow("Sharpness (pixels)", Int(256, 2048, 128, s.TexturePx, v => s.TexturePx = v), "Higher is sharper but uses more memory.");
+        var showExp = new CheckBox { Text = "Show experimental features in the list (⚠ Experimental page)", AutoSize = true, Checked = HeadSmoothingFile.ShowPage };
+        showExp.CheckedChanged += (o, e) =>
+        {
+            if (showExp.Checked && MessageBox.Show(FindForm(), "Experimental features are unfinished and some can cause motion sickness. They are all off until you switch them on.\n\nShow them?",
+                    "⚠ Experimental features", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+            { showExp.Checked = false; return; }
+            HeadSmoothingFile.ShowPage = showExp.Checked;
+            (FindForm() as MainForm)?.RebuildList();
+        };
+        adv.AddRow("", showExp, "Adds the ⚠ Experimental page to Settings. The page stays listed while one of its features is on, so you can always switch it off.");
         var advToggle = new CheckBox { Text = "Show advanced settings", AutoSize = true, Dock = DockStyle.Top, Padding = new Padding(0, 10, 0, 4) };
         adv.Visible = false;
         advToggle.CheckedChanged += (o, e) => adv.Visible = advToggle.Checked;
@@ -393,6 +449,9 @@ public class SettingsEditor : EditorBase
                 case "mirror":
                     pageHelp = "A desktop window showing what the headset shows, including the wheel, panels and lasers. Good for OBS.";
                     pageControls.Add(C("Headset mirror", "\uE890", true, mir)); break;
+                case "experimental":
+                    pageHelp = "Features that can cause motion sickness. All off by default.";
+                    pageControls.Add(C("Head smoothing", "\uE7BA", true, exp)); break;
                 case "advanced":
                     adv.Visible = true;
                     pageControls.Add(C("Advanced", "\uE90F", false, adv)); break;
@@ -464,12 +523,12 @@ public class SettingsEditor : EditorBase
     }
 
     // ---------------- small builders
-    Control ResetPose(Func<bool> isSet, Action clear)
+    Control ResetPose(Func<bool> isSet, Action clear, string notSet = "No, using the numbers below", string back = "Use the numbers below again")
     {
         var f = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
         var l = new Label { AutoSize = true, Padding = new Padding(0, 6, 8, 0) };
-        var b = new Button { Text = "Use the numbers below again", AutoSize = true };
-        void Show() { bool on = isSet(); l.Text = on ? "Yes, set in the headset" : "No, using the numbers below"; b.Enabled = on; }
+        var b = new Button { Text = back, AutoSize = true };
+        void Show() { bool on = isSet(); l.Text = on ? "Yes, set in the headset" : notSet; b.Enabled = on; }
         b.Click += (o, e) => { clear(); Show(); Fire(); };
         f.Controls.Add(l); f.Controls.Add(b); Show();
         return f;

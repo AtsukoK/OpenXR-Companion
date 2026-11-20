@@ -164,20 +164,17 @@ public class FormPanel : TableLayoutPanel
     }
     public Label AddRow(string label, Control c, string hint = null)
     {
-        var l = new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top, Padding = new Padding(0, 6, 0, 0), BackColor = Color.Transparent };
+        var l = new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top, Padding = new Padding(0, 9, 0, 0), BackColor = Color.Transparent };
         RowStyles.Add(new RowStyle(SizeType.AutoSize));
         int row = RowCount++;
         Controls.Add(l, 0, row);
-        if (hint != null)
-        {
-            var f = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false, Margin = new Padding(0, 0, 0, 2), BackColor = Color.Transparent };
-            f.Controls.Add(c);
-            f.Controls.Add(InfoIcon(hint));
-            Controls.Add(f, 1, row);
-            c.VisibleChanged += (s, e) => { f.Visible = c.Visible; };
-            l.Tag = f;
-        }
-        else { Controls.Add(c, 1, row); l.Tag = c; }
+        // Every row in the same holder, with or without help, so all rows get the same height and spacing.
+        var f = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false, Margin = new Padding(0, 3, 0, 5), MinimumSize = new Size(0, 32), BackColor = Color.Transparent };
+        f.Controls.Add(c);
+        if (hint != null) f.Controls.Add(InfoIcon(hint));
+        Controls.Add(f, 1, row);
+        c.VisibleChanged += (s, e) => { f.Visible = c.Visible; };
+        l.Tag = f;
         Rows.Add((l, c, hint));
         return l;
     }
@@ -277,6 +274,7 @@ public sealed class SettingsPage
         new() { Key = "screen", Title = "Screen mirror", Sub = "A monitor or window in VR", Icon = "\uE7F4" },
         new() { Key = "offsets", Title = "Controller offsets", Sub = "How the game's hands and guns point", Icon = "\uE7FC" },
         new() { Key = "mirror", Title = "Headset mirror", Sub = "What the headset shows, on the desktop", Icon = "\uE890", Live = true },
+        new() { Key = "experimental", Title = "Experimental", Sub = "Head smoothing (can cause motion sickness)", Icon = "\uE7BA", Live = true },
         new() { Key = "advanced", Title = "Advanced", Sub = "Thresholds, wheel details, focus", Icon = "\uE90F" },
     };
     public static SettingsPage ByKey(string k) => All.FirstOrDefault(p => p.Key == k) ?? All[0];
@@ -515,6 +513,7 @@ public class ActionEditor : FormPanel
         lScreenWin = AddRow("Or a window", screenWin, "Leave empty for a monitor. Type part of a window's title or a program name (e.g. chrome, Discord), or pick one that's open now. The first matching window is shown.");
         lOffMode = AddRow("Offsets", offMode, "Settings > Controller offsets has the numbers, sliders and reset buttons too.");
         lMirMode = AddRow("Headset mirror", mirMode, "The window shows on the desktop; the editor's toolbar has the same switch, and Settings > Headset mirror sets eye, zoom and frame rate.");
+        foreach (var (_, ctl, _) in Rows) if (ctl is ComboBox) ctl.Width = 400; // one width for every dropdown here, so they line up
         mirMode.SelectedIndexChanged += (s, e) => { if (!loading) { a.Mode = mirMode.Code; Fire(); } };
         offMode.SelectedIndexChanged += (s, e) => { if (!loading) { a.Mode = offMode.Code; Fire(); } };
         screenWin.TextChanged += (s, e) => { if (!loading) { a.Window = string.IsNullOrWhiteSpace(screenWin.Text) ? null : screenWin.Text.Trim(); Fire(); } };
@@ -636,6 +635,7 @@ public class BindingEditor : EditorBase
         when.AddRow("Not in layer", notLayers);
         when.AddRow("Hide from game", block);
         lPass = when.AddRow("", passthrough);
+        foreach (var (_, ctl, _) in when.Rows) if (ctl is ComboBox) ctl.Width = 400; // same width as the action's dropdowns below
 
         Stack(Title("Binding"),
               FormPanel.Header("Do something when a controller button (or combo) is used."),
@@ -833,6 +833,30 @@ public class WheelEditor : EditorBase
         var f = new FormPanel();
         f.AddRow("Name", name, wrist ? "Used by 'open another page' buttons. Renaming updates them." : "Used by 'Open a wheel' actions. Renaming updates them.");
         f.AddRow("Title", title, wrist ? "Shown at the top of the page." : "Shown in the middle of the wheel.");
+        if (!wrist) // what happens when this wheel opens: which buttons open it, and where it appears
+        {
+            var p = MainForm.Current.Profile;
+            var how = new List<string>();
+            foreach (var b in p.Bindings.Where(b => b.Action?.Type == "wheel" && b.Action.Wheel == w.Name))
+            {
+                string verb = b.Gesture switch { "double_tap" => "Double-tap", "hold" or "while_held" => "Hold", "tap" => "Tap", _ => "Press" };
+                how.Add(verb + " " + InputText.Friendly(b.Input) + (b.Enabled ? "" : "  (that binding is off)"));
+            }
+            foreach (var o in p.Wheels.Values) foreach (var i in o.Items.Where(i => i.Action?.Type == "wheel" && i.Action.Wheel == w.Name))
+                how.Add($"The '{i.Label}' item on wheel '{o.Title ?? o.Name}'" + (i.Enabled ? "" : "  (that item is off)"));
+            for (int h = 0; h < 2; h++) foreach (var o in p.WristFor(h).Pages.Values) foreach (var i in o.Items.Where(i => i.Action?.Type == "wheel" && i.Action.Wheel == w.Name))
+                how.Add($"The '{i.Label}' button on the {(h == 0 ? "left" : "right")} wrist panel" + (i.Enabled ? "" : "  (that button is off)"));
+            var opens = new Label { AutoSize = true, MaximumSize = new Size(460, 0), Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                Text = how.Count == 0 ? "Nothing opens it yet: add a binding or a wheel item with 'Open a wheel'." : string.Join("\n", how) };
+            f.AddRow("Opens with", opens);
+            string anchor = SettingsEditor.Anchors.FirstOrDefault(a => a.Code == p.Style?.Anchor)?.Text ?? p.Style?.Anchor ?? "";
+            var where = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+            where.Controls.Add(new Label { AutoSize = true, Text = anchor, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), Margin = new Padding(0, 6, 10, 0) });
+            var change = new Button { Text = "Change...", AutoSize = true };
+            change.Click += (s, e) => MainForm.Current.GoTo(SettingsPage.ByKey("wheel"));
+            where.Controls.Add(change);
+            f.AddRow("Appears", where, "Where every wheel appears is set in Settings > Wheel look and picking (the same for all wheels).");
+        }
         Preview.Wheel = w; Preview.IsWristPage = wrist; Preview.GridColumns = columns;
         Preview.Margin = new Padding(170, 8, 0, 0);
         var previewHost = new Panel { Height = 340, Dock = DockStyle.Top };

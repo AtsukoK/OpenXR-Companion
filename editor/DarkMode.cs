@@ -82,6 +82,11 @@ public static class ThemeWalker
                     b2.FlatAppearance.BorderColor = Theme.CardBorder;
                 if (c is ComboBox cb) DarkCombo(cb);
             }
+            if (c is LinkLabel ll) // default link blue is unreadable on dark
+            {
+                ll.LinkColor = ll.ActiveLinkColor = dark ? Theme.Link : Color.FromArgb(0, 0, 255);
+                ll.VisitedLinkColor = dark ? Theme.Link : Color.FromArgb(128, 0, 128);
+            }
             if (c is TreeView || (c is ScrollableControl sc && sc.AutoScroll))
             {
                 void Scroll() => SetWindowTheme(c.Handle, dark ? "DarkMode_Explorer" : "Explorer", null);

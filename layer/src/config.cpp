@@ -253,6 +253,15 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
         Get(k, "width_m", p->kb.width); Get(k, "distance_m", p->kb.distance);
         Get(k, "below_eyes_m", p->kb.below); Get(k, "close_on_enter", p->kb.closeOnEnter);
         p->kb.width = std::clamp(p->kb.width, 0.2f, 1.5f);
+        if (k.contains("pose")) ParsePose(k["pose"], p->kb.pose);
+    }
+
+    if (j.contains("dock")) {
+        auto& d = j["dock"];
+        std::string m; Get(d, "mode", m);
+        p->dock.mode = m == "screen_to_keyboard" ? 1 : m == "keyboard_to_screen" ? 2 : 0;
+        if (d.contains("pose")) ParsePose(d["pose"], p->dock.pose);
+        Get(d, "width_m", p->dock.width); p->dock.width = std::clamp(p->dock.width, 0.f, 3.f);
     }
 
     if (j.contains("screen")) {
@@ -419,14 +428,65 @@ static bool ReadFile(const std::wstring& path, std::string& out) {
     return true;
 }
 
+// default.json is the STANDARD profile: rewritten from the built-in one, so every release brings its new
+// defaults. The user's own changes live in user_defaults.json, which wins over default.json.
+// Once: an older default.json that differs from the built-in one holds the user's edits -> user_defaults.json.
+void SetActiveProfileName(const std::string& n);
+static bool Exists(const std::wstring& p) { return GetFileAttributesW(p.c_str()) != INVALID_FILE_ATTRIBUTES; }
+void PrepareDefaults() {
+    std::wstring dir = ProfilesDir();
+    std::wstring def = dir + L"\\default.json", user = dir + L"\\user_defaults.json", marker = dir + L"\\.defaults_split";
+    std::string text;
+    if (!Exists(marker)) {
+        if (Exists(def) && !Exists(user) && ReadFile(def, text) && text != DefaultProfileJson()) {
+            if (MoveFileW(def.c_str(), user.c_str())) {
+                Log("defaults: your default.json had changes, kept as user_defaults.json (and selected)");
+                SetActiveProfileName("user_defaults.json");
+                std::ofstream n(dir + L"\.defaults_moved_notice", std::ios::binary); n << "show once in the editor"; // the editor tells the user, then deletes it
+            }
+        }
+        std::ofstream m(marker, std::ios::binary); m << "default.json = standard, user_defaults.json = yours";
+    }
+    text.clear();
+    if (!ReadFile(def, text) || text != DefaultProfileJson()) { std::ofstream f(def, std::ios::binary | std::ios::trunc); f << DefaultProfileJson(); }
+}
+
+// The profile the user selected in the editor: games always use it. Kept in <data>\\active_profile.txt (a file name).
+std::wstring ActiveProfilePath() { return DataDir() + L"\\active_profile.txt"; }
+std::string ActiveProfileName() {
+    std::string t;
+    if (!ReadFile(ActiveProfilePath(), t)) return "";
+    while (!t.empty() && (t.back() == '\n' || t.back() == '\r' || t.back() == ' ')) t.pop_back();
+    if (t.find_first_of("\\/:") != std::string::npos || t.size() < 6 || _stricmp(t.c_str() + t.size() - 5, ".json") != 0) return ""; // a plain file name only
+    return t;
+}
+void SetActiveProfileName(const std::string& n) { std::ofstream f(ActiveProfilePath(), std::ios::binary | std::ios::trunc); f << n; }
+
+// Where a save by the layer goes: never into the standard default.json (copied to user_defaults.json first).
+// Never into the standard: user_defaults.json, or a new "user_defaults N.json" when that already exists
+// (the user's own is never replaced). The new profile becomes the selected one.
+static std::wstring SaveTarget(const Profile& p) {
+    std::wstring dir = ProfilesDir();
+    if (_stricmp(p.sourceName.c_str(), "default.json") == 0) {
+        std::string name = "user_defaults.json";
+        for (int i = 2; Exists(dir + L"\\" + Utf8ToW(name)); i++) name = "user_defaults " + std::to_string(i) + ".json";
+        CopyFileW((dir + L"\\default.json").c_str(), (dir + L"\\" + Utf8ToW(name)).c_str(), TRUE);
+        p.sourceName = name;
+        SetActiveProfileName(name);
+        Log("defaults: a change made in the headset was saved to %s (default.json stays standard)", name.c_str());
+    }
+    return dir + L"\\" + Utf8ToW(p.sourceName);
+}
+
 std::shared_ptr<Profile> LoadProfile(std::wstring& pathOut, std::string& err) {
     std::wstring dir = ProfilesDir();
     std::wstring game = dir + L"\\" + Utf8ToW(ExeName()) + L".json";
-    std::wstring def = dir + L"\\default.json";
-    if (GetFileAttributesW(def.c_str()) == INVALID_FILE_ATTRIBUTES) {
-        std::ofstream f(def, std::ios::binary); f << DefaultProfileJson();
-    }
-    pathOut = GetFileAttributesW(game.c_str()) != INVALID_FILE_ATTRIBUTES ? game : def;
+    std::wstring def = dir + L"\\default.json", user = dir + L"\\user_defaults.json";
+    PrepareDefaults();
+    // 1. the profile selected in the editor, 2. a profile named after the game, 3. the user's defaults, 4. the standard
+    std::string act = ActiveProfileName();
+    std::wstring active = act.empty() ? L"" : dir + L"\\" + Utf8ToW(act);
+    pathOut = !active.empty() && Exists(active) ? active : Exists(game) ? game : Exists(user) ? user : def;
     std::string text;
     if (!ReadFile(pathOut, text)) { err = "cannot read " + WToUtf8(pathOut); return nullptr; }
     try {
@@ -444,7 +504,7 @@ std::shared_ptr<Profile> LoadProfile(std::wstring& pathOut, std::string& err) {
 // Adjust mode: put the placement numbers back into the profile file the layer loaded.
 bool SavePlacement(const Profile& p, std::string& err) {
     std::wstring dir = ProfilesDir();
-    std::wstring path = dir + L"\\" + Utf8ToW(p.sourceName);
+    std::wstring path = SaveTarget(p);
     std::string text;
     if (!ReadFile(path, text)) { err = "cannot read " + WToUtf8(path); return false; }
     try {
@@ -476,6 +536,17 @@ bool SavePlacement(const Profile& p, std::string& err) {
             w["text_up"] = W.textUp; if (W.textUp == "custom") w["rotate_deg"] = std::round(W.rotateDeg * 10.f) / 10.f;
             if (W.pose.set) w["pose"] = PoseJson(W.pose); else w.erase("pose");
         }
+        {
+            json& k = j["keyboard"];
+            k["width_m"] = r(p.kb.width);
+            if (p.kb.pose.set) k["pose"] = PoseJson(p.kb.pose); else k.erase("pose");
+        }
+        {
+            json& d = j["dock"];
+            d["mode"] = p.dock.mode == 1 ? "screen_to_keyboard" : p.dock.mode == 2 ? "keyboard_to_screen" : "none";
+            if (p.dock.pose.set) d["pose"] = PoseJson(p.dock.pose); else d.erase("pose");
+            if (p.dock.width > 0) d["width_m"] = r(p.dock.width); else d.erase("width_m");
+        }
         std::ofstream f(path, std::ios::binary | std::ios::trunc);
         if (!f) { err = "cannot write " + WToUtf8(path); return false; }
         f << j.dump(2);
@@ -485,7 +556,7 @@ bool SavePlacement(const Profile& p, std::string& err) {
 
 bool SaveScreenChoice(const Profile& p, std::string& err) {
     std::wstring dir = ProfilesDir();
-    std::wstring path = dir + L"\\" + Utf8ToW(p.sourceName);
+    std::wstring path = SaveTarget(p);
     std::string text;
     if (!ReadFile(path, text)) { err = "cannot read " + WToUtf8(path); return false; }
     try {
@@ -502,7 +573,7 @@ bool SaveScreenChoice(const Profile& p, std::string& err) {
 }
 
 bool SaveOffsets(const Profile& p, std::string& err) {
-    std::wstring path = ProfilesDir() + L"\\" + Utf8ToW(p.sourceName);
+    std::wstring path = SaveTarget(p);
     std::string text;
     if (!ReadFile(path, text)) { err = "cannot read " + WToUtf8(path); return false; }
     try {
@@ -527,13 +598,35 @@ bool SaveOffsets(const Profile& p, std::string& err) {
     } catch (const std::exception& e) { err = e.what(); return false; }
 }
 
+std::wstring HeadSmoothSettingsPath() { return DataDir() + L"\\head_smoothing.json"; }
+bool LoadHeadSmoothSettings(HeadSmoothSettings& h) {
+    h = HeadSmoothSettings{};
+    std::string text;
+    if (!ReadFile(HeadSmoothSettingsPath(), text)) return false;
+    try {
+        json j = json::parse(text, nullptr, true, true);
+        Get(j, "on", h.on); Get(j, "strength", h.strength); Get(j, "keep_on", h.keepOn);
+        std::string m; Get(j, "mode", m); h.mode = m == "headset" ? 1 : 0;
+        h.strength = std::clamp(h.strength, 0.f, 100.f);
+        return true;
+    } catch (...) { h = HeadSmoothSettings{}; return false; }
+}
+void SwitchOffHeadSmoothing() {
+    std::string text;
+    if (!ReadFile(HeadSmoothSettingsPath(), text)) return;
+    json j;
+    try { j = json::parse(text, nullptr, true, true); } catch (...) { return; }
+    j["on"] = false;
+    std::ofstream f(HeadSmoothSettingsPath(), std::ios::binary | std::ios::trunc);
+    if (f) f << j.dump(2);
+}
 std::wstring MirrorSettingsPath() { return DataDir() + L"\\headset_mirror.json"; }
 bool LoadMirrorSettings(MirrorSettings& m) {
     std::string text;
     if (!ReadFile(MirrorSettingsPath(), text)) return false;
     try {
         json j = json::parse(text, nullptr, true, true);
-        Get(j, "on", m.on); Get(j, "zoom", m.zoom); Get(j, "fps", m.fps);
+        Get(j, "on", m.on); Get(j, "on_top", m.onTop); Get(j, "zoom", m.zoom); Get(j, "fps", m.fps);
         std::string e = "right"; Get(j, "eye", e); m.eye = Lower(e) == "left" ? 0 : 1;
         Get(j, "smoothing", m.smoothing); m.smoothing = std::clamp(m.smoothing, 0.f, 1.f);
         m.zoom = std::clamp(m.zoom, 1.f, 3.f); m.fps = std::clamp(m.fps, 0, 240);
@@ -544,7 +637,7 @@ bool SaveMirrorSettings(const MirrorSettings& m) {
     json j = json::object();
     std::string text;
     if (ReadFile(MirrorSettingsPath(), text)) { try { j = json::parse(text, nullptr, true, true); } catch (...) { j = json::object(); } }
-    j["on"] = m.on; j["eye"] = m.eye ? "right" : "left"; j["zoom"] = std::round(m.zoom * 100.f) / 100.f; j["fps"] = m.fps; j["smoothing"] = std::round(m.smoothing * 100.f) / 100.f;
+    j["on"] = m.on; j["eye"] = m.eye ? "right" : "left"; j["zoom"] = std::round(m.zoom * 100.f) / 100.f; j["fps"] = m.fps; j["smoothing"] = std::round(m.smoothing * 100.f) / 100.f; j["on_top"] = m.onTop;
     std::ofstream f(MirrorSettingsPath(), std::ios::binary | std::ios::trunc);
     if (!f) return false;
     f << j.dump(2);
@@ -691,6 +784,7 @@ extern "C" __declspec(dllexport) int vro_validate(const char* text, char* err, i
 }
 
 extern "C" __declspec(dllexport) const char* vro_default_profile() { return DefaultProfileJson(); }
+extern "C" __declspec(dllexport) void vro_prepare_defaults() { PrepareDefaults(); }
 
 // Editor helper: check one key combo (seq=0) or macro step list (seq=1). Returns 1 if valid.
 extern "C" __declspec(dllexport) int vro_check_keys(const char* text, int seq, char* err, int errLen) {

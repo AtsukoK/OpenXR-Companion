@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **Steadying of the game's hands is safer.** A controller that loses tracking (or switches to hand tracking) is no longer steadied toward a stale or zero position, which could pull a hand or a body IK out of shape for a moment. When a game reads the hands at two times in one frame, both reads now get the same steadying instead of one raw and one steadied.
+
+### New
+- **Dock the screen and the keyboard together** for easier typing into a mirrored window: a bar under the VR keyboard has **Dock screen above keys** (the screen sits just above the keyboard and moves with it), **Dock keys under screen** (the keyboard follows the screen), **Adjust dock** (grab the docked one with a grip and put it where you like; the stick sizes the docked screen) and **Close keyboard**. The choice and the spot are saved with the profile (also in Settings > VR keyboard).
+- **The profile you select in the editor is the one your games use**, always (it used to be a profile named after the game, else default.json). A running game switches within a second. If nothing is selected, the old order applies: the game's own profile, then `user_defaults.json`, then `default.json`.
+- **One-click updates**: the editor's orange **Update available** button now downloads the new release from GitHub, checks it against GitHub's SHA-256 checksum, keeps the current version in `_previous_version`, swaps the files (even while the editor or a game has them open) and restarts. Profiles and settings aren't touched. Falls back to the download page if the folder can't be written.
+- **Standard and your own defaults**: `default.json` is now the standard profile and is refreshed with every release, so new defaults reach everyone. Your changes go to `user_defaults.json` (created the first time you save changes to the standard; if you already have one, saving changes to the standard warns you and makes a new profile, `user_defaults 2.json`, instead of replacing yours; or when the headset saves offsets, placement or a screen choice), which becomes the selected profile. **An existing `default.json` with your edits is kept as `user_defaults.json`** automatically, once.
+- **Headset mirror: Always on top** (Settings > Headset mirror). The mirror window also never takes focus from the game any more, even when you click, move or resize it.
+- **Experimental features**, hidden behind Settings > Advanced > Show experimental features, with motion sickness warnings:
+  - **Head smoothing** steadies the direction the game renders from, for using the headset as a camera. "For recording" (the headset still corrects to your real head) or "In the headset too". Strength 0 to 100: a heavy camera that smooths every movement the same way and eases into and out of turns (about 0.12 s of lag per step). Off by default, asks to confirm, and switches itself off whenever a game starts unless "Keep it on" is ticked.
+
+### Changed
+- **The VR keyboard can be placed by hand**: in Adjust / Calibrate Positions, open it with its Keyboard button, grab it with a grip and put it anywhere (the stick changes its width). It then opens in that spot, turned to wherever you face. Settings > VR keyboard > Placed by hand goes back to the numbers. The default spot is unchanged.
+- **Adjust / Calibrate Positions** no longer brings out a wheel that is set to appear in front of you (it floated in your face). Open it with its usual button if you want to place it.
+- **Wheel pages in the editor** now show what opens the wheel (buttons, wheel items, wrist buttons) and where it appears, with a **Change...** button to that setting.
+- **Adjust / Calibrate Positions**: the wheel turns see-through so it no longer blocks the wrist panels or the screen you are placing. It becomes solid again when a hand comes near it to grab it, and fades further while you hold something else.
+- **Overview page**: the on/off checkboxes are now green **ON** / red **OFF** buttons, each with how to open the feature in the headset in plain words ("Double-tap Right Thumbrest"). Wrist panel cards say how to bring them up, the keyboard card lists the wheel and wrist buttons that open it, and a new **Tools on your menus** card shows where the Adjust, Screen, Controller offsets and Headset mirror buttons are.
+
+- Editor: more space between settings rows, and the Controller offsets sliders line up (units and 0 buttons in one column).
+
+### Fixed
+- The Controller offsets panel in the headset now faces your eyes; it used to lean its top toward you.
+- Editor: scrolling the page with the mouse wheel no longer changes a dropdown, number box or slider that passes under the mouse; the page scrolls instead.
+- Editor: the Overview page no longer turns light after a switch is clicked in dark mode.
+- Editor: links (such as "+ add another button") were dark blue on dark and hard to read in dark mode.
+
+### Docs
+- README restructured (feature table at the top, quick start, then one section per feature, then reference) with new editor screenshots in dark mode. Sections for the headset mirror, controller offsets, steadying, the new default wrist panel, the editor's Settings pages and dark mode, experimental features, and the missing actions (`page`, `keyboard`, `adjust`, `screen`, `controller_offsets`, `headset_mirror`).
+
 ## v0.2.8 (2026-11-20)
 
 ### New

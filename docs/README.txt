@@ -1,8 +1,8 @@
 OpenXR Companion - by Atsuko
 
 Hand tools for any OpenXR game: radial menus (wheels), wrist panels, button combos, a VR keyboard,
-your desktop mirrored into VR, controller offsets for the game's hands and guns, and steadying
-for shaky hands. (Formerly OpenXR Hand Menus.)
+your desktop mirrored into VR, a headset mirror window for recording, controller offsets for the
+game's hands and guns, and steadying for shaky hands. (Formerly OpenXR Hand Menus.)
 Works with Virtual Desktop (VDXR), SteamVR OpenXR, Meta Link and other OpenXR runtimes.
 
 
@@ -33,11 +33,24 @@ DEFAULT CONTROLS
   other hand's controller (a ring shows where it will touch), or point at it and pull
   the trigger.
 - The VR keyboard is on the wheels and the left wrist panel.
-- Move things to where you like them: right wheel > More... > Adjust positions. Grab the
+- The left wrist panel: Quick save, Pause, Monitor (screen on your wrist), Keyboard, More.
+  More has Quick load, Reload profile, Calibrate Positions, Controller offsets,
+  Headset mirror and Screen options.
+- Move things to where you like them: left wrist panel > More > Calibrate Positions
+  (or right wheel > More... > Adjust positions). Grab the
   wheel or a wrist panel with your other hand's grip and move it; while holding, the stick
   resizes it (up/down) or turns a wrist panel (left/right). Adjust positions again saves.
 
 Change anything in the editor and save (Ctrl+S). A running game picks it up within a second.
+default.json is the standard profile and updates with each release. When you save changes to it,
+they go to user_defaults.json (your own defaults). If you already have one, it is never replaced:
+the changes become a new profile (user_defaults 2.json).
+THE PROFILE YOU SELECT IN THE EDITOR IS THE ONE YOUR GAMES USE. Select default.json to use the standard.
+
+UPDATING
+When a new version is out, an orange "Update available" button appears at the top right of the
+editor. Click it and choose Yes. It downloads and checks the release, keeps your current version in
+the _previous_version folder and restarts. Your profiles are not touched. Close VR games first.
 
 
 32-BIT GAMES (Fallout: New Vegas / Fallout 3 / TTW with TTWVR)
@@ -51,7 +64,7 @@ with the 64-bit one. The toolbar then shows "Layer: installed (+ 32-bit)".
 "Uninstall layer" removes both (or run x86\uninstall.ps1 as admin).
 
 SCREEN MIRROR (a monitor or window in VR)
-Turn it on from the left wrist panel: More > Screen. Point at the screen and a button bar
+Turn it on from the left wrist panel: Monitor, or More > Screen options. Point at the screen and a button bar
 appears under it:
   Choose...   pick any monitor or open window (your pick is remembered)
   Frame rate  steps through the frame rates from Settings
@@ -63,6 +76,28 @@ appears under it:
 Pointing at the screen moves the mouse: trigger = left click, A/X = right click,
 stick = scroll. Recommended: frame rate 15-30, button bar size 0.7, and on your Screen
 buttons leave Monitor on "Keep the current one" and the window name empty.
+
+HEADSET MIRROR (what the headset shows, in a desktop window)
+Turn it on with the first button on the editor's toolbar or the left wrist panel (More >
+Headset mirror). It shows the wheel, panels, lasers and messages too, so it's good for OBS.
+Settings > Headset mirror: eye, zoom, steady the picture, frame rate cap, and
+"Always on top of other windows". The mirror never takes focus from the game, even when you
+click or move it. Use borderless or windowed mode in the game.
+
+CONTROLLER OFFSETS (when the game's hands or guns point wrong)
+Left wrist panel > More > Controller offsets: + / - for pitch, yaw, roll and position, or
+"Grab to set" (hold grip, turn the controller until it feels right, let go). Saved per game.
+The same values are in the editor under Settings > Controller offsets.
+
+STEADYING FOR SHAKY HANDS (all off by default, 0.5 is a good start)
+Settings > Pointing > Steady the laser; Settings > Screen mirror > Steady the screen;
+Settings > Controller offsets > Steady the game's hands.
+
+EXPERIMENTAL (hidden, off by default) - WARNING: CAN CAUSE MOTION SICKNESS
+Settings > Advanced > Show experimental features adds a "! Experimental" page with
+head smoothing (steadies the game's camera, for using the headset as a camera).
+Start with "For recording" and a low strength. It switches itself off whenever a game starts.
+Take the headset off at the first sign of feeling unwell.
 
 UNINSTALL
 Open the editor and click "Uninstall layer", or run uninstall.ps1 as admin. Then delete the folder.

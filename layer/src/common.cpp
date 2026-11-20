@@ -23,6 +23,7 @@ std::string WToUtf8(const std::wstring& w) {
     return s;
 }
 std::wstring DataDir() {
+    if (const wchar_t* t = _wgetenv(L"OPENXR_COMPANION_TEST_DATA")) { CreateDirectoryW(t, nullptr); return t; } // tests only
     PWSTR p = nullptr;
     std::wstring d;
     if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &p))) d = p;
@@ -161,8 +162,15 @@ XrPosef PoseSmoother::Apply(const XrPosef& in, float dt, float strength) {
     last = in;
     // cutoff: strength 0 -> 8 Hz (barely any), 1 -> 0.35 Hz (very steady); faster movement opens it up
     float minC = 8.f * std::pow(0.35f / 8.f, std::clamp(strength, 0.f, 1.f));
-    float aP = OneEuroAlpha(minC + 6.f * speed, dt);   // 6 Hz more per m/s
-    float aR = OneEuroAlpha(minC + 1.5f * turn, dt);   // 1.5 Hz more per rad/s
+    float openP = 6.f, openR = 1.5f;
+    if (strength > 1.f) { // beyond 1 (head smoothing only): a heavy camera, 1 -> 10 = 0.35 -> 0.05 Hz, and real moves lag too
+        float e = (std::min(strength, 10.f) - 1.f) / 9.f;
+        minC = 0.35f * std::pow(0.05f / 0.35f, e);
+        float k = std::pow(0.1f, e);
+        openP *= k; openR *= k;
+    }
+    float aP = OneEuroAlpha(minC + openP * speed, dt);   // 6 Hz more per m/s
+    float aR = OneEuroAlpha(minC + openR * turn, dt);    // 1.5 Hz more per rad/s
     Vec3 p = V(s.position) + (V(in.position) - V(s.position)) * aP;
     // nlerp the angle, taking the short way round
     XrQuaternionf a = s.orientation, b = in.orientation;
@@ -172,4 +180,26 @@ XrPosef PoseSmoother::Apply(const XrPosef& in, float dt, float strength) {
     if (l > 1e-6f) { q.x /= l; q.y /= l; q.z /= l; q.w /= l; }
     s = { q, X(p) };
     return s;
+}
+
+XrPosef SpaceSteady::Step(XrTime t, const XrPosef& raw, uint64_t flags, float strength) {
+    const uint64_t need = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR_SPACE_LOCATION_POSITION_VALID_BIT |
+                          XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT | XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
+    if ((flags & need) != need || strength <= 0.001f) { Reset(); return raw; }
+    const Rec* use = nullptr;
+    if (t > last) { // a newer time: one filter step
+        float dt = last ? (float)((t - last) * 1e-9) : 0.f;
+        XrPosef out = f.Apply(raw, dt, strength);
+        last = t;
+        Rec& r = hist[next]; next = (next + 1) % 16;
+        r.t = t; r.dq = QMul(out.orientation, QInv(raw.orientation));
+        r.dp = X(V(out.position) - V(raw.position));
+        return out;
+    }
+    for (auto& h : hist) { // the same or an older time: the correction recorded nearest to it
+        if (!h.t) continue;
+        if (!use || (h.t > t ? h.t - t : t - h.t) < (use->t > t ? use->t - t : t - use->t)) use = &h;
+    }
+    if (!use) return raw;
+    return { QMul(use->dq, raw.orientation), X(V(raw.position) + V(use->dp)) };
 }

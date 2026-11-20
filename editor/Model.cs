@@ -99,6 +99,7 @@ public class ProfileModel
     [Category("5 Keyboard"), TypeConverter(typeof(ExpandableObjectConverter)), Description("The VR keyboard opened by a 'keyboard' action.")]
     [DisplayName("VR keyboard")]
     [JsonPropertyName("keyboard")] public KeyboardModel Keyboard { get; set; } = new();
+    [Browsable(false)][JsonPropertyName("dock"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public DockModel Dock { get; set; }
 
     [Browsable(false)][JsonPropertyName("pointer")] public PointerModel Pointer { get; set; } = new();
     [Browsable(false)][JsonPropertyName("screen")] public ScreenModel Screen { get; set; } = new();
@@ -305,6 +306,13 @@ public static class Monitors
     }
 }
 
+public class DockModel
+{
+    [JsonPropertyName("mode")] public string Mode { get; set; } = "none"; // none, screen_to_keyboard, keyboard_to_screen
+    [JsonPropertyName("pose"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<float> Pose { get; set; }
+    [JsonPropertyName("width_m"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public float Width { get; set; }
+}
+
 public class KeyboardModel
 {
     [DisplayName("Width (m)")]
@@ -315,6 +323,7 @@ public class KeyboardModel
     [Description("How far below eye level, metres.")][JsonPropertyName("below_eyes_m")] public float Below { get; set; } = 0.30f;
     [DisplayName("Close after Enter")]
     [Description("Close the keyboard after Enter (handy for chat boxes).")][JsonPropertyName("close_on_enter")] public bool CloseOnEnter { get; set; }
+    [Browsable(false)][JsonPropertyName("pose"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<float> Pose { get; set; } // placed by hand in the headset
     public override string ToString() => $"{Width} m wide";
 }
 
