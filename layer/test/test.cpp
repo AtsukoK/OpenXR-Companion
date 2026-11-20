@@ -1199,6 +1199,15 @@ int main(int argc, char** argv) {
         CHECK(std::fabs(world.y) < 0.01f, "offsets: while grabbing, the game's hand keeps its angle");
         f.h[0].grip = 0; step(2);
         CHECK(e.offGrabHand < 0 && std::fabs(e.offs.o[1][0].pitch - 10.f) < 0.2f, ("offsets: letting go keeps +10 pitch, got " + std::to_string(e.offs.o[1][0].pitch)).c_str());
+        // Armed by mistake: after 5 s without a grip it gives up, the grips go back to the game and a later grip changes nothing.
+        aimAt(22); step(2); f.h[1].trig = 1; step(2); f.h[1].trig = 0; step(2);
+        f.h[1].aimPose.position = { 3, 3, 3 };
+        CHECK(e.offView.labels[22].rfind("Now hold grip", 0) == 0 && e.Blocked(0, C_GRIP), "offsets: Grab to set armed, the grips wait for it");
+        step(500); // 5.5 s
+        CHECK(e.offView.labels[22].rfind("Grab to set", 0) == 0 && !e.Blocked(0, C_GRIP), "offsets: an armed Grab to set gives up after 5 s and frees the grips");
+        float before = e.offs.o[1][0].pitch;
+        f.h[0].grip = 1; step(2); f.h[0].gripPose.orientation = { std::sin(a * 2), 0, 0, std::cos(a * 2) }; step(3); f.h[0].grip = 0; step(2);
+        CHECK(e.offGrabHand < 0 && e.offs.o[1][0].pitch == before, "offsets: a grip after that leaves the offsets alone");
         Action off; off.type = ActType::Offsets; off.mode = "enable"; e.OffsetsAction(off); step(1);
         CHECK(!e.OffsetPose(1, 0, none), "offsets: turning them off gives the game the plain controllers");
     }

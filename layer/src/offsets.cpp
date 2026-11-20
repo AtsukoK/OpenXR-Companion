@@ -80,7 +80,7 @@ void Engine::OffsetsAction(const Action& a) {
         for (auto& h : offs.o) for (auto& o : h) o = HandOffset{};
         Toast("Controller offsets reset", 2.0);
     } else if (m == "grab") {
-        offGrabArmed = true;
+        offGrabArmed = true; offGrabArmedAt = now;
         Toast("Hold grip on a controller, turn it to where it feels right, let go", 5.0);
         return;
     }
@@ -152,7 +152,7 @@ void Engine::OffsetCell(int cell, bool repeat) {
         break;
     case 2: offs.enabled = !offs.enabled; break;
     case 21: offStep = (offStep + 1) % 3; BuildOffsetPanel(); return;
-    case 22: offGrabArmed = !offGrabArmed && offGrabHand < 0; BuildOffsetPanel(); return;
+    case 22: offGrabArmed = !offGrabArmed && offGrabHand < 0; offGrabArmedAt = now; BuildOffsetPanel(); return;
     case 23: { float s = offs.smoothing; offs.smoothing = s < 0.2f ? 0.25f : s < 0.45f ? 0.5f : s < 0.7f ? 0.75f : s < 0.95f ? 1.f : 0.f; break; }
     case 24: {
         int hand = offs.linkHands ? 1 : offSel;
@@ -172,6 +172,11 @@ void Engine::UpdateOffsets() {
     float dt = (float)std::clamp(now - lastNow, 0.0, 0.1);
     // Grab to set: while the grip is held, the game's hand keeps the angle it had when you grabbed;
     // you turn the real controller to where it feels right, and on letting go that difference is kept.
+    // Armed by mistake (the button sits next to Steady hands): give up after 5 s without a grip,
+    // so a later grab in the game can't quietly turn the offsets (and the grips go back to the game).
+    if (offGrabArmed && offGrabHand < 0 && now - offGrabArmedAt > 5.0) {
+        offGrabArmed = false; BuildOffsetPanel(); Toast("Grab to set: cancelled (no grip within 5 s)", 2.0);
+    }
     if (offGrabArmed && offGrabHand < 0) {
         for (int h = 0; h < 2 && offGrabHand < 0; h++) {
             if (!offs.linkHands && offSel != h) continue;

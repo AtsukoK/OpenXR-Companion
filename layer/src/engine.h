@@ -259,6 +259,7 @@ private:
     int offKind = 2;            // 0 grip, 1 aim, 2 both
     int offStep = 1;            // index into the step sizes
     bool offGrabArmed = false;  // waiting for a grip to start grab-to-set
+    double offGrabArmedAt = -1; // when it was armed: it gives up after a few seconds without a grip
     XrQuaternionf offGrabStart{ 0,0,0,1 };
     HandOffset offGrabFrom[2];  // [kind] at the start of the grab
     int offUiHand = -1, offRepeatCell = -1;
