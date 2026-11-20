@@ -846,7 +846,7 @@ public partial class MainForm : Form
             {
                 Directory.CreateDirectory(DataDir);
                 string cur = File.Exists(ActiveFile) ? File.ReadAllText(ActiveFile).Trim() : null;
-                if (cur != value) File.WriteAllText(ActiveFile, value);
+                if (cur != value) AtomicFile.WriteAllText(ActiveFile, value);
             }
             catch { }
         }
@@ -1043,7 +1043,7 @@ public partial class MainForm : Form
             }
             currentFile = user; forked = true;
         }
-        File.WriteAllText(currentFile, json);
+        AtomicFile.WriteAllText(currentFile, json);
         NoteFileTime();
         dirty = false;
         if (forked)

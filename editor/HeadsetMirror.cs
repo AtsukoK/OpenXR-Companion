@@ -18,7 +18,7 @@ public static class HeadsetMirrorFile
     static void Write(JsonObject j)
     {
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(Path)!);
-        File.WriteAllText(Path, j.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        AtomicFile.WriteAllText(Path, j.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
     }
     static T Get<T>(string k, T def) { try { var n = Read()[k]; return n == null ? def : n.GetValue<T>(); } catch { return def; } }
     static void Set(string k, JsonNode v) { var j = Read(); j[k] = v; Write(j); }

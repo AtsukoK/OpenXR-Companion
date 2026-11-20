@@ -428,6 +428,22 @@ static bool ReadFile(const std::wstring& path, std::string& out) {
     return true;
 }
 
+// Write a whole file safely: a temp file next to it, then swapped in. A crash or a reader (the editor,
+// another game) never sees a half-written profile.
+static bool WriteFileAtomic(const std::wstring& path, const std::string& text) {
+    std::wstring tmp = path + L".tmp";
+    {
+        std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
+        if (!f) return false;
+        f << text;
+        f.flush();
+        if (!f) return false;
+    }
+    if (MoveFileExW(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) return true;
+    DeleteFileW(tmp.c_str());
+    return false;
+}
+
 // default.json is the STANDARD profile: rewritten from the built-in one, so every release brings its new
 // defaults. The user's own changes live in user_defaults.json, which wins over default.json.
 // Once: an older default.json that differs from the built-in one holds the user's edits -> user_defaults.json.
@@ -448,7 +464,7 @@ void PrepareDefaults() {
         std::ofstream m(marker, std::ios::binary); m << "default.json = standard, user_defaults.json = yours";
     }
     text.clear();
-    if (!ReadFile(def, text) || text != DefaultProfileJson()) { std::ofstream f(def, std::ios::binary | std::ios::trunc); f << DefaultProfileJson(); }
+    if (!ReadFile(def, text) || text != DefaultProfileJson()) WriteFileAtomic(def, DefaultProfileJson());
 }
 
 // The profile the user selected in the editor: games always use it. Kept in <data>\\active_profile.txt (a file name).
@@ -460,7 +476,7 @@ std::string ActiveProfileName() {
     if (t.find_first_of("\\/:") != std::string::npos || t.size() < 6 || _stricmp(t.c_str() + t.size() - 5, ".json") != 0) return ""; // a plain file name only
     return t;
 }
-void SetActiveProfileName(const std::string& n) { std::ofstream f(ActiveProfilePath(), std::ios::binary | std::ios::trunc); f << n; }
+void SetActiveProfileName(const std::string& n) { WriteFileAtomic(ActiveProfilePath(), n); }
 
 // Where a save by the layer goes: never into the standard default.json (copied to user_defaults.json first).
 // Never into the standard: user_defaults.json, or a new "user_defaults N.json" when that already exists
@@ -547,9 +563,7 @@ bool SavePlacement(const Profile& p, std::string& err) {
             if (p.dock.pose.set) d["pose"] = PoseJson(p.dock.pose); else d.erase("pose");
             if (p.dock.width > 0) d["width_m"] = r(p.dock.width); else d.erase("width_m");
         }
-        std::ofstream f(path, std::ios::binary | std::ios::trunc);
-        if (!f) { err = "cannot write " + WToUtf8(path); return false; }
-        f << j.dump(2);
+        if (!WriteFileAtomic(path, j.dump(2))) { err = "cannot write " + WToUtf8(path); return false; }
         return true;
     } catch (const std::exception& e) { err = e.what(); return false; }
 }
@@ -565,9 +579,7 @@ bool SaveScreenChoice(const Profile& p, std::string& err) {
         sc["source"] = S.source; sc["monitor"] = S.monitor;
         if (S.source == "window") { sc["window"] = S.window; sc["window_title"] = S.windowTitle; }
         else { sc.erase("window_title"); }
-        std::ofstream f(path, std::ios::binary | std::ios::trunc);
-        if (!f) { err = "cannot write " + WToUtf8(path); return false; }
-        f << j.dump(2);
+        if (!WriteFileAtomic(path, j.dump(2))) { err = "cannot write " + WToUtf8(path); return false; }
         return true;
     } catch (const std::exception& e) { err = e.what(); return false; }
 }
@@ -591,9 +603,7 @@ bool SaveOffsets(const Profile& p, std::string& err) {
                                     {"x_cm", r1(o.x * 100.f)}, {"y_cm", r1(o.y * 100.f)}, {"z_cm", r1(o.z * 100.f)} };
             }
         j["controller_offsets"] = k;
-        std::ofstream f(path, std::ios::binary | std::ios::trunc);
-        if (!f) { err = "cannot write " + WToUtf8(path); return false; }
-        f << j.dump(2);
+        if (!WriteFileAtomic(path, j.dump(2))) { err = "cannot write " + WToUtf8(path); return false; }
         return true;
     } catch (const std::exception& e) { err = e.what(); return false; }
 }
@@ -617,8 +627,7 @@ void SwitchOffHeadSmoothing() {
     json j;
     try { j = json::parse(text, nullptr, true, true); } catch (...) { return; }
     j["on"] = false;
-    std::ofstream f(HeadSmoothSettingsPath(), std::ios::binary | std::ios::trunc);
-    if (f) f << j.dump(2);
+    WriteFileAtomic(HeadSmoothSettingsPath(), j.dump(2));
 }
 std::wstring MirrorSettingsPath() { return DataDir() + L"\\headset_mirror.json"; }
 bool LoadMirrorSettings(MirrorSettings& m) {
@@ -638,10 +647,7 @@ bool SaveMirrorSettings(const MirrorSettings& m) {
     std::string text;
     if (ReadFile(MirrorSettingsPath(), text)) { try { j = json::parse(text, nullptr, true, true); } catch (...) { j = json::object(); } }
     j["on"] = m.on; j["eye"] = m.eye ? "right" : "left"; j["zoom"] = std::round(m.zoom * 100.f) / 100.f; j["fps"] = m.fps; j["smoothing"] = std::round(m.smoothing * 100.f) / 100.f; j["on_top"] = m.onTop;
-    std::ofstream f(MirrorSettingsPath(), std::ios::binary | std::ios::trunc);
-    if (!f) return false;
-    f << j.dump(2);
-    return true;
+    return WriteFileAtomic(MirrorSettingsPath(), j.dump(2));
 }
 
 const char* DefaultProfileJson() {
