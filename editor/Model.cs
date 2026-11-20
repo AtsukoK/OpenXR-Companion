@@ -39,18 +39,62 @@ public static class Inputs
         return l.ToArray();
     }
 }
-public class InputConv : ChoiceConverter { protected override IEnumerable<string> Values(ITypeDescriptorContext c) => Inputs.All; }
-public class GestureConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "press", "tap", "hold", "double_tap", "while_held" }; }
-public class BlockConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "trigger", "all" }; }
-public class BlockOpenConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "minimal", "hand", "all" }; }
-public class TypeConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "key", "sequence", "xr_input", "wheel", "back", "close", "layer", "reload", "keyboard", "page", "adjust", "screen", "controller_offsets", "headset_mirror" }; }
-public class ModeConv : ChoiceConverter { protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "tap", "hold", "toggle", "on", "off", "next_monitor", "prev_monitor", "next_window", "prev_window", "choose", "next_fps", "next_place", "panel", "enable", "grab", "reset" }; }
-public class ConfirmConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "auto", "release", "stick_return", "button" }; }
-public class AnchorConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "hand", "hand_locked", "head", "head_locked" }; }
-public class MethodConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "thumbstick", "point", "both" }; }
-public class SelHandConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "opener", "left", "right" }; }
-public class CompConv : ChoiceConverter { protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "trigger", "grip", "primary", "secondary", "thumbstick", "menu" }; }
-public class WheelNameConv : ChoiceConverter { protected override IEnumerable<string> Values(ITypeDescriptorContext c) => MainForm.Current?.Profile?.Wheels.Keys.ToArray() ?? Array.Empty<string>(); }
+public class InputConv : ChoiceConverter
+{
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => Inputs.All;
+}
+public class GestureConv : ChoiceConverter
+{
+    protected override bool Exclusive => true;
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "press", "tap", "hold", "double_tap", "while_held" };
+}
+public class BlockConv : ChoiceConverter
+{
+    protected override bool Exclusive => true;
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "trigger", "all" };
+}
+public class BlockOpenConv : ChoiceConverter
+{
+    protected override bool Exclusive => true;
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "minimal", "hand", "all" };
+}
+public class TypeConv : ChoiceConverter
+{
+    protected override bool Exclusive => true;
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "key", "sequence", "xr_input", "wheel", "back", "close", "layer", "reload", "keyboard", "page", "adjust", "screen", "controller_offsets", "headset_mirror" };
+}
+public class ModeConv : ChoiceConverter
+{
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "tap", "hold", "toggle", "on", "off", "next_monitor", "prev_monitor", "next_window", "prev_window", "choose", "next_fps", "next_place", "panel", "enable", "grab", "reset" };
+}
+public class ConfirmConv : ChoiceConverter
+{
+    protected override bool Exclusive => true;
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "auto", "release", "stick_return", "button" };
+}
+public class AnchorConv : ChoiceConverter
+{
+    protected override bool Exclusive => true;
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "hand", "hand_locked", "head", "head_locked" };
+}
+public class MethodConv : ChoiceConverter
+{
+    protected override bool Exclusive => true;
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "thumbstick", "point", "both" };
+}
+public class SelHandConv : ChoiceConverter
+{
+    protected override bool Exclusive => true;
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "opener", "left", "right" };
+}
+public class CompConv : ChoiceConverter
+{
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "trigger", "grip", "primary", "secondary", "thumbstick", "menu" };
+}
+public class WheelNameConv : ChoiceConverter
+{
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => MainForm.Current?.Profile?.Wheels.Keys.ToArray() ?? Array.Empty<string>();
+}
 public class LayerConv : ChoiceConverter
 {
     protected override IEnumerable<string> Values(ITypeDescriptorContext c)
