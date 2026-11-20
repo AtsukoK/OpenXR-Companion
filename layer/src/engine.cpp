@@ -20,12 +20,12 @@ void Engine::SetProfile(std::shared_ptr<Profile> p) {
             screen.windowAsk++;
         } else if (S.source == ScreenSource::Monitor)
             screen.source = ScreenSource::Monitor;
-        if (!scr.init) {
+        if (!screenMirror.run_.init) {
             screen.on = S.startOn;
-            scr.placeFront = screen.on;
-            scr.init = true;
+            screenMirror.run_.placeFront = screen.on;
+            screenMirror.run_.init = true;
         } else if (screen.on)
-            scr.placeFront = true;
+            screenMirror.run_.placeFront = true;
         offs = prof->offsets; // controller offsets: the file's values (also after the editor saves)
         offsetsPanel.run_.sel = offs.linkHands ? 2 : (offsetsPanel.run_.sel == 2 ? 1 : offsetsPanel.run_.sel);
         offsetsPanel.run_.kind = offs.aimSame ? 2 : (offsetsPanel.run_.kind == 2 ? 0 : offsetsPanel.run_.kind);
@@ -49,9 +49,9 @@ void Engine::Reset() {
     offGrabHand = -1;
     offsetsPanel.run_.uiHand = -1;
     offsetsPanel.run_.saveAt = -1;
-    if (scr.mouseL) Keys::MouseButton(0, false);
-    if (scr.mouseR) Keys::MouseButton(1, false);
-    scr.mouseL = scr.mouseR = false;
+    if (screenMirror.run_.mouseL) Keys::MouseButton(0, false);
+    if (screenMirror.run_.mouseR) Keys::MouseButton(1, false);
+    screenMirror.run_.mouseL = screenMirror.run_.mouseR = false;
     screen.hoverHand = -1;
     Keys::ReleaseAll();
     keyToggles.clear();
@@ -450,8 +450,8 @@ void Engine::UpdatePointers() {
         if (kb.visible) test(kb.pose, kb.widthM / 2, kb.heightM / 2);
         if (screen.interactive && screen.hoverHand == h)
             test(screen.pose, screen.widthM / 2 * 1.2f, screen.widthM * screen.aspect / 2 * 1.2f);
-        if (scr.uiHand == h && screen.pickOpen) test(screen.pickPose, screen.pickW / 2, screen.pickH / 2);
-        if (scr.uiHand == h && screen.barVisible) test(screen.barPose, screen.barW / 2, screen.barH / 2);
+        if (screenMirror.run_.uiHand == h && screen.pickOpen) test(screen.pickPose, screen.pickW / 2, screen.pickH / 2);
+        if (screenMirror.run_.uiHand == h && screen.barVisible) test(screen.barPose, screen.barW / 2, screen.barH / 2);
         if (offView.open && h != offGrabHand) test(offView.pose, offView.w / 2, offView.h / 2);
         int panel = 1 - h; // a hand points at the panel on the other arm
         const WristView& wv = wrist[panel];
@@ -532,7 +532,7 @@ void Engine::ComputeBlocks() {
         int h = screen.hoverHand;
         want[h][C_TRIGGER] = want[h][C_BTN1] = want[h][C_STICK] = true;
     }
-    if (scr.uiHand >= 0) want[scr.uiHand][C_TRIGGER] = true;
+    if (screenMirror.run_.uiHand >= 0) want[screenMirror.run_.uiHand][C_TRIGGER] = true;
     if (offsetsPanel.run_.uiHand >= 0) want[offsetsPanel.run_.uiHand][C_TRIGGER] = want[offsetsPanel.run_.uiHand][C_STICK] = true;
     if (offsetsPanel.run_.grabArmed || offGrabHand >= 0) want[0][C_GRIP] = want[1][C_GRIP] = true; // grab-to-set uses the grips
     for (int h = 0; h < 2; h++) // the pressing (other) hand's trigger belongs to the panel while over a button
@@ -603,7 +603,7 @@ void Engine::Update(const Frame& f) {
     keyboard.Update();
     UpdateWrist(0);
     UpdateWrist(1);
-    UpdateScreen(); // places a docked screen/keyboard too, before the screen takes the pointer
+    screenMirror.Update(); // places a docked screen/keyboard too, before the screen takes the pointer
     keyboard.UpdateBar();
     offsetsPanel.Update();
     ComputeBlocks();
@@ -640,4 +640,8 @@ bool Engine::OffsetPose(int hand, int kind, XrPosef& out) const {
 
 void Engine::OffsetsAction(const Action& a) {
     offsetsPanel.OffsetsAction(a);
+}
+
+void Engine::ScreenAction(const Action& a) {
+    screenMirror.ScreenAction(a);
 }

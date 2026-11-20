@@ -1,5 +1,6 @@
 #pragma once
 #include "config.h"
+#include "screen_mirror.h"
 #include "engine_types.h"
 #include "vr_keyboard.h"
 #include "offsets_panel.h"
@@ -177,10 +178,12 @@ struct PointerView {
 };
 
 class Engine {
+    friend class ScreenMirror;
     friend class OffsetsPanel;
     friend class VrKeyboard;
 
 public:
+    void ScreenAction(const Action& a);  // screen on/off, monitor, frame rate, place
     void OffsetsAction(const Action& a); // panel, enable, on, off, grab, reset
     bool OffsetPose(int hand, int kind, XrPosef& out) const;
     std::shared_ptr<Profile> prof;
@@ -214,9 +217,9 @@ public:
     bool Active() const { return prof && prof->enabled; }
     // Is this action a toggle that is currently on? (key toggle, game input toggle, layer)
     bool IsOn(const Action& a) const;
-    void ScreenAction(const Action& a); // screen on/off, monitor, frame rate, place
 
 private:
+    ScreenMirror screenMirror{ *this };
     VrKeyboard keyboard{ *this };
     OffsetsPanel offsetsPanel{ *this };
     struct BState {
@@ -279,33 +282,7 @@ private:
     // ---------------- VR keyboard (keyboard.cpp)
 
     // ---------------- mirrored screen (screen_ui.cpp)
-    struct ScreenRun {
-        bool init = false;       // the profile's start-on setting has been applied
-        bool placeFront = false; // put it in front of the head on the next update
-        XrPosef frontPose{ { 0, 0, 0, 1 }, { 0, 0, 0 } }, frontFrame{ { 0, 0, 0, 1 }, { 0, 0, 0 } };
-        bool mouseL = false, mouseR = false; // mouse buttons we hold down on the desktop
-        bool clicked = false;                // clicked into the desktop: give the game focus back later
-        int lastMx = -1, lastMy = -1;
-        float wheelAcc = 0; // stick scrolling, in notches
-        double leftAt = -1; // when the pointer left the screen after a click
-        int pickPage = 0;
-        std::vector<int> pickMap; // picker cell -> choice index
-        uint64_t seenChoices = 0;
-        PickerMode pickMode = PickerMode::Source;
-        double barUntil = -1, uiFlashUntil = 0;
-        int uiHand = -1; // the hand on the bar or picker this frame
-    } scr;
     PoseSmoother aimSmooth[2], screenSmooth;
-    void ScreenInteract();
-    void ScreenUi();
-    bool PanelRay(int h, const XrPosef& pose, float w, float hgt, float& u, float& v) const;
-    void OpenPicker();
-    void BuildPicker();
-    void PickerActivate(int cell);
-    void BarActivate(ScreenBarButton button);
-    bool ScreenRay(int h, float& u, float& v, float& t) const;
-    void UpdateScreen();
-    void ScreenPose();
 
     // ---------------- controller offsets panel (offsets.cpp)
 

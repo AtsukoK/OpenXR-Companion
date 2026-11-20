@@ -80,7 +80,7 @@ void VrKeyboard::Open(int bi) {
     Vec3 head = V(e.fr.head.position);
     run_.frame = YawFrame(e.fr.head);
     if (e.prof->kb.pose.set)
-        e.kb.pose = PMul(run_.frame, e.prof->kb.pose.p); // placed by hand in e.adjust mode
+        e.kb.pose = PMul(run_.frame, e.prof->kb.pose.p); // placed by hand in adjust mode
     else {
         Vec3 f = Rotate(e.fr.head.orientation, { 0, 0, -1 });
         f.y = 0;
@@ -177,7 +177,7 @@ void VrKeyboard::UpdatePlacing() {
     bool placing = e.adjust || e.kb.moving;
     if (e.grab.target == GrabTarget::Keyboard && (!placing || !e.kb.visible)) e.grab = Engine::GrabRun{};
     if (!placing || !e.kb.visible || (e.grab.Active() && e.grab.target != GrabTarget::Keyboard)) return;
-    if (e.prof->dock.mode == DockMode::KeysUnderScreen && e.screen.shown) return; // docked under the e.screen: Adjust dock places it
+    if (e.prof->dock.mode == DockMode::KeysUnderScreen && e.screen.shown) return; // docked under the screen: Adjust dock places it
     if (!e.grab.Active()) {
         for (int h = 0; h < 2; h++) {
             const HandRaw& hr = e.fr.h[h];
@@ -294,7 +294,7 @@ void VrKeyboard::ApplyDock() {
         e.kb.pose = PMul(e.screen.pose, PInv(rel));
     if (!e.dockAdjust || (e.grab.Active() && e.grab.target != GrabTarget::Dock)) return;
 
-    // Adjust dock: e.grab the one that follows (the e.screen, or the keyboard) and put it where you like.
+    // Adjust dock: grab the one that follows (the screen, or the keyboard) and put it where you like.
     if (!e.grab.Active()) {
         for (int h = 0; h < 2; h++) {
             const HandRaw& hr = e.fr.h[h];
@@ -374,7 +374,7 @@ void VrKeyboard::UpdateBar() {
     int hover = -1, hand = -1;
     for (int h = 0; h < 2 && hover < 0; h++) {
         float u, v;
-        if (!e.PanelRay(h, e.kb.barPose, e.kb.barW, e.kb.barH, u, v)) continue;
+        if (!e.screenMirror.PanelRay(h, e.kb.barPose, e.kb.barW, e.kb.barH, u, v)) continue;
         int n = (int)e.kb.barLabels.size();
         int c = (int)(u * n);
         if (c >= 0 && c < n && v >= 0 && v <= 1) {

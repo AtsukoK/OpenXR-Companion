@@ -9,6 +9,8 @@ class VrKeyboard {
 public:
     explicit VrKeyboard(Engine& engine) : e(engine) {}
 
+    double OpenedAt() const { return run_.openTime; } // presses right after opening are ignored
+
     void ApplyDock(); // after the screen: put the screen above the keyboard, or the keyboard under the screen
     void Close();
     XrPosef DockRel() const; // the screen in the keyboard's frame

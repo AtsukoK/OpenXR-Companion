@@ -342,7 +342,7 @@ void OffsetsPanel::Update() {
     for (int g = 0; g < 2 && run_.uiHand < 0; g++) {
         if (g == e.offGrabHand) continue;
         float u, v;
-        if (!e.PanelRay(g, e.offView.pose, e.offView.w, e.offView.h, u, v)) continue;
+        if (!e.screenMirror.PanelRay(g, e.offView.pose, e.offView.w, e.offView.h, u, v)) continue;
         run_.uiHand = g;
         for (int i = 0; i < (int)cells.size(); i++)
             if (u >= cells[i].x && u < cells[i].x + cells[i].w && v >= cells[i].y && v < cells[i].y + cells[i].h) hover = i;
