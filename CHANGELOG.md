@@ -1,11 +1,21 @@
 # Changelog
 
-## Unreleased
+## v0.2.9 (2026-11-20)
 
 ### Fixed
+- **Smoother in D3D12 games**: menus, toasts and the screen mirror no longer make the game wait for the GPU each time they redraw.
+- Less work on the game's threads: the layer no longer holds its lock while the frame is shown, looks up its settings folder only once, and the screen mirror hands frames over without copying them.
+- Profiles and settings are saved safely (written to a temp file, then swapped in), in the layer and the editor, so a crash can't leave a half-written profile.
+- **Grab to set** (Controller offsets) cancels itself after 5 seconds without a grip, so a stray press can't hold your grips back or change your offsets later.
+- The editor no longer rewrites the selected profile on every refresh (which made a running game reload and close open menus).
+- The "your defaults were moved" notice was written to the wrong place and never shown.
+- Editor, dark mode: key and steps boxes turned white while typing or recording a key, making the text unreadable.
+- The layer logs tracking changes and sudden jumps of the hands, to help find tracking problems.
 - **Steadying of the game's hands is safer.** A controller that loses tracking (or switches to hand tracking) is no longer steadied toward a stale or zero position, which could pull a hand or a body IK out of shape for a moment. When a game reads the hands at two times in one frame, both reads now get the same steadying instead of one raw and one steadied.
 
 ### New
+- **Adjust the VR keyboard any time**: an **Adjust keyboard** button on the bar under the keyboard (and a **Move** key on the keys) lets you grab the keyboard with a grip and place it, without Adjust mode. The stick changes its size; **Done adjusting** saves it.
+- **Use the mirrored screen while the keyboard is open**: point at the screen to move the mouse and click, and point at the keys to type, one hand each if you like.
 - **Dock the screen and the keyboard together** for easier typing into a mirrored window: a bar under the VR keyboard has **Dock screen above keys** (the screen sits just above the keyboard and moves with it), **Dock keys under screen** (the keyboard follows the screen), **Adjust dock** (grab the docked one with a grip and put it where you like; the stick sizes the docked screen) and **Close keyboard**. The choice and the spot are saved with the profile (also in Settings > VR keyboard).
 - **The profile you select in the editor is the one your games use**, always (it used to be a profile named after the game, else default.json). A running game switches within a second. If nothing is selected, the old order applies: the game's own profile, then `user_defaults.json`, then `default.json`.
 - **One-click updates**: the editor's orange **Update available** button now downloads the new release from GitHub, checks it against GitHub's SHA-256 checksum, keeps the current version in `_previous_version`, swaps the files (even while the editor or a game has them open) and restarts. Profiles and settings aren't touched. Falls back to the download page if the folder can't be written.
