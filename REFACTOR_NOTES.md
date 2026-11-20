@@ -22,3 +22,9 @@ after every step. Commit after every step.
 
 ## Progress
 (newest last)
+- 2026-11-20: step 1 done: GrabTarget, ScreenBarButton, PickerMode, KbBarButton, MirrorRequest (engine.h), DockMode (config.h) replace numbers.
+- 2026-11-20: quick_test.sh = build 64-bit layer + run tests (use it after every step; the full build_all.ps1 also builds x86 + editor).
+- 2026-11-20: step 2 started: tracking_log.h/.cpp (class TrackingLog), head_smoothing.h/.cpp (class HeadSmoother, owns its lock; the old gHeadMx is gone).
+  layer.cpp 1465 -> 1242 lines. Head smoothing is covered by the existing "real layer over a pretend runtime" tests.
+  Next in step 2: game hand offsets (OffsetLocation, gPoseBinds, gGameSpaces, gSpaceSmooth, gOff, gOffMx) -> class GameHandOffsets;
+  then the EndFrame drawing (Hook_xrEndFrame ~330 lines) -> compositor/overlay file; then input hooks (Evaluate, GetActionState*).
