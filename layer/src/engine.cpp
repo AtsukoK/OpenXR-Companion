@@ -664,8 +664,7 @@ void Engine::Update(const Frame& f) {
     UpdateKeyboard();
     UpdateWrist(0);
     UpdateWrist(1);
-    UpdateScreen();
-    ApplyDock();
+    UpdateScreen(); // places a docked screen/keyboard too, before the screen takes the pointer
     UpdateKbBar();
     UpdateOffsets();
     ComputeBlocks();
@@ -743,13 +742,14 @@ void Engine::UpdateScreen() {
     screen.shown = screen.on || adjust; // adjust mode shows it so it can be moved
     if (screen.shown && !wasShown) screenPlaceFront = true;
     if (grab.target == 3 && !screen.shown) grab = GrabRun{};
-    if (!screen.shown) { ScreenInteract(); return; }
+    if (!screen.shown) { ApplyDock(); ScreenInteract(); return; }
     ScreenStyle& S = prof->screen;
     ScreenPose();
     if (screen.poseValid && screen.place != "front" && grab.target != 3) {
         float dt = (float)std::clamp(now - lastNow, 0.0, 0.25);
         screen.pose = screenSmooth.Apply(screen.pose, dt, S.smoothing);
     } else screenSmooth.Reset();
+    ApplyDock(); // docked: the screen sits at the keyboard (or the keyboard at the screen) before pointing is checked
     ScreenInteract();
     if (!adjust || !screen.poseValid || (grab.target >= 0 && grab.target != 3)) return;
     if (kb.visible && prof->dock.mode != 0) return; // docked: Adjust dock (on the keyboard's bar) places it
@@ -862,7 +862,8 @@ bool Engine::ScreenRay(int h, float& u, float& v, float& t) const {
 // Point at the screen to move the mouse; trigger = left button, A/X = right button, stick = scroll.
 void Engine::ScreenInteract() {
     const ScreenStyle& S = prof->screen;
-    bool onWrist = screen.place == "wrist_left" || screen.place == "wrist_right";
+    bool dockedToKb = kb.visible && prof->dock.mode == 1; // it sits above the keyboard then, not on the arm
+    bool onWrist = !dockedToKb && (screen.place == "wrist_left" || screen.place == "wrist_right");
     int wh = screen.place == "wrist_left" ? 0 : 1;
     screen.interactive = S.interact && screen.on && screen.poseValid && !adjust && !wr.open && !(kb.visible && kbOpenTime > now - 0.25) && screen.monW > 0; // works next to the open keyboard too
     ScreenUi();
