@@ -28,3 +28,9 @@ after every step. Commit after every step.
   layer.cpp 1465 -> 1242 lines. Head smoothing is covered by the existing "real layer over a pretend runtime" tests.
   Next in step 2: game hand offsets (OffsetLocation, gPoseBinds, gGameSpaces, gSpaceSmooth, gOff, gOffMx) -> class GameHandOffsets;
   then the EndFrame drawing (Hook_xrEndFrame ~330 lines) -> compositor/overlay file; then input hooks (Evaluate, GetActionState*).
+- 2026-11-20: game_offsets.h/.cpp (class GameHandOffsets owns gOffMx's job + the TrackingLog; PoseKind enum; tests added).
+- 2026-11-20: overlay.h/.cpp: OverlayRenderer draws everything (screen + bar + picker, wheel, keyboard + bar, wrists + cursors,
+  offsets panel, pointers, fingertips, toast); OverlayQuad = swapchain + drawn version + quad. Screen source picking
+  (window by name/step, picker list, remembering the choice) lives there too (UpdateScreenSource, FillScreenChoices).
+  New test renders through it on a WARP D3D11 device with pretend swapchains. layer.cpp now 868 lines.
+  NOT yet tried in a headset. Next: input hooks (Evaluate/GetActionState*) + action set setup -> own file; then Engine split (step 3).
