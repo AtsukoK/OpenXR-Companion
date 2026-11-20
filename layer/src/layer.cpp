@@ -4,6 +4,7 @@
 #include "screen.h"
 #include "keys.h"
 #include "mirror.h"
+#include "tracking_log.h"
 #include <openxr/openxr_loader_negotiation.h>
 #include <unordered_map>
 #include <map>
@@ -180,80 +181,15 @@ static bool ParsePosePath(const std::string& s, PoseBind& b) {
     return false;
 }
 
-// Move one located pose: space' = space * Os, base' = base * Ob  ->  pose' = inv(Ob) * pose * Os.
-// Tracking diagnostics for the game's hand poses (grip/aim, located in a world space), under gOffMx.
-// Logs tracking state changes and big jumps at once; every 10 s a summary of reads and of how far
-// our offsets + steadying moved each hand (so a log from a glitch shows whether the layer moved it).
-struct TrackDiag {
-    uint64_t lastFlags = ~0ull; bool havePrev = false; XrPosef prev{}; XrTime prevT = 0;
-    int reads = 0, older = 0, untracked = 0, jumps = 0, changes = 0, lines = 0; // lines: written this 10 s (capped)
-    float movedSum = 0, movedMax = 0, turnedSum = 0, turnedMax = 0; int movedN = 0;
-};
-static TrackDiag gTrackDiag[2][2]; static double gTrackDiagT = 0;
-static const char* kHandName[2] = { "left", "right" }; static const char* kKindName[2] = { "grip", "aim" };
-static std::string FlagText(uint64_t f) {
-    std::string s;
-    s += (f & XR_SPACE_LOCATION_POSITION_VALID_BIT) ? (f & XR_SPACE_LOCATION_POSITION_TRACKED_BIT ? "position tracked" : "position guessed") : "position LOST";
-    s += ", ";
-    s += (f & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) ? (f & XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT ? "angle tracked" : "angle guessed") : "angle LOST";
-    return s;
-}
-static void TrackDiagRaw(const GameSpace& g, XrTime t, uint64_t flags, const XrPosef& raw) {
-    TrackDiag& d = gTrackDiag[g.hand][g.kind];
-    const char* hn = kHandName[g.hand]; const char* kn = kKindName[g.kind];
-    d.reads++;
-    const uint64_t full = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR_SPACE_LOCATION_POSITION_VALID_BIT |
-                          XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT | XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
-    if ((flags & full) != full) d.untracked++;
-    if (flags != d.lastFlags) { // at most 8 lines per pose per 10 s: a flickering hand must not flood the log
-        if (d.lastFlags != ~0ull) { d.changes++; if (d.lines++ < 8) Log("tracking: %s %s now %s", hn, kn, FlagText(flags).c_str()); }
-        else Log("tracking: %s %s first read: %s", hn, kn, FlagText(flags).c_str());
-        d.lastFlags = flags;
-    }
-    if (t < d.prevT) d.older++;
-    bool posOk = (flags & XR_SPACE_LOCATION_POSITION_VALID_BIT) != 0;
-    if (posOk && t > d.prevT) {
-        if (d.havePrev) {
-            float jump = Len(V(raw.position) - V(d.prev.position));
-            double gap = (t - d.prevT) * 1e-9;
-            if (jump > 0.2f && gap < 0.1) {
-                d.jumps++;
-                if (d.lines++ < 8) Log("tracking: %s %s JUMPED %.0f cm in %.0f ms (from %.2f %.2f %.2f to %.2f %.2f %.2f), %s", hn, kn, jump * 100.f, gap * 1000.0,
-                    d.prev.position.x, d.prev.position.y, d.prev.position.z, raw.position.x, raw.position.y, raw.position.z, FlagText(flags).c_str());
-            }
-        }
-        d.prev = raw; d.prevT = t; d.havePrev = true;
-    }
-}
-static void TrackDiagMoved(const GameSpace& g, const XrPosef& raw, const XrPosef& out) {
-    TrackDiag& d = gTrackDiag[g.hand][g.kind];
-    float m = Len(V(out.position) - V(raw.position));
-    XrQuaternionf dq = QMul(out.orientation, QInv(raw.orientation));
-    float a = 2.f * std::acos(std::min(1.f, std::fabs(dq.w))) * 57.2958f;
-    d.movedSum += m; d.movedMax = std::max(d.movedMax, m); d.turnedSum += a; d.turnedMax = std::max(d.turnedMax, a); d.movedN++;
-}
-static void TrackDiagSummary() {
-    double now = NowSec();
-    if (!gTrackDiagT) { gTrackDiagT = now; return; }
-    if (now - gTrackDiagT < 10.0) return;
-    gTrackDiagT = now;
-    for (int h = 0; h < 2; h++) for (int k = 0; k < 2; k++) {
-        TrackDiag& d = gTrackDiag[h][k];
-        if (!d.reads) continue;
-        float n = (float)std::max(1, d.movedN);
-        Log("tracking 10 s: %s %s reads %d (older time %d, not fully tracked %d, tracking changes %d, jumps %d%s); layer moved it %.1f cm avg / %.1f max, turned %.1f deg avg / %.1f max",
-            kHandName[h], kKindName[k], d.reads, d.older, d.untracked, d.changes, d.jumps, d.lines > 8 ? ", some lines not written" : "",
-            d.movedSum * 100.f / n, d.movedMax * 100.f, d.turnedSum / n, d.turnedMax);
-        d.reads = d.older = d.untracked = d.jumps = d.movedN = d.changes = d.lines = 0; d.movedSum = d.movedMax = d.turnedSum = d.turnedMax = 0;
-    }
-}
+static TrackingLog gTrackLog; // under gOffMx
 
+// Move one located pose: space' = space * Os, base' = base * Ob  ->  pose' = inv(Ob) * pose * Os.
 static void OffsetLocation(XrSpace space, XrSpace base, XrTime t, XrSpaceLocationFlags& flags, XrPosef& pose, XrSpaceVelocityFlags* vflags, XrVector3f* lin, XrVector3f* ang) {
     std::lock_guard l(gOffMx);
     {
         auto is = gGameSpaces.find((uint64_t)space);
-        if (is != gGameSpaces.end() && !gGameSpaces.count((uint64_t)base)) TrackDiagRaw(is->second, t, flags, pose);
-        TrackDiagSummary();
+        if (is != gGameSpaces.end() && !gGameSpaces.count((uint64_t)base)) gTrackLog.Read(is->second.hand, is->second.kind, t, flags, pose);
+        gTrackLog.Summary(NowSec());
     }
     if (!(flags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)) return;
     if (!gOff.on || gGameSpaces.empty()) return;
@@ -277,7 +213,7 @@ static void OffsetLocation(XrSpace space, XrSpace base, XrTime t, XrSpaceLocatio
         SpaceSmooth& ss = gSpaceSmooth[{ (uint64_t)space, (uint64_t)base }];
         p = ss.st.Step(t, p, flags, gOff.smooth); // untracked poses pass through and restart the filter
     }
-    if (is != gGameSpaces.end() && ib == gGameSpaces.end()) TrackDiagMoved(is->second, pose, p);
+    if (is != gGameSpaces.end() && ib == gGameSpaces.end()) gTrackLog.Moved(is->second.hand, is->second.kind, pose, p);
     pose = p;
 }
 

@@ -3,7 +3,7 @@ project(OpenXRCompanion CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 add_library(OpenXRCompanion SHARED
-    src/layer.cpp src/engine.cpp src/keyboard.cpp src/wrist.cpp src/config.cpp src/keys.cpp src/panel.cpp src/common.cpp src/screen.cpp src/wincap.cpp src/offsets.cpp src/mirror.cpp)
+    src/layer.cpp src/engine.cpp src/keyboard.cpp src/wrist.cpp src/config.cpp src/keys.cpp src/panel.cpp src/common.cpp src/screen.cpp src/wincap.cpp src/offsets.cpp src/mirror.cpp src/tracking_log.cpp)
 target_include_directories(OpenXRCompanion PRIVATE
     ${CMAKE_SOURCE_DIR}/../third_party/openxr-sdk/include
     ${CMAKE_SOURCE_DIR}/../third_party)
@@ -17,7 +17,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
 endif()
 
 add_executable(vro_test test/test.cpp
-    src/engine.cpp src/keyboard.cpp src/wrist.cpp src/config.cpp src/keys.cpp src/panel.cpp src/common.cpp src/screen.cpp src/wincap.cpp src/offsets.cpp src/mirror.cpp)
+    src/engine.cpp src/keyboard.cpp src/wrist.cpp src/config.cpp src/keys.cpp src/panel.cpp src/common.cpp src/screen.cpp src/wincap.cpp src/offsets.cpp src/mirror.cpp src/tracking_log.cpp)
 target_include_directories(vro_test PRIVATE
     ${CMAKE_SOURCE_DIR}/../third_party/openxr-sdk/include
     ${CMAKE_SOURCE_DIR}/../third_party)
