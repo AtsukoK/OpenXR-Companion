@@ -5,6 +5,7 @@
 #include "keys.h"
 #include "mirror.h"
 #include "tracking_log.h"
+#include "head_smoothing.h"
 #include <openxr/openxr_loader_negotiation.h>
 #include <unordered_map>
 #include <map>
@@ -50,24 +51,8 @@ static FILETIME gMirrorFileTime{};
 static double gLastMirrorCheck = -10;
 
 // ---------------------------------------------------------------- head smoothing (experimental)
-// The game is handed a steadied head (direction only; position stays real). In "headset" mode the
-// frame is then submitted with the real head pose, so the compositor shows the steadied picture as is.
-static std::mutex gHeadMx;
-static HeadSmoothSettings gHeadSet;
+static HeadSmoother gHeadSmooth;
 static FILETIME gHeadFileTime{};
-static HeavyCam gHeadSm;
-static XrTime gHeadLastT = 0;
-static XrQuaternionf gHeadD{ 0, 0, 0, 1 }; // steadied * inverse(real) for gHeadLastT
-struct HeadRec { XrTime t = 0; XrSpace space = XR_NULL_HANDLE; XrPosef real{ {0,0,0,1}, {0,0,0} }, sm{ {0,0,0,1}, {0,0,0} }; }; // the head, real and steadied, in that space
-static HeadRec gHeadRecs[8];
-static int gHeadRecNext = 0;
-static std::set<uint64_t> gViewSpaces;                // the game's VIEW reference spaces (its head)
-// diagnostics (head smoothing): how this game asks for its head, counted per 10 s
-static int gDiagViewsWorld = 0, gDiagViewsHead = 0, gDiagHeadLocates = 0, gDiagFrames = 0, gDiagFrameNoRec = 0;
-static bool gDiagSaidViews[2] = {}, gDiagSaidLocate = false, gDiagSaidFrame = false;
-static bool gHeadLogged = false;                      // "in use" written for this run of it
-static double gHeadStatT = 0; static float gHeadLagSum = 0, gHeadLagMax = 0; static int gHeadLagN = 0;
-static int gHeadSwapOk = 0, gHeadSwapMiss = 0;
 
 // ---------------------------------------------------------------- our action set
 enum OA { A_BTN1, A_BTN1T, A_BTN2, A_BTN2T, A_TRIG, A_TRIGT, A_GRIP, A_STICK, A_STICKC, A_STICKT, A_REST, A_MENU, A_GRIPPOSE, A_AIMPOSE, A_HAPTIC, A_COUNT };
@@ -359,7 +344,7 @@ static void CheckHeadSmoothingFile() {
         Log("head smoothing: was on, switched off at game start (keep_on is false)");
     }
     firstLoad = false;
-    bool was; { std::lock_guard hl(gHeadMx); was = gHeadSet.on; gHeadSet = hs; }
+    bool was = gHeadSmooth.SetSettings(hs);
     Log("head smoothing: settings read: %s, mode %s, strength %.2f", hs.on ? "ON" : "off", hs.mode == 1 ? "headset" : "recording", hs.strength);
     if (hs.on != was) gEng.Toast(hs.on ? "Head smoothing ON (experimental: stop if you feel unwell)" : "Head smoothing off", 3.0);
 }
@@ -640,166 +625,22 @@ static XrResult XRAPI_CALL Hook_xrDestroySpace(XrSpace sp) {
         for (auto it = gSpaceSmooth.begin(); it != gSpaceSmooth.end();)
             if (it->first.first == (uint64_t)sp || it->first.second == (uint64_t)sp) it = gSpaceSmooth.erase(it); else ++it;
     }
-    { std::lock_guard hl(gHeadMx); gViewSpaces.erase((uint64_t)sp); }
+    gHeadSmooth.RemoveViewSpace(sp);
     return N.DestroySpace(sp);
 }
 
-// One step of the heavy camera for the head at time t: returns the turn from the real head to the steadied one.
-// Called with gHeadMx held. false = head smoothing is off.
-// The steadied direction for each recent time (the game asks for several times per frame, e.g. Unreal's
-// game and render threads): an older time gets the camera it had then, not the newest one.
-struct HeadHist { XrTime t = 0; XrQuaternionf sm{ 0,0,0,1 }; };
-static HeadHist gHeadHist[64]; static int gHeadHistNext = 0;
-static XrQuaternionf HeadAt(XrTime t, const XrQuaternionf& fallback) {
-    const HeadHist *lo = nullptr, *hi = nullptr; // the nearest times before and after t
-    for (auto& h : gHeadHist) {
-        if (!h.t) continue;
-        if (h.t <= t && (!lo || h.t > lo->t)) lo = &h;
-        if (h.t >= t && (!hi || h.t < hi->t)) hi = &h;
-    }
-    if (lo && hi && hi->t > lo->t) { // in between two: blend by time
-        float k = (float)(t - lo->t) / (float)(hi->t - lo->t);
-        XrQuaternionf a = lo->sm, b = hi->sm;
-        if (a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w < 0) b = { -b.x, -b.y, -b.z, -b.w };
-        XrQuaternionf q{ a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k, a.z + (b.z - a.z) * k, a.w + (b.w - a.w) * k };
-        float l = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
-        return l > 1e-6f ? XrQuaternionf{ q.x / l, q.y / l, q.z / l, q.w / l } : a;
-    }
-    if (lo) return lo->sm;
-    if (hi) return hi->sm;
-    return fallback;
-}
-static bool HeadStep(XrTime t, const XrQuaternionf& real, XrQuaternionf& D) {
-    if (!gHeadSet.on || gHeadSet.strength <= 0.001f) {
-        if (gHeadLogged) { Log("head smoothing: stopped"); gHeadLogged = false; }
-        gHeadSm.Reset(); gHeadLastT = 0; gHeadD = { 0, 0, 0, 1 }; for (auto& h : gHeadHist) h = HeadHist{}; return false;
-    }
-    if (t > gHeadLastT) { // a newer time: one step (asked again for the same or an older time: the same turn)
-        float dt = gHeadLastT && t > gHeadLastT ? std::min(0.1f, (float)((t - gHeadLastT) * 1e-9)) : 0.f;
-        XrQuaternionf sm = gHeadSm.Apply(real, dt, gHeadSet.strength);
-        gHeadD = QMul(sm, QInv(real));
-        gHeadLastT = t;
-        gHeadHist[gHeadHistNext] = { t, sm }; gHeadHistNext = (gHeadHistNext + 1) % 64;
-        if (!gHeadLogged) { gHeadLogged = true; gHeadStatT = NowSec(); Log("head smoothing: in use, mode %s, strength %.2f (about %.2f s of camera lag)", gHeadSet.mode == 1 ? "headset" : "recording", gHeadSet.strength, 0.12f * gHeadSet.strength); }
-        float lag = 2.f * std::acos(std::min(1.f, std::fabs(gHeadD.w))) * 57.2958f;
-        gHeadLagSum += lag; gHeadLagMax = std::max(gHeadLagMax, lag); gHeadLagN++;
-        if (NowSec() - gHeadStatT > 10.0 && gHeadLagN > 0) {
-            Log("head smoothing: last 10 s the camera trailed your head by %.1f deg on average, %.1f deg at most%s", gHeadLagSum / gHeadLagN, gHeadLagMax,
-                gHeadSet.mode == 1 ? (" ; frames shown as steadied: " + std::to_string(gHeadSwapOk) + ", not matched: " + std::to_string(gHeadSwapMiss)).c_str() : "");
-            Log("head smoothing: calls in 10 s: eye views in world %d, eye views relative to head %d, head reads %d, frames %d (no head record for %d)",
-                gDiagViewsWorld, gDiagViewsHead, gDiagHeadLocates, gDiagFrames, gDiagFrameNoRec);
-            gHeadStatT = NowSec(); gHeadLagSum = gHeadLagMax = 0; gHeadLagN = 0; gHeadSwapOk = gHeadSwapMiss = 0;
-            gDiagViewsWorld = gDiagViewsHead = gDiagHeadLocates = gDiagFrames = gDiagFrameNoRec = 0;
-        }
-    }
-    D = QMul(HeadAt(t, real), QInv(real)); // the camera for this time, whatever the real head is in this call
-    return true;
-}
-static void HeadRecord(XrTime t, XrSpace space, const XrPosef& real, const XrPosef& sm) {
-    if (gHeadSet.mode != 1) return;
-    int last = (gHeadRecNext + 7) % 8;
-    HeadRec& r = (gHeadRecs[last].t == t && gHeadRecs[last].space == space) ? gHeadRecs[last] : gHeadRecs[gHeadRecNext];
-    if (&r == &gHeadRecs[gHeadRecNext]) gHeadRecNext = (gHeadRecNext + 1) % 8;
-    r.t = t; r.space = space; r.real = real; r.sm = sm;
-}
-
-// Games that ask for the eye views in their world (most Unity / native games): steady them here.
+// Games that ask for the eye views in their world (most Unity / native games): steadied here.
 static XrResult XRAPI_CALL Hook_xrLocateViews(XrSession s, const XrViewLocateInfo* li, XrViewState* vs, uint32_t cap, uint32_t* cnt, XrView* views) {
     XrResult r = N.LocateViews(s, li, vs, cap, cnt, views);
     if (XR_FAILED(r) || !li || !vs || !cnt || !views || cap == 0) return r;
-    std::lock_guard hl(gHeadMx);
-    bool rel = gViewSpaces.count((uint64_t)li->space) > 0;
-    if (gHeadSet.on) {
-        (rel ? gDiagViewsHead : gDiagViewsWorld)++;
-        if (!gDiagSaidViews[rel]) { gDiagSaidViews[rel] = true; Log("head smoothing: the game asks for its eye views %s", rel ? "relative to its head (Unreal style)" : "in its world"); }
-    }
-    if (rel) return r; // eyes relative to the head (Unreal): the head itself is steadied in LocateSpace
-    if (!(vs->viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT)) return r;
-    uint32_t n = std::min(*cnt, cap);
-    if (n == 0) return r;
-    Vec3 c{};
-    for (uint32_t i = 0; i < n; i++) c = c + V(views[i].pose.position);
-    c = c * (1.f / n);
-    XrQuaternionf D;
-    if (!HeadStep(li->displayTime, views[0].pose.orientation, D)) return r;
-    XrPosef realHead{ views[0].pose.orientation, X(c) }, smHead{ QMul(D, views[0].pose.orientation), X(c) };
-    for (uint32_t i = 0; i < n; i++) {
-        XrPosef& p = views[i].pose;
-        Vec3 off = Rotate(D, V(p.position) - c);
-        p.orientation = QMul(D, p.orientation);
-        p.position = X(c + off);
-    }
-    HeadRecord(li->displayTime, li->space, realHead, smHead);
+    gHeadSmooth.OnLocateViews(*li, *vs, std::min(*cnt, cap), views);
     return r;
-}
-
-// Games that read the head (their VIEW space) on its own and the eyes relative to it (Unreal): steady the head here.
-static void HeadLocation(XrSpace space, XrSpace base, XrTime t, XrSpaceLocationFlags flags, XrPosef& pose) {
-    if (!(flags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)) return;
-    std::lock_guard hl(gHeadMx);
-    if (!gViewSpaces.count((uint64_t)space) || gViewSpaces.count((uint64_t)base)) return;
-    if (gHeadSet.on) { gDiagHeadLocates++; if (!gDiagSaidLocate) { gDiagSaidLocate = true; Log("head smoothing: the game reads its head on its own (Unreal style): steadying it there"); } }
-    XrQuaternionf D;
-    if (!HeadStep(t, pose.orientation, D)) return;
-    XrPosef real = pose;
-    pose.orientation = QMul(D, pose.orientation);
-    HeadRecord(t, base, real, pose);
-}
-
-// "headset" mode: hand the compositor the real head pose for views the game rendered from the steadied one.
-static const XrFrameEndInfo* HeadSmoothEndFrame(const XrFrameEndInfo* fi) {
-    static XrFrameEndInfo out;
-    static std::vector<XrCompositionLayerProjection> projs;
-    static std::vector<XrCompositionLayerProjectionView> pviews;
-    static std::vector<const XrCompositionLayerBaseHeader*> ptrs;
-    std::lock_guard hl(gHeadMx);
-    if (gHeadSet.on && fi) {
-        gDiagFrames++;
-        for (uint32_t i = 0; i < fi->layerCount; i++) if (fi->layers[i] && fi->layers[i]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION && !gDiagSaidFrame) {
-            gDiagSaidFrame = true;
-            auto* pl = (const XrCompositionLayerProjection*)fi->layers[i];
-            Log("head smoothing: the game hands in its frames in space %llx (%s), %u views", (unsigned long long)(uint64_t)pl->space,
-                gViewSpaces.count((uint64_t)pl->space) ? "its head space" : "a world space", pl->viewCount);
-        }
-    }
-    if (!gHeadSet.on || gHeadSet.mode != 1 || !fi) return fi;
-    size_t nv = 0, np = 0;
-    for (uint32_t i = 0; i < fi->layerCount; i++) if (fi->layers[i] && fi->layers[i]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION) {
-        np++; nv += ((const XrCompositionLayerProjection*)fi->layers[i])->viewCount;
-    }
-    if (!np) return fi;
-    projs.assign(np, {}); pviews.assign(nv, {}); ptrs.assign(fi->layers, fi->layers + fi->layerCount);
-    bool changed = false; size_t pi = 0, vi = 0;
-    for (uint32_t i = 0; i < fi->layerCount; i++) {
-        if (!fi->layers[i] || fi->layers[i]->type != XR_TYPE_COMPOSITION_LAYER_PROJECTION) continue;
-        auto* src = (const XrCompositionLayerProjection*)fi->layers[i];
-        XrCompositionLayerProjection& p = projs[pi++];
-        p = *src; p.views = pviews.data() + vi;
-        const HeadRec* rec = nullptr; XrTime best = 3000000; // within 3 ms of the frame's time
-        for (auto& h : gHeadRecs) {
-            if (!h.t || h.space != src->space) continue;
-            XrTime d = h.t > fi->displayTime ? h.t - fi->displayTime : fi->displayTime - h.t;
-            if (d <= best) { best = d; rec = &h; }
-        }
-        if (!rec) gDiagFrameNoRec++;
-        XrPosef fix = rec ? PMul(rec->real, PInv(rec->sm)) : XrPosef{ {0,0,0,1}, {0,0,0} }; // steadied head -> real head
-        for (uint32_t k = 0; k < src->viewCount; k++) {
-            XrCompositionLayerProjectionView& v = pviews[vi++];
-            v = src->views[k];
-            if (rec) { v.pose = PMul(fix, v.pose); changed = true; }
-        }
-        ptrs[i] = (const XrCompositionLayerBaseHeader*)&p;
-    }
-    if (changed) gHeadSwapOk++; else gHeadSwapMiss++;
-    if (!changed) return fi;
-    out = *fi; out.layers = ptrs.data();
-    return &out;
 }
 
 static XrResult XRAPI_CALL Hook_xrCreateReferenceSpace(XrSession s, const XrReferenceSpaceCreateInfo* ci, XrSpace* sp) {
     XrResult r = N.CreateReferenceSpace(s, ci, sp);
     if (XR_SUCCEEDED(r) && ci && sp && ci->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_VIEW) {
-        std::lock_guard hl(gHeadMx); gViewSpaces.insert((uint64_t)*sp);
+        gHeadSmooth.AddViewSpace(*sp);
         Log("game made a VIEW space (its head): head smoothing steadies it there too");
     }
     return r;
@@ -808,7 +649,7 @@ static XrResult XRAPI_CALL Hook_xrCreateReferenceSpace(XrSession s, const XrRefe
 static XrResult XRAPI_CALL Hook_xrLocateSpace(XrSpace sp, XrSpace base, XrTime t, XrSpaceLocation* loc) {
     XrResult r = N.LocateSpace(sp, base, t, loc);
     if (XR_FAILED(r) || !loc) return r;
-    HeadLocation(sp, base, t, loc->locationFlags, loc->pose);
+    gHeadSmooth.OnLocateSpace(sp, base, t, loc->locationFlags, loc->pose);
     XrSpaceVelocity* vel = nullptr;
     for (auto* n = (XrBaseOutStructure*)loc->next; n; n = n->next) if (n->type == XR_TYPE_SPACE_VELOCITY) vel = (XrSpaceVelocity*)n;
     OffsetLocation(sp, base, t, loc->locationFlags, loc->pose, vel ? &vel->velocityFlags : nullptr, vel ? &vel->linearVelocity : nullptr, vel ? &vel->angularVelocity : nullptr);
@@ -820,7 +661,7 @@ static void OffsetLocations(const XrSpacesLocateInfo* li, XrSpaceLocations* sl) 
     XrSpaceVelocities* vel = nullptr;
     for (auto* n = (XrBaseOutStructure*)sl->next; n; n = n->next) if (n->type == XR_TYPE_SPACE_VELOCITIES) vel = (XrSpaceVelocities*)n;
     uint32_t n = std::min(li->spaceCount, sl->locationCount);
-    for (uint32_t i = 0; i < n; i++) HeadLocation(li->spaces[i], li->baseSpace, li->time, sl->locations[i].locationFlags, sl->locations[i].pose);
+    for (uint32_t i = 0; i < n; i++) gHeadSmooth.OnLocateSpace(li->spaces[i], li->baseSpace, li->time, sl->locations[i].locationFlags, sl->locations[i].pose);
     for (uint32_t i = 0; i < n; i++) {
         bool hv = vel && vel->velocities && i < vel->velocityCount;
         OffsetLocation(li->spaces[i], li->baseSpace, li->time, sl->locations[i].locationFlags, sl->locations[i].pose,
@@ -1000,7 +841,7 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
     // The lock covers our work only, never the runtime's xrEndFrame: that can wait for the compositor
     // for milliseconds, and the game's input thread (xrSyncActions, xrGetActionState*) needs this lock.
     std::unique_lock l(gMx);
-    if (s == gSess) fi = HeadSmoothEndFrame(fi);
+    if (s == gSess) fi = gHeadSmooth.OnEndFrame(fi);
     if (s != gSess || !fi || !gEng.Active() || !gGfx.api) {
         if (s == gSess && fi && gMirror.On() && gGfx.api == 11) MirrorFrame(std::vector<const XrCompositionLayerBaseHeader*>(fi->layers, fi->layers + fi->layerCount), fi->displayTime);
         l.unlock();
@@ -1382,7 +1223,7 @@ static XrResult XRAPI_CALL Hook_xrCreateApiLayerInstance(const XrInstanceCreateI
     LoadMirrorSettings(gMirrorSet);
     CheckHeadSmoothingFile();
     Log("instance created for '%s' (%s), OpenXR Companion layer built %s %s", info->applicationInfo.applicationName, ExeName().c_str(), __DATE__, __TIME__);
-    { std::lock_guard hl(gHeadMx); Log("head smoothing at start: %s", gHeadSet.on ? (gHeadSet.mode == 1 ? "on, in the headset" : "on, for recording") : "off (switch it on in the editor while the game runs, or tick Keep it on)"); }
+    Log("head smoothing at start: %s", gHeadSmooth.StateText().c_str());
     return r;
 }
 
