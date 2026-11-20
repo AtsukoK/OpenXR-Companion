@@ -58,6 +58,15 @@ after every step. Commit after every step.
   BindingBlock, TextUp, PressMethod, LaserCorrection. Unknown text keeps the old behaviour (errors where it errored, else
   the old fall-through value). No raw-string setting comparisons left outside config.cpp. dist2 refreshed.
 
+- 2026-11-20: user TESTED dist2 (refactor up to the enums): works. Merged into main (671ae67), local only.
+- 2026-11-21: ENGINE SPLIT (in this branch, not merged yet): feature classes OffsetsPanel (offsets_panel.*), VrKeyboard
+  (vr_keyboard.*), ScreenMirror (screen_mirror.*), WristPanels (wrist_panels.*). Each owns its state (run_) and logic,
+  holds `Engine& e`, Engine lists them as friends and holds one of each. engine_types.h has the shared enums.
+  Engine public section grouped by purpose. Done with tools/split_feature.py + tools/fix_loop.py (compile-driven).
+  LESSON: after engine.h layout changes do a CLEAN build (rm -rf layer/build layer/build32): a stale layer.cpp object
+  crashed the pretend-runtime test once. Tests now print unbuffered. dist2 refreshed 2026-11-21 00:08 (clean build).
+  Needs a headset test, then merge into main.
+
 ## Status / resume here
 Done: steps 1, 2, 4 (layer, via clang-format), 6 (editor file split), 7; most of 3 (files per feature + grouped state; still one Engine class);
 part of 5 (support header + part tests; the engine-flow tests in test.cpp share one running engine, so they stay together).
