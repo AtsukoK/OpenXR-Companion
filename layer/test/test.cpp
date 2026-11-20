@@ -378,6 +378,7 @@ static bool D3D12PanelRun(std::vector<uint32_t>& got, uint32_t& want, int& uploa
 }
 
 int main(int argc, char** argv) {
+    setvbuf(stdout, nullptr, _IONBF, 0); // every line reaches the console, even if a test crashes
     // Always the app's built-in default profile, never the user's own bindings.
     std::string err;
     auto p = ParseProfileText(DefaultProfileJson(), err);

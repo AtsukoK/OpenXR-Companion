@@ -51,7 +51,7 @@ for d in fwd_decls:
     eh = eh.replace('public:\n', 'public:\n    ' + d + '\n', 1)
 
 # 3. member + friend in Engine
-eh = eh.replace('class Engine {\npublic:\n', 'class Engine {\n    friend class ' + cls + ';\n\npublic:\n', 1)
+eh = eh.replace('class Engine {\n', 'class Engine {\n    friend class ' + cls + ';\n', 1)
 eh = re.sub(r'(\nprivate:\n)', r'\1    ' + cls + ' ' + member + '{ *this };\n', eh, count=1)
 eh = eh.replace('#include "config.h"\n', '#include "config.h"\n#include "' + header + '"\n', 1)
 write('engine.h', eh)

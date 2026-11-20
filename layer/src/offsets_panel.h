@@ -1,6 +1,7 @@
 #pragma once
 // Controller offsets panel in the headset: +/- buttons, stick sliders, grab-to-set and resets; and the offsets the layer applies to the game.
 #include "config.h"
+#include "engine_types.h"
 
 class Engine;
 

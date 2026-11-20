@@ -35,7 +35,7 @@ void Engine::SetProfile(std::shared_ptr<Profile> p) {
 void Engine::Reset() {
     if (wr.open) CloseWheel();
     kb = KeyboardView{};
-    kbRun.repeatKey = kbRun.repeatHand = -1;
+    keyboard.run_.repeatKey = keyboard.run_.repeatHand = -1;
     for (int h = 0; h < 2; h++) {
         wrist[h] = WristView{};
         wrun[h] = WristRun{};
@@ -265,7 +265,7 @@ bool Engine::RunAction(const Action& a, int hand, int bi, bool fromWheel) {
         reloadRequested = true;
         return false;
     case ActType::Keyboard:
-        OpenKeyboard(bi);
+        keyboard.Open(bi);
         return false;
     case ActType::Screen:
         ScreenAction(a);
@@ -599,12 +599,12 @@ void Engine::Update(const Frame& f) {
     UpdateWheel();
     UpdateAdjustWheel();
     UpdateAdjustFade();
-    UpdateAdjustKeyboard();
-    UpdateKeyboard();
+    keyboard.UpdatePlacing();
+    keyboard.Update();
     UpdateWrist(0);
     UpdateWrist(1);
     UpdateScreen(); // places a docked screen/keyboard too, before the screen takes the pointer
-    UpdateKbBar();
+    keyboard.UpdateBar();
     offsetsPanel.Update();
     ComputeBlocks();
     UpdatePointers();

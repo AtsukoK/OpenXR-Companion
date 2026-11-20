@@ -1,5 +1,7 @@
 #pragma once
 #include "config.h"
+#include "engine_types.h"
+#include "vr_keyboard.h"
 #include "offsets_panel.h"
 #include <set>
 
@@ -153,19 +155,6 @@ struct OffsetView {
 };
 
 // Things that can be grabbed with a grip and placed by hand.
-// Buttons of the bar under the mirrored screen, left to right.
-enum class ScreenBarButton { Choose, FrameRate, Move, Keyboard, Adjust, Hide };
-// What the screen picker lists: what to show (monitors, windows), or where to put the screen.
-enum class PickerMode { Source, Place };
-// Buttons of the bar under the VR keyboard, left to right.
-enum class KbBarButton { DockScreen, DockKeys, AdjustDock, AdjustKeyboard, Close };
-// What a wheel or wrist button asks of the headset mirror window (the layer does it).
-enum class MirrorRequest { None, Toggle, On, Off };
-
-enum class GrabTarget { None = -1, LeftWrist = 0, RightWrist = 1, Wheel, Screen, Keyboard, Dock };
-inline GrabTarget WristGrab(int hand) {
-    return hand == 0 ? GrabTarget::LeftWrist : GrabTarget::RightWrist;
-}
 
 struct HapticReq {
     int hand;
@@ -189,6 +178,7 @@ struct PointerView {
 
 class Engine {
     friend class OffsetsPanel;
+    friend class VrKeyboard;
 
 public:
     void OffsetsAction(const Action& a); // panel, enable, on, off, grab, reset
@@ -227,6 +217,7 @@ public:
     void ScreenAction(const Action& a); // screen on/off, monitor, frame rate, place
 
 private:
+    VrKeyboard keyboard{ *this };
     OffsetsPanel offsetsPanel{ *this };
     struct BState {
         bool armed = false;
@@ -278,13 +269,6 @@ private:
     double adjustClosedAt = -1;
     void UpdateAdjustWheel();
     void UpdateAdjustFade();
-    void UpdateAdjustKeyboard();
-    void ApplyDock(); // after the screen: put the screen above the keyboard, or the keyboard under the screen
-    void UpdateKbBar();
-    void KbBarActivate(KbBarButton button);
-    void KbToggleMove();
-    XrPosef DockRel() const; // the screen in the keyboard's frame
-    float DockScreenWidth() const;
 
 public:
     bool dockAdjust = false; // "Adjust dock": grab the docked one to set where it sits
@@ -293,19 +277,6 @@ private:
     float wheelAlphaDrawn = 1.f;
 
     // ---------------- VR keyboard (keyboard.cpp)
-    struct KeyboardRun {
-        double openTime = 0; // presses right after opening are ignored
-        double pressFlashUntil = 0, barFlashUntil = 0;
-        int repeatKey = -1, repeatHand = -1; // a held key that repeats
-        double nextRepeat = 0;
-        int opener = -1;                              // the binding that opened it (-1: a menu button)
-        XrPosef frame{ { 0, 0, 0, 1 }, { 0, 0, 0 } }; // the head (turned like the head) when it opened
-    } kbRun;
-    void OpenKeyboard(int bi);
-    void CloseKeyboard();
-    void UpdateKeyboard();
-    void KbPress(int key, int hand);
-    int KbHit(int hand) const;
 
     // ---------------- mirrored screen (screen_ui.cpp)
     struct ScreenRun {

@@ -109,7 +109,7 @@ void Engine::UpdateScreen() {
     if (screen.shown && !wasShown) scr.placeFront = true;
     if (grab.target == GrabTarget::Screen && !screen.shown) grab = GrabRun{};
     if (!screen.shown) {
-        ApplyDock();
+        keyboard.ApplyDock();
         ScreenInteract();
         return;
     }
@@ -120,7 +120,7 @@ void Engine::UpdateScreen() {
         screen.pose = screenSmooth.Apply(screen.pose, dt, S.smoothing);
     } else
         screenSmooth.Reset();
-    ApplyDock(); // docked: the screen sits at the keyboard (or the keyboard at the screen) before pointing is checked
+    keyboard.ApplyDock(); // docked: the screen sits at the keyboard (or the keyboard at the screen) before pointing is checked
     ScreenInteract();
     if (!adjust || !screen.poseValid || (grab.Active() && grab.target != GrabTarget::Screen)) return;
     if (kb.visible && prof->dock.mode != DockMode::Apart) return; // docked: Adjust dock (on the keyboard's bar) places it
@@ -264,7 +264,7 @@ void Engine::ScreenInteract() {
     bool onWrist = !dockedToKb && (IsWristPlace(screen.place));
     int wh = WristHandOf(screen.place);
     screen.interactive = S.interact && screen.on && screen.poseValid && !adjust && !wr.open &&
-                         !(kb.visible && kbRun.openTime > now - 0.25) && screen.monW > 0; // works next to the open keyboard too
+                         !(kb.visible && keyboard.run_.openTime > now - 0.25) && screen.monW > 0; // works next to the open keyboard too
     ScreenUi();
     if (scr.uiHand >= 0 || screen.pickOpen) screen.interactive = false; // the bar or the picker has the laser
     int hand = -1;
@@ -517,7 +517,7 @@ void Engine::BarActivate(ScreenBarButton button) {
         screen.uiVersion++;
         if (screen.source == ScreenSource::Window && screen.hwnd) Keys::BringToFront(screen.hwnd);
         scr.clicked = true; // so the game gets its window back once you're done
-        OpenKeyboard(-1);
+        keyboard.Open(-1);
         return;
     case ScreenBarButton::Hide:
         a.mode = ActMode::Off;
