@@ -1,4 +1,4 @@
-OpenXR Companion - created by Atsuko
+OpenXR Companion - by Atsuko
 
 Hand tools for any OpenXR game: radial menus (wheels), wrist panels, button combos, a VR keyboard,
 your desktop mirrored into VR, controller offsets for the game's hands and guns, and steadying
