@@ -616,7 +616,7 @@ int main(int argc, char** argv) {
         pressBar(0);
         Vec3 up = Rotate(e.kb.pose.orientation, { 0, 1, 0 });
         float above = Dot(V(e.screen.pose.position) - V(e.kb.pose.position), up);
-        CHECK(q->dock.mode == 1 && e.screen.on && e.screen.poseValid && above > e.kb.heightM / 2, "dock: 'Dock screen above keys' turns the screen on and puts it above the keyboard");
+        CHECK(q->dock.mode == DockMode::ScreenOnKeys && e.screen.on && e.screen.poseValid && above > e.kb.heightM / 2, "dock: 'Dock screen above keys' turns the screen on and puts it above the keyboard");
         CHECK(std::fabs(e.screen.widthM - e.kb.widthM) < 0.001f, "dock: the docked screen is as wide as the keyboard by default");
         pressBar(2);
         CHECK(e.dockAdjust, "dock: 'Adjust dock' starts placing the docked screen");
@@ -630,9 +630,9 @@ int main(int argc, char** argv) {
         CHECK(!e.dockAdjust, "dock: 'Done adjusting' ends it");
         pressBar(1);
         XrPosef rel = PMul(PInv(e.kb.pose), e.screen.pose);
-        CHECK(q->dock.mode == 2 && Len(V(rel.position) - V(q->dock.pose.p.position)) < 0.01f, "dock: 'Dock keys under screen' keeps the same spacing, the keyboard following the screen");
+        CHECK(q->dock.mode == DockMode::KeysUnderScreen && Len(V(rel.position) - V(q->dock.pose.p.position)) < 0.01f, "dock: 'Dock keys under screen' keeps the same spacing, the keyboard following the screen");
         pressBar(1);
-        CHECK(q->dock.mode == 0, "dock: pressing it again undocks");
+        CHECK(q->dock.mode == DockMode::Apart, "dock: pressing it again undocks");
     }
 
     // Adjust mode saving: write the placement into a (temporary) profile file and read it back.
@@ -643,7 +643,7 @@ int main(int argc, char** argv) {
         q->sourceName = "vro_save_test.json";
         q->style.handUp = 0.17f; q->style.radius = 0.15f; q->wrist[0].towardElbow = 0.2f; q->wrist[0].side = -0.01f; q->wrist[1].size = 0.13f;
         q->wrist[0].textUp = "custom"; q->wrist[0].rotateDeg = 33.f;
-        q->dock.mode = 2; q->dock.pose = { true, XrPosef{ {0,0,0,1}, {0.01f, 0.2f, -0.03f} } }; q->dock.width = 0.7f;
+        q->dock.mode = DockMode::KeysUnderScreen; q->dock.pose = { true, XrPosef{ {0,0,0,1}, {0.01f, 0.2f, -0.03f} } }; q->dock.width = 0.7f;
         q->kb.pose = { true, XrPosef{ {0,0,0,1}, {0.1f, -0.25f, -0.4f} } };
         std::string serr;
         bool ok = SavePlacement(*q, serr);
@@ -653,7 +653,7 @@ int main(int argc, char** argv) {
               && std::fabs(back->wrist[0].towardElbow - 0.2f) < 1e-4f && std::fabs(back->wrist[0].side + 0.01f) < 1e-4f
               && std::fabs(back->wrist[1].size - 0.13f) < 1e-4f && back->wrist[0].textUp == "custom" && std::fabs(back->wrist[0].rotateDeg - 33.f) < 0.1f && back->wheels.size() == q->wheels.size(),
               ("adjust: positions are saved to the profile file and the rest is kept " + serr).c_str());
-        CHECK(back && back->dock.mode == 2 && back->dock.pose.set && std::fabs(back->dock.pose.p.position.y - 0.2f) < 0.002f && std::fabs(back->dock.width - 0.7f) < 0.002f
+        CHECK(back && back->dock.mode == DockMode::KeysUnderScreen && back->dock.pose.set && std::fabs(back->dock.pose.p.position.y - 0.2f) < 0.002f && std::fabs(back->dock.width - 0.7f) < 0.002f
               && back->kb.pose.set && std::fabs(back->kb.pose.p.position.z + 0.4f) < 0.002f, "adjust: the keyboard spot and the dock are saved too");
         DeleteFileW(path.c_str());
     }

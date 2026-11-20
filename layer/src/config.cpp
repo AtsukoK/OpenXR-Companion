@@ -259,7 +259,7 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
     if (j.contains("dock")) {
         auto& d = j["dock"];
         std::string m; Get(d, "mode", m);
-        p->dock.mode = m == "screen_to_keyboard" ? 1 : m == "keyboard_to_screen" ? 2 : 0;
+        p->dock.mode = m == "screen_to_keyboard" ? DockMode::ScreenOnKeys : m == "keyboard_to_screen" ? DockMode::KeysUnderScreen : DockMode::Apart;
         if (d.contains("pose")) ParsePose(d["pose"], p->dock.pose);
         Get(d, "width_m", p->dock.width); p->dock.width = std::clamp(p->dock.width, 0.f, 3.f);
     }
@@ -559,7 +559,7 @@ bool SavePlacement(const Profile& p, std::string& err) {
         }
         {
             json& d = j["dock"];
-            d["mode"] = p.dock.mode == 1 ? "screen_to_keyboard" : p.dock.mode == 2 ? "keyboard_to_screen" : "none";
+            d["mode"] = p.dock.mode == DockMode::ScreenOnKeys ? "screen_to_keyboard" : p.dock.mode == DockMode::KeysUnderScreen ? "keyboard_to_screen" : "none";
             if (p.dock.pose.set) d["pose"] = PoseJson(p.dock.pose); else d.erase("pose");
             if (p.dock.width > 0) d["width_m"] = r(p.dock.width); else d.erase("width_m");
         }

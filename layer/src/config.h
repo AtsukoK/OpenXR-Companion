@@ -85,8 +85,10 @@ struct Selection {
 };
 
 // Docking the mirrored screen and the VR keyboard together (set from the bar under the keyboard).
+// Docking the mirrored screen and the VR keyboard together.
+enum class DockMode { Apart, ScreenOnKeys /* the screen sits above the keyboard */, KeysUnderScreen /* the keyboard sits under the screen */ };
 struct DockStyle {
-    int mode = 0;            // 0 apart, 1 the screen sits above the keyboard, 2 the keyboard sits under the screen
+    DockMode mode = DockMode::Apart;
     FreePose pose;           // the screen in the keyboard's frame, when set by hand (Adjust dock)
     float width = 0.f;       // screen width while docked to the keyboard (0 = as wide as the keyboard)
 };
