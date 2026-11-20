@@ -25,8 +25,10 @@ public partial class MainForm
                 foreach (var v in k.GetValueNames())
                     if (v.EndsWith(LayerJson, StringComparison.OrdinalIgnoreCase))
                     {
-                        if (string.Equals(v, manifest, StringComparison.OrdinalIgnoreCase) && k.GetValue(v) is int i && i == 0) installed = true;
-                        else other = true;
+                        if (string.Equals(v, manifest, StringComparison.OrdinalIgnoreCase) && k.GetValue(v) is int i && i == 0)
+                            installed = true;
+                        else
+                            other = true;
                     }
         return installed ? 1 : other ? 2 : 0;
     }
@@ -64,7 +66,8 @@ public partial class MainForm
             // One admin prompt for both: the 64-bit layer, then the 32-bit one (x86 folder) if it shipped.
             string cmd = $"& '{script.Replace("'", "''")}'";
             string script32 = Path.Combine(X86Dir, name);
-            if (HasX86 && File.Exists(script32)) cmd += $"; & '{script32.Replace("'", "''")}'";
+            if (HasX86 && File.Exists(script32))
+                cmd += $"; & '{script32.Replace("'", "''")}'";
             var p = Process.Start(new ProcessStartInfo("powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -Command \"{cmd}\"") { Verb = "runas", UseShellExecute = true });
             p?.WaitForExit();
         }

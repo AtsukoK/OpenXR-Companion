@@ -34,7 +34,9 @@ public class BindingEditor : EditorBase
         when.AddRow("Not in layer", notLayers);
         when.AddRow("Hide from game", block);
         lPass = when.AddRow("", passthrough);
-        foreach (var (_, ctl, _) in when.Rows) if (ctl is ComboBox) ctl.Width = 400; // same width as the action's dropdowns below
+        foreach (var (_, ctl, _) in when.Rows)
+            if (ctl is ComboBox)
+                ctl.Width = 400; // same width as the action's dropdowns below
 
         Stack(Title("Binding"),
               FormPanel.Header("Do something when a controller button (or combo) is used."),
@@ -43,11 +45,19 @@ public class BindingEditor : EditorBase
               action);
 
         loading = true;
-        name.Text = b.Name; enabled.Checked = b.Enabled; chord.Value = b.Input; gesture.Code = b.Gesture;
-        hold.Value = Math.Clamp(b.HoldMs, 50, 5000); tap.Value = Math.Clamp(b.TapMs, 50, 5000); dbl.Value = Math.Clamp(b.DoubleTapMs, 50, 5000);
-        foreach (var l in new LayerConv().GetStandardValues(null)) { layers.Items.Add(l); notLayers.Items.Add(l); }
-        layers.Text = b.Layers ?? ""; notLayers.Text = b.NotLayers ?? "";
-        block.Code = b.Block; passthrough.Checked = b.TapPassthrough;
+        name.Text = b.Name;
+        enabled.Checked = b.Enabled;
+        chord.Value = b.Input;
+        gesture.Code = b.Gesture;
+        hold.Value = Math.Clamp(b.HoldMs, 50, 5000);
+        tap.Value = Math.Clamp(b.TapMs, 50, 5000);
+        dbl.Value = Math.Clamp(b.DoubleTapMs, 50, 5000);
+        foreach (var l in new LayerConv().GetStandardValues(null))
+        { layers.Items.Add(l); notLayers.Items.Add(l); }
+        layers.Text = b.Layers ?? "";
+        notLayers.Text = b.NotLayers ?? "";
+        block.Code = b.Block;
+        passthrough.Checked = b.TapPassthrough;
         action.Bind(b.Action ??= new ActionModel());
         loading = false;
         Sync();

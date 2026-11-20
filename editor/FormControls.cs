@@ -7,7 +7,10 @@ public class FormPanel : TableLayoutPanel
 {
     public FormPanel()
     {
-        ColumnCount = 2; AutoSize = true; AutoSizeMode = AutoSizeMode.GrowAndShrink; Dock = DockStyle.Top;
+        ColumnCount = 2;
+        AutoSize = true;
+        AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        Dock = DockStyle.Top;
         ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
         ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         Padding = new Padding(0, 0, 0, 6);
@@ -23,9 +26,12 @@ public class FormPanel : TableLayoutPanel
             int col = 0;
             foreach (var w in para.Split(' '))
             {
-                if (col > 0 && col + w.Length + 1 > width) { sb.Append('\n'); col = 0; }
-                else if (col > 0) { sb.Append(' '); col++; }
-                sb.Append(w); col += w.Length;
+                if (col > 0 && col + w.Length + 1 > width)
+                { sb.Append('\n'); col = 0; }
+                else if (col > 0)
+                { sb.Append(' '); col++; }
+                sb.Append(w);
+                col += w.Length;
             }
             sb.Append('\n');
         }
@@ -49,7 +55,8 @@ public class FormPanel : TableLayoutPanel
         // Every row in the same holder, with or without help, so all rows get the same height and spacing.
         var f = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false, Margin = new Padding(0, 3, 0, 5), MinimumSize = new Size(0, 32), BackColor = Color.Transparent };
         f.Controls.Add(c);
-        if (hint != null) f.Controls.Add(InfoIcon(hint));
+        if (hint != null)
+            f.Controls.Add(InfoIcon(hint));
         Controls.Add(f, 1, row);
         c.VisibleChanged += (s, e) => { f.Visible = c.Visible; };
         l.Tag = f;
@@ -62,8 +69,13 @@ public class FormPanel : TableLayoutPanel
     {
         return new Label
         {
-            Text = text + (help != null ? "\n" + help : ""), AutoSize = true, MaximumSize = new Size(640, 0),
-            Font = new Font("Segoe UI", 9.5f), Padding = new Padding(0, 4, 0, 10), Dock = DockStyle.Top, ForeColor = Theme.SubText
+            Text = text + (help != null ? "\n" + help : ""),
+            AutoSize = true,
+            MaximumSize = new Size(640, 0),
+            Font = new Font("Segoe UI", 9.5f),
+            Padding = new Padding(0, 4, 0, 10),
+            Dock = DockStyle.Top,
+            ForeColor = Theme.SubText
         };
     }
 }
@@ -74,22 +86,30 @@ public class Card : Panel
     readonly TableLayoutPanel inner;
     public Card(string title, string glyph, string tag, Color tagColor, string tagHelp, params Control[] body)
     {
-        DoubleBuffered = true; AutoSize = true; AutoSizeMode = AutoSizeMode.GrowAndShrink; Dock = DockStyle.Top;
-        Padding = new Padding(18, 12, 18, 12); BackColor = Theme.Page;
+        DoubleBuffered = true;
+        AutoSize = true;
+        AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        Dock = DockStyle.Top;
+        Padding = new Padding(18, 12, 18, 12);
+        BackColor = Theme.Page;
         inner = new TableLayoutPanel { ColumnCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, BackColor = Color.Transparent, Location = new Point(18, 12), Margin = Padding.Empty };
         var head = new FlowLayoutPanel { AutoSize = true, WrapContents = false, BackColor = Color.Transparent, Margin = new Padding(0, 0, 0, 6) };
-        if (glyph != null) head.Controls.Add(new Label { Text = glyph, Font = new Font("Segoe MDL2 Assets", 13f), ForeColor = Theme.Heading, AutoSize = true, Margin = new Padding(0, 5, 8, 0), BackColor = Color.Transparent });
+        if (glyph != null)
+            head.Controls.Add(new Label { Text = glyph, Font = new Font("Segoe MDL2 Assets", 13f), ForeColor = Theme.Heading, AutoSize = true, Margin = new Padding(0, 5, 8, 0), BackColor = Color.Transparent });
         head.Controls.Add(new Label { Text = title, Font = new Font("Segoe UI", 12f, FontStyle.Bold), ForeColor = Theme.Heading, AutoSize = true, Margin = new Padding(0, 2, 10, 0), BackColor = Color.Transparent });
         if (tag != null)
         {
             var pill = new Label { Text = tag, Font = new Font("Segoe UI", 8.5f, FontStyle.Bold), ForeColor = Color.White, BackColor = tagColor, AutoSize = true, Padding = new Padding(6, 2, 6, 2), Margin = new Padding(0, 6, 0, 0) };
-            if (tagHelp != null) FormPanel.Tips.SetToolTip(pill, tagHelp);
+            if (tagHelp != null)
+                FormPanel.Tips.SetToolTip(pill, tagHelp);
             head.Controls.Add(pill);
         }
         inner.Controls.Add(head);
-        foreach (var b in body) { b.Dock = DockStyle.None; b.BackColor = Color.Transparent; b.Margin = Padding.Empty; inner.Controls.Add(b); }
+        foreach (var b in body)
+        { b.Dock = DockStyle.None; b.BackColor = Color.Transparent; b.Margin = Padding.Empty; inner.Controls.Add(b); }
         Controls.Add(inner);
-        void Solid(Control c) { foreach (Control k in c.Controls) { if (k is TrackBar) k.BackColor = Theme.Card; Solid(k); } }
+        void Solid(Control c)
+        { foreach (Control k in c.Controls) { if (k is TrackBar) k.BackColor = Theme.Card; Solid(k); } }
         Solid(inner); // sliders can't be see-through: give them the card's colour
     }
     protected override void OnPaintBackground(PaintEventArgs e)
@@ -99,10 +119,15 @@ public class Card : Panel
         var r = new Rectangle(0, 0, Width - 1, Height - 1);
         using var path = new System.Drawing.Drawing2D.GraphicsPath();
         int d = 16;
-        path.AddArc(r.X, r.Y, d, d, 180, 90); path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
-        path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90); path.AddArc(r.X, r.Bottom - d, d, d, 90, 90); path.CloseFigure();
-        using (var b = new SolidBrush(Theme.Card)) e.Graphics.FillPath(b, path);
-        using (var p = new Pen(Theme.CardBorder)) e.Graphics.DrawPath(p, path);
+        path.AddArc(r.X, r.Y, d, d, 180, 90);
+        path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+        path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+        path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+        path.CloseFigure();
+        using (var b = new SolidBrush(Theme.Card))
+            e.Graphics.FillPath(b, path);
+        using (var p = new Pen(Theme.CardBorder))
+            e.Graphics.DrawPath(p, path);
     }
     protected override void OnResize(EventArgs e) { base.OnResize(e); Invalidate(); }
 }

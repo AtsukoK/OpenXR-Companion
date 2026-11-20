@@ -13,8 +13,10 @@ public partial class MainForm
     // Run after the current event; before the window exists, wait until it is shown.
     void Later(Action a)
     {
-        if (IsHandleCreated) BeginInvoke(a);
-        else { EventHandler h = null; h = (s, e) => { Shown -= h; a(); }; Shown += h; }
+        if (IsHandleCreated)
+            BeginInvoke(a);
+        else
+        { EventHandler h = null; h = (s, e) => { Shown -= h; a(); }; Shown += h; }
     }
 
     Control InfoWithPic(TreeNode n, string title, string text)
@@ -32,7 +34,8 @@ public partial class MainForm
     static Control Info(string title, string text, Image pic = null)
     {
         var p = new Panel { Padding = new Padding(14) };
-        if (pic != null) p.Controls.Add(new PictureBox { Image = pic, Dock = DockStyle.Top, Height = pic.Height + 12, SizeMode = PictureBoxSizeMode.Normal, Padding = new Padding(0, 8, 0, 0) });
+        if (pic != null)
+            p.Controls.Add(new PictureBox { Image = pic, Dock = DockStyle.Top, Height = pic.Height + 12, SizeMode = PictureBoxSizeMode.Normal, Padding = new Padding(0, 8, 0, 0) });
         p.Controls.Add(new Label { Text = text, AutoSize = true, MaximumSize = new Size(620, 0), Dock = DockStyle.Top, Font = new Font("Segoe UI", 10f) });
         p.Controls.Add(new Label { Text = title, AutoSize = true, Dock = DockStyle.Top, Font = new Font("Segoe UI", 14f, FontStyle.Bold), Padding = new Padding(0, 0, 0, 8) });
         return p;
@@ -101,15 +104,25 @@ public partial class MainForm
     // Quick switch above a wrist page / button: Off, own pages, or mirror the other panel.
     Control PanelModeStrip(int h, Action changed)
     {
-        var wm = Profile.WristFor(h); var other = Profile.WristFor(1 - h);
+        var wm = Profile.WristFor(h);
+        var other = Profile.WristFor(1 - h);
         string side = h == 0 ? "Left" : "Right", otherSide = h == 0 ? "right" : "left";
         var strip = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 48, Padding = new Padding(12, 8, 0, 0), BackColor = Color.FromArgb(232, 244, 241), WrapContents = false };
         strip.Controls.Add(new Label { Text = $"{side} wrist panel:", AutoSize = true, Font = new Font("Segoe UI", 10f, FontStyle.Bold), Margin = new Padding(0, 7, 10, 0), ForeColor = Color.FromArgb(30, 90, 80) });
         void Opt(string text, bool active, Action apply)
         {
-            var b = new Button { Text = text, AutoSize = true, Height = 32, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(0, 0, 6, 0),
-                                 Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
-                                 BackColor = active ? Color.FromArgb(30, 130, 110) : Color.White, ForeColor = active ? Color.White : Color.FromArgb(40, 50, 70) };
+            var b = new Button
+            {
+                Text = text,
+                AutoSize = true,
+                Height = 32,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 0, 6, 0),
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                BackColor = active ? Color.FromArgb(30, 130, 110) : Color.White,
+                ForeColor = active ? Color.White : Color.FromArgb(40, 50, 70)
+            };
             b.FlatAppearance.BorderColor = Color.FromArgb(150, 190, 180);
             b.Click += (s, e) => { if (active) return; apply(); changed(); };
             strip.Controls.Add(b);

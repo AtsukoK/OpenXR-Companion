@@ -12,13 +12,15 @@ public partial class MainForm
     // Adds an empty "+ Add ..." row under a group (not while searching).
     void Slot(TreeNode parent, string text, string sub = null)
     {
-        if (!string.IsNullOrWhiteSpace(Q)) return;
+        if (!string.IsNullOrWhiteSpace(Q))
+            return;
         parent.Nodes.Add(new TreeNode(text) { Tag = new AddSlot { Text = text, Sub = sub } });
     }
     Rectangle SlotRect(TreeNode n)
     {
         int indent = Indent(n);
-        var row = n.Bounds; int W = tree.ClientSize.Width;
+        var row = n.Bounds;
+        int W = tree.ClientSize.Width;
         return new Rectangle(indent + 2, row.Y + 7, W - indent - 14, row.Height - 14);
     }
 
@@ -51,37 +53,49 @@ public partial class MainForm
         tree.DrawMode = TreeViewDrawMode.OwnerDrawAll;
         // Draw the list off-screen and show it in one go (no wipe-then-draw flicker).
         void Buffer() => SendMessage(tree.Handle, 0x112C /*TVM_SETEXTENDEDSTYLE*/, (IntPtr)0x0004, (IntPtr)0x0004 /*TVS_EX_DOUBLEBUFFER*/);
-        if (tree.IsHandleCreated) Buffer();
+        if (tree.IsHandleCreated)
+            Buffer();
         tree.HandleCreated += (s, e) => Buffer();
         tree.ItemHeight = 46;
-        tree.ShowLines = false; tree.ShowPlusMinus = false; tree.ShowRootLines = false;
-        tree.FullRowSelect = true; tree.Indent = 22;
+        tree.ShowLines = false;
+        tree.ShowPlusMinus = false;
+        tree.ShowRootLines = false;
+        tree.FullRowSelect = true;
+        tree.Indent = 22;
         tree.BorderStyle = BorderStyle.None;
         tree.BackColor = Theme.Surface;
         tree.DrawNode += DrawRow;
         tree.BeforeSelect += (s, e) => { if (e.Node?.Tag is AddSlot) e.Cancel = true; };
         tree.NodeMouseClick += (s, e) =>
         {
-            if (e.Button != MouseButtons.Left) return;
+            if (e.Button != MouseButtons.Left)
+                return;
             if (e.Node.Tag is AddSlot)
             {
                 // add next to the slot: select its group, then the usual Add for that group
                 var owner = e.Node.Parent;
-                if (owner == null) return;
+                if (owner == null)
+                    return;
                 var sr = SlotRect(e.Node);
-                if (((AddSlot)e.Node.Tag).Sub != null && e.X >= sr.X + sr.Width / 2) { AddSub(owner); return; }
-                tree.SelectedNode = owner; Add();
+                if (((AddSlot)e.Node.Tag).Sub != null && e.X >= sr.X + sr.Width / 2)
+                { AddSub(owner); return; }
+                tree.SelectedNode = owner;
+                Add();
                 return;
             }
             int w = tree.ClientSize.Width;
-            if (Toggleable(e.Node.Tag) && e.X >= w - 46) { ToggleNode(e.Node); return; }
+            if (Toggleable(e.Node.Tag) && e.X >= w - 46)
+            { ToggleNode(e.Node); return; }
             if (IsSection(e.Node))
             {
-                if (e.X >= w - 70) { tree.SelectedNode = e.Node; Add(); return; }
-                if (e.X < 34) Fold(e.Node); // only the arrow folds; clicking the rest of the header just selects it
+                if (e.X >= w - 70)
+                { tree.SelectedNode = e.Node; Add(); return; }
+                if (e.X < 34)
+                    Fold(e.Node); // only the arrow folds; clicking the rest of the header just selects it
                 return;
             }
-            if (RealCount(e.Node) > 0 && e.Node.Tag is not ProfileModel && e.X < Indent(e.Node) + 2) Fold(e.Node); // the arrow left of a wheel or page
+            if (RealCount(e.Node) > 0 && e.Node.Tag is not ProfileModel && e.X < Indent(e.Node) + 2)
+                Fold(e.Node); // the arrow left of a wheel or page
         };
         // no double-click / keyboard folding: only the arrows fold (code-driven changes have Action Unknown)
         tree.BeforeCollapse += (s, e) => { if (UserToggle()) e.Cancel = true; };
@@ -103,9 +117,12 @@ public partial class MainForm
     bool UserToggle() => !folding && !rebuilding && (Control.MouseButtons != MouseButtons.None || arrowKey);
     void Fold(TreeNode n)
     {
-        if (RealCount(n) == 0) return;
+        if (RealCount(n) == 0)
+            return;
         folding = true;
-        try { if (n.IsExpanded) n.Collapse(); else n.Expand(); } finally { folding = false; }
+        try
+        { if (n.IsExpanded) n.Collapse(); else n.Expand(); }
+        finally { folding = false; }
     }
 
     // After a rebuild: everything open except what the user folded (searching opens everything).
@@ -116,22 +133,28 @@ public partial class MainForm
         {
             tree.ExpandAll();
             if (string.IsNullOrWhiteSpace(Q))
-                foreach (TreeNode root in tree.Nodes) ApplyFolds(root);
+                foreach (TreeNode root in tree.Nodes)
+                    ApplyFolds(root);
         }
         finally { rebuilding = false; }
     }
     void ApplyFolds(TreeNode n)
     {
-        foreach (TreeNode c in n.Nodes) ApplyFolds(c);
-        if (n.Tag is WheelModel ? !unfolded.Contains(n.Tag) : n.Tag != null && folded.Contains(n.Tag)) n.Collapse(false);
-        else if (n.Nodes.Count > 0) n.Expand();
+        foreach (TreeNode c in n.Nodes)
+            ApplyFolds(c);
+        if (n.Tag is WheelModel ? !unfolded.Contains(n.Tag) : n.Tag != null && folded.Contains(n.Tag))
+            n.Collapse(false);
+        else if (n.Nodes.Count > 0)
+            n.Expand();
     }
 
     void Chevron(Graphics g, int x, int midY, bool open, Color c)
     {
         using var pen = new Pen(c, 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
-        if (open) g.DrawLines(pen, new[] { new Point(x, midY - 3), new Point(x + 5, midY + 2), new Point(x + 10, midY - 3) });
-        else g.DrawLines(pen, new[] { new Point(x + 3, midY - 5), new Point(x + 8, midY), new Point(x + 3, midY + 5) });
+        if (open)
+            g.DrawLines(pen, new[] { new Point(x, midY - 3), new Point(x + 5, midY + 2), new Point(x + 10, midY - 3) });
+        else
+            g.DrawLines(pen, new[] { new Point(x + 3, midY - 5), new Point(x + 8, midY), new Point(x + 3, midY + 5) });
     }
 
     static bool Toggleable(object tag) => tag is BindingModel or WheelItemModel;
@@ -139,12 +162,16 @@ public partial class MainForm
 
     void ToggleNode(TreeNode n)
     {
-        if (n.Tag is BindingModel b) b.Enabled = !b.Enabled;
-        else if (n.Tag is WheelItemModel wi) wi.Enabled = !wi.Enabled;
-        else return;
+        if (n.Tag is BindingModel b)
+            b.Enabled = !b.Enabled;
+        else if (n.Tag is WheelItemModel wi)
+            wi.Enabled = !wi.Enabled;
+        else
+            return;
         MarkDirty();
         RefreshNodeTexts();
-        if (ReferenceEquals(tree.SelectedNode, n)) ShowEditor(n);
+        if (ReferenceEquals(tree.SelectedNode, n))
+            ShowEditor(n);
     }
 
     bool Matches(string q, params string[] fields) => string.IsNullOrWhiteSpace(q) || fields.Any(f => f != null && f.Contains(q, StringComparison.OrdinalIgnoreCase));
@@ -153,7 +180,8 @@ public partial class MainForm
     // ---- plain-English descriptions
     static string Plain(ActionModel a)
     {
-        if (a == null) return "Does nothing";
+        if (a == null)
+            return "Does nothing";
         string mode = a.Mode switch { "toggle" => " (toggle on/off)", "hold" => " (held while the button is)", _ => "" };
         return a.Type switch
         {
@@ -166,8 +194,10 @@ public partial class MainForm
             "headset_mirror" => a.Mode switch { "on" => "Turns the headset mirror window on", "off" => "Turns the headset mirror window off", _ => "Headset mirror window on / off" },
             "controller_offsets" => a.Mode switch
             {
-                "enable" => "Controller offsets on / off", "grab" => "Controller offsets: grab to set",
-                "reset" => "Controller offsets: reset all", _ => "Opens the controller offsets panel",
+                "enable" => "Controller offsets on / off",
+                "grab" => "Controller offsets: grab to set",
+                "reset" => "Controller offsets: reset all",
+                _ => "Opens the controller offsets panel",
             },
             "layer" => a.Mode switch { "on" => $"Turns layer '{a.Layer}' on", "off" => $"Turns layer '{a.Layer}' off", "toggle" => $"Switches layer '{a.Layer}' on/off", _ => $"Layer '{a.Layer}' while held" },
             "xr_input" => $"Presses game button {a.Target}{mode}",
@@ -176,10 +206,15 @@ public partial class MainForm
             "reload" => "Reloads the profile",
             "screen" => a.Mode switch
             {
-                "on" => "Shows the mirrored screen", "off" => "Hides the mirrored screen",
-                "next_monitor" => "Screen: next monitor", "prev_monitor" => "Screen: previous monitor",
-                "choose" => "Screen: opens the list of monitors and windows", "next_window" => "Screen: next window", "prev_window" => "Screen: previous window",
-                "next_fps" => "Screen: next frame rate", "next_place" => "Screen: moves it to the next place",
+                "on" => "Shows the mirrored screen",
+                "off" => "Hides the mirrored screen",
+                "next_monitor" => "Screen: next monitor",
+                "prev_monitor" => "Screen: previous monitor",
+                "choose" => "Screen: opens the list of monitors and windows",
+                "next_window" => "Screen: next window",
+                "prev_window" => "Screen: previous window",
+                "next_fps" => "Screen: next frame rate",
+                "next_place" => "Screen: moves it to the next place",
                 _ => "Shows / hides the mirrored screen" + (a.Place switch { "wrist_left" => " on the left wrist", "wrist_right" => " on the right wrist", "front" => " in front of you", "head" => " following your view", _ => "" }),
             },
             _ => "Does nothing",
@@ -187,7 +222,12 @@ public partial class MainForm
     }
     static string Gesture(BindingModel b) => b.Gesture switch
     {
-        "press" => "press", "tap" => "tap", "hold" => "hold", "double_tap" => "double-tap", "while_held" => "hold down", _ => b.Gesture,
+        "press" => "press",
+        "tap" => "tap",
+        "hold" => "hold",
+        "double_tap" => "double-tap",
+        "while_held" => "hold down",
+        _ => b.Gesture,
     };
     static int HandOf(BindingModel b) => (b.Input ?? "").Split('+').Last().Trim().StartsWith("left") ? 0 : 1;
 
@@ -195,9 +235,12 @@ public partial class MainForm
     {
         switch (n.Tag)
         {
-            case "overview": return ("Overview", "What is on and off", "", SecNav, null, default);
-            case ProfileModel: return ("Settings", string.IsNullOrWhiteSpace(Q) ? "Pick a page below" : n.Nodes.Count > 0 ? "Pages with a matching setting below" : "No setting matches", "", SecNav, null, default);
-            case SettingsPage sp: return (sp.Title, sp.Sub, sp.Icon, sp.Live ? OnC : SecNav, null, default);
+            case "overview":
+                return ("Overview", "What is on and off", "", SecNav, null, default);
+            case ProfileModel:
+                return ("Settings", string.IsNullOrWhiteSpace(Q) ? "Pick a page below" : n.Nodes.Count > 0 ? "Pages with a matching setting below" : "No setting matches", "", SecNav, null, default);
+            case SettingsPage sp:
+                return (sp.Title, sp.Sub, sp.Icon, sp.Live ? OnC : SecNav, null, default);
             case "bindings_right":
             case "bindings_left":
                 {
@@ -205,7 +248,8 @@ public partial class MainForm
                     var bs = Profile.Bindings.Where(b => HandOf(b) == h).ToList();
                     return (h == 1 ? "RIGHT CONTROLLER" : "LEFT CONTROLLER", null, null, h == 1 ? SecRight : SecLeft, $"{bs.Count(b => b.Enabled)} of {bs.Count} on", OnC);
                 }
-            case "wheels": return ("WHEELS (radial menus)", null, null, SecWheels, $"{Profile.Wheels.Count}", SecWheels);
+            case "wheels":
+                return ("WHEELS (radial menus)", null, null, SecWheels, $"{Profile.Wheels.Count}", SecWheels);
             case "wrist0":
             case "wrist1":
                 {
@@ -238,7 +282,9 @@ public partial class MainForm
                 }
             case AddSlot:
                 {
-                    var top = n; while (top.Parent != null) top = top.Parent;
+                    var top = n;
+                    while (top.Parent != null)
+                        top = top.Parent;
                     var acc = top.Tag switch { "bindings_left" => SecLeft, "bindings_right" => SecRight, "wheels" => SecWheels, _ => SecWrist };
                     return (null, null, null, acc, null, default);
                 }
@@ -251,7 +297,8 @@ public partial class MainForm
     void DrawRow(object sender, DrawTreeNodeEventArgs e)
     {
         var n = e.Node;
-        if (n == null || e.Bounds.Height == 0) return;
+        if (n == null || e.Bounds.Height == 0)
+            return;
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
         int W = tree.ClientSize.Width;
@@ -259,23 +306,33 @@ public partial class MainForm
         bool sel = ReferenceEquals(tree.SelectedNode, n);
         var d = Describe(n);
         bool section = IsSection(n);
-        using (var bg = new SolidBrush(tree.BackColor)) g.FillRectangle(bg, row);
+        using (var bg = new SolidBrush(tree.BackColor))
+            g.FillRectangle(bg, row);
 
         if (section)
         {
             var band = new Rectangle(4, row.Y + 8, W - 8, row.Height - 10);
-            using (var b = new SolidBrush(Color.FromArgb(sel ? 60 : 32, d.accent))) using (var p = RoundRect(band, 8)) g.FillPath(b, p);
-            using (var b = new SolidBrush(d.accent)) g.FillRectangle(b, band.X, band.Y + 6, 4, band.Height - 12);
+            using (var b = new SolidBrush(Color.FromArgb(sel ? 60 : 32, d.accent)))
+            using (var p = RoundRect(band, 8))
+                g.FillPath(b, p);
+            using (var b = new SolidBrush(d.accent))
+                g.FillRectangle(b, band.X, band.Y + 6, 4, band.Height - 12);
             int real = RealCount(n);
-            if (real > 0) Chevron(g, band.X + 12, band.Y + band.Height / 2, n.IsExpanded, Darker(d.accent)); // nothing to fold when empty
+            if (real > 0)
+                Chevron(g, band.X + 12, band.Y + band.Height / 2, n.IsExpanded, Darker(d.accent)); // nothing to fold when empty
             TextRenderer.DrawText(g, d.title, fHead, new Point(band.X + 30, band.Y + (band.Height - fHead.Height) / 2), Darker(d.accent));
             int x = band.X + 34 + TextRenderer.MeasureText(d.title, fHead).Width;
-            if (real == 0) x = Pill(g, string.IsNullOrWhiteSpace(Q) ? "empty" : "no matches", OffC, x, band.Y + band.Height / 2) + 6;
-            else if (!n.IsExpanded) x = Pill(g, $"{real} hidden", OffC, x, band.Y + band.Height / 2) + 6;
-            if (d.pill != null) x = Pill(g, d.pill, d.pillColor, x, band.Y + band.Height / 2) + 6;
+            if (real == 0)
+                x = Pill(g, string.IsNullOrWhiteSpace(Q) ? "empty" : "no matches", OffC, x, band.Y + band.Height / 2) + 6;
+            else if (!n.IsExpanded)
+                x = Pill(g, $"{real} hidden", OffC, x, band.Y + band.Height / 2) + 6;
+            if (d.pill != null)
+                x = Pill(g, d.pill, d.pillColor, x, band.Y + band.Height / 2) + 6;
             // + Add
             var add = new Rectangle(W - 70, band.Y + 6, 60, band.Height - 12);
-            using (var b = new SolidBrush(d.accent)) using (var p = RoundRect(add, 6)) g.FillPath(b, p);
+            using (var b = new SolidBrush(d.accent))
+            using (var p = RoundRect(add, 6))
+                g.FillPath(b, p);
             TextRenderer.DrawText(g, "+ Add", fPill, add, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
             return;
         }
@@ -286,7 +343,8 @@ public partial class MainForm
         {
             // sub-wheel block: tinted band + guide line per nesting level, so it reads as part of its parent
             int wx = Indent(n.Tag is WheelModel ? n : n.Parent);
-            using (var tb = new SolidBrush(Color.FromArgb(14 * depth, d.accent))) g.FillRectangle(tb, wx - 26, row.Y, W - wx + 22, row.Height);
+            using (var tb = new SolidBrush(Color.FromArgb(14 * depth, d.accent)))
+                g.FillRectangle(tb, wx - 26, row.Y, W - wx + 22, row.Height);
             for (int k = 1; k <= depth; k++)
             {
                 int gx = wx - 22 - (depth - k) * SubShift;
@@ -301,8 +359,12 @@ public partial class MainForm
                 : new[] { (new Rectangle(full.X, full.Y, full.Width / 2 - 4, full.Height), slot.Text), (new Rectangle(full.X + full.Width / 2 + 4, full.Y, full.Width - full.Width / 2 - 4, full.Height), slot.Sub) };
             foreach (var (sr, text) in halves)
             {
-                using (var b = new SolidBrush(Color.FromArgb(18, d.accent))) using (var p = RoundRect(sr, 7)) g.FillPath(b, p);
-                using (var pen = new Pen(Color.FromArgb(150, d.accent), 1.4f) { DashStyle = DashStyle.Dash }) using (var p = RoundRect(sr, 7)) g.DrawPath(pen, p);
+                using (var b = new SolidBrush(Color.FromArgb(18, d.accent)))
+                using (var p = RoundRect(sr, 7))
+                    g.FillPath(b, p);
+                using (var pen = new Pen(Color.FromArgb(150, d.accent), 1.4f) { DashStyle = DashStyle.Dash })
+                using (var p = RoundRect(sr, 7))
+                    g.DrawPath(pen, p);
                 TextRenderer.DrawText(g, "+  " + text, fTitle, sr, Darker(d.accent), TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.NoPadding | TextFormatFlags.LeftAndRightPadding | TextFormatFlags.EndEllipsis);
             }
             return;
@@ -316,23 +378,29 @@ public partial class MainForm
             using var a = new SolidBrush(d.accent);
             g.FillRectangle(a, indent - 6, row.Y + 8, 4, row.Height - 16);
         }
-        if (RealCount(n) > 0 && n.Tag is not ProfileModel) Chevron(g, indent - 13, row.Y + row.Height / 2, n.IsExpanded, Theme.Chevron); // Settings always shows its pages
+        if (RealCount(n) > 0 && n.Tag is not ProfileModel)
+            Chevron(g, indent - 13, row.Y + row.Height / 2, n.IsExpanded, Theme.Chevron); // Settings always shows its pages
         // icon (or colour swatch for items with a colour)
         var ic = new Rectangle(indent + 2, row.Y + 9, 28, 28);
         Color iconCol = enabled ? d.accent : OffC;
         if (n.Tag is WheelItemModel wi && WheelPreview.TryColor(wi.Color, out var sw))
         {
-            using var b = new SolidBrush(Color.FromArgb(255, sw)); using var p = RoundRect(ic, 7); g.FillPath(b, p);
+            using var b = new SolidBrush(Color.FromArgb(255, sw));
+            using var p = RoundRect(ic, 7);
+            g.FillPath(b, p);
         }
         else if (d.icon != null)
         {
-            using (var b = new SolidBrush(Color.FromArgb(28, iconCol))) using (var p = RoundRect(ic, 7)) g.FillPath(b, p);
+            using (var b = new SolidBrush(Color.FromArgb(28, iconCol)))
+            using (var p = RoundRect(ic, 7))
+                g.FillPath(b, p);
             TextRenderer.DrawText(g, d.icon, fIcon, ic, iconCol, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }
         else
         {
             using var b = new SolidBrush(Color.FromArgb(enabled ? 60 : 30, iconCol));
-            using var p = RoundRect(new Rectangle(ic.X + 7, ic.Y + 7, 14, 14), 4); g.FillPath(b, p);
+            using var p = RoundRect(new Rectangle(ic.X + 7, ic.Y + 7, 14, 14), 4);
+            g.FillPath(b, p);
         }
         int tx = ic.Right + 10, tw = W - tx - (Toggleable(n.Tag) ? 54 : 10);
         var titleCol = enabled ? Theme.Text : Theme.OffText;
@@ -344,19 +412,25 @@ public partial class MainForm
         if (Toggleable(n.Tag))
         {
             var dot = new Rectangle(W - 38, row.Y + 13, 20, 20);
-            if (enabled) { using var b = new SolidBrush(OnC); g.FillEllipse(b, dot); using var pen = new Pen(Color.White, 2.2f); g.DrawLines(pen, new[] { new Point(dot.X + 5, dot.Y + 10), new Point(dot.X + 9, dot.Y + 14), new Point(dot.X + 15, dot.Y + 6) }); }
-            else { using var pen = new Pen(OffC, 2f); g.DrawEllipse(pen, dot); }
+            if (enabled)
+            { using var b = new SolidBrush(OnC); g.FillEllipse(b, dot); using var pen = new Pen(Color.White, 2.2f); g.DrawLines(pen, new[] { new Point(dot.X + 5, dot.Y + 10), new Point(dot.X + 9, dot.Y + 14), new Point(dot.X + 15, dot.Y + 6) }); }
+            else
+            { using var pen = new Pen(OffC, 2f); g.DrawEllipse(pen, dot); }
         }
         // drag and drop marks
-        if (ReferenceEquals(dropWheel, n)) { using var pen = new Pen(SecWheels, 2f); using var p = RoundRect(new Rectangle(indent - 6, row.Y + 2, W - indent, row.Height - 5), 8); g.DrawPath(pen, p); }
-        if (ReferenceEquals(dropNode, n)) { using var b = new SolidBrush(Color.FromArgb(40, 90, 170)); g.FillRectangle(b, indent, dropAfter ? row.Bottom - 3 : row.Y, W - indent - 8, 3); }
+        if (ReferenceEquals(dropWheel, n))
+        { using var pen = new Pen(SecWheels, 2f); using var p = RoundRect(new Rectangle(indent - 6, row.Y + 2, W - indent, row.Height - 5), 8); g.DrawPath(pen, p); }
+        if (ReferenceEquals(dropNode, n))
+        { using var b = new SolidBrush(Color.FromArgb(40, 90, 170)); g.FillRectangle(b, indent, dropAfter ? row.Bottom - 3 : row.Y, W - indent - 8, 3); }
     }
 
     static int Pill(Graphics g, string text, Color c, int x, int midY)
     {
         var sz = TextRenderer.MeasureText(text, fPill);
         var r = new Rectangle(x, midY - 10, sz.Width + 8, 20);
-        using (var b = new SolidBrush(c)) using (var p = RoundRect(r, 10)) g.FillPath(b, p);
+        using (var b = new SolidBrush(c))
+        using (var p = RoundRect(r, 10))
+            g.FillPath(b, p);
         TextRenderer.DrawText(g, text, fPill, r, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         return r.Right;
     }
@@ -365,8 +439,11 @@ public partial class MainForm
     {
         var p = new GraphicsPath();
         d = Math.Max(1, Math.Min(d * 2, Math.Min(r.Width, r.Height)));
-        p.AddArc(r.X, r.Y, d, d, 180, 90); p.AddArc(r.Right - d, r.Y, d, d, 270, 90);
-        p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90); p.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
-        p.CloseFigure(); return p;
+        p.AddArc(r.X, r.Y, d, d, 180, 90);
+        p.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+        p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+        p.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+        p.CloseFigure();
+        return p;
     }
 }

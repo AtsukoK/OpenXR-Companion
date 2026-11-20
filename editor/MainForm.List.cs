@@ -18,7 +18,8 @@ public partial class MainForm
     void BuildTree()
     {
         subDepth.Clear();
-        if (Profile == null) return;
+        if (Profile == null)
+            return;
         object sel = tree.SelectedNode?.Tag;
         string q = Q;
         int topRow = VisibleRows().IndexOf(tree.TopNode); // the list stays scrolled where it was
@@ -65,7 +66,8 @@ public partial class MainForm
             {
                 tree.TopNode = rows[Math.Min(topRow, rows.Count - 1)];
                 // keep the selected row on screen if it moved out of view
-                if (tree.SelectedNode != null && (tree.SelectedNode.Bounds.Bottom > tree.ClientSize.Height || tree.SelectedNode.Bounds.Top < 0)) tree.SelectedNode.EnsureVisible();
+                if (tree.SelectedNode != null && (tree.SelectedNode.Bounds.Bottom > tree.ClientSize.Height || tree.SelectedNode.Bounds.Top < 0))
+                    tree.SelectedNode.EnsureVisible();
             }
         }
         finally { Redraw(tree, true, false); } // no wipe: the double-buffered list paints over itself
@@ -75,7 +77,8 @@ public partial class MainForm
     List<TreeNode> VisibleRows()
     {
         var l = new List<TreeNode>();
-        void Walk(TreeNodeCollection c) { foreach (TreeNode n in c) { l.Add(n); if (n.IsExpanded) Walk(n.Nodes); } }
+        void Walk(TreeNodeCollection c)
+        { foreach (TreeNode n in c) { l.Add(n); if (n.IsExpanded) Walk(n.Nodes); } }
         Walk(tree.Nodes);
         return l;
     }
@@ -90,27 +93,39 @@ public partial class MainForm
             .Select(i => wrist ? (i.Action?.Type == "page" ? i.Action.Page : null) : (i.Action?.Type == "wheel" ? i.Action.Wheel : null))
             .Where(nm => nm != null).Distinct().Select(Find).Where(x => x != null && x != w);
         var parentOf = new Dictionary<WheelModel, WheelModel>();
-        foreach (var w in all) foreach (var c in Children(w)) parentOf.TryAdd(c, w);
+        foreach (var w in all)
+            foreach (var c in Children(w))
+                parentOf.TryAdd(c, w);
         int startH = root == wristRoots[0] ? 0 : 1;
         bool IsMain(WheelModel w) => wrist ? w.Name == Profile.WristFor(startH).Start || !parentOf.ContainsKey(w)
                                            : Profile.Bindings.Any(b => b.Action?.Type == "wheel" && b.Action.Wheel == w.Name) || !parentOf.ContainsKey(w);
-        var ordered = new List<WheelModel>(); var seen = new HashSet<WheelModel>();
+        var ordered = new List<WheelModel>();
+        var seen = new HashSet<WheelModel>();
         void Visit(WheelModel w, int d)
         {
-            if (!seen.Add(w)) return;
-            ordered.Add(w); subDepth[w] = Math.Min(d, 3);
-            foreach (var c in Children(w)) if (!IsMain(c)) Visit(c, d + 1);
+            if (!seen.Add(w))
+                return;
+            ordered.Add(w);
+            subDepth[w] = Math.Min(d, 3);
+            foreach (var c in Children(w))
+                if (!IsMain(c))
+                    Visit(c, d + 1);
         }
-        foreach (var w in all) if (IsMain(w)) Visit(w, 0);
-        foreach (var w in all) Visit(w, 0); // cycles with no main wheel
+        foreach (var w in all)
+            if (IsMain(w))
+                Visit(w, 0);
+        foreach (var w in all)
+            Visit(w, 0); // cycles with no main wheel
         foreach (var w in ordered)
         {
             bool self = Matches(q, w.Name, w.Title);
             var items = w.Items.Where(i => self || Matches(q, i.Label, Plain(i.Action), i.Action?.Keys)).ToList();
-            if (!self && items.Count == 0) continue;
+            if (!self && items.Count == 0)
+                continue;
             var wn = root.Nodes.Add(w.Name);
             wn.Tag = w;
-            foreach (var i in items) wn.Nodes.Add(new TreeNode(i.Label) { Tag = i });
+            foreach (var i in items)
+                wn.Nodes.Add(new TreeNode(i.Label) { Tag = i });
             Slot(wn, root == wheelsRoot ? "Add item" : "Add button", root == wheelsRoot ? "Add sub-wheel" : "Add sub-page");
         }
     }
@@ -135,28 +150,33 @@ public partial class MainForm
 
     static TreeNode Find(TreeNodeCollection nodes, object tag)
     {
-        if (tag == null) return null;
-        foreach (TreeNode n in nodes) { if (ReferenceEquals(n.Tag, tag)) return n; var f = Find(n.Nodes, tag); if (f != null) return f; }
+        if (tag == null)
+            return null;
+        foreach (TreeNode n in nodes)
+        { if (ReferenceEquals(n.Tag, tag)) return n; var f = Find(n.Nodes, tag); if (f != null) return f; }
         return null;
     }
 
     void RefreshNodeTexts()
     {
-        if (wheelsRoot == null) return;
+        if (wheelsRoot == null)
+            return;
         tree.Invalidate(); // rows are drawn from the live model
     }
 
     WheelModel SelectedWheel(out TreeNode wheelNode)
     {
         wheelNode = tree.SelectedNode;
-        if (wheelNode?.Tag is WheelItemModel) wheelNode = wheelNode.Parent;
+        if (wheelNode?.Tag is WheelItemModel)
+            wheelNode = wheelNode.Parent;
         return wheelNode?.Tag as WheelModel;
     }
 
     void Add()
     {
         var n = tree.SelectedNode;
-        if (n == null) return;
+        if (n == null)
+            return;
         if (n == bindingRoots[0] || n == bindingRoots[1] || n.Tag is BindingModel)
         {
             int hand = n == bindingRoots[0] ? 0 : n == bindingRoots[1] ? 1 : HandOf((BindingModel)n.Tag);
@@ -171,11 +191,13 @@ public partial class MainForm
             var owner = Profile.WristFor(h);
             var pages = owner.Pages;
             WheelModel w;
-            if (pages.Count == 0) { w = DefaultPage(h); owner.Start = w.Name; }
+            if (pages.Count == 0)
+            { w = DefaultPage(h); owner.Start = w.Name; }
             else
             {
                 string name = "page" + (pages.Count + 1);
-                while (pages.ContainsKey(name)) name += "_";
+                while (pages.ContainsKey(name))
+                    name += "_";
                 w = new WheelModel { Name = name, Title = name };
             }
             string name0 = w.Name;
@@ -185,7 +207,8 @@ public partial class MainForm
         else if (n == wheelsRoot)
         {
             string name = "wheel" + (Profile.Wheels.Count + 1);
-            while (Profile.Wheels.ContainsKey(name)) name += "_";
+            while (Profile.Wheels.ContainsKey(name))
+                name += "_";
             var w = new WheelModel { Name = name, Title = name };
             Profile.Wheels[name] = w;
             Rebuild(w);
@@ -193,7 +216,8 @@ public partial class MainForm
         else if (SelectedWheel(out _) is WheelModel w)
         {
             bool wristPage = InWrist(n);
-            if (w.Items.Count >= 16) { MessageBox.Show(this, wristPage ? "A page holds at most 16 buttons. Add another page." : "A wheel holds at most 16 items. Use a submenu wheel."); return; }
+            if (w.Items.Count >= 16)
+            { MessageBox.Show(this, wristPage ? "A page holds at most 16 buttons. Add another page." : "A wheel holds at most 16 items. Use a submenu wheel."); return; }
             var it = new WheelItemModel { Label = wristPage ? "New button" : "New item", Action = new ActionModel { Type = "key", Keys = "F1" } };
             int at = n.Tag is WheelItemModel ci ? w.Items.IndexOf(ci) + 1 : w.Items.Count;
             w.Items.Insert(at, it);
@@ -204,15 +228,20 @@ public partial class MainForm
     // A new sub-wheel (or wrist sub-page) plus the item on this wheel/page that opens it; the new one starts with a Back item.
     void AddSub(TreeNode wheelNode)
     {
-        if (wheelNode.Tag is not WheelModel w) return;
+        if (wheelNode.Tag is not WheelModel w)
+            return;
         bool wrist = InWrist(wheelNode);
-        if (w.Items.Count >= 16) { MessageBox.Show(this, wrist ? "This page is full (16 buttons)." : "This wheel is full (16 items)."); return; }
+        if (w.Items.Count >= 16)
+        { MessageBox.Show(this, wrist ? "This page is full (16 buttons)." : "This wheel is full (16 items)."); return; }
         var dict = DictFor(wheelNode);
         string name = w.Name + (wrist ? " sub-page" : " sub-wheel");
-        for (int k = 2; dict.ContainsKey(name); k++) name = w.Name + (wrist ? " sub-page " : " sub-wheel ") + k;
+        for (int k = 2; dict.ContainsKey(name); k++)
+            name = w.Name + (wrist ? " sub-page " : " sub-wheel ") + k;
         var sub = new WheelModel { Name = name, Title = "More" };
         sub.Items.Add(new WheelItemModel { Label = "Back", Action = new ActionModel { Type = "back" } });
-        dict[name] = sub; unfolded.Add(sub); unfolded.Add(w);
+        dict[name] = sub;
+        unfolded.Add(sub);
+        unfolded.Add(w);
         w.Items.Add(new WheelItemModel { Label = "More", Action = wrist ? new ActionModel { Type = "page", Page = name } : new ActionModel { Type = "wheel", Wheel = name } });
         Rebuild(sub);
     }
@@ -224,14 +253,20 @@ public partial class MainForm
         var n = tree.SelectedNode;
         switch (n?.Tag)
         {
-            case BindingModel b: { var c = Clone(b); c.Name += " copy"; Profile.Bindings.Insert(Profile.Bindings.IndexOf(b) + 1, c); Rebuild(c); break; }
-            case WheelItemModel i: { var w = (WheelModel)n.Parent.Tag; var c = Clone(i); w.Items.Insert(w.Items.IndexOf(i) + 1, c); Rebuild(c); break; }
+            case BindingModel b:
+                { var c = Clone(b); c.Name += " copy"; Profile.Bindings.Insert(Profile.Bindings.IndexOf(b) + 1, c); Rebuild(c); break; }
+            case WheelItemModel i:
+                { var w = (WheelModel)n.Parent.Tag; var c = Clone(i); w.Items.Insert(w.Items.IndexOf(i) + 1, c); Rebuild(c); break; }
             case WheelModel w:
                 {
                     var dict = DictFor(n);
-                    var c = Clone(w); c.Name = w.Name + "_copy";
-                    while (dict.ContainsKey(c.Name)) c.Name += "_";
-                    dict[c.Name] = c; Rebuild(c); break;
+                    var c = Clone(w);
+                    c.Name = w.Name + "_copy";
+                    while (dict.ContainsKey(c.Name))
+                        c.Name += "_";
+                    dict[c.Name] = c;
+                    Rebuild(c);
+                    break;
                 }
         }
     }
@@ -241,32 +276,44 @@ public partial class MainForm
         var n = tree.SelectedNode;
         switch (n?.Tag)
         {
-            case BindingModel b: Profile.Bindings.Remove(b); Rebuild(null); break;
-            case WheelItemModel i: ((WheelModel)n.Parent.Tag).Items.Remove(i); Rebuild(n.Parent.Tag); break;
+            case BindingModel b:
+                Profile.Bindings.Remove(b);
+                Rebuild(null);
+                break;
+            case WheelItemModel i:
+                ((WheelModel)n.Parent.Tag).Items.Remove(i);
+                Rebuild(n.Parent.Tag);
+                break;
             case WheelModel w:
                 {
                     var dict = DictFor(n);
-                    if (MessageBox.Show(this, InWrist(n) ? $"Delete wrist page {w.Name} and its {w.Items.Count} buttons?" : $"Delete wheel {w.Name} and its {w.Items.Count} items?", "Delete", MessageBoxButtons.YesNo) != DialogResult.Yes) return;
-                    foreach (var k in dict.Where(kv => ReferenceEquals(kv.Value, w)).Select(kv => kv.Key).ToList()) dict.Remove(k);
+                    if (MessageBox.Show(this, InWrist(n) ? $"Delete wrist page {w.Name} and its {w.Items.Count} buttons?" : $"Delete wheel {w.Name} and its {w.Items.Count} items?", "Delete", MessageBoxButtons.YesNo) != DialogResult.Yes)
+                        return;
+                    foreach (var k in dict.Where(kv => ReferenceEquals(kv.Value, w)).Select(kv => kv.Key).ToList())
+                        dict.Remove(k);
                 }
-                Rebuild(null); break;
+                Rebuild(null);
+                break;
         }
     }
 
     void MoveItem(int d)
     {
         var n = tree.SelectedNode;
-        void Swap<T>(List<T> l, T x) { int i = l.IndexOf(x), j = i + d; if (j < 0 || j >= l.Count) return; (l[i], l[j]) = (l[j], l[i]); Rebuild(x); }
+        void Swap<T>(List<T> l, T x)
+        { int i = l.IndexOf(x), j = i + d; if (j < 0 || j >= l.Count) return; (l[i], l[j]) = (l[j], l[i]); Rebuild(x); }
         if (n?.Tag is BindingModel b)
         {
             var same = Profile.Bindings.Where(x => HandOf(x) == HandOf(b)).ToList();
             int i = same.IndexOf(b), j = i + d;
-            if (j < 0 || j >= same.Count) return;
+            if (j < 0 || j >= same.Count)
+                return;
             int a1 = Profile.Bindings.IndexOf(b), a2 = Profile.Bindings.IndexOf(same[j]);
             (Profile.Bindings[a1], Profile.Bindings[a2]) = (Profile.Bindings[a2], Profile.Bindings[a1]);
             Rebuild(b);
         }
-        else if (n?.Tag is WheelItemModel i) Swap(((WheelModel)n.Parent.Tag).Items, i);
+        else if (n?.Tag is WheelItemModel i)
+            Swap(((WheelModel)n.Parent.Tag).Items, i);
     }
 
     void Rebuild(object select)
@@ -274,6 +321,7 @@ public partial class MainForm
         MarkDirty();
         BuildTree();
         var f = Find(tree.Nodes, select);
-        if (f != null) tree.SelectedNode = f;
+        if (f != null)
+            tree.SelectedNode = f;
     }
 }

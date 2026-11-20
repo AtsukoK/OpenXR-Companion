@@ -33,8 +33,10 @@ public partial class MainForm
             ShowDropMark(target, after);
             // Scroll when dragging near the top or bottom edge.
             var under = tree.GetNodeAt(pt);
-            if (under != null && pt.Y < 16) under.PrevVisibleNode?.EnsureVisible();
-            else if (under != null && pt.Y > tree.ClientSize.Height - 16) under.NextVisibleNode?.EnsureVisible();
+            if (under != null && pt.Y < 16)
+                under.PrevVisibleNode?.EnsureVisible();
+            else if (under != null && pt.Y > tree.ClientSize.Height - 16)
+                under.NextVisibleNode?.EnsureVisible();
         };
         tree.DragLeave += (s, e) => ShowDropMark(null, false);
         tree.DragDrop += (s, e) =>
@@ -42,7 +44,8 @@ public partial class MainForm
             ShowDropMark(null, false);
             var src = e.Data.GetData(typeof(TreeNode)) as TreeNode;
             var (target, after) = DropTarget(src, tree.PointToClient(new Point(e.X, e.Y)));
-            if (target != null) DoDrop(src, target, after);
+            if (target != null)
+                DoDrop(src, target, after);
         };
     }
 
@@ -50,21 +53,26 @@ public partial class MainForm
     (TreeNode, bool) DropTarget(TreeNode src, Point pt)
     {
         var n = tree.GetNodeAt(pt);
-        if (src == null || n == null || n == src) return (null, false);
+        if (src == null || n == null || n == src)
+            return (null, false);
         if (n.Tag is AddSlot)
         {
-            if (src.Tag is WheelItemModel && n.Parent?.Tag is WheelModel) return (n.Parent, true); // onto "+ Add item" = append to that wheel
+            if (src.Tag is WheelItemModel && n.Parent?.Tag is WheelModel)
+                return (n.Parent, true); // onto "+ Add item" = append to that wheel
             return (null, false);
         }
         bool lowerHalf = pt.Y > n.Bounds.Top + n.Bounds.Height / 2;
         if (src.Tag is BindingModel)
         {
-            if (n.Tag is BindingModel) return (n, lowerHalf);
-            if ((n == bindingRoots[0] || n == bindingRoots[1]) && n.Nodes.Count > 0) return (n.Nodes[0], false);
+            if (n.Tag is BindingModel)
+                return (n, lowerHalf);
+            if ((n == bindingRoots[0] || n == bindingRoots[1]) && n.Nodes.Count > 0)
+                return (n.Nodes[0], false);
         }
         else if (src.Tag is WheelItemModel)
         {
-            if (n.Tag is WheelItemModel) return (n, lowerHalf);
+            if (n.Tag is WheelItemModel)
+                return (n, lowerHalf);
             if (n.Tag is WheelModel w)
                 return ReferenceEquals(w, src.Parent.Tag) && n.Nodes.Count > 0 ? (n.Nodes[0], false) : (n, true);
         }
@@ -76,8 +84,11 @@ public partial class MainForm
     {
         var wheel = n?.Tag is WheelModel ? n : null;
         var line = wheel == null ? n : null;
-        if (ReferenceEquals(wheel, dropWheel) && ReferenceEquals(line, dropNode) && after == dropAfter) return;
-        dropWheel = wheel; dropNode = line; dropAfter = after;
+        if (ReferenceEquals(wheel, dropWheel) && ReferenceEquals(line, dropNode) && after == dropAfter)
+            return;
+        dropWheel = wheel;
+        dropNode = line;
+        dropAfter = after;
         tree.Invalidate();
     }
 
@@ -93,7 +104,8 @@ public partial class MainForm
         {
             var fromWheel = (WheelModel)src.Parent.Tag;
             var toWheel = target.Tag as WheelModel ?? (WheelModel)target.Parent.Tag;
-            if (!ReferenceEquals(fromWheel, toWheel) && toWheel.Items.Count >= 16) { MessageBox.Show(this, $"Wheel {toWheel.Name} already has 16 items."); return; }
+            if (!ReferenceEquals(fromWheel, toWheel) && toWheel.Items.Count >= 16)
+            { MessageBox.Show(this, $"Wheel {toWheel.Name} already has 16 items."); return; }
             fromWheel.Items.Remove(it);
             int i = target.Tag is WheelItemModel ti ? toWheel.Items.IndexOf(ti) + (after ? 1 : 0) : toWheel.Items.Count;
             toWheel.Items.Insert(Math.Clamp(i, 0, toWheel.Items.Count), it);

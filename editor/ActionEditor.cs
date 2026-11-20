@@ -35,7 +35,9 @@ public class ActionEditor : FormPanel
 
     public ActionEditor(bool inWheel, WristModel wrist = null)
     {
-        this.inWheel = inWheel; this.inWrist = wrist != null; wristOwner = wrist;
+        this.inWheel = inWheel;
+        this.inWrist = wrist != null;
+        wristOwner = wrist;
         var types = Choices.ActionTypes.Where(c => c.Code != "page").ToList();
         if (wrist != null)
         {
@@ -66,7 +68,9 @@ public class ActionEditor : FormPanel
         lScreenWin = AddRow("Or a window", screenWin, "Leave empty for a monitor. Type part of a window's title or a program name (e.g. chrome, Discord), or pick one that's open now. The first matching window is shown.");
         lOffMode = AddRow("Offsets", offMode, "Settings > Controller offsets has the numbers, sliders and reset buttons too.");
         lMirMode = AddRow("Headset mirror", mirMode, "The window shows on the desktop; the editor's toolbar has the same switch, and Settings > Headset mirror sets eye, zoom and frame rate.");
-        foreach (var (_, ctl, _) in Rows) if (ctl is ComboBox) ctl.Width = 400; // one width for every dropdown here, so they line up
+        foreach (var (_, ctl, _) in Rows)
+            if (ctl is ComboBox)
+                ctl.Width = 400; // one width for every dropdown here, so they line up
         mirMode.SelectedIndexChanged += (s, e) => { if (!loading) { a.Mode = mirMode.Code; Fire(); } };
         offMode.SelectedIndexChanged += (s, e) => { if (!loading) { a.Mode = offMode.Code; Fire(); } };
         screenWin.TextChanged += (s, e) => { if (!loading) { a.Window = string.IsNullOrWhiteSpace(screenWin.Text) ? null : screenWin.Text.Trim(); Fire(); } };
@@ -97,14 +101,37 @@ public class ActionEditor : FormPanel
     {
         switch (a.Type)
         {
-            case "key": a.Keys ??= "F1"; if (a.Mode is not ("tap" or "hold" or "toggle")) a.Mode = null; break;
-            case "wheel": a.Wheel ??= MainForm.Current.Profile.Wheels.Keys.FirstOrDefault(); break;
-            case "page": a.Page ??= wristOwner?.Pages.Keys.FirstOrDefault(); break;
-            case "layer": a.Layer ??= "shift"; if (a.Mode is not ("hold" or "toggle" or "on" or "off")) a.Mode = inWheel ? "toggle" : "hold"; break;
-            case "xr_input": a.Target ??= "left.menu"; break;
-            case "screen": if (Choices.ScreenModes.All(c => c.Code != a.Mode)) a.Mode = "toggle"; break;
-            case "headset_mirror": if (Choices.MirrorModes.All(c => c.Code != a.Mode)) a.Mode = "toggle"; break;
-            case "controller_offsets": if (Choices.OffsetModes.All(c => c.Code != a.Mode)) a.Mode = "panel"; break;
+            case "key":
+                a.Keys ??= "F1";
+                if (a.Mode is not ("tap" or "hold" or "toggle"))
+                    a.Mode = null;
+                break;
+            case "wheel":
+                a.Wheel ??= MainForm.Current.Profile.Wheels.Keys.FirstOrDefault();
+                break;
+            case "page":
+                a.Page ??= wristOwner?.Pages.Keys.FirstOrDefault();
+                break;
+            case "layer":
+                a.Layer ??= "shift";
+                if (a.Mode is not ("hold" or "toggle" or "on" or "off"))
+                    a.Mode = inWheel ? "toggle" : "hold";
+                break;
+            case "xr_input":
+                a.Target ??= "left.menu";
+                break;
+            case "screen":
+                if (Choices.ScreenModes.All(c => c.Code != a.Mode))
+                    a.Mode = "toggle";
+                break;
+            case "headset_mirror":
+                if (Choices.MirrorModes.All(c => c.Code != a.Mode))
+                    a.Mode = "toggle";
+                break;
+            case "controller_offsets":
+                if (Choices.OffsetModes.All(c => c.Code != a.Mode))
+                    a.Mode = "panel";
+                break;
         }
     }
 
@@ -117,14 +144,18 @@ public class ActionEditor : FormPanel
         keyMode.Code = string.IsNullOrEmpty(a.Mode) || a.Type != "key" ? "tap" : a.Mode;
         steps.Text = (a.Steps ?? "").Replace("; ", "\r\n").Replace(";", "\r\n");
         wheel.Items.Clear();
-        foreach (var w in MainForm.Current.Profile.Wheels.Keys) wheel.Items.Add(w);
+        foreach (var w in MainForm.Current.Profile.Wheels.Keys)
+            wheel.Items.Add(w);
         wheel.SelectedItem = a.Wheel;
         page.Items.Clear();
-        if (wristOwner != null) foreach (var pg in wristOwner.Pages.Keys) page.Items.Add(pg);
+        if (wristOwner != null)
+            foreach (var pg in wristOwner.Pages.Keys)
+                page.Items.Add(pg);
         page.SelectedItem = a.Page;
         confirm.Code = string.IsNullOrEmpty(a.Confirm) ? "auto" : a.Confirm;
         layer.Items.Clear();
-        foreach (var l in new LayerConv().GetStandardValues(null)) layer.Items.Add(l);
+        foreach (var l in new LayerConv().GetStandardValues(null))
+            layer.Items.Add(l);
         layer.Text = a.Layer ?? "";
         layerMode.Code = a.Type == "layer" && !string.IsNullOrEmpty(a.Mode) ? a.Mode : (inWheel ? "toggle" : "hold");
         target.Value = a.Target ?? "left.menu";
@@ -133,7 +164,8 @@ public class ActionEditor : FormPanel
         mirMode.Code = a.Type == "headset_mirror" && !string.IsNullOrEmpty(a.Mode) ? a.Mode : "toggle";
         offMode.Code = a.Type == "controller_offsets" && !string.IsNullOrEmpty(a.Mode) ? a.Mode : "panel";
         screenMon.Code = a.Monitor?.ToString() ?? "";
-        screenWin.Items.Clear(); OpenWindows.FillOnOpen(screenWin);
+        screenWin.Items.Clear();
+        OpenWindows.FillOnOpen(screenWin);
         screenWin.Text = a.Window ?? "";
         loading = false;
         Sync();
@@ -142,16 +174,23 @@ public class ActionEditor : FormPanel
     void Sync()
     {
         string t = a.Type;
-        Show(lKeys, t == "key"); Show(lKeyMode, t is "key" or "xr_input");
+        Show(lKeys, t == "key");
+        Show(lKeyMode, t is "key" or "xr_input");
         Show(lSteps, t == "sequence");
-        Show(lWheel, t == "wheel"); Show(lConfirm, t == "wheel" && (!inWheel || inWrist));
+        Show(lWheel, t == "wheel");
+        Show(lConfirm, t == "wheel" && (!inWheel || inWrist));
         Show(lPage, t == "page");
-        Show(lLayer, t == "layer"); Show(lLayerMode, t == "layer");
+        Show(lLayer, t == "layer");
+        Show(lLayerMode, t == "layer");
         Show(lTarget, t == "xr_input");
         bool turnsOn = t == "screen" && (a.Mode is null or "toggle" or "on");
         Show(lOffMode, t == "controller_offsets");
         Show(lMirMode, t == "headset_mirror");
-        Show(lScreenMode, t == "screen"); Show(lScreenPlace, turnsOn); Show(lScreenMon, turnsOn); Show(lScreenWin, turnsOn);
-        if (t == "xr_input") { keyMode.Code = string.IsNullOrEmpty(a.Mode) ? "tap" : a.Mode; }
+        Show(lScreenMode, t == "screen");
+        Show(lScreenPlace, turnsOn);
+        Show(lScreenMon, turnsOn);
+        Show(lScreenWin, turnsOn);
+        if (t == "xr_input")
+        { keyMode.Code = string.IsNullOrEmpty(a.Mode) ? "tap" : a.Mode; }
     }
 }

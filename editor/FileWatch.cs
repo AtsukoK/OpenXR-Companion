@@ -9,15 +9,21 @@ public partial class MainForm
 
     void NoteFileTime()
     {
-        try { knownWrite = currentFile != null && File.Exists(currentFile) ? File.GetLastWriteTimeUtc(currentFile) : default; } catch { }
+        try
+        { knownWrite = currentFile != null && File.Exists(currentFile) ? File.GetLastWriteTimeUtc(currentFile) : default; }
+        catch { }
     }
 
     void CheckFileChangedOutside()
     {
-        if (askingReload || currentFile == null || coach != null || !File.Exists(currentFile)) return;
+        if (askingReload || currentFile == null || coach != null || !File.Exists(currentFile))
+            return;
         DateTime t;
-        try { t = File.GetLastWriteTimeUtc(currentFile); } catch { return; }
-        if (knownWrite == default || t == knownWrite) return;
+        try
+        { t = File.GetLastWriteTimeUtc(currentFile); }
+        catch { return; }
+        if (knownWrite == default || t == knownWrite)
+            return;
         knownWrite = t;
         if (dirty)
         {
@@ -26,7 +32,8 @@ public partial class MainForm
                 "Load the new version? Your unsaved changes here would be lost. Choose No to keep editing; saving will then overwrite the outside change.",
                 "Profile changed", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             askingReload = false;
-            if (r != DialogResult.Yes) return;
+            if (r != DialogResult.Yes)
+                return;
         }
         LoadFile(currentFile);
         SetStatus("Reloaded " + Path.GetFileName(currentFile) + ": it was changed outside the editor", false);

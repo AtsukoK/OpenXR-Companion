@@ -25,7 +25,8 @@ public partial class MainForm
             {
                 Directory.CreateDirectory(DataDir);
                 string cur = File.Exists(ActiveFile) ? File.ReadAllText(ActiveFile).Trim() : null;
-                if (cur != value) AtomicFile.WriteAllText(ActiveFile, value);
+                if (cur != value)
+                    AtomicFile.WriteAllText(ActiveFile, value);
             }
             catch { }
         }
@@ -35,8 +36,10 @@ public partial class MainForm
     {
         Native.PrepareDefaults();
         string def = Path.Combine(ProfilesDir, StandardFile);
-        if (!File.Exists(def)) File.WriteAllText(def, Native.DefaultProfile() ?? "{}");
-        if (!File.Exists(Path.Combine(ProfilesDir, select))) select = StartProfile;
+        if (!File.Exists(def))
+            File.WriteAllText(def, Native.DefaultProfile() ?? "{}");
+        if (!File.Exists(Path.Combine(ProfilesDir, select)))
+            select = StartProfile;
         loading = true;
         profileBox.Items.Clear();
         foreach (var f in Directory.GetFiles(ProfilesDir, "*.json").Select(Path.GetFileName)
@@ -55,18 +58,23 @@ public partial class MainForm
             var root = JsonNode.Parse(File.ReadAllText(path), documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
             // Accept a chord given as an array as well.
             foreach (var b in root?["bindings"]?.AsArray() ?? new JsonArray())
-                if (b?["input"] is JsonArray arr) b["input"] = string.Join("+", arr.Select(x => x.ToString()));
+                if (b?["input"] is JsonArray arr)
+                    b["input"] = string.Join("+", arr.Select(x => x.ToString()));
             foreach (var b in root?["bindings"]?.AsArray() ?? new JsonArray())
                 foreach (var k in new[] { "layers", "not_layers" })
-                    if (b?[k] is JsonArray la) b[k] = string.Join(",", la.Select(x => x.ToString()));
+                    if (b?[k] is JsonArray la)
+                        b[k] = string.Join(",", la.Select(x => x.ToString()));
             Profile = root.Deserialize<ProfileModel>(JsonOpts) ?? new ProfileModel();
-            foreach (var (k, w) in Profile.Wheels) w.Name = k;
-            Profile.WristLeft ??= new(); Profile.WristRight ??= new() { Mirror = true };
+            foreach (var (k, w) in Profile.Wheels)
+                w.Name = k;
+            Profile.WristLeft ??= new();
+            Profile.WristRight ??= new() { Mirror = true };
             MigrateWrist();
             foreach (var wm in new[] { Profile.WristLeft, Profile.WristRight })
             {
                 wm.Pages ??= new();
-                foreach (var (k, w) in wm.Pages) w.Name = k;
+                foreach (var (k, w) in wm.Pages)
+                    w.Name = k;
             }
             EnsureWristPages();
             currentFile = path;
@@ -79,7 +87,8 @@ public partial class MainForm
                 SetStatus("default.json is the standard profile (it updates with each release), and your games now use it. Changes you save go to user_defaults.json (or a new profile if you have one).", false);
             else if (err == null && string.Equals(Path.GetFileName(path), UserDefaultsFile, StringComparison.OrdinalIgnoreCase))
                 SetStatus("user_defaults.json: your own defaults, and the profile your games now use. Select default.json to use the standard instead.", false);
-            else SetStatus(err == null ? "Loaded " + path : "Loaded, but the layer reports: " + err, err != null);
+            else
+                SetStatus(err == null ? "Loaded " + path : "Loaded, but the layer reports: " + err, err != null);
         }
         catch (Exception e)
         {
@@ -90,10 +99,12 @@ public partial class MainForm
     // Headless check: round-trip every profile through the model and validate with the layer.
     public static int SelfTest(string outFile)
     {
-        var sb = new StringBuilder(); int bad = 0;
+        var sb = new StringBuilder();
+        int bad = 0;
         Directory.CreateDirectory(ProfilesDir);
         string def = Path.Combine(ProfilesDir, "default.json");
-        if (!File.Exists(def)) File.WriteAllText(def, Native.DefaultProfile() ?? "{}");
+        if (!File.Exists(def))
+            File.WriteAllText(def, Native.DefaultProfile() ?? "{}");
         var f = new MainForm();
         foreach (var file in Directory.GetFiles(ProfilesDir, "*.json"))
         {
@@ -101,7 +112,8 @@ public partial class MainForm
             string json = f.Serialize();
             var err = Native.Validate(json);
             sb.AppendLine($"{Path.GetFileName(file)}: {(err == null ? "OK" : "ERROR " + err)} ({f.Profile.Bindings.Count} bindings, {f.Profile.Wheels.Count} wheels)");
-            if (err != null) bad++;
+            if (err != null)
+                bad++;
         }
         // Controller choices applied to the built-in defaults must still pass the layer's parser.
         var builtin = Path.Combine(Path.GetTempPath(), "vro_builtin_default.json");
@@ -113,10 +125,12 @@ public partial class MainForm
             var err = Native.Validate(f.Serialize());
             var openers = string.Join(", ", f.Profile.Bindings.Where(b => b.Action?.Type == "wheel").Select(b => b.Input + " " + b.Gesture));
             sb.AppendLine($"controllers {id}: {(err == null && n == 2 ? "OK" : "ERROR " + err)} ({n} openers: {openers})");
-            if (err != null || n != 2) bad++;
+            if (err != null || n != 2)
+                bad++;
         }
         sb.AppendLine("--- round-trip of default ---");
-        f.LoadFile(def); sb.AppendLine(f.Serialize());
+        f.LoadFile(def);
+        sb.AppendLine(f.Serialize());
         File.WriteAllText(outFile, sb.ToString());
         return bad;
     }
@@ -148,7 +162,8 @@ public partial class MainForm
         for (int h = 0; h < 2; h++)
         {
             var wm = Profile.WristFor(h);
-            if (wm.Pages.Count > 0) continue;
+            if (wm.Pages.Count > 0)
+                continue;
             var page = DefaultPage(h);
             wm.Pages[page.Name] = page;
             wm.Start = page.Name;
@@ -160,7 +175,8 @@ public partial class MainForm
     {
         var old = Profile.LegacyWrist;
         Profile.LegacyWrist = null;
-        if (old == null) return;
+        if (old == null)
+            return;
         int h = (old.LegacyHand ?? "left").ToLowerInvariant() == "right" ? 1 : 0;
         old.LegacyHand = null;
         old.Mirror = false;
@@ -174,21 +190,27 @@ public partial class MainForm
             page.Name = legacy;
             old.Pages[legacy] = page;
             old.Start = legacy;
-            if (!usedElsewhere) Profile.Wheels.Remove(legacy);
+            if (!usedElsewhere)
+                Profile.Wheels.Remove(legacy);
         }
         old.LegacyWheel = null;
-        if (h == 0) Profile.WristLeft = old; else { Profile.WristRight = old; }
+        if (h == 0)
+            Profile.WristLeft = old;
+        else
+        { Profile.WristRight = old; }
     }
 
     string Serialize()
     {
         var wheels = new Dictionary<string, WheelModel>();
-        foreach (var w in Profile.Wheels.Values) wheels[w.Name] = w;
+        foreach (var w in Profile.Wheels.Values)
+            wheels[w.Name] = w;
         Profile.Wheels = wheels;
         foreach (var wm in new[] { Profile.WristLeft, Profile.WristRight })
         {
             var pages = new Dictionary<string, WheelModel>();
-            foreach (var w in wm.Pages.Values) pages[w.Name] = w;
+            foreach (var w in wm.Pages.Values)
+                pages[w.Name] = w;
             wm.Pages = pages;
         }
         return JsonSerializer.Serialize(Profile, JsonOpts);
@@ -196,11 +218,14 @@ public partial class MainForm
 
     bool Save()
     {
-        if (Profile == null) return false;
+        if (Profile == null)
+            return false;
         var names = Profile.Wheels.Values.GroupBy(w => w.Name).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
-        if (names.Count > 0) { MessageBox.Show(this, "Two wheels share the name " + names[0] + "."); return false; }
+        if (names.Count > 0)
+        { MessageBox.Show(this, "Two wheels share the name " + names[0] + "."); return false; }
         var pnames = Profile.WristLeft.Pages.Values.Concat(Profile.WristRight.Pages.Values).GroupBy(w => w.Name).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
-        if (pnames.Count > 0) { MessageBox.Show(this, "Two wrist pages share the name " + pnames[0] + "."); return false; }
+        if (pnames.Count > 0)
+        { MessageBox.Show(this, "Two wrist pages share the name " + pnames[0] + "."); return false; }
         string json = Serialize();
         var err = Native.Validate(json);
         if (err != null && MessageBox.Show(this, "The layer would reject this profile:\n\n" + err + "\n\nSave anyway? (the game keeps the last good version until fixed)", "Problem", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
@@ -212,15 +237,18 @@ public partial class MainForm
             if (File.Exists(user)) // never replace the user's own defaults: a new profile instead
             {
                 string name = "user_defaults 2.json";
-                for (int i = 3; File.Exists(Path.Combine(ProfilesDir, name)); i++) name = "user_defaults " + i + ".json";
+                for (int i = 3; File.Exists(Path.Combine(ProfilesDir, name)); i++)
+                    name = "user_defaults " + i + ".json";
                 if (MessageBox.Show(this,
                         "You changed default.json, the standard profile. It stays as it is, and you already have your own user_defaults.json, which won't be replaced.\n\n" +
                         "These changes will be saved as a new profile: " + name + "\n\n" +
                         "The new profile becomes the selected one, so your games use it. Pick user_defaults.json in the profile list to go back to it.",
-                        "Saving changes to the standard profile", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK) return false;
+                        "Saving changes to the standard profile", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK)
+                    return false;
                 user = Path.Combine(ProfilesDir, name);
             }
-            currentFile = user; forked = true;
+            currentFile = user;
+            forked = true;
         }
         AtomicFile.WriteAllText(currentFile, json);
         NoteFileTime();
@@ -231,7 +259,8 @@ public partial class MainForm
             ActiveProfile = saved;
             bool isUser = string.Equals(saved, UserDefaultsFile, StringComparison.OrdinalIgnoreCase);
             loading = true;
-            if (!profileBox.Items.Contains(saved)) profileBox.Items.Insert(Math.Min(isUser ? 1 : profileBox.Items.Count, profileBox.Items.Count), saved);
+            if (!profileBox.Items.Contains(saved))
+                profileBox.Items.Insert(Math.Min(isUser ? 1 : profileBox.Items.Count, profileBox.Items.Count), saved);
             profileBox.SelectedItem = saved;
             loading = false;
             Text = "OpenXR Companion - Profile Editor - " + saved;
@@ -248,27 +277,34 @@ public partial class MainForm
 
     void NewProfile()
     {
-        if (!ConfirmDiscard()) return;
+        if (!ConfirmDiscard())
+            return;
         var seen = Directory.Exists(Path.Combine(DataDir, "logs"))
             ? Directory.GetFiles(Path.Combine(DataDir, "logs"), "*.log").Select(Path.GetFileNameWithoutExtension).ToArray() : Array.Empty<string>();
         using var dlg = new NewProfileDialog(seen);
-        ThemeWalker.Apply(dlg); dlg.HandleCreated += (s, e) => ThemeWalker.TitleBar(dlg, Theme.IsDark);
-        if (dlg.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(dlg.ExeName)) return;
+        ThemeWalker.Apply(dlg);
+        dlg.HandleCreated += (s, e) => ThemeWalker.TitleBar(dlg, Theme.IsDark);
+        if (dlg.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(dlg.ExeName))
+            return;
         string name = dlg.ExeName.Trim().ToLowerInvariant();
-        if (name.EndsWith(".exe")) name = name[..^4];
+        if (name.EndsWith(".exe"))
+            name = name[..^4];
         string path = Path.Combine(ProfilesDir, name + ".json");
-        if (File.Exists(path)) { MessageBox.Show(this, "A profile for " + name + " already exists."); RefreshProfileList(name + ".json"); return; }
+        if (File.Exists(path))
+        { MessageBox.Show(this, "A profile for " + name + " already exists."); RefreshProfileList(name + ".json"); return; }
         File.Copy(Path.Combine(ProfilesDir, dlg.CopyFrom ?? StartProfile), path);
         RefreshProfileList(name + ".json");
     }
 
     void DeleteProfile()
     {
-        if (IsStandard(currentFile)) { MessageBox.Show(this, "default.json is the standard profile and can't be deleted."); return; }
+        if (IsStandard(currentFile))
+        { MessageBox.Show(this, "default.json is the standard profile and can't be deleted."); return; }
         bool userDefs = string.Equals(Path.GetFileName(currentFile), UserDefaultsFile, StringComparison.OrdinalIgnoreCase);
         if (MessageBox.Show(this, userDefs
                 ? "Delete user_defaults.json? Your games switch to the standard default.json."
-                : "Delete " + Path.GetFileName(currentFile) + "? Your games switch to " + StartProfile + ".", "Delete", MessageBoxButtons.YesNo) != DialogResult.Yes) return;
+                : "Delete " + Path.GetFileName(currentFile) + "? Your games switch to " + StartProfile + ".", "Delete", MessageBoxButtons.YesNo) != DialogResult.Yes)
+            return;
         File.Delete(currentFile);
         dirty = false;
         RefreshProfileList(ActiveProfile);

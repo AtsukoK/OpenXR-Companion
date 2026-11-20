@@ -33,15 +33,29 @@ public class ArmPosePreview : Control
         float sizeM = wp?.Size ?? 0.11f, elbowM = wp?.TowardElbow ?? 0.13f;
         int columns = wp?.Columns ?? 2;
 
-        float armAngle; string caption;
+        float armAngle;
+        string caption;
         switch (m)
         {
-            case "between": armAngle = -45; caption = "Arm half raised: text turned halfway"; break;
-            case "along_arm": armAngle = 0; caption = "Arm across the body: text along the forearm"; break;
-            case "custom": armAngle = -(wp?.RotateDeg ?? 0); caption = $"Custom: text turned {wp?.RotateDeg ?? 0:0} degrees from along the forearm"; break;
-            default: armAngle = -90; caption = "Hand held up, palm to face: top toward the fingers"; break;
+            case "between":
+                armAngle = -45;
+                caption = "Arm half raised: text turned halfway";
+                break;
+            case "along_arm":
+                armAngle = 0;
+                caption = "Arm across the body: text along the forearm";
+                break;
+            case "custom":
+                armAngle = -(wp?.RotateDeg ?? 0);
+                caption = $"Custom: text turned {wp?.RotateDeg ?? 0:0} degrees from along the forearm";
+                break;
+            default:
+                armAngle = -90;
+                caption = "Hand held up, palm to face: top toward the fingers";
+                break;
         }
-        if (RightArm) armAngle = -180 - armAngle;
+        if (RightArm)
+            armAngle = -180 - armAngle;
         float textTurn = -armAngle; // every pose is meant to read upright from where you look
 
         // Fit the hand and the panel into the view at any angle, centred on them; the sleeve just runs
@@ -51,12 +65,15 @@ public class ArmPosePreview : Control
         var pts = new List<PointF> { new(180, -18), new(180, 18), new(108, -26), new(108, 26), new(px - S / 2 - 15, -16), new(px - S / 2 - 15, 16) };
         using (var pm = new Matrix())
         {
-            pm.Translate(px, 0); pm.Rotate(textTurn);
+            pm.Translate(px, 0);
+            pm.Rotate(textTurn);
             var corners = new[] { new PointF(-S / 2, -S / 2), new PointF(S / 2, -S / 2), new PointF(S / 2, S * 0.6f), new PointF(-S / 2, S * 0.6f) };
-            pm.TransformPoints(corners); pts.AddRange(corners);
+            pm.TransformPoints(corners);
+            pts.AddRange(corners);
         }
         var fit = pts.ToArray();
-        using (var am = new Matrix()) { am.Rotate(armAngle); am.TransformPoints(fit); }
+        using (var am = new Matrix())
+        { am.Rotate(armAngle); am.TransformPoints(fit); }
         float minX = fit.Min(p => p.X), maxX = fit.Max(p => p.X), minY = fit.Min(p => p.Y), maxY = fit.Max(p => p.Y);
         float scale = Math.Min(1.8f, Math.Min((W - 20) / (maxX - minX), (H - 12) / (maxY - minY)));
         var state = g.Save();
@@ -68,18 +85,23 @@ public class ArmPosePreview : Control
         using var skin = new SolidBrush(Color.FromArgb(255, 205, 170, 140));
         using var sleeve = new SolidBrush(Color.FromArgb(255, 90, 96, 110));
         using var outline = new Pen(Color.FromArgb(255, 30, 30, 34), 1.5f);
-        using (var arm = Capsule(-400, -15, 515, 30)) { g.FillPath(sleeve, arm); g.DrawPath(outline, arm); }
-        using (var palm = Capsule(108, -17, 46, 34)) { g.FillPath(skin, palm); g.DrawPath(outline, palm); }
+        using (var arm = Capsule(-400, -15, 515, 30))
+        { g.FillPath(sleeve, arm); g.DrawPath(outline, arm); }
+        using (var palm = Capsule(108, -17, 46, 34))
+        { g.FillPath(skin, palm); g.DrawPath(outline, palm); }
         for (int i = 0; i < 4; i++)
         {
             float y = -15 + i * 8.5f;
             using var f = Capsule(146, y, i == 0 || i == 3 ? 26 : 32, 7.5f);
-            g.FillPath(skin, f); g.DrawPath(outline, f);
+            g.FillPath(skin, f);
+            g.DrawPath(outline, f);
         }
         float thumbSide = RightArm ? 1 : -1;
         var ts = g.Save();
-        g.TranslateTransform(122, thumbSide * 15); g.RotateTransform(thumbSide * 35);
-        using (var th = Capsule(0, -4, 24, 8)) { g.FillPath(skin, th); g.DrawPath(outline, th); }
+        g.TranslateTransform(122, thumbSide * 15);
+        g.RotateTransform(thumbSide * 35);
+        using (var th = Capsule(0, -4, 24, 8))
+        { g.FillPath(skin, th); g.DrawPath(outline, th); }
         g.Restore(ts);
 
         // The panel, to scale, centred 'toward the elbow' back from the grip.
@@ -118,7 +140,9 @@ public class ArmPosePreview : Control
             }
         }
         var cells = WheelPreview.GridLayout(labels.Count, columns, out var hd);
-        float bottom = hd.Bottom; foreach (var c in cells) bottom = Math.Max(bottom, c.Bottom);
+        float bottom = hd.Bottom;
+        foreach (var c in cells)
+            bottom = Math.Max(bottom, c.Bottom);
         // Centred on the wrist point by its real height (a short page is not square).
         var pr = new RectangleF(-S / 2, -(bottom + 0.03f) * S / 2, S, S);
         using (var bg = new SolidBrush(Color.FromArgb(235, 16, 20, 24)))
@@ -149,8 +173,11 @@ public class ArmPosePreview : Control
     {
         var p = new GraphicsPath();
         d = Math.Max(0.5f, Math.Min(d, Math.Min(r.Width, r.Height)));
-        p.AddArc(r.X, r.Y, d, d, 180, 90); p.AddArc(r.Right - d, r.Y, d, d, 270, 90);
-        p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90); p.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
-        p.CloseFigure(); return p;
+        p.AddArc(r.X, r.Y, d, d, 180, 90);
+        p.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+        p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+        p.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+        p.CloseFigure();
+        return p;
     }
 }

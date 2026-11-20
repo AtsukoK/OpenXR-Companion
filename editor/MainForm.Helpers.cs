@@ -22,8 +22,12 @@ public partial class MainForm
         var w = pages[oldName];
         pages.Remove(oldName);
         pages[newName] = w;
-        if (owner.Start == oldName) owner.Start = newName;
-        foreach (var pg in pages.Values) foreach (var i in pg.Items) if (i.Action?.Type == "page" && i.Action.Page == oldName) i.Action.Page = newName;
+        if (owner.Start == oldName)
+            owner.Start = newName;
+        foreach (var pg in pages.Values)
+            foreach (var i in pg.Items)
+                if (i.Action?.Type == "page" && i.Action.Page == oldName)
+                    i.Action.Page = newName;
         RefreshNodeTexts();
     }
 
@@ -32,8 +36,13 @@ public partial class MainForm
         var w = Profile.Wheels[oldName];
         Profile.Wheels.Remove(oldName);
         Profile.Wheels[newName] = w;
-        foreach (var b in Profile.Bindings) if (b.Action?.Type == "wheel" && b.Action.Wheel == oldName) b.Action.Wheel = newName;
-        foreach (var ww in Profile.Wheels.Values.Concat(Profile.WristLeft.Pages.Values).Concat(Profile.WristRight.Pages.Values)) foreach (var i in ww.Items) if (i.Action?.Type == "wheel" && i.Action.Wheel == oldName) i.Action.Wheel = newName;
+        foreach (var b in Profile.Bindings)
+            if (b.Action?.Type == "wheel" && b.Action.Wheel == oldName)
+                b.Action.Wheel = newName;
+        foreach (var ww in Profile.Wheels.Values.Concat(Profile.WristLeft.Pages.Values).Concat(Profile.WristRight.Pages.Values))
+            foreach (var i in ww.Items)
+                if (i.Action?.Type == "wheel" && i.Action.Wheel == oldName)
+                    i.Action.Wheel = newName;
         RefreshNodeTexts();
     }
 
@@ -45,10 +54,13 @@ public partial class MainForm
 
     bool ConfirmDiscard()
     {
-        if (!dirty) return true;
+        if (!dirty)
+            return true;
         var r = MessageBox.Show(this, "Save changes to " + Path.GetFileName(currentFile) + "?", "Unsaved changes", MessageBoxButtons.YesNoCancel);
-        if (r == DialogResult.Cancel) return false;
-        if (r == DialogResult.Yes) return Save();
+        if (r == DialogResult.Cancel)
+            return false;
+        if (r == DialogResult.Yes)
+            return Save();
         dirty = false;
         return true;
     }

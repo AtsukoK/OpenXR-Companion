@@ -22,30 +22,37 @@ public class WheelPreview : Control
         const float pad = 0.03f, gap = 0.02f, headH = 0.14f;
         header = new RectangleF(pad, pad, 1 - 2 * pad, headH);
         var outp = new List<RectangleF>();
-        if (n <= 0) return outp;
+        if (n <= 0)
+            return outp;
         cols = Math.Clamp(Math.Min(cols, n), 1, 4);
         int rows = (n + cols - 1) / cols;
         float top = pad + headH + gap, availW = 1 - 2 * pad, availH = 1 - top - pad;
         float cw = (availW - gap * (cols - 1)) / cols, ch = (availH - gap * (rows - 1)) / rows;
-        float c = Math.Min(cw, ch * 1.25f); ch = Math.Min(ch, c);
+        float c = Math.Min(cw, ch * 1.25f);
+        ch = Math.Min(ch, c);
         float left = 0.5f - (c * cols + gap * (cols - 1)) / 2;
-        for (int i = 0; i < n; i++) outp.Add(new RectangleF(left + (i % cols) * (c + gap), top + (i / cols) * (ch + gap), c, ch));
+        for (int i = 0; i < n; i++)
+            outp.Add(new RectangleF(left + (i % cols) * (c + gap), top + (i / cols) * (ch + gap), c, ch));
         return outp;
     }
 
     int HitIndex(Point p)
     {
-        var items = On; int n = items.Count;
-        if (n == 0) return -1;
+        var items = On;
+        int n = items.Count;
+        if (n == 0)
+            return -1;
         if (Grid)
         {
-            float S0 = Math.Min(Width, Height); float u = p.X / S0, v = p.Y / S0;
+            float S0 = Math.Min(Width, Height);
+            float u = p.X / S0, v = p.Y / S0;
             var cells = GridLayout(n, Columns, out _);
             return cells.FindIndex(r => r.Contains(u, v));
         }
         float cx = Width / 2f, cy = Height / 2f, dx = p.X - cx, dy = p.Y - cy;
         float r = MathF.Sqrt(dx * dx + dy * dy), R = Math.Min(Width, Height) / 2f - 4;
-        if (r < R * 0.34f || r > R) return -1;
+        if (r < R * 0.34f || r > R)
+            return -1;
         float ang = MathF.Atan2(dx, -dy) * 180f / MathF.PI; // 0 = up, clockwise
         float seg = 360f / n;
         return (int)(((ang + seg / 2 + 720) % 360) / seg) % n;
@@ -53,18 +60,23 @@ public class WheelPreview : Control
     protected override void OnMouseClick(MouseEventArgs e)
     {
         int i = HitIndex(e.Location);
-        if (i >= 0) ItemClicked?.Invoke(On[i]);
+        if (i >= 0)
+            ItemClicked?.Invoke(On[i]);
     }
 
     protected override void OnPaint(PaintEventArgs e)
     {
-        var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
         g.Clear(BackColor);
-        if (Grid) { PaintGrid(g); return; }
+        if (Grid)
+        { PaintGrid(g); return; }
         float S = Math.Min(Width, Height), c = S / 2f, R = S / 2f - 4, r = R * 0.34f;
         using var bg = new SolidBrush(Color.FromArgb(255, 24, 28, 34));
         g.FillEllipse(bg, c - R, c - R, 2 * R, 2 * R);
-        var items = On; int n = items.Count;
+        var items = On;
+        int n = items.Count;
         float seg = n > 0 ? 360f / n : 360f;
         using var segB = new SolidBrush(Color.FromArgb(255, 44, 52, 70));
         using var hovB = new SolidBrush(Color.FromArgb(255, 60, 140, 255));
@@ -80,7 +92,8 @@ public class WheelPreview : Control
             path.CloseFigure();
             Brush br = ReferenceEquals(it, Highlight) ? hovB : segB;
             SolidBrush custom = null;
-            if (!ReferenceEquals(it, Highlight) && TryColor(it.Color, out var col)) br = custom = new SolidBrush(col);
+            if (!ReferenceEquals(it, Highlight) && TryColor(it.Color, out var col))
+                br = custom = new SolidBrush(col);
             g.FillPath(br, path);
             custom?.Dispose();
             float rad = mid * MathF.PI / 180, tr = (R + r) / 2;
@@ -97,19 +110,26 @@ public class WheelPreview : Control
     void PaintGrid(Graphics g)
     {
         float S = Math.Min(Width, Height);
-        var items = On; int n = items.Count;
+        var items = On;
+        int n = items.Count;
         var cells = GridLayout(n, Columns, out var hd);
-        float bottom = hd.Bottom; foreach (var r in cells) bottom = Math.Max(bottom, r.Bottom);
+        float bottom = hd.Bottom;
+        foreach (var r in cells)
+            bottom = Math.Max(bottom, r.Bottom);
         RectangleF Px(RectangleF r) => new(r.X * S, r.Y * S, r.Width * S, r.Height * S);
         static GraphicsPath Round(RectangleF r, float rad)
         {
             var gp = new GraphicsPath();
-            gp.AddArc(r.X, r.Y, rad, rad, 180, 90); gp.AddArc(r.Right - rad, r.Y, rad, rad, 270, 90);
-            gp.AddArc(r.Right - rad, r.Bottom - rad, rad, rad, 0, 90); gp.AddArc(r.X, r.Bottom - rad, rad, rad, 90, 90);
-            gp.CloseFigure(); return gp;
+            gp.AddArc(r.X, r.Y, rad, rad, 180, 90);
+            gp.AddArc(r.Right - rad, r.Y, rad, rad, 270, 90);
+            gp.AddArc(r.Right - rad, r.Bottom - rad, rad, rad, 0, 90);
+            gp.AddArc(r.X, r.Bottom - rad, rad, rad, 90, 90);
+            gp.CloseFigure();
+            return gp;
         }
         using (var bgp = Round(new RectangleF(1, 1, S - 2, (bottom + 0.03f) * S - 2), S * 0.06f))
-        using (var bg = new SolidBrush(Color.FromArgb(255, 24, 28, 34))) g.FillPath(bg, bgp);
+        using (var bg = new SolidBrush(Color.FromArgb(255, 24, 28, 34)))
+            g.FillPath(bg, bgp);
         var fmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
         using var tf = new Font("Segoe UI", 9.5f, FontStyle.Bold);
         using var accent = new SolidBrush(Color.FromArgb(255, 127, 196, 255));
@@ -119,11 +139,13 @@ public class WheelPreview : Control
         using var hovB = new SolidBrush(Color.FromArgb(255, 60, 140, 255));
         for (int i = 0; i < n; i++)
         {
-            var it = items[i]; var r = Px(cells[i]);
+            var it = items[i];
+            var r = Px(cells[i]);
             using var gp = Round(r, r.Height * 0.22f);
             Brush br = ReferenceEquals(it, Highlight) ? hovB : segB;
             SolidBrush custom = null;
-            if (!ReferenceEquals(it, Highlight) && TryColor(it.Color, out var col)) br = custom = new SolidBrush(col);
+            if (!ReferenceEquals(it, Highlight) && TryColor(it.Color, out var col))
+                br = custom = new SolidBrush(col);
             g.FillPath(br, gp);
             custom?.Dispose();
             g.DrawString(it.Label, font, Brushes.White, r, fmt);
@@ -133,9 +155,11 @@ public class WheelPreview : Control
     public static bool TryColor(string s, out Color c)
     {
         c = Color.Empty;
-        if (string.IsNullOrWhiteSpace(s)) return false;
+        if (string.IsNullOrWhiteSpace(s))
+            return false;
         s = s.TrimStart('#');
-        if (s.Length != 6 && s.Length != 8) return false;
+        if (s.Length != 6 && s.Length != 8)
+            return false;
         try
         {
             uint v = Convert.ToUInt32(s, 16);

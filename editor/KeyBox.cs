@@ -11,7 +11,10 @@ public class ChordEditor : FlowLayoutPanel
 
     public ChordEditor()
     {
-        FlowDirection = FlowDirection.TopDown; AutoSize = true; WrapContents = false; Margin = Padding.Empty;
+        FlowDirection = FlowDirection.TopDown;
+        AutoSize = true;
+        WrapContents = false;
+        Margin = Padding.Empty;
         addLink.LinkClicked += (s, e) => { AddRow("left", "grip", true); Fire(); };
         Controls.Add(addLink);
     }
@@ -51,10 +54,13 @@ public class ChordEditor : FlowLayoutPanel
         set
         {
             loading = true;
-            foreach (var r in Rows().ToList()) { Controls.Remove(r); r.Dispose(); }
+            foreach (var r in Rows().ToList())
+            { Controls.Remove(r); r.Dispose(); }
             var parts = (value ?? "").Split('+', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length == 0) parts = new[] { "right.trigger" };
-            foreach (var p in parts) { var (h, b) = InputText.Split(p); AddRow(h, b, false); }
+            if (parts.Length == 0)
+                parts = new[] { "right.trigger" };
+            foreach (var p in parts)
+            { var (h, b) = InputText.Split(p); AddRow(h, b, false); }
             loading = false;
             Relabel();
         }
@@ -72,7 +78,9 @@ public class KeyBox : FlowLayoutPanel
 
     public KeyBox()
     {
-        AutoSize = true; WrapContents = false; Margin = Padding.Empty;
+        AutoSize = true;
+        WrapContents = false;
+        Margin = Padding.Empty;
         Controls.AddRange(new Control[] { text, rec, mouse });
         text.TextChanged += (s, e) => { Check(); if (!Recording) Changed?.Invoke(); };
         rec.Click += (s, e) => StartRecording();
@@ -89,7 +97,8 @@ public class KeyBox : FlowLayoutPanel
     static readonly ToolTip tip = new();
     void Check()
     {
-        if (Recording) return;
+        if (Recording)
+            return;
         var err = Native.CheckKeys(text.Text, false);
         text.BackColor = err == null ? Theme.InputBack : Theme.ErrorBack;
         tip.SetToolTip(text, err == null ? null : "Unknown bind: " + err);
@@ -100,8 +109,10 @@ public class KeyBox : FlowLayoutPanel
 
     void OnKey(object s, KeyEventArgs e)
     {
-        if (!Recording) return;
-        e.SuppressKeyPress = true; e.Handled = true;
+        if (!Recording)
+            return;
+        e.SuppressKeyPress = true;
+        e.Handled = true;
         if (e.KeyCode is Keys.ControlKey or Keys.ShiftKey or Keys.Menu or Keys.LWin or Keys.RWin)
         {   // remember which modifier; if it is released with no other key, it is recorded alone
             lastMod = ModName(e.KeyCode);
@@ -109,11 +120,15 @@ public class KeyBox : FlowLayoutPanel
         }
         lastMod = null;
         string name = KeyName(e.KeyCode);
-        if (name == null) return;
+        if (name == null)
+            return;
         var parts = new List<string>();
-        if (e.Control) parts.Add("Ctrl");
-        if (e.Shift) parts.Add("Shift");
-        if (e.Alt) parts.Add("Alt");
+        if (e.Control)
+            parts.Add("Ctrl");
+        if (e.Shift)
+            parts.Add("Shift");
+        if (e.Alt)
+            parts.Add("Alt");
         parts.Add(name);
         text.Text = string.Join("+", parts);
         StopRecording();
@@ -132,30 +147,65 @@ public class KeyBox : FlowLayoutPanel
     };
     void OnKeyUp(object s, KeyEventArgs e)
     {
-        if (!Recording) return;
-        e.SuppressKeyPress = true; e.Handled = true;
-        if (lastMod == null || e.KeyCode is not (Keys.ControlKey or Keys.ShiftKey or Keys.Menu or Keys.LWin or Keys.RWin)) return;
-        text.Text = lastMod; lastMod = null;
+        if (!Recording)
+            return;
+        e.SuppressKeyPress = true;
+        e.Handled = true;
+        if (lastMod == null || e.KeyCode is not (Keys.ControlKey or Keys.ShiftKey or Keys.Menu or Keys.LWin or Keys.RWin))
+            return;
+        text.Text = lastMod;
+        lastMod = null;
         StopRecording();
         Changed?.Invoke();
     }
 
     static string KeyName(Keys k)
     {
-        if (k >= Keys.A && k <= Keys.Z) return k.ToString();
-        if (k >= Keys.D0 && k <= Keys.D9) return ((int)(k - Keys.D0)).ToString();
-        if (k >= Keys.F1 && k <= Keys.F24) return k.ToString();
-        if (k >= Keys.NumPad0 && k <= Keys.NumPad9) return "Num" + (int)(k - Keys.NumPad0);
+        if (k >= Keys.A && k <= Keys.Z)
+            return k.ToString();
+        if (k >= Keys.D0 && k <= Keys.D9)
+            return ((int)(k - Keys.D0)).ToString();
+        if (k >= Keys.F1 && k <= Keys.F24)
+            return k.ToString();
+        if (k >= Keys.NumPad0 && k <= Keys.NumPad9)
+            return "Num" + (int)(k - Keys.NumPad0);
         return k switch
         {
-            Keys.Escape => "Esc", Keys.Return => "Enter", Keys.Space => "Space", Keys.Tab => "Tab", Keys.Back => "Backspace",
-            Keys.Delete => "Delete", Keys.Insert => "Insert", Keys.Home => "Home", Keys.End => "End",
-            Keys.PageUp => "PageUp", Keys.PageDown => "PageDown", Keys.Up => "Up", Keys.Down => "Down", Keys.Left => "Left", Keys.Right => "Right",
-            Keys.OemMinus => "minus", Keys.Oemplus => "equals", Keys.Oemcomma => "comma", Keys.OemPeriod => "period",
-            Keys.OemQuestion => "slash", Keys.OemSemicolon => "semicolon", Keys.OemQuotes => "quote",
-            Keys.OemOpenBrackets => "lbracket", Keys.OemCloseBrackets => "rbracket", Keys.OemPipe => "backslash", Keys.Oemtilde => "grave",
-            Keys.Multiply => "NumMul", Keys.Add => "NumAdd", Keys.Subtract => "NumSub", Keys.Divide => "NumDiv", Keys.Decimal => "NumDec",
-            Keys.CapsLock => "CapsLock", Keys.PrintScreen => "PrintScreen", Keys.Pause => "Pause", Keys.Scroll => "ScrollLock",
+            Keys.Escape => "Esc",
+            Keys.Return => "Enter",
+            Keys.Space => "Space",
+            Keys.Tab => "Tab",
+            Keys.Back => "Backspace",
+            Keys.Delete => "Delete",
+            Keys.Insert => "Insert",
+            Keys.Home => "Home",
+            Keys.End => "End",
+            Keys.PageUp => "PageUp",
+            Keys.PageDown => "PageDown",
+            Keys.Up => "Up",
+            Keys.Down => "Down",
+            Keys.Left => "Left",
+            Keys.Right => "Right",
+            Keys.OemMinus => "minus",
+            Keys.Oemplus => "equals",
+            Keys.Oemcomma => "comma",
+            Keys.OemPeriod => "period",
+            Keys.OemQuestion => "slash",
+            Keys.OemSemicolon => "semicolon",
+            Keys.OemQuotes => "quote",
+            Keys.OemOpenBrackets => "lbracket",
+            Keys.OemCloseBrackets => "rbracket",
+            Keys.OemPipe => "backslash",
+            Keys.Oemtilde => "grave",
+            Keys.Multiply => "NumMul",
+            Keys.Add => "NumAdd",
+            Keys.Subtract => "NumSub",
+            Keys.Divide => "NumDiv",
+            Keys.Decimal => "NumDec",
+            Keys.CapsLock => "CapsLock",
+            Keys.PrintScreen => "PrintScreen",
+            Keys.Pause => "Pause",
+            Keys.Scroll => "ScrollLock",
             _ => null,
         };
     }

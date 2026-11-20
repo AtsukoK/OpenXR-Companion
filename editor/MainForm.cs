@@ -19,7 +19,8 @@ static class Native
         try
         {
             var buf = new byte[1024];
-            if (vro_validate(json, buf, buf.Length) != 0) return null;
+            if (vro_validate(json, buf, buf.Length) != 0)
+                return null;
             return Encoding.UTF8.GetString(buf, 0, Array.IndexOf(buf, (byte)0) is int n && n >= 0 ? n : buf.Length);
         }
         catch (Exception e) { return "(could not load OpenXRCompanion.dll to check: " + e.Message + ")"; }
@@ -30,11 +31,13 @@ static class Native
     /// <summary>null = fine (or cannot check), otherwise the layer's reason.</summary>
     public static string CheckKeys(string text, bool sequence)
     {
-        if (string.IsNullOrWhiteSpace(text)) return null;
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
         try
         {
             var buf = new byte[512];
-            if (vro_check_keys(text, sequence ? 1 : 0, buf, buf.Length) != 0) return null;
+            if (vro_check_keys(text, sequence ? 1 : 0, buf, buf.Length) != 0)
+                return null;
             int n = Array.IndexOf(buf, (byte)0);
             return Encoding.UTF8.GetString(buf, 0, n >= 0 ? n : buf.Length);
         }
@@ -46,7 +49,9 @@ static class Native
     public static void PrepareDefaults() { try { vro_prepare_defaults(); } catch { } }
     public static string DefaultProfile()
     {
-        try { return Marshal.PtrToStringUTF8(vro_default_profile()); } catch { return null; }
+        try
+        { return Marshal.PtrToStringUTF8(vro_default_profile()); }
+        catch { return null; }
     }
 }
 
@@ -65,7 +70,8 @@ public partial class MainForm : Form
         var dir = Path.Combine(local, "OpenXRCompanion");
         // OpenXR Hand Menus first, before that VR Radial Overlay
         var old = Path.Combine(local, "OpenXRHandMenus");
-        if (!Directory.Exists(old)) old = Path.Combine(local, "VRRadialOverlay");
+        if (!Directory.Exists(old))
+            old = Path.Combine(local, "VRRadialOverlay");
         try
         {
             if (!Directory.Exists(dir) && Directory.Exists(old))
@@ -102,9 +108,11 @@ public partial class MainForm : Form
     // Stop a control (and everything in it) from painting, then paint it once when done.
     static void Redraw(Control c, bool on, bool erase = true)
     {
-        if (!c.IsHandleCreated) return;
+        if (!c.IsHandleCreated)
+            return;
         SendMessage(c.Handle, 0x000B /*WM_SETREDRAW*/, on ? (IntPtr)1 : IntPtr.Zero, IntPtr.Zero);
-        if (on) RedrawWindow(c.Handle, IntPtr.Zero, IntPtr.Zero, 0x0001 | (erase ? 0x0004u : 0) | 0x0080 | 0x0100 | 0x0400 /*INVALIDATE|ERASE|ALLCHILDREN|UPDATENOW|FRAME*/);
+        if (on)
+            RedrawWindow(c.Handle, IntPtr.Zero, IntPtr.Zero, 0x0001 | (erase ? 0x0004u : 0) | 0x0080 | 0x0100 | 0x0400 /*INVALIDATE|ERASE|ALLCHILDREN|UPDATENOW|FRAME*/);
     }
     Stack<object> history = new();
     object lastTag;
@@ -125,7 +133,8 @@ public partial class MainForm : Form
         homeBtn = Nav("\u2302  Overview", Color.FromArgb(40, 90, 170));
         backBtn.Click += (s, e) => GoBack();
         homeBtn.Click += (s, e) => GoTo("overview");
-        bar.Controls.Add(backBtn); bar.Controls.Add(homeBtn);
+        bar.Controls.Add(backBtn);
+        bar.Controls.Add(homeBtn);
         Button Act(string text, Action a)
         {
             var b = new Button { Text = text, AutoSize = true, Height = 32, FlatStyle = FlatStyle.Flat, BackColor = Color.White, ForeColor = Color.FromArgb(40, 50, 70), Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), Margin = new Padding(0, 0, 6, 0), Cursor = Cursors.Hand };
@@ -161,13 +170,16 @@ public partial class MainForm : Form
             dupBtn.Text = what != null ? "Duplicate " + what : "Duplicate";
             delBtn.Text = what != null ? "Delete " + what : "Delete";
         }
-        if (backBtn != null) backBtn.Enabled = history.Count > 0;
-        if (homeBtn != null) homeBtn.Enabled = lastTag as string != "overview";
+        if (backBtn != null)
+            backBtn.Enabled = history.Count > 0;
+        if (homeBtn != null)
+            homeBtn.Enabled = lastTag as string != "overview";
     }
     public void GoTo(object tag)
     {
         var n = Find(tree.Nodes, tag);
-        if (n != null) { tree.SelectedNode = n; n.EnsureVisible(); }
+        if (n != null)
+        { tree.SelectedNode = n; n.EnsureVisible(); }
     }
     void GoBack()
     {
@@ -175,9 +187,12 @@ public partial class MainForm : Form
         {
             var tag = history.Pop();
             var n = Find(tree.Nodes, tag);
-            if (n == null) continue; // deleted since
+            if (n == null)
+                continue; // deleted since
             navigatingBack = true;
-            try { tree.SelectedNode = n; n.EnsureVisible(); } finally { navigatingBack = false; }
+            try
+            { tree.SelectedNode = n; n.EnsureVisible(); }
+            finally { navigatingBack = false; }
             break;
         }
         UpdateNav();
@@ -234,12 +249,16 @@ public partial class MainForm : Form
         }
         {   // light / dark: Auto follows Windows
             var tb = new ToolStripButton { Alignment = ToolStripItemAlignment.Right, DisplayStyle = ToolStripItemDisplayStyle.Text };
-            void ShowT() { tb.Text = ThemeMode.Choice switch { "dark" => "☾ Dark", "light" => "☀ Light", _ => "◐ Auto" }; tb.ToolTipText = "Light or dark look. Auto follows your Windows setting. Click to switch."; }
+            void ShowT()
+            { tb.Text = ThemeMode.Choice switch { "dark" => "☾ Dark", "light" => "☀ Light", _ => "◐ Auto" }; tb.ToolTipText = "Light or dark look. Auto follows your Windows setting. Click to switch."; }
             tb.Click += (s, e) =>
             {
                 ThemeMode.Choice = ThemeMode.Choice switch { "dark" => "light", "light" => "auto", _ => "dark" };
-                ShowT(); Theme.Set(ThemeMode.IsDark);
-                ThemeWalker.Apply(this); tree.BackColor = Theme.Surface; tree.Invalidate();
+                ShowT();
+                Theme.Set(ThemeMode.IsDark);
+                ThemeWalker.Apply(this);
+                tree.BackColor = Theme.Surface;
+                tree.Invalidate();
                 ShowEditor(tree.SelectedNode);
             };
             ShowT();
@@ -265,7 +284,9 @@ public partial class MainForm : Form
         {   // credit, bottom right on every page
             var credit = new ToolStripStatusLabel("Created by Atsuko")
             {
-                IsLink = true, LinkBehavior = LinkBehavior.HoverUnderline, Font = new Font(Font, FontStyle.Bold),
+                IsLink = true,
+                LinkBehavior = LinkBehavior.HoverUnderline,
+                Font = new Font(Font, FontStyle.Bold),
                 ToolTipText = "OpenXR Companion v" + AppVersion.ToString(3) + " - github.com/AtsukoK/OpenXR-Companion\nSupport: patreon.com/cw/AtsukoK and ko-fi.com/atsukok",
             };
             credit.Click += (s, e) => Process.Start(new ProcessStartInfo("https://www.patreon.com/cw/AtsukoK") { UseShellExecute = true });
@@ -279,35 +300,48 @@ public partial class MainForm : Form
         tree.AfterSelect += (s, e) =>
         {
             // Remember where we came from so Back can return there.
-            if (!navigatingBack && lastTag != null && !ReferenceEquals(lastTag, e.Node?.Tag)) { history.Push(lastTag); if (history.Count > 50) history = new Stack<object>(history.Take(50).Reverse()); }
+            if (!navigatingBack && lastTag != null && !ReferenceEquals(lastTag, e.Node?.Tag))
+            { history.Push(lastTag); if (history.Count > 50) history = new Stack<object>(history.Take(50).Reverse()); }
             lastTag = e.Node?.Tag;
-            ShowEditor(e.Node); tree.Invalidate();
+            ShowEditor(e.Node);
+            tree.Invalidate();
             UpdateNav();
         };
         SetupTreeLook();
         tree.KeyDown += (s, e) =>
         {
-            if (e.KeyCode == Keys.Delete) { Remove(); e.Handled = true; }
-            else if (e.Control && e.KeyCode == Keys.D) { Duplicate(); e.Handled = true; }
-            else if (e.Alt && e.KeyCode == Keys.Up) { MoveItem(-1); e.Handled = true; }
-            else if (e.Alt && e.KeyCode == Keys.Down) { MoveItem(1); e.Handled = true; }
+            if (e.KeyCode == Keys.Delete)
+            { Remove(); e.Handled = true; }
+            else if (e.Control && e.KeyCode == Keys.D)
+            { Duplicate(); e.Handled = true; }
+            else if (e.Alt && e.KeyCode == Keys.Up)
+            { MoveItem(-1); e.Handled = true; }
+            else if (e.Alt && e.KeyCode == Keys.Down)
+            { MoveItem(1); e.Handled = true; }
         };
         var menu = new ContextMenuStrip { Font = new Font("Segoe UI", 10f) };
         tree.NodeMouseClick += (s, e) =>
         {
-            if (e.Button != MouseButtons.Right || e.Node.Tag is AddSlot) return;
+            if (e.Button != MouseButtons.Right || e.Node.Tag is AddSlot)
+                return;
             tree.SelectedNode = e.Node;
             menu.Items.Clear();
             string add = e.Node.Tag switch
             {
                 "bindings_right" or "bindings_left" or BindingModel => "Add binding",
-                "wheels" => "New wheel", "wrist0" or "wrist1" => "New page",
-                WheelModel or WheelItemModel => InWrist(e.Node) ? "Add button" : "Add item", _ => null,
+                "wheels" => "New wheel",
+                "wrist0" or "wrist1" => "New page",
+                WheelModel or WheelItemModel => InWrist(e.Node) ? "Add button" : "Add item",
+                _ => null,
             };
-            if (add != null) menu.Items.Add(add, null, (o, a) => Add());
-            if (dupBtn.Enabled) { menu.Items.Add(dupBtn.Text + "   (Ctrl+D)", null, (o, a) => Duplicate()); menu.Items.Add(delBtn.Text + "   (Del)", null, (o, a) => Remove()); }
-            if (upBtn.Enabled) { menu.Items.Add("Move up   (Alt+\u2191)", null, (o, a) => MoveItem(-1)); menu.Items.Add("Move down   (Alt+\u2193)", null, (o, a) => MoveItem(1)); }
-            if (menu.Items.Count > 0) menu.Show(tree, e.Location);
+            if (add != null)
+                menu.Items.Add(add, null, (o, a) => Add());
+            if (dupBtn.Enabled)
+            { menu.Items.Add(dupBtn.Text + "   (Ctrl+D)", null, (o, a) => Duplicate()); menu.Items.Add(delBtn.Text + "   (Del)", null, (o, a) => Remove()); }
+            if (upBtn.Enabled)
+            { menu.Items.Add("Move up   (Alt+\u2191)", null, (o, a) => MoveItem(-1)); menu.Items.Add("Move down   (Alt+\u2193)", null, (o, a) => MoveItem(1)); }
+            if (menu.Items.Count > 0)
+                menu.Show(tree, e.Location);
         };
         SetupDragDrop();
         grid.PropertyValueChanged += (s, e) => { MarkDirty(); RefreshNodeTexts(); };
@@ -318,7 +352,8 @@ public partial class MainForm : Form
         UpdateLayerStatus();
         Native.PrepareDefaults(); // before choosing: this may move an edited default.json to user_defaults.json (and select it)
         RefreshProfileList(ActiveProfile);
-        if (Theme.IsDark) ThemeWalker.Apply(this);
+        if (Theme.IsDark)
+            ThemeWalker.Apply(this);
         HandleCreated += (s, e) => ThemeWalker.TitleBar(this, Theme.IsDark);
         Shown += (s, e) => ShowDefaultsMovedNotice();
     }
@@ -328,8 +363,10 @@ public partial class MainForm : Form
     void ShowDefaultsMovedNotice()
     {
         string notice = Path.Combine(ProfilesDir, ".defaults_moved_notice");
-        if (Environment.GetCommandLineArgs().Length > 1 && Environment.GetCommandLineArgs()[1] != "--updated") return; // tests and screenshots
-        if (!File.Exists(notice)) return;
+        if (Environment.GetCommandLineArgs().Length > 1 && Environment.GetCommandLineArgs()[1] != "--updated")
+            return; // tests and screenshots
+        if (!File.Exists(notice))
+            return;
         bool selected = string.Equals(Path.GetFileName(currentFile), UserDefaultsFile, StringComparison.OrdinalIgnoreCase);
         MessageBox.Show(this,
             "Your own settings have moved to a new profile: user_defaults.json\n\n" +
@@ -340,7 +377,9 @@ public partial class MainForm : Form
             "If you save changes while default.json is open, they go to a profile of your own; default.json itself is never changed.\n\n" +
             "The profile you select in the editor is always the one your games use. To use the standard, select default.json.",
             "Your settings moved to user_defaults.json", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        try { File.Delete(notice); } catch { }
+        try
+        { File.Delete(notice); }
+        catch { }
     }
 
     // Timing of the slow parts (opening each page, rebuilding the list, moving an item), on a copy of a profile.
@@ -349,16 +388,20 @@ public partial class MainForm : Form
         var sb = new StringBuilder();
         var f = new MainForm { StartPosition = FormStartPosition.Manual, Location = new Point(0, 0), Size = new Size(1500, 1000) };
         f.Show();
-        for (int i = 0; i < 10; i++) Application.DoEvents();
+        for (int i = 0; i < 10; i++)
+            Application.DoEvents();
         var copy = Path.Combine(Path.GetTempPath(), "vro_perf_profile.json");
         File.Copy(profile, copy, true);
         var sw = System.Diagnostics.Stopwatch.StartNew();
         f.LoadFile(copy);
-        for (int i = 0; i < 5; i++) Application.DoEvents();
+        for (int i = 0; i < 5; i++)
+            Application.DoEvents();
         sb.AppendLine($"load file: {sw.ElapsedMilliseconds} ms");
-        double Time(Action a) { var t = System.Diagnostics.Stopwatch.StartNew(); a(); for (int i = 0; i < 3; i++) Application.DoEvents(); f.Update(); return t.Elapsed.TotalMilliseconds; }
+        double Time(Action a)
+        { var t = System.Diagnostics.Stopwatch.StartNew(); a(); for (int i = 0; i < 3; i++) Application.DoEvents(); f.Update(); return t.Elapsed.TotalMilliseconds; }
         var nodes = new List<TreeNode>();
-        void All(TreeNodeCollection c) { foreach (TreeNode n in c) { if (n.Tag is not AddSlot) nodes.Add(n); All(n.Nodes); } }
+        void All(TreeNodeCollection c)
+        { foreach (TreeNode n in c) { if (n.Tag is not AddSlot) nodes.Add(n); All(n.Nodes); } }
         All(f.tree.Nodes);
         foreach (var round in new[] { "first", "again" })
             foreach (var n in nodes)
@@ -369,8 +412,10 @@ public partial class MainForm : Form
                 PerfLog = null;
             }
         {   // building blocks, 5 times each
-            double T(Action a) { var t = System.Diagnostics.Stopwatch.StartNew(); for (int i = 0; i < 5; i++) a(); return t.Elapsed.TotalMilliseconds / 5; }
-            var w0 = f.Profile.Wheels.Values.First(); var it0 = w0.Items.First();
+            double T(Action a)
+            { var t = System.Diagnostics.Stopwatch.StartNew(); for (int i = 0; i < 5; i++) a(); return t.Elapsed.TotalMilliseconds / 5; }
+            var w0 = f.Profile.Wheels.Values.First();
+            var it0 = w0.Items.First();
             sb.AppendLine($"  new ActionEditor: {T(() => new ActionEditor(true).Dispose()):F0} ms");
             sb.AppendLine($"  new ItemEditor: {T(() => new ItemEditor(w0, it0).Dispose()):F0} ms");
             sb.AppendLine($"  new BindingEditor: {T(() => new BindingEditor(f.Profile.Bindings[0]).Dispose()):F0} ms");
@@ -379,13 +424,16 @@ public partial class MainForm : Form
             sb.AppendLine($"  ChoiceBox(40 items): {T(() => new ChoiceBox(Enumerable.Range(0, 40).Select(i => new Choice(i.ToString(), "x" + i))).Dispose()):F1} ms");
             sb.AppendLine($"  new KeyBox: {T(() => new KeyBox().Dispose()):F1} ms");
             sb.AppendLine($"  new ChordEditor: {T(() => new ChordEditor().Dispose()):F1} ms");
-            var ie = new ItemEditor(w0, it0); f.editorHost.Controls.Add(ie);
+            var ie = new ItemEditor(w0, it0);
+            f.editorHost.Controls.Add(ie);
             sb.AppendLine($"  theme walk item page: {T(() => ThemeWalker.Apply(ie)):F1} ms");
-            f.editorHost.Controls.Remove(ie); ie.Dispose();
+            f.editorHost.Controls.Remove(ie);
+            ie.Dispose();
         }
         sb.AppendLine($"rebuild list: {Time(() => f.BuildTree()):F0} ms");
         var item = nodes.FirstOrDefault(n => n.Tag is WheelItemModel);
-        if (item != null) { f.tree.SelectedNode = item; sb.AppendLine($"move item down: {Time(() => f.MoveItem(1)):F0} ms"); sb.AppendLine($"move item up: {Time(() => f.MoveItem(-1)):F0} ms"); }
+        if (item != null)
+        { f.tree.SelectedNode = item; sb.AppendLine($"move item down: {Time(() => f.MoveItem(1)):F0} ms"); sb.AppendLine($"move item up: {Time(() => f.MoveItem(-1)):F0} ms"); }
         {   // the list must stay where it was scrolled when an item moves
             var items = f.VisibleRows().Where(n => n.Tag is WheelItemModel).ToList();
             if (items.Count > 3)
@@ -394,20 +442,25 @@ public partial class MainForm : Form
                 f.tree.SelectedNode = it;
                 var rows = f.VisibleRows();
                 f.tree.TopNode = rows[Math.Max(0, rows.IndexOf(it) - 4)];
-                for (int i = 0; i < 3; i++) Application.DoEvents();
+                for (int i = 0; i < 3; i++)
+                    Application.DoEvents();
                 int before = f.VisibleRows().IndexOf(f.tree.TopNode);
-                f.MoveItem(-1); for (int i = 0; i < 3; i++) Application.DoEvents();
+                f.MoveItem(-1);
+                for (int i = 0; i < 3; i++)
+                    Application.DoEvents();
                 int after = f.VisibleRows().IndexOf(f.tree.TopNode);
                 sb.AppendLine($"list scroll kept on move: top row {before} -> {after} {(before == after ? "OK" : "MOVED")}");
                 f.MoveItem(1);
             }
         }
         var bind = nodes.FirstOrDefault(n => n.Tag is BindingModel);
-        if (bind != null) { f.tree.SelectedNode = bind; sb.AppendLine($"move binding: {Time(() => f.MoveItem(1)):F0} ms"); }
+        if (bind != null)
+        { f.tree.SelectedNode = bind; sb.AppendLine($"move binding: {Time(() => f.MoveItem(1)):F0} ms"); }
         sb.AppendLine($"search 'a': {Time(() => { f.search.Text = "a"; f.BuildTree(); }):F0} ms");
         sb.AppendLine($"search clear: {Time(() => { f.search.Text = ""; f.BuildTree(); }):F0} ms");
         File.WriteAllText(outFile, sb.ToString());
-        f.dirty = false; f.Close();
+        f.dirty = false;
+        f.Close();
     }
 
     // Headless screenshots of each editor page (for checking layout).
@@ -416,25 +469,32 @@ public partial class MainForm : Form
         Directory.CreateDirectory(dir);
         var f = new MainForm { StartPosition = FormStartPosition.Manual, Location = new Point(0, 0), Size = new Size(1500, 1000) };
         f.Show();
-        for (int i = 0; i < 10; i++) Application.DoEvents();
+        for (int i = 0; i < 10; i++)
+            Application.DoEvents();
         // Screenshots show the app's built-in default profile, never the user's own (nothing is saved).
         var builtin = Path.Combine(Path.GetTempPath(), "vro_builtin_default.json");
         File.WriteAllText(builtin, Native.DefaultProfile() ?? "{}");
         f.LoadFile(builtin);
         void Snap(string name, TreeNode n)
         {
-            if (n == null) return;
+            if (n == null)
+                return;
             f.tree.SelectedNode = n;
-            for (int i = 0; i < 5; i++) Application.DoEvents();
+            for (int i = 0; i < 5; i++)
+                Application.DoEvents();
             using var bmp = new Bitmap(f.Width, f.Height);
             f.DrawToBitmap(bmp, new Rectangle(0, 0, f.Width, f.Height));
             bmp.Save(Path.Combine(dir, name + ".png"));
         }
         {   // the whole Settings page at once (it scrolls in the app)
             var se = new SettingsEditor(f.Profile) { Size = new Size(1000, 5200), AutoScroll = false };
-            se.CreateControl(); se.PerformLayout();
-            for (int i = 0; i < 10; i++) Application.DoEvents();
-            int hgt = 0; foreach (Control c in se.Controls) hgt = Math.Max(hgt, c.Bottom);
+            se.CreateControl();
+            se.PerformLayout();
+            for (int i = 0; i < 10; i++)
+                Application.DoEvents();
+            int hgt = 0;
+            foreach (Control c in se.Controls)
+                hgt = Math.Max(hgt, c.Bottom);
             using var bmp = new Bitmap(se.Width, Math.Max(200, Math.Min(hgt + 10, 5200)));
             se.DrawToBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height));
             bmp.Save(Path.Combine(dir, "settings_full.png"));
@@ -461,16 +521,23 @@ public partial class MainForm : Form
                 MiniPics.Keyboard(96, 72, true), MiniPics.Controllers(96, 72, true),
             };
             using var sheet2 = new Bitmap(pics.Count * 104, 80);
-            using (var gg = Graphics.FromImage(sheet2)) { gg.Clear(Color.White); for (int i = 0; i < pics.Count; i++) gg.DrawImage(pics[i], i * 104 + 4, 4); }
+            using (var gg = Graphics.FromImage(sheet2))
+            { gg.Clear(Color.White); for (int i = 0; i < pics.Count; i++) gg.DrawImage(pics[i], i * 104 + 4, 4); }
             sheet2.Save(Path.Combine(dir, "0_minipics.png"));
-            foreach (var b in pics) b.Dispose();
+            foreach (var b in pics)
+                b.Dispose();
         }
         Snap("00_overview", f.tree.Nodes[0]);
         Snap("1_settings", f.tree.Nodes[1]);
-        foreach (TreeNode pn in f.tree.Nodes[1].Nodes) Snap("1_settings_" + ((SettingsPage)pn.Tag).Key, pn);
-        f.search.Text = "zoom"; for (int i = 0; i < 40; i++) { Application.DoEvents(); System.Threading.Thread.Sleep(10); }
-        f.BuildTree(); Snap("1_search_zoom", f.tree.Nodes[1].Nodes.Count > 0 ? f.tree.Nodes[1].Nodes[0] : f.tree.Nodes[1]);
-        f.search.Text = ""; f.BuildTree();
+        foreach (TreeNode pn in f.tree.Nodes[1].Nodes)
+            Snap("1_settings_" + ((SettingsPage)pn.Tag).Key, pn);
+        f.search.Text = "zoom";
+        for (int i = 0; i < 40; i++)
+        { Application.DoEvents(); System.Threading.Thread.Sleep(10); }
+        f.BuildTree();
+        Snap("1_search_zoom", f.tree.Nodes[1].Nodes.Count > 0 ? f.tree.Nodes[1].Nodes[0] : f.tree.Nodes[1]);
+        f.search.Text = "";
+        f.BuildTree();
         Snap("2_binding", f.bindingRoots[1].Nodes.Count > 0 ? f.bindingRoots[1].Nodes[0] : null);
         Snap("3_binding_chord", f.bindingRoots[1].Nodes.Count > 1 ? f.bindingRoots[1].Nodes[1] : null);
         Snap("4_wheel", f.wheelsRoot.Nodes.Count > 0 ? f.wheelsRoot.Nodes[0] : null);
@@ -480,14 +547,16 @@ public partial class MainForm : Form
         Snap("8_wrist_button", f.wristRoots[0].Nodes.Count > 0 && f.wristRoots[0].Nodes[0].Nodes.Count > 2 ? f.wristRoots[0].Nodes[0].Nodes[2] : null);
         Snap("9_wrist_right", f.wristRoots[1]);
         Snap("5_item", f.wheelsRoot.Nodes.Count > 0 && f.wheelsRoot.Nodes[0].Nodes.Count > 0 ? f.wheelsRoot.Nodes[0].Nodes[0] : null);
-        f.Fold(f.bindingRoots[1]); f.Fold(f.wheelsRoot);
+        f.Fold(f.bindingRoots[1]);
+        f.Fold(f.wheelsRoot);
         Snap("10_folded", f.tree.Nodes[0]);
         // Drop logic check (in memory only, never saved).
         var log = new StringBuilder();
         var b0 = (BindingModel)f.bindingRoots[1].Nodes[0].Tag;
         f.DoDrop(f.bindingRoots[1].Nodes[0], f.bindingRoots[1].Nodes[1], true);
         log.AppendLine("binding 0 dropped after binding 1 -> now at index " + f.Profile.Bindings.IndexOf(b0) + " (expect 1)");
-        var w0 = f.wheelsRoot.Nodes[0]; var w1 = f.wheelsRoot.Nodes[1];
+        var w0 = f.wheelsRoot.Nodes[0];
+        var w1 = f.wheelsRoot.Nodes[1];
         var it0 = (WheelItemModel)w0.Nodes[0].Tag;
         int before0 = ((WheelModel)w0.Tag).Items.Count, before1 = ((WheelModel)w1.Tag).Items.Count;
         f.DoDrop(Find(f.tree.Nodes, it0), f.wheelsRoot.Nodes[1], true);

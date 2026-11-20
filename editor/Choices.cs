@@ -76,17 +76,23 @@ public class ChoiceBox : ComboBox
 {
     public ChoiceBox(IEnumerable<Choice> items, int width = 340)
     {
-        DropDownStyle = ComboBoxStyle.DropDownList; Width = width;
-        foreach (var c in items) Items.Add(c);
-        if (Items.Count > 0) SelectedIndex = 0;
+        DropDownStyle = ComboBoxStyle.DropDownList;
+        Width = width;
+        foreach (var c in items)
+            Items.Add(c);
+        if (Items.Count > 0)
+            SelectedIndex = 0;
     }
     public string Code
     {
         get => (SelectedItem as Choice)?.Code;
         set
         {
-            foreach (Choice c in Items) if (c.Code == value) { SelectedItem = c; return; }
-            if (!string.IsNullOrEmpty(value)) { var extra = new Choice(value, value); Items.Add(extra); SelectedItem = extra; }
+            foreach (Choice c in Items)
+                if (c.Code == value)
+                { SelectedItem = c; return; }
+            if (!string.IsNullOrEmpty(value))
+            { var extra = new Choice(value, value); Items.Add(extra); SelectedItem = extra; }
         }
     }
 }
@@ -101,7 +107,8 @@ public static class InputText
         string comp = bits.Length > 1 ? bits[1] : "trigger";
         comp = comp switch { "a" or "x" or "btn1" => "primary", "b" or "y" or "btn2" => "secondary", "stick" or "trackpad" => "thumbstick", "squeeze" => "grip", _ => comp };
         string feat = bits.Length > 2 && bits[2] is not ("click" or "press") ? "." + bits[2] : "";
-        if (comp == "thumbrest") feat = "";
+        if (comp == "thumbrest")
+            feat = "";
         return (hand, comp + feat);
     }
     public static string Join(string hand, string button)
@@ -112,13 +119,16 @@ public static class InputText
     }
     public static string Friendly(string input)
     {
-        if (string.IsNullOrWhiteSpace(input)) return "(nothing)";
+        if (string.IsNullOrWhiteSpace(input))
+            return "(nothing)";
         return string.Join(" + ", input.Split('+').Select(p =>
         {
             var (h, b) = Split(p);
             string name = Choices.Buttons.FirstOrDefault(c => c.Code == b)?.Text ?? b;
-            if (b.StartsWith("primary")) name = name.Replace("A / X", h == "left" ? "X" : "A");
-            if (b.StartsWith("secondary")) name = name.Replace("B / Y", h == "left" ? "Y" : "B");
+            if (b.StartsWith("primary"))
+                name = name.Replace("A / X", h == "left" ? "X" : "A");
+            if (b.StartsWith("secondary"))
+                name = name.Replace("B / Y", h == "left" ? "Y" : "B");
             return (h == "left" ? "Left " : "Right ") + name.Split("  (")[0];
         }));
     }

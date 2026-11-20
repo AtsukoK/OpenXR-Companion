@@ -14,21 +14,30 @@ public partial class MainForm
     void ShowEditor(TreeNode n)
     {
         var psw = System.Diagnostics.Stopwatch.StartNew();
-        void Mark(string what) { PerfLog?.Append($" {what} {psw.Elapsed.TotalMilliseconds:F0}"); }
+        void Mark(string what)
+        { PerfLog?.Append($" {what} {psw.Elapsed.TotalMilliseconds:F0}"); }
         var old = currentEditor;
         Control ed;
-        void Changed() { MarkDirty(); RefreshNodeTexts(); }
+        void Changed()
+        { MarkDirty(); RefreshNodeTexts(); }
         switch (n?.Tag)
         {
             case "overview":
                 {
                     var ov = new OverviewEditor(Profile, GoTo);
-                    ov.Changed += Changed; ed = ov; break;
+                    ov.Changed += Changed;
+                    ed = ov;
+                    break;
                 }
-            case ProfileModel p: { var se = new SettingsEditor(p, -1, "general", Q); se.Changed += Changed; ed = se; break; }
-            case SettingsPage sp: { var se = new SettingsEditor(Profile, -1, sp.Key, Q); se.Changed += Changed; ed = se; break; }
-            case BindingModel b: { var be = new BindingEditor(b); be.Changed += Changed; ed = be; break; }
-            case "wrist0": case "wrist1": { var se = new SettingsEditor(Profile, (string)n.Tag == "wrist1" ? 1 : 0); (bool, bool) lastMirror = (Profile.WristLeft.Mirror, Profile.WristRight.Mirror); se.Changed += () => { Changed(); var m = (Profile.WristLeft.Mirror, Profile.WristRight.Mirror); if (m != lastMirror) { lastMirror = m; BuildTree(); } }; ed = se; break; }
+            case ProfileModel p:
+                { var se = new SettingsEditor(p, -1, "general", Q); se.Changed += Changed; ed = se; break; }
+            case SettingsPage sp:
+                { var se = new SettingsEditor(Profile, -1, sp.Key, Q); se.Changed += Changed; ed = se; break; }
+            case BindingModel b:
+                { var be = new BindingEditor(b); be.Changed += Changed; ed = be; break; }
+            case "wrist0":
+            case "wrist1":
+                { var se = new SettingsEditor(Profile, (string)n.Tag == "wrist1" ? 1 : 0); (bool, bool) lastMirror = (Profile.WristLeft.Mirror, Profile.WristRight.Mirror); se.Changed += () => { Changed(); var m = (Profile.WristLeft.Mirror, Profile.WristRight.Mirror); if (m != lastMirror) { lastMirror = m; BuildTree(); } }; ed = se; break; }
             case WheelModel w:
                 {
                     int wh = WristOf(n);
@@ -36,7 +45,8 @@ public partial class MainForm
                                      : new WheelEditor(w, RenameWheel);
                     we.Changed += Changed;
                     we.Preview.ItemClicked += it => tree.SelectedNode = Find(tree.Nodes, it);
-                    ed = we; break;
+                    ed = we;
+                    break;
                 }
             case WheelItemModel i:
                 {
@@ -45,7 +55,8 @@ public partial class MainForm
                     var ie = ih >= 0 ? new ItemEditor(w2, i, Profile.WristPages(ih), Profile.WristFor(ih).Columns) : new ItemEditor(w2, i);
                     ie.Changed += Changed;
                     ie.Preview.ItemClicked += it => tree.SelectedNode = Find(tree.Nodes, it);
-                    ed = ie; break;
+                    ed = ie;
+                    break;
                 }
             case "bindings_right":
             case "bindings_left":
@@ -54,7 +65,9 @@ public partial class MainForm
             case "wheels":
                 ed = InfoWithPic(n, "Wheels", "A wheel is a radial menu. A controller binding opens a main wheel; an item on a wheel can open a sub-wheel.\n\nTo make a wheel, click '+ Add' on the WHEELS bar in the list. To add items or a sub-wheel, unfold WHEELS (the arrow on its left) and use the '+ Add item' / '+ Add sub-wheel' row under a wheel.");
                 break;
-            default: ed = new Panel(); break;
+            default:
+                ed = new Panel();
+                break;
         }
         Mark("built");
         addBtn.Text = n?.Tag switch
@@ -72,18 +85,24 @@ public partial class MainForm
         ed.Dock = DockStyle.Fill;
         var parts = new List<Control> { ed };
         string tip = TipFor(n);
-        if (tip != null) parts.Add(TipBar(tip));
+        if (tip != null)
+            parts.Add(TipBar(tip));
         int stripHand = n?.Tag is WheelModel or WheelItemModel || n?.Tag as string is "wrist0" or "wrist1" ? WristOf(n) : -1;
-        if (stripHand >= 0) parts.Add(PanelModeStrip(stripHand, () => { MarkDirty(); BuildTree(); }));
-        else if (n?.Tag as string is "bindings_left" or "bindings_right" or "wheels") parts.Add(SectionSwitch((string)n.Tag));
-        if (Theme.IsDark) foreach (var c in parts) ThemeWalker.Apply(c);
+        if (stripHand >= 0)
+            parts.Add(PanelModeStrip(stripHand, () => { MarkDirty(); BuildTree(); }));
+        else if (n?.Tag as string is "bindings_left" or "bindings_right" or "wheels")
+            parts.Add(SectionSwitch((string)n.Tag));
+        if (Theme.IsDark)
+            foreach (var c in parts)
+                ThemeWalker.Apply(c);
         Mark("theme");
         Redraw(editorHost, false); // nothing shows until the whole page is ready
         try
         {
             editorHost.SuspendLayout();
             editorHost.Controls.Clear();
-            foreach (var c in parts) editorHost.Controls.Add(c);
+            foreach (var c in parts)
+                editorHost.Controls.Add(c);
             Mark("added");
             editorHost.ResumeLayout();
             Mark("layout");
@@ -91,7 +110,8 @@ public partial class MainForm
         finally { Redraw(editorHost, true); }
         Mark("painted");
         currentEditor = ed;
-        if (old != null && !ReferenceEquals(old, ed)) { if (old.Contains(grid)) old.Controls.Remove(grid); old.Dispose(); }
+        if (old != null && !ReferenceEquals(old, ed))
+        { if (old.Contains(grid)) old.Controls.Remove(grid); old.Dispose(); }
         Mark("disposed");
     }
 }

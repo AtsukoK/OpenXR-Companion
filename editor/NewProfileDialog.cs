@@ -17,9 +17,12 @@ class NewProfileDialog : Form
     public NewProfileDialog(string[] seenExes)
     {
         Text = "New game profile";
-        FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = MinimizeBox = false;
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        MaximizeBox = MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        AutoSize = true; AutoSizeMode = AutoSizeMode.GrowAndShrink; Padding = new Padding(10);
+        AutoSize = true;
+        AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        Padding = new Padding(10);
         var t = new TableLayoutPanel { ColumnCount = 3, AutoSize = true, Dock = DockStyle.Fill };
         t.Controls.Add(new Label { Text = "Game exe name:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 0);
         exe.Items.AddRange(seenExes);
