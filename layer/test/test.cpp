@@ -6,6 +6,7 @@
 #include "../src/keys.h"
 #include "../src/screen.h"
 #include "../src/mirror.h"
+#include "../src/game_offsets.h"
 #include <thread>
 #include <cstdio>
 #include <objidl.h>
@@ -1312,6 +1313,32 @@ int main(int argc, char** argv) {
         }
     }
 
+    { // game hand offsets (GameHandOffsets): only registered hand spaces move, the base gets the inverse, lost poses pass through
+        const XrSpaceLocationFlags tracked = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR_SPACE_LOCATION_POSITION_VALID_BIT |
+                                             XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT | XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
+        XrSpace hand = (XrSpace)(uintptr_t)11, world = (XrSpace)(uintptr_t)12, other = (XrSpace)(uintptr_t)13;
+        GameHandOffsets go;
+        go.AddSpace(hand, 1, PoseKind::Grip);
+        GameHandOffsets::Settings st; st.on = true; st.has[1][0] = true;
+        st.pose[1][0] = { { 0, 0, 0, 1 }, { 0, 0, -0.1f } }; // 10 cm forward
+        go.SetSettings(st);
+        XrPosef p{ { 0, 0, 0, 1 }, { 0, 1, 0 } };
+        go.Apply(hand, world, 1, tracked, p, nullptr, nullptr, nullptr);
+        CHECK(std::fabs(p.position.z + 0.1f) < 1e-4f, "game offsets: the right grip is moved 10 cm forward");
+        XrPosef q{ { 0, 0, 0, 1 }, { 0, 1, 0 } };
+        go.Apply(other, world, 1, tracked, q, nullptr, nullptr, nullptr);
+        CHECK(q.position.z == 0.f, "game offsets: a space that isn't a hand is left alone");
+        XrPosef r{ { 0, 0, 0, 1 }, { 0, 0, -0.1f } };
+        go.Apply(world, hand, 1, tracked, r, nullptr, nullptr, nullptr);
+        CHECK(std::fabs(r.position.z) < 1e-4f, "game offsets: located relative to the hand, the inverse offset applies");
+        XrPosef lost{ { 0, 0, 0, 1 }, { 0, 1, 0 } };
+        go.Apply(hand, world, 2, XR_SPACE_LOCATION_POSITION_VALID_BIT, lost, nullptr, nullptr, nullptr);
+        CHECK(lost.position.z == 0.f, "game offsets: a pose without a valid angle passes through");
+        go.RemoveSpace(hand);
+        XrPosef gone{ { 0, 0, 0, 1 }, { 0, 1, 0 } };
+        go.Apply(hand, world, 3, tracked, gone, nullptr, nullptr, nullptr);
+        CHECK(gone.position.z == 0.f, "game offsets: a destroyed space is no longer moved");
+    }
     printf("\n%d failures\n", fails);
     Keys::Shutdown();
     DrawShutdown();
