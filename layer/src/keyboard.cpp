@@ -78,9 +78,9 @@ void Engine::OpenKeyboard(int bi) {
     kb.widthM = prof->kb.width;
     kb.heightM = prof->kb.width * uh / uw;
     Vec3 head = V(fr.head.position);
-    kbFrame = YawFrame(fr.head);
+    kbRun.frame = YawFrame(fr.head);
     if (prof->kb.pose.set)
-        kb.pose = PMul(kbFrame, prof->kb.pose.p); // placed by hand in adjust mode
+        kb.pose = PMul(kbRun.frame, prof->kb.pose.p); // placed by hand in adjust mode
     else {
         Vec3 f = Rotate(fr.head.orientation, { 0, 0, -1 });
         f.y = 0;
@@ -89,9 +89,9 @@ void Engine::OpenKeyboard(int bi) {
         kb.pose.position = X(c);
         kb.pose.orientation = BillboardTo(c, head); // faces the eyes, so it tilts up like a desk
     }
-    kbOpenTime = now;
-    kbOpener = bi;
-    kbRepeatKey = -1;
+    kbRun.openTime = now;
+    kbRun.opener = bi;
+    kbRun.repeatKey = -1;
     Log("keyboard open");
     kb.version++;
 }
@@ -104,7 +104,7 @@ void Engine::CloseKeyboard() {
     }
     kb.visible = false;
     kb.version++;
-    kbRepeatKey = kbRepeatHand = -1;
+    kbRun.repeatKey = kbRun.repeatHand = -1;
     Log("keyboard closed");
 }
 
@@ -134,7 +134,7 @@ void Engine::KbPress(int i, int hand) {
     const KbKey& k = keys[i];
     if (prof->haptics) haptics.push_back({ hand, std::min(1.f, prof->hapticAmp * 1.4f), 0.02f });
     kb.pressed = i;
-    kbPressFlashUntil = now + 0.12;
+    kbRun.pressFlashUntil = now + 0.12;
     switch (k.kind) {
     case KB_SHIFT:
         kb.shift = !kb.shift;
@@ -197,7 +197,7 @@ void Engine::UpdateAdjustKeyboard() {
         return;
     }
     kb.pose = GrabbedPose();
-    prof->kb.pose = { true, PMul(PInv(kbFrame), kb.pose) };
+    prof->kb.pose = { true, PMul(PInv(kbRun.frame), kb.pose) };
     float dt = (float)std::clamp(now - lastNow, 0.0, 0.1);
     if (std::fabs(hr.sy) > 0.2f) {
         float uw, uh;
@@ -226,7 +226,7 @@ void Engine::UpdateKeyboard() {
             if (hit >= 0 && prof->haptics) haptics.push_back({ h, prof->hapticAmp * 0.5f, 0.008f });
         }
     }
-    if (kb.pressed >= 0 && now > kbPressFlashUntil) {
+    if (kb.pressed >= 0 && now > kbRun.pressFlashUntil) {
         kb.pressed = -1;
         kb.version++;
     }
@@ -236,7 +236,7 @@ void Engine::UpdateKeyboard() {
             CloseKeyboard();
             return;
         }
-    if (now - kbOpenTime < 0.25) return; // ignore the press that opened it
+    if (now - kbRun.openTime < 0.25) return; // ignore the press that opened it
     float uw, uh;
     const auto& keys = KbLayout(uw, uh);
     for (int h = 0; h < 2; h++) {
@@ -247,16 +247,16 @@ void Engine::UpdateKeyboard() {
             KbPress(k, h);
             if (!kb.visible) return;
             if (keys[k].repeat) {
-                kbRepeatKey = k;
-                kbRepeatHand = h;
-                kbNextRepeat = now + 0.45;
+                kbRun.repeatKey = k;
+                kbRun.repeatHand = h;
+                kbRun.nextRepeat = now + 0.45;
             }
         }
-        if (kbRepeatHand == h && (!down || kb.hover[h] != kbRepeatKey)) kbRepeatKey = kbRepeatHand = -1;
+        if (kbRun.repeatHand == h && (!down || kb.hover[h] != kbRun.repeatKey)) kbRun.repeatKey = kbRun.repeatHand = -1;
     }
-    if (kbRepeatKey >= 0 && now >= kbNextRepeat) {
-        KbPress(kbRepeatKey, kbRepeatHand);
-        kbNextRepeat = now + 0.06;
+    if (kbRun.repeatKey >= 0 && now >= kbRun.nextRepeat) {
+        KbPress(kbRun.repeatKey, kbRun.repeatHand);
+        kbRun.nextRepeat = now + 0.06;
     }
 }
 
@@ -387,14 +387,14 @@ void Engine::UpdateKbBar() {
         kb.barHover = hover;
         kb.barVersion++;
     }
-    if (kb.barPressed >= 0 && now > kbBarFlashUntil) {
+    if (kb.barPressed >= 0 && now > kbRun.barFlashUntil) {
         kb.barPressed = -1;
         kb.barVersion++;
     }
     if (hand < 0 || !(cur[hand][C_TRIGGER][F_PRESS] && !prev[hand][C_TRIGGER][F_PRESS])) return;
     if (prof->haptics) haptics.push_back({ hand, prof->hapticAmp, 0.025f });
     kb.barPressed = hover;
-    kbBarFlashUntil = now + 0.15;
+    kbRun.barFlashUntil = now + 0.15;
     kb.barVersion++;
     KbBarActivate((KbBarButton)hover);
 }

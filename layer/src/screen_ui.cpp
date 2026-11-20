@@ -25,7 +25,7 @@ void Engine::ScreenAction(const Action& a) {
             screen.windowAsk++;
         }
         screen.on = true;
-        screenPlaceFront = true;
+        scr.placeFront = true;
         Toast(std::string("Screen on (") + PlaceName(screen.place) + ")", 1.5);
     };
     auto turnOff = [&] {
@@ -47,7 +47,7 @@ void Engine::ScreenAction(const Action& a) {
         screen.choiceChanged = true;
         if (!screen.on) {
             screen.on = true;
-            screenPlaceFront = true;
+            scr.placeFront = true;
         }
         Toast("Screen: monitor " + std::to_string(cur) + " of " + std::to_string(n), 1.5);
     } else if (m == "next_window" || m == "prev_window") {
@@ -58,13 +58,13 @@ void Engine::ScreenAction(const Action& a) {
         screen.choiceChanged = true;
         if (!screen.on) {
             screen.on = true;
-            screenPlaceFront = true;
+            scr.placeFront = true;
         }
         // the layer shows the window's name once it has picked it
     } else if (m == "choose") {
         if (!screen.on) {
             screen.on = true;
-            screenPlaceFront = true;
+            scr.placeFront = true;
         }
         OpenPicker();
     } else if (m == "next_fps") {
@@ -81,7 +81,7 @@ void Engine::ScreenAction(const Action& a) {
             i++;
         screen.place = order[(i + 1) % 4];
         screen.on = true;
-        screenPlaceFront = true;
+        scr.placeFront = true;
         Toast(std::string("Screen: ") + PlaceName(screen.place), 1.5);
     } else { // toggle: the same button with another place moves it there instead of turning it off
         if (screen.on && (a.place.empty() || a.place == screen.place))
@@ -96,7 +96,7 @@ void Engine::UpdateScreen() {
     screen.poseValid = false;
     bool wasShown = screen.shown;
     screen.shown = screen.on || adjust; // adjust mode shows it so it can be moved
-    if (screen.shown && !wasShown) screenPlaceFront = true;
+    if (screen.shown && !wasShown) scr.placeFront = true;
     if (grab.target == GrabTarget::Screen && !screen.shown) grab = GrabRun{};
     if (!screen.shown) {
         ApplyDock();
@@ -149,7 +149,7 @@ void Engine::UpdateScreen() {
     } else if (screen.place == "head")
         frame = fr.head;
     else
-        frame = screenFrontFrame;
+        frame = scr.frontFrame;
     S.poses[screen.place] = { true, PMul(PInv(frame), obj) };
     if (onWrist)
         S.wristWidth = std::clamp(S.wristWidth * (1.f + dz(hr.sy) * dt * 0.8f), 0.04f, 0.6f);
@@ -161,7 +161,7 @@ void Engine::UpdateScreen() {
 void Engine::ScreenPose() {
     screen.poseValid = false;
     const ScreenStyle& S = prof->screen;
-    if (screenPlaceFront && fr.headValid) screenFrontFrame = YawFrame(fr.head);
+    if (scr.placeFront && fr.headValid) scr.frontFrame = YawFrame(fr.head);
     auto fp = S.poses.find(screen.place);
     if (fp != S.poses.end() && fp->second.set) { // placed by hand in adjust mode
         bool onWrist = screen.place == "wrist_left" || screen.place == "wrist_right";
@@ -173,11 +173,11 @@ void Engine::ScreenPose() {
             if (!fr.headValid) return;
             screen.pose = PMul(fr.head, fp->second.p);
         } else {
-            if (screenPlaceFront) {
+            if (scr.placeFront) {
                 if (!fr.headValid) return;
-                screenPlaceFront = false;
+                scr.placeFront = false;
             }
-            screen.pose = PMul(screenFrontFrame, fp->second.p);
+            screen.pose = PMul(scr.frontFrame, fp->second.p);
         }
         screen.widthM = onWrist ? S.wristWidth : S.width;
         screen.poseValid = true;
@@ -213,7 +213,7 @@ void Engine::ScreenPose() {
         return;
     }
     // front: placed in front of you (level, facing you) when shown, then stays there
-    if (screenPlaceFront) {
+    if (scr.placeFront) {
         Vec3 f = Rotate(hp.orientation, { 0, 0, -1 });
         f.y = 0;
         if (Len(f) < 1e-3f) f = { 0, 0, -1 };
@@ -222,10 +222,10 @@ void Engine::ScreenPose() {
         Vec3 c = eye + f * S.distance;
         c.y -= S.below;
         Vec3 zf = f * -1.f, yUp{ 0, 1, 0 }, xr = Cross(yUp, zf);
-        screenFrontPose = { QuatFromBasis(xr, yUp, zf), X(c) };
-        screenPlaceFront = false;
+        scr.frontPose = { QuatFromBasis(xr, yUp, zf), X(c) };
+        scr.placeFront = false;
     }
-    screen.pose = screenFrontPose;
+    screen.pose = scr.frontPose;
     screen.widthM = S.width;
     screen.poseValid = true;
 }
@@ -253,21 +253,21 @@ void Engine::ScreenInteract() {
     bool dockedToKb = kb.visible && prof->dock.mode == DockMode::ScreenOnKeys; // it sits above the keyboard then, not on the arm
     bool onWrist = !dockedToKb && (screen.place == "wrist_left" || screen.place == "wrist_right");
     int wh = screen.place == "wrist_left" ? 0 : 1;
-    screen.interactive = S.interact && screen.on && screen.poseValid && !adjust && !wr.open && !(kb.visible && kbOpenTime > now - 0.25) &&
-                         screen.monW > 0; // works next to the open keyboard too
+    screen.interactive = S.interact && screen.on && screen.poseValid && !adjust && !wr.open &&
+                         !(kb.visible && kbRun.openTime > now - 0.25) && screen.monW > 0; // works next to the open keyboard too
     ScreenUi();
-    if (uiHand >= 0 || screen.pickOpen) screen.interactive = false; // the bar or the picker has the laser
+    if (scr.uiHand >= 0 || screen.pickOpen) screen.interactive = false; // the bar or the picker has the laser
     int hand = -1;
     float hu = 0, hv = 0;
     if (screen.interactive) {
         int order[2] = { screen.hoverHand >= 0 ? screen.hoverHand : 1, screen.hoverHand >= 0 ? 1 - screen.hoverHand : 0 };
         for (int g : order) {
             if (onWrist && g == wh) continue; // the arm it sits on can't point at it
-            if (kb.visible && kb.hover[g] >= 0 && !(g == screen.hoverHand && (mouseL || mouseR)))
+            if (kb.visible && kb.hover[g] >= 0 && !(g == screen.hoverHand && (scr.mouseL || scr.mouseR)))
                 continue; // pointing at a key: the keyboard has it
             float u, v, t;
             if (!ScreenRay(g, u, v, t)) continue;
-            bool held = g == screen.hoverHand && (mouseL || mouseR); // dragging keeps going past the edge
+            bool held = g == screen.hoverHand && (scr.mouseL || scr.mouseR); // dragging keeps going past the edge
             if (held || (u >= 0 && u <= 1 && v >= 0 && v <= 1)) {
                 hand = g;
                 hu = std::clamp(u, 0.f, 1.f);
@@ -277,79 +277,79 @@ void Engine::ScreenInteract() {
         }
     }
     auto release = [&] {
-        if (mouseL) {
+        if (scr.mouseL) {
             Keys::MouseButton(0, false);
-            mouseL = false;
+            scr.mouseL = false;
         }
-        if (mouseR) {
+        if (scr.mouseR) {
             Keys::MouseButton(1, false);
-            mouseR = false;
+            scr.mouseR = false;
         }
     };
     if (hand >= 0 && hand != screen.hoverHand) release();
     screen.hoverHand = hand;
     if (hand < 0) {
         release();
-        lastMx = lastMy = -1;
-        wheelAcc = 0;
-        if (screenClicked && kb.visible)
-            screenLeftAt = -1; // typing into the desktop: keep its focus
-        else if (screenClicked) {
-            if (screenLeftAt < 0)
-                screenLeftAt = now;
-            else if (now - screenLeftAt > 0.4) {
+        scr.lastMx = scr.lastMy = -1;
+        scr.wheelAcc = 0;
+        if (scr.clicked && kb.visible)
+            scr.leftAt = -1; // typing into the desktop: keep its focus
+        else if (scr.clicked) {
+            if (scr.leftAt < 0)
+                scr.leftAt = now;
+            else if (now - scr.leftAt > 0.4) {
                 if (S.refocus) Keys::FocusGameNow();
-                screenClicked = false;
-                screenLeftAt = -1;
+                scr.clicked = false;
+                scr.leftAt = -1;
             }
         }
         return;
     }
-    screenLeftAt = -1;
+    scr.leftAt = -1;
     int x = screen.monX + std::min(screen.monW - 1, (int)(hu * screen.monW));
     int y = screen.monY + std::min(screen.monH - 1, (int)(hv * screen.monH));
-    if (x != lastMx || y != lastMy) {
+    if (x != scr.lastMx || y != scr.lastMy) {
         Keys::MouseTo(x, y);
-        lastMx = x;
-        lastMy = y;
+        scr.lastMx = x;
+        scr.lastMy = y;
     }
     // buttons: press only on a fresh press while pointing, so a held game trigger doesn't click
     bool trig = cur[hand][C_TRIGGER][F_PRESS], trigEdge = trig && !prev[hand][C_TRIGGER][F_PRESS];
     bool b1 = cur[hand][C_BTN1][F_PRESS], b1Edge = b1 && !prev[hand][C_BTN1][F_PRESS];
     if ((trigEdge || b1Edge) && screen.source == "window" && screen.hwnd) Keys::BringToFront(screen.hwnd);
-    if (trigEdge && !mouseL) {
+    if (trigEdge && !scr.mouseL) {
         Keys::MouseButton(0, true);
-        mouseL = true;
-        screenClicked = true;
+        scr.mouseL = true;
+        scr.clicked = true;
         if (prof->haptics) haptics.push_back({ hand, prof->hapticAmp, 0.02f });
     }
-    if (!trig && mouseL) {
+    if (!trig && scr.mouseL) {
         Keys::MouseButton(0, false);
-        mouseL = false;
+        scr.mouseL = false;
     }
-    if (b1Edge && !mouseR) {
+    if (b1Edge && !scr.mouseR) {
         Keys::MouseButton(1, true);
-        mouseR = true;
-        screenClicked = true;
+        scr.mouseR = true;
+        scr.clicked = true;
         if (prof->haptics) haptics.push_back({ hand, prof->hapticAmp, 0.02f });
     }
-    if (!b1 && mouseR) {
+    if (!b1 && scr.mouseR) {
         Keys::MouseButton(1, false);
-        mouseR = false;
+        scr.mouseR = false;
     }
     float sy = fr.h[hand].sy;
     float dt = (float)std::clamp(now - lastNow, 0.0, 0.1);
     if (std::fabs(sy) > 0.3f)
-        wheelAcc += sy * dt * 10.f;
+        scr.wheelAcc += sy * dt * 10.f;
     else
-        wheelAcc = 0; // up to 10 notches a second
-    while (wheelAcc >= 1.f) {
+        scr.wheelAcc = 0; // up to 10 notches a second
+    while (scr.wheelAcc >= 1.f) {
         Keys::MouseWheel(120);
-        wheelAcc -= 1.f;
+        scr.wheelAcc -= 1.f;
     }
-    while (wheelAcc <= -1.f) {
+    while (scr.wheelAcc <= -1.f) {
         Keys::MouseWheel(-120);
-        wheelAcc += 1.f;
+        scr.wheelAcc += 1.f;
     }
 }
 
@@ -370,8 +370,8 @@ bool Engine::PanelRay(int h, const XrPosef& pose, float w, float hgt, float& u, 
 
 void Engine::OpenPicker() {
     screen.pickOpen = true;
-    pickPage = 0;
-    pickMode = PickerMode::Source;
+    scr.pickPage = 0;
+    scr.pickMode = PickerMode::Source;
     screen.wantChoices = true; // the layer fills the list
     BuildPicker();
 }
@@ -381,14 +381,14 @@ static const char* kPlaces[4] = { "wrist_left", "wrist_right", "front", "head" }
 static const char* kPlaceNames[4] = { "Left wrist", "Right wrist", "In front of me\nstays where it appears", "Following my view" };
 
 void Engine::BuildPicker() {
-    if (pickMode == PickerMode::Place) { // where to put the screen
-        pickMap.clear();
+    if (scr.pickMode == PickerMode::Place) { // where to put the screen
+        scr.pickMap.clear();
         screen.pickLabels.clear();
         for (int i = 0; i < 4; i++) {
-            pickMap.push_back(i);
+            scr.pickMap.push_back(i);
             screen.pickLabels.push_back((screen.place == kPlaces[i] ? "\xE2\x80\xA2 " : "") + std::string(kPlaceNames[i]));
         }
-        pickMap.push_back(-3);
+        scr.pickMap.push_back(-3);
         screen.pickLabels.push_back("Cancel");
         screen.pickTitle = "Move the screen to";
         screen.pickHover = -1;
@@ -398,50 +398,50 @@ void Engine::BuildPicker() {
     const int perPage = 12;
     int n = (int)screen.choices.size();
     int pages = std::max(1, (n + perPage - 1) / perPage);
-    pickPage = std::clamp(pickPage, 0, pages - 1);
-    pickMap.clear();
+    scr.pickPage = std::clamp(scr.pickPage, 0, pages - 1);
+    scr.pickMap.clear();
     screen.pickLabels.clear();
-    for (int i = pickPage * perPage; i < std::min(n, (pickPage + 1) * perPage); i++) {
-        pickMap.push_back(i);
+    for (int i = scr.pickPage * perPage; i < std::min(n, (scr.pickPage + 1) * perPage); i++) {
+        scr.pickMap.push_back(i);
         screen.pickLabels.push_back((screen.choices[i].current ? "\xE2\x80\xA2 " : "") + screen.choices[i].label);
     }
-    if (pickPage > 0) {
-        pickMap.push_back(-1);
+    if (scr.pickPage > 0) {
+        scr.pickMap.push_back(-1);
         screen.pickLabels.push_back("\xE2\x80\xB9 Previous");
     }
-    if (pickPage < pages - 1) {
-        pickMap.push_back(-2);
+    if (scr.pickPage < pages - 1) {
+        scr.pickMap.push_back(-2);
         screen.pickLabels.push_back("More \xE2\x80\xBA");
     }
-    pickMap.push_back(-3);
+    scr.pickMap.push_back(-3);
     screen.pickLabels.push_back("Close");
     screen.pickTitle =
-        n ? "Show on the screen" + (pages > 1 ? " (" + std::to_string(pickPage + 1) + "/" + std::to_string(pages) + ")" : std::string())
+        n ? "Show on the screen" + (pages > 1 ? " (" + std::to_string(scr.pickPage + 1) + "/" + std::to_string(pages) + ")" : std::string())
           : "Looking for monitors and windows...";
     screen.pickHover = -1;
     screen.uiVersion++;
 }
 
 void Engine::PickerActivate(int cell) {
-    if (cell < 0 || cell >= (int)pickMap.size()) return;
-    int k = pickMap[cell];
-    if (pickMode == PickerMode::Place) {
+    if (cell < 0 || cell >= (int)scr.pickMap.size()) return;
+    int k = scr.pickMap[cell];
+    if (scr.pickMode == PickerMode::Place) {
         screen.pickOpen = false;
         screen.uiVersion++;
         if (k >= 0 && screen.place != kPlaces[k]) {
             screen.place = kPlaces[k];
-            screenPlaceFront = true;
+            scr.placeFront = true;
             Toast(std::string("Screen: ") + kPlaceNames[k], 1.5);
         }
         return;
     }
     if (k == -1) {
-        pickPage--;
+        scr.pickPage--;
         BuildPicker();
         return;
     }
     if (k == -2) {
-        pickPage++;
+        scr.pickPage++;
         BuildPicker();
         return;
     }
@@ -475,7 +475,7 @@ void Engine::BarActivate(ScreenBarButton button) {
     } // the bar is just "Done"
     switch (button) {
     case ScreenBarButton::Choose:
-        if (screen.pickOpen && pickMode == PickerMode::Source) {
+        if (screen.pickOpen && scr.pickMode == PickerMode::Source) {
             screen.pickOpen = false;
             screen.uiVersion++;
         } else
@@ -485,13 +485,13 @@ void Engine::BarActivate(ScreenBarButton button) {
         a.mode = "next_fps";
         break;
     case ScreenBarButton::Move:
-        if (screen.pickOpen && pickMode == PickerMode::Place) {
+        if (screen.pickOpen && scr.pickMode == PickerMode::Place) {
             screen.pickOpen = false;
             screen.uiVersion++;
             return;
         }
         screen.pickOpen = true;
-        pickMode = PickerMode::Place;
+        scr.pickMode = PickerMode::Place;
         BuildPicker();
         return;
     case ScreenBarButton::Adjust: { // adjust positions: move the screen, wheel and wrist panels by hand
@@ -506,7 +506,7 @@ void Engine::BarActivate(ScreenBarButton button) {
         screen.pickOpen = false;
         screen.uiVersion++;
         if (screen.source == "window" && screen.hwnd) Keys::BringToFront(screen.hwnd);
-        screenClicked = true; // so the game gets its window back once you're done
+        scr.clicked = true; // so the game gets its window back once you're done
         OpenKeyboard(-1);
         return;
     case ScreenBarButton::Hide:
@@ -519,7 +519,7 @@ void Engine::BarActivate(ScreenBarButton button) {
 
 // Bar under the screen while you point at it, and the picker in front of it.
 void Engine::ScreenUi() {
-    uiHand = -1;
+    scr.uiHand = -1;
     // In adjust mode the bar stays as one "Done" button (the screen shows then even while off).
     bool live = screen.shown && screen.poseValid && (adjust || (screen.on && !wr.open)) && !kb.visible && prof->screen.interact;
     if (!live) {
@@ -529,8 +529,8 @@ void Engine::ScreenUi() {
         }
         return;
     }
-    if (screen.choicesVersion != seenChoices) {
-        seenChoices = screen.choicesVersion;
+    if (screen.choicesVersion != scr.seenChoices) {
+        scr.seenChoices = screen.choicesVersion;
         if (screen.pickOpen) BuildPicker();
     }
     // where they go: the bar just under the screen, the picker a little in front of it
@@ -547,7 +547,7 @@ void Engine::ScreenUi() {
     screen.pickH = screen.pickW * 0.95f;
     screen.pickPose = { screen.pose.orientation, X(V(screen.pose.position) + nrm * 0.03f) };
     std::string fps = screen.fps ? std::to_string(screen.fps) + " fps" : std::string("max fps");
-    bool listOpen = screen.pickOpen && pickMode == PickerMode::Source, moveOpen = screen.pickOpen && pickMode == PickerMode::Place;
+    bool listOpen = screen.pickOpen && scr.pickMode == PickerMode::Source, moveOpen = screen.pickOpen && scr.pickMode == PickerMode::Place;
     std::vector<std::string> bar =
         adjust ? std::vector<std::string>{ "Done adjusting" } : std::vector<std::string>{ listOpen ? "Close list" : "Choose...",
                                                                                           "Frame rate\n" + fps,
@@ -573,7 +573,7 @@ void Engine::ScreenUi() {
             ListLayout((int)screen.pickLabels.size(), screen.pickCols, screen.pickH / screen.pickW, true, cells, hd);
             for (int i = 0; i < (int)cells.size(); i++)
                 if (u >= cells[i].x && u < cells[i].x + cells[i].w && v >= cells[i].y && v < cells[i].y + cells[i].h) pickHover = i;
-            uiHand = g;
+            scr.uiHand = g;
             pointedAt = true;
             break;
         }
@@ -583,35 +583,36 @@ void Engine::ScreenUi() {
             ListLayout((int)screen.barLabels.size(), (int)screen.barLabels.size(), screen.barH / screen.barW, false, cells, hd);
             for (int i = 0; i < (int)cells.size(); i++)
                 if (u >= cells[i].x && u < cells[i].x + cells[i].w && v >= cells[i].y && v < cells[i].y + cells[i].h) barHover = i;
-            uiHand = g;
+            scr.uiHand = g;
             pointedAt = true;
             break;
         }
         float t;
         if (ScreenRay(g, u, v, t) && u > -0.1f && u < 1.1f && v > -0.1f && v < 1.3f) pointedAt = true;
     }
-    if (pointedAt) barUntil = now + 2.0;
-    bool barVis = now < barUntil || screen.pickOpen || adjust;
+    if (pointedAt) scr.barUntil = now + 2.0;
+    bool barVis = now < scr.barUntil || screen.pickOpen || adjust;
     if (barVis != screen.barVisible) {
         screen.barVisible = barVis;
         screen.uiVersion++;
     }
     if (!screen.barVisible) barHover = -1;
     if (barHover != screen.barHover || pickHover != screen.pickHover) {
-        if (prof->haptics && uiHand >= 0 && (barHover >= 0 || pickHover >= 0)) haptics.push_back({ uiHand, prof->hapticAmp * 0.4f, 0.01f });
+        if (prof->haptics && scr.uiHand >= 0 && (barHover >= 0 || pickHover >= 0))
+            haptics.push_back({ scr.uiHand, prof->hapticAmp * 0.4f, 0.01f });
         screen.barHover = barHover;
         screen.pickHover = pickHover;
         screen.uiVersion++;
     }
-    if (now > uiFlashUntil && (screen.barPressed >= 0 || screen.pickPressed >= 0)) {
+    if (now > scr.uiFlashUntil && (screen.barPressed >= 0 || screen.pickPressed >= 0)) {
         screen.barPressed = screen.pickPressed = -1;
         screen.uiVersion++;
     }
-    if (uiHand < 0) return;
-    bool press = cur[uiHand][C_TRIGGER][F_PRESS] && !prev[uiHand][C_TRIGGER][F_PRESS];
+    if (scr.uiHand < 0) return;
+    bool press = cur[scr.uiHand][C_TRIGGER][F_PRESS] && !prev[scr.uiHand][C_TRIGGER][F_PRESS];
     if (!press) return;
-    if (prof->haptics) haptics.push_back({ uiHand, prof->hapticAmp, 0.025f });
-    uiFlashUntil = now + 0.15;
+    if (prof->haptics) haptics.push_back({ scr.uiHand, prof->hapticAmp, 0.025f });
+    scr.uiFlashUntil = now + 0.15;
     if (pickHover >= 0) {
         screen.pickPressed = pickHover;
         screen.uiVersion++;

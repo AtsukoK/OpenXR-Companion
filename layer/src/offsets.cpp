@@ -95,7 +95,7 @@ HandOffset& Engine::EditOffset(int hand, int kind) {
 }
 
 void Engine::OffsetsChanged() {
-    offSaveAt = now + 1.0; // written a moment after the last change
+    off.saveAt = now + 1.0; // written a moment after the last change
     if (offView.open) BuildOffsetPanel();
 }
 
@@ -105,9 +105,9 @@ void Engine::OffsetsAction(const Action& a) {
     if (m == "panel") {
         if (offView.open) {
             offView.open = false;
-            offGrabArmed = false;
+            off.grabArmed = false;
             offView.version++;
-            if (offSaveAt > 0) offSaveAt = now;
+            if (off.saveAt > 0) off.saveAt = now;
         } else
             OpenOffsets();
         return;
@@ -121,8 +121,8 @@ void Engine::OffsetsAction(const Action& a) {
                 o = HandOffset{};
         Toast("Controller offsets reset", 2.0);
     } else if (m == "grab") {
-        offGrabArmed = true;
-        offGrabArmedAt = now;
+        off.grabArmed = true;
+        off.grabArmedAt = now;
         Toast("Hold grip on a controller, turn it to where it feels right, let go", 5.0);
         return;
     }
@@ -140,16 +140,16 @@ void Engine::OpenOffsets() {
     offView.w = 0.42f;
     offView.h = 0.52f;
     offView.cols = 3;
-    offRepeatCell = -1;
+    off.repeatCell = -1;
     BuildOffsetPanel();
 }
 
 void Engine::BuildOffsetPanel() {
     std::vector<std::string> L;
-    L.push_back(offs.linkHands ? "Hand\nBoth (mirrored)" : offSel == 0 ? "Hand\nLeft only" : "Hand\nRight only");
-    L.push_back(offs.aimSame ? "Pose\nGrip + aim" : offKind == 1 ? "Pose\nAim (game laser)" : "Pose\nGrip (hand, guns)");
+    L.push_back(offs.linkHands ? "Hand\nBoth (mirrored)" : off.sel == 0 ? "Hand\nLeft only" : "Hand\nRight only");
+    L.push_back(offs.aimSame ? "Pose\nGrip + aim" : off.kind == 1 ? "Pose\nAim (game laser)" : "Pose\nGrip (hand, guns)");
     L.push_back(offs.enabled ? "Offsets ON\n(press: off)" : "Offsets OFF\n(press: on)");
-    int hand = offs.linkHands ? 1 : offSel, kind = offs.aimSame ? 0 : (offKind == 1 ? 1 : 0);
+    int hand = offs.linkHands ? 1 : off.sel, kind = offs.aimSame ? 0 : (off.kind == 1 ? 1 : 0);
     const HandOffset& o = offs.linkHands ? offs.o[1][kind] : offs.o[hand][kind];
     for (int f = 0; f < 6; f++) {
         bool deg = f < 3;
@@ -158,10 +158,10 @@ void Engine::BuildOffsetPanel() {
         L.push_back("+");
     }
     char st[48];
-    snprintf(st, sizeof(st), "Step\n%g\xC2\xB0 / %g cm", kStepDeg[offStep], kStepCm[offStep]);
+    snprintf(st, sizeof(st), "Step\n%g\xC2\xB0 / %g cm", kStepDeg[off.step], kStepCm[off.step]);
     L.push_back(st);
     L.push_back(offGrabHand >= 0 ? "Turning...\nlet go to keep"
-                : offGrabArmed   ? "Now hold grip\non a controller"
+                : off.grabArmed  ? "Now hold grip\non a controller"
                                  : "Grab to set\n(turn by hand)");
     char sm[48];
     if (offs.smoothing <= 0.001f)
@@ -169,7 +169,7 @@ void Engine::BuildOffsetPanel() {
     else
         snprintf(sm, sizeof(sm), "Steady hands\n%.2f", offs.smoothing);
     L.push_back(sm);
-    L.push_back(offs.linkHands ? "Reset\n(both hands)" : offSel == 0 ? "Reset\nleft hand" : "Reset\nright hand");
+    L.push_back(offs.linkHands ? "Reset\n(both hands)" : off.sel == 0 ? "Reset\nleft hand" : "Reset\nright hand");
     L.push_back("Reset all");
     L.push_back("Done");
     std::string title = "Controller offsets" + (prof && !prof->sourceName.empty() ? " - " + prof->sourceName : std::string());
@@ -181,10 +181,10 @@ void Engine::BuildOffsetPanel() {
 }
 
 void Engine::OffsetCell(int cell, bool repeat) {
-    float sd = kStepDeg[offStep], sc = kStepCm[offStep];
+    float sd = kStepDeg[off.step], sc = kStepCm[off.step];
     if (cell >= 3 && cell < 21) {
         int f = (cell - 3) / 3, c = (cell - 3) % 3;
-        int hand = offs.linkHands ? 1 : offSel, kind = offs.aimSame ? 0 : (offKind == 1 ? 1 : 0);
+        int hand = offs.linkHands ? 1 : off.sel, kind = offs.aimSame ? 0 : (off.kind == 1 ? 1 : 0);
         HandOffset& o = EditOffset(hand, kind);
         float v = FieldGet(o, f), step = f < 3 ? sd : sc;
         if (c == 0)
@@ -201,39 +201,39 @@ void Engine::OffsetCell(int cell, bool repeat) {
     case 0: // Both (linked) -> Right -> Left -> Both
         if (offs.linkHands) {
             offs.linkHands = false;
-            offSel = 1;
+            off.sel = 1;
             for (int k = 0; k < 2; k++)
                 offs.o[0][k] = offs.o[1][k].Mirrored();
-        } else if (offSel == 1)
-            offSel = 0;
+        } else if (off.sel == 1)
+            off.sel = 0;
         else {
             offs.linkHands = true;
-            offSel = 2;
+            off.sel = 2;
         }
         break;
     case 1: // Grip + aim -> Grip -> Aim -> Grip + aim
         if (offs.aimSame) {
             offs.aimSame = false;
-            offKind = 0;
+            off.kind = 0;
             for (int h = 0; h < 2; h++)
                 offs.o[h][1] = offs.o[h][0];
-        } else if (offKind == 0)
-            offKind = 1;
+        } else if (off.kind == 0)
+            off.kind = 1;
         else {
             offs.aimSame = true;
-            offKind = 2;
+            off.kind = 2;
         }
         break;
     case 2:
         offs.enabled = !offs.enabled;
         break;
     case 21:
-        offStep = (offStep + 1) % 3;
+        off.step = (off.step + 1) % 3;
         BuildOffsetPanel();
         return;
     case 22:
-        offGrabArmed = !offGrabArmed && offGrabHand < 0;
-        offGrabArmedAt = now;
+        off.grabArmed = !off.grabArmed && offGrabHand < 0;
+        off.grabArmedAt = now;
         BuildOffsetPanel();
         return;
     case 23: {
@@ -242,7 +242,7 @@ void Engine::OffsetCell(int cell, bool repeat) {
         break;
     }
     case 24: {
-        int hand = offs.linkHands ? 1 : offSel;
+        int hand = offs.linkHands ? 1 : off.sel;
         for (int k = 0; k < 2; k++)
             offs.o[hand][k] = HandOffset{};
         Toast("Offsets reset", 1.5);
@@ -256,9 +256,9 @@ void Engine::OffsetCell(int cell, bool repeat) {
         break;
     case 26:
         offView.open = false;
-        offGrabArmed = false;
+        off.grabArmed = false;
         offView.version++;
-        offSaveAt = offSaveAt > 0 ? now : -1;
+        off.saveAt = off.saveAt > 0 ? now : -1;
         return;
     default:
         return;
@@ -273,20 +273,20 @@ void Engine::UpdateOffsets() {
     // you turn the real controller to where it feels right, and on letting go that difference is kept.
     // Armed by mistake (the button sits next to Steady hands): give up after 5 s without a grip,
     // so a later grab in the game can't quietly turn the offsets (and the grips go back to the game).
-    if (offGrabArmed && offGrabHand < 0 && now - offGrabArmedAt > 5.0) {
-        offGrabArmed = false;
+    if (off.grabArmed && offGrabHand < 0 && now - off.grabArmedAt > 5.0) {
+        off.grabArmed = false;
         BuildOffsetPanel();
         Toast("Grab to set: cancelled (no grip within 5 s)", 2.0);
     }
-    if (offGrabArmed && offGrabHand < 0) {
+    if (off.grabArmed && offGrabHand < 0) {
         for (int h = 0; h < 2 && offGrabHand < 0; h++) {
-            if (!offs.linkHands && offSel != h) continue;
+            if (!offs.linkHands && off.sel != h) continue;
             if (!(cur[h][C_GRIP][F_PRESS] && !prev[h][C_GRIP][F_PRESS]) || !fr.h[h].gripValid) continue;
             offGrabHand = h;
-            offGrabArmed = false;
-            offGrabStart = fr.h[h].gripPose.orientation;
+            off.grabArmed = false;
+            off.grabStart = fr.h[h].gripPose.orientation;
             for (int k = 0; k < 2; k++)
-                offGrabFrom[k] = offs.Effective(h, k);
+                off.grabFrom[k] = offs.Effective(h, k);
             if (!offs.enabled) {
                 offs.enabled = true;
             }
@@ -299,7 +299,7 @@ void Engine::UpdateOffsets() {
         int h = offGrabHand;
         if (!cur[h][C_GRIP][F_PRESS]) {
             offGrabHand = -1;
-            int k = offs.aimSame ? 0 : (offKind == 1 ? 1 : 0);
+            int k = offs.aimSame ? 0 : (off.kind == 1 ? 1 : 0);
             HandOffset e = offs.Effective(h, k);
             char b[128];
             snprintf(b, sizeof(b), "Kept: pitch %+.1f, yaw %+.1f, roll %+.1f", e.pitch, e.yaw, e.roll);
@@ -307,16 +307,16 @@ void Engine::UpdateOffsets() {
             if (prof->haptics) haptics.push_back({ h, prof->hapticAmp, 0.04f });
             OffsetsChanged();
         } else if (fr.h[h].gripValid) {
-            XrQuaternionf rel = QMul(QInv(fr.h[h].gripPose.orientation), offGrabStart);
+            XrQuaternionf rel = QMul(QInv(fr.h[h].gripPose.orientation), off.grabStart);
             int kinds[2], nk = 0;
             if (offs.aimSame)
                 kinds[nk++] = 0;
             else
-                kinds[nk++] = offKind == 1 ? 1 : 0;
+                kinds[nk++] = off.kind == 1 ? 1 : 0;
             for (int i = 0; i < nk; i++) {
                 int k = kinds[i];
-                HandOffset n = offGrabFrom[k];
-                QEuler(QMul(rel, EulerQ(offGrabFrom[k])), n);
+                HandOffset n = off.grabFrom[k];
+                QEuler(QMul(rel, EulerQ(off.grabFrom[k])), n);
                 // stored form: with linked hands the right hand's values (the left is its mirror)
                 HandOffset& dst = EditOffset(h, k);
                 if (offs.linkHands && h == 0) n = n.Mirrored();
@@ -327,63 +327,63 @@ void Engine::UpdateOffsets() {
             if (offView.open) BuildOffsetPanel();
         }
     }
-    if (offSaveAt > 0 && now >= offSaveAt && offGrabHand < 0) {
-        offSaveAt = -1;
+    if (off.saveAt > 0 && now >= off.saveAt && offGrabHand < 0) {
+        off.saveAt = -1;
         offsSaveRequested = true;
     }
 
-    offUiHand = -1;
+    off.uiHand = -1;
     if (!offView.open) return;
     if (wr.open || kb.visible) return;
     int hover = -1;
     std::vector<Cell> cells;
     Cell hd;
     ListLayout((int)offView.labels.size(), offView.cols, offView.h / offView.w, true, cells, hd);
-    for (int g = 0; g < 2 && offUiHand < 0; g++) {
+    for (int g = 0; g < 2 && off.uiHand < 0; g++) {
         if (g == offGrabHand) continue;
         float u, v;
         if (!PanelRay(g, offView.pose, offView.w, offView.h, u, v)) continue;
-        offUiHand = g;
+        off.uiHand = g;
         for (int i = 0; i < (int)cells.size(); i++)
             if (u >= cells[i].x && u < cells[i].x + cells[i].w && v >= cells[i].y && v < cells[i].y + cells[i].h) hover = i;
     }
     if (hover != offView.hover) {
-        if (prof->haptics && offUiHand >= 0 && hover >= 0) haptics.push_back({ offUiHand, prof->hapticAmp * 0.4f, 0.01f });
+        if (prof->haptics && off.uiHand >= 0 && hover >= 0) haptics.push_back({ off.uiHand, prof->hapticAmp * 0.4f, 0.01f });
         offView.hover = hover;
         offView.version++;
     }
-    if (now > offFlashUntil && offView.pressed >= 0) {
+    if (now > off.flashUntil && offView.pressed >= 0) {
         offView.pressed = -1;
         offView.version++;
     }
-    if (offUiHand < 0 || hover < 0) {
-        offRepeatCell = -1;
+    if (off.uiHand < 0 || hover < 0) {
+        off.repeatCell = -1;
         return;
     }
-    int g = offUiHand;
+    int g = off.uiHand;
     bool down = cur[g][C_TRIGGER][F_PRESS], press = down && !prev[g][C_TRIGGER][F_PRESS];
     bool isStep = hover >= 3 && hover < 21 && (hover - 3) % 3 != 1;
     if (press) {
         if (prof->haptics) haptics.push_back({ g, prof->hapticAmp, 0.025f });
-        offFlashUntil = now + 0.15;
+        off.flashUntil = now + 0.15;
         offView.pressed = hover;
         offView.version++;
         OffsetCell(hover, false);
-        offRepeatCell = isStep ? hover : -1;
-        offRepeatAt = now + 0.45;
-    } else if (down && hover == offRepeatCell && now >= offRepeatAt) { // held: keeps stepping
+        off.repeatCell = isStep ? hover : -1;
+        off.repeatAt = now + 0.45;
+    } else if (down && hover == off.repeatCell && now >= off.repeatAt) { // held: keeps stepping
         OffsetCell(hover, true);
-        offRepeatAt = now + 0.07;
+        off.repeatAt = now + 0.07;
     } else if (!down)
-        offRepeatCell = -1;
+        off.repeatCell = -1;
     // The stick works as a slider on the row you point at: push right to raise, left to lower.
     if (hover >= 3 && hover < 21) {
         float sx = fr.h[g].sx;
         if (std::fabs(sx) > 0.25f) {
             int f = (hover - 3) / 3;
-            int hand = offs.linkHands ? 1 : offSel, kind = offs.aimSame ? 0 : (offKind == 1 ? 1 : 0);
+            int hand = offs.linkHands ? 1 : off.sel, kind = offs.aimSame ? 0 : (off.kind == 1 ? 1 : 0);
             HandOffset& o = EditOffset(hand, kind);
-            float rate = (f < 3 ? kStepDeg[offStep] : kStepCm[offStep]) * 8.f; // 8 steps a second at full push
+            float rate = (f < 3 ? kStepDeg[off.step] : kStepCm[off.step]) * 8.f; // 8 steps a second at full push
             float s = (std::fabs(sx) - 0.25f) / 0.75f * (sx > 0 ? 1.f : -1.f);
             FieldSet(o, f, FieldGet(o, f) + s * rate * dt);
             OffsetsChanged();

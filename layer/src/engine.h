@@ -284,25 +284,46 @@ private:
 
 public:
     bool dockAdjust = false; // "Adjust dock": grab the docked one to set where it sits
+
 private:
-    double kbBarFlashUntil = 0;
-    XrPosef kbFrame{ { 0, 0, 0, 1 }, { 0, 0, 0 } }; // the head (turned like the head) when the keyboard opened
     float wheelAlphaDrawn = 1.f;
-    bool screenInit = false, screenPlaceFront = false;
-    XrPosef screenFrontPose{ { 0, 0, 0, 1 }, { 0, 0, 0 } }, screenFrontFrame{ { 0, 0, 0, 1 }, { 0, 0, 0 } };
-    bool mouseL = false, mouseR = false, screenClicked = false;
-    int lastMx = -1, lastMy = -1;
-    float wheelAcc = 0;
-    double screenLeftAt = -1;
+
+    // ---------------- VR keyboard (keyboard.cpp)
+    struct KeyboardRun {
+        double openTime = 0; // presses right after opening are ignored
+        double pressFlashUntil = 0, barFlashUntil = 0;
+        int repeatKey = -1, repeatHand = -1; // a held key that repeats
+        double nextRepeat = 0;
+        int opener = -1;                              // the binding that opened it (-1: a menu button)
+        XrPosef frame{ { 0, 0, 0, 1 }, { 0, 0, 0 } }; // the head (turned like the head) when it opened
+    } kbRun;
+    void OpenKeyboard(int bi);
+    void CloseKeyboard();
+    void UpdateKeyboard();
+    void KbPress(int key, int hand);
+    int KbHit(int hand) const;
+
+    // ---------------- mirrored screen (screen_ui.cpp)
+    struct ScreenRun {
+        bool init = false;       // the profile's start-on setting has been applied
+        bool placeFront = false; // put it in front of the head on the next update
+        XrPosef frontPose{ { 0, 0, 0, 1 }, { 0, 0, 0 } }, frontFrame{ { 0, 0, 0, 1 }, { 0, 0, 0 } };
+        bool mouseL = false, mouseR = false; // mouse buttons we hold down on the desktop
+        bool clicked = false;                // clicked into the desktop: give the game focus back later
+        int lastMx = -1, lastMy = -1;
+        float wheelAcc = 0; // stick scrolling, in notches
+        double leftAt = -1; // when the pointer left the screen after a click
+        int pickPage = 0;
+        std::vector<int> pickMap; // picker cell -> choice index
+        uint64_t seenChoices = 0;
+        PickerMode pickMode = PickerMode::Source;
+        double barUntil = -1, uiFlashUntil = 0;
+        int uiHand = -1; // the hand on the bar or picker this frame
+    } scr;
+    PoseSmoother aimSmooth[2], screenSmooth;
     void ScreenInteract();
     void ScreenUi();
     bool PanelRay(int h, const XrPosef& pose, float w, float hgt, float& u, float& v) const;
-    int pickPage = 0;
-    std::vector<int> pickMap;
-    uint64_t seenChoices = 0;
-    PickerMode pickMode = PickerMode::Source;
-    double barUntil = -1, uiFlashUntil = 0;
-    int uiHand = -1; // the hand on the bar or picker this frame
     void OpenPicker();
     void BuildPicker();
     void PickerActivate(int cell);
@@ -310,24 +331,27 @@ private:
     bool ScreenRay(int h, float& u, float& v, float& t) const;
     void UpdateScreen();
     void ScreenPose();
-    PoseSmoother aimSmooth[2], screenSmooth;
-    // controller offsets
+
+    // ---------------- controller offsets panel (offsets.cpp)
+    struct OffsetsRun {
+        int sel = 2;             // 0 left, 1 right, 2 both hands (linked)
+        int kind = 2;            // 0 grip, 1 aim, 2 both
+        int step = 1;            // index into the step sizes
+        bool grabArmed = false;  // waiting for a grip to start grab-to-set
+        double grabArmedAt = -1; // it gives up after a few seconds without a grip
+        XrQuaternionf grabStart{ 0, 0, 0, 1 };
+        HandOffset grabFrom[2]; // [kind] at the start of the grab
+        int uiHand = -1, repeatCell = -1;
+        double repeatAt = 0, flashUntil = 0, saveAt = -1;
+    } off;
     void OpenOffsets();
     void UpdateOffsets();
     void BuildOffsetPanel();
     void OffsetCell(int cell, bool repeat);
     void OffsetsChanged();
     HandOffset& EditOffset(int hand, int kind);
-    int offSel = 2;             // 0 left, 1 right, 2 both hands (linked)
-    int offKind = 2;            // 0 grip, 1 aim, 2 both
-    int offStep = 1;            // index into the step sizes
-    bool offGrabArmed = false;  // waiting for a grip to start grab-to-set
-    double offGrabArmedAt = -1; // when it was armed: it gives up after a few seconds without a grip
-    XrQuaternionf offGrabStart{ 0, 0, 0, 1 };
-    HandOffset offGrabFrom[2]; // [kind] at the start of the grab
-    int offUiHand = -1, offRepeatCell = -1;
-    double offRepeatAt = 0, offFlashUntil = 0, offSaveAt = -1;
 
+    // ---------------- bindings, wheel, pointers (engine.cpp, wheel.cpp)
     bool Down(const InputId& i) const { return cur[i.hand][i.comp][i.feat]; }
     bool Pressed(const InputId& i) const { return cur[i.hand][i.comp][i.feat] && !prev[i.hand][i.comp][i.feat]; }
     void ComputeDown();
@@ -348,14 +372,8 @@ private:
     XrPosef WheelPose(int hand) const;
     static Override MakeOv(const InputId& t);
     void Dirty() { view.version++; }
-    double kbOpenTime = 0, kbPressFlashUntil = 0, kbNextRepeat = 0;
-    int kbRepeatKey = -1, kbRepeatHand = -1, kbOpener = -1;
-    void OpenKeyboard(int bi);
-    void CloseKeyboard();
-    void UpdateKeyboard();
     void UpdatePointers();
-    void KbPress(int key, int hand);
-    int KbHit(int hand) const;
+
     // wrist panel
     struct WristRun {
         std::vector<const Wheel*> stack;
