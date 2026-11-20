@@ -50,6 +50,6 @@ after every step. Commit after every step.
 ## Status / resume here
 Done: steps 1, 2, 4 (layer, via clang-format), 6 (editor file split), 7; most of 3 (files per feature + grouped state; still one Engine class);
 part of 5 (support header + part tests; the engine-flow tests in test.cpp share one running engine, so they stay together).
-Untested in a headset. dist2 is OLDER than the last 5 commits; refresh it (copy this dist) when the user is not running it.
+Untested in a headset. dist2 refreshed 2026-11-20 22:59 with everything above (copy this dist again after new changes).
 Possible next: Engine feature classes (Keyboard, ScreenMirror, OffsetsPanel) taking an input view; editor dense one-liners (C#, by hand);
 layer.cpp globals into a LayerState struct.
