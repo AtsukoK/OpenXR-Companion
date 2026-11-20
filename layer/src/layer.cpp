@@ -1055,10 +1055,13 @@ static XrResult XRAPI_CALL Hook_xrReleaseSwapchainImage(XrSwapchain sc, const Xr
 }
 
 static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi) {
-    std::lock_guard l(gMx);
+    // The lock covers our work only, never the runtime's xrEndFrame: that can wait for the compositor
+    // for milliseconds, and the game's input thread (xrSyncActions, xrGetActionState*) needs this lock.
+    std::unique_lock l(gMx);
     if (s == gSess) fi = HeadSmoothEndFrame(fi);
     if (s != gSess || !fi || !gEng.Active() || !gGfx.api) {
         if (s == gSess && fi && gMirror.On() && gGfx.api == 11) MirrorFrame(std::vector<const XrCompositionLayerBaseHeader*>(fi->layers, fi->layers + fi->layerCount), fi->displayTime);
+        l.unlock();
         return N.EndFrame(s, fi);
     }
     std::vector<const XrCompositionLayerBaseHeader*> layers(fi->layers, fi->layers + fi->layerCount);
@@ -1382,6 +1385,7 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
     XrFrameEndInfo copy = *fi;
     copy.layerCount = (uint32_t)layers.size();
     copy.layers = layers.data();
+    l.unlock();
     return N.EndFrame(s, &copy);
 }
 
