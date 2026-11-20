@@ -36,10 +36,34 @@ inline int WristHandOf(ScreenPlace p) {
 // What the mirrored screen shows: a whole monitor or one window.
 enum class ScreenSource { Monitor, Window };
 
+// How an action runs; which modes apply depends on the action type (see the profile documentation).
+enum class ActMode {
+    Unknown,
+    Tap,
+    Hold,
+    Toggle,
+    On,
+    Off,
+    NextMonitor,
+    PrevMonitor,
+    NextFps,
+    NextPlace,
+    NextWindow,
+    PrevWindow,
+    Choose,
+    Panel,
+    Enable,
+    Grab,
+    Reset
+};
+// The text used in profile files ("tap", "next_monitor", ...); Unknown for anything else.
+ActMode ParseActMode(const std::string& text);
+const char* ActModeKey(ActMode m);
+
 struct Action {
     ActType type = ActType::None;
-    std::string keys;         // key: "Ctrl+S"
-    std::string mode = "tap"; // key/xr_input: tap|hold|toggle ; layer: hold|toggle|on|off
+    std::string keys;            // key: "Ctrl+S"
+    ActMode mode = ActMode::Tap; // key/xr_input: tap|hold|toggle ; layer: hold|toggle|on|off
     int tapMs = 60;
     std::string steps;            // sequence: "Ctrl+C; wait 100; down W; up W"
     std::string wheel;            // wheel: name

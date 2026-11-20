@@ -884,11 +884,11 @@ static XrResult XRAPI_CALL Hook_xrGetInstanceProcAddr(XrInstance inst, const cha
     HOOK(DestroyInstance)
     HOOK(CreateSession)
     HOOK(DestroySession)
-    HOOK(CreateActionSet) HOOK(CreateAction) HOOK(SuggestInteractionProfileBindings) HOOK(AttachSessionActionSets) HOOK(SyncActions)
-        HOOK(GetActionStateBoolean) HOOK(GetActionStateFloat) HOOK(GetActionStateVector2f) HOOK(WaitFrame) HOOK(EndFrame)
-            HOOK(CreateActionSpace) HOOK(CreateReferenceSpace) HOOK(DestroySpace) HOOK(LocateSpace) HOOK(LocateViews) HOOK(CreateSwapchain)
-                HOOK(DestroySwapchain) HOOK(EnumerateSwapchainImages) HOOK(AcquireSwapchainImage)
-                    HOOK(ReleaseSwapchainImage) if (n == "xrLocateSpaces") {
+    HOOK(CreateActionSet)
+    HOOK(CreateAction) HOOK(SuggestInteractionProfileBindings) HOOK(AttachSessionActionSets) HOOK(SyncActions) HOOK(GetActionStateBoolean)
+        HOOK(GetActionStateFloat) HOOK(GetActionStateVector2f) HOOK(WaitFrame) HOOK(EndFrame) HOOK(CreateActionSpace)
+            HOOK(CreateReferenceSpace) HOOK(DestroySpace) HOOK(LocateSpace) HOOK(LocateViews) HOOK(CreateSwapchain) HOOK(DestroySwapchain)
+                HOOK(EnumerateSwapchainImages) HOOK(AcquireSwapchainImage) HOOK(ReleaseSwapchainImage) if (n == "xrLocateSpaces") {
         N.LocateSpaces = (PFN_xrLocateSpaces)*fn;
         *fn = (PFN_xrVoidFunction)Hook_xrLocateSpaces;
         return r;

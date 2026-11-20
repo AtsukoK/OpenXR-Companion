@@ -405,7 +405,7 @@ void Engine::KbBarActivate(KbBarButton button) {
         if (!screen.on) {
             Action a;
             a.type = ActType::Screen;
-            a.mode = "on";
+            a.mode = ActMode::On;
             ScreenAction(a);
         }
     };

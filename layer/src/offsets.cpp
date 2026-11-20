@@ -101,8 +101,8 @@ void Engine::OffsetsChanged() {
 
 // ------------------------------------------------------------ actions
 void Engine::OffsetsAction(const Action& a) {
-    const std::string& m = a.mode;
-    if (m == "panel") {
+    const ActMode m = a.mode;
+    if (m == ActMode::Panel) {
         if (offView.open) {
             offView.open = false;
             off.grabArmed = false;
@@ -112,15 +112,15 @@ void Engine::OffsetsAction(const Action& a) {
             OpenOffsets();
         return;
     }
-    if (m == "enable" || m == "on" || m == "off") {
-        offs.enabled = m == "on" ? true : m == "off" ? false : !offs.enabled;
+    if (m == ActMode::Enable || m == ActMode::On || m == ActMode::Off) {
+        offs.enabled = m == ActMode::On ? true : m == ActMode::Off ? false : !offs.enabled;
         Toast(offs.enabled ? "Controller offsets ON" : "Controller offsets OFF (game sees the controllers as they are)", 2.0);
-    } else if (m == "reset") {
+    } else if (m == ActMode::Reset) {
         for (auto& h : offs.o)
             for (auto& o : h)
                 o = HandOffset{};
         Toast("Controller offsets reset", 2.0);
-    } else if (m == "grab") {
+    } else if (m == ActMode::Grab) {
         off.grabArmed = true;
         off.grabArmedAt = now;
         Toast("Hold grip on a controller, turn it to where it feels right, let go", 5.0);

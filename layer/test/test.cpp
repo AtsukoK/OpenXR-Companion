@@ -485,7 +485,7 @@ int main(int argc, char** argv) {
         lb.gesture = "while_held";
         lb.block = "trigger";
         lb.action.type = ActType::Layer;
-        lb.action.mode = "hold";
+        lb.action.mode = ActMode::Hold;
         lb.action.layer = "testshift";
         p->bindings.push_back(lb);
         e.SetProfile(p);
@@ -1382,7 +1382,7 @@ int main(int argc, char** argv) {
         };
         Action tg;
         tg.type = ActType::Screen;
-        tg.mode = "toggle";
+        tg.mode = ActMode::Toggle;
         tg.place = ScreenPlace::WristLeft;
         CHECK(!e.screen.on, "screen: off at start (start_on false)");
         e.ScreenAction(tg);
@@ -1401,7 +1401,7 @@ int main(int argc, char** argv) {
         CHECK(!e.screen.on && !e.screen.poseValid, "screen: the same button turns it off");
         Action nf;
         nf.type = ActType::Screen;
-        nf.mode = "next_fps";
+        nf.mode = ActMode::NextFps;
         e.ScreenAction(nf);
         CHECK(e.screen.fps == 60, "screen: next frame rate 30 -> 60");
         e.ScreenAction(nf);
@@ -1413,17 +1413,17 @@ int main(int argc, char** argv) {
         e.screen.monitor = 0;
         Action nm;
         nm.type = ActType::Screen;
-        nm.mode = "next_monitor";
+        nm.mode = ActMode::NextMonitor;
         e.ScreenAction(nm);
         CHECK(e.screen.monitor == 3 && e.screen.on, "screen: next monitor from the main one (2 of 3) is 3, and shows it");
         e.ScreenAction(nm);
         CHECK(e.screen.monitor == 1, "screen: next monitor wraps 3 -> 1");
-        nm.mode = "prev_monitor";
+        nm.mode = ActMode::PrevMonitor;
         e.ScreenAction(nm);
         CHECK(e.screen.monitor == 3, "screen: previous monitor wraps 1 -> 3");
         Action np;
         np.type = ActType::Screen;
-        np.mode = "next_place";
+        np.mode = ActMode::NextPlace;
         e.screen.place = ScreenPlace::Head;
         e.ScreenAction(np);
         CHECK(e.screen.place == ScreenPlace::WristLeft, "screen: next place cycles head -> left wrist");
@@ -1467,7 +1467,7 @@ int main(int argc, char** argv) {
         // turn adjust mode on through the engine's own action path
         Action on;
         on.type = ActType::Screen;
-        on.mode = "off";
+        on.mode = ActMode::Off;
         e.ScreenAction(on);
         q->bindings.clear();
         Binding b;
@@ -1540,7 +1540,7 @@ int main(int argc, char** argv) {
         e.screen.aspect = 9.f / 16.f;
         Action on;
         on.type = ActType::Screen;
-        on.mode = "on";
+        on.mode = ActMode::On;
         e.ScreenAction(on);
         step(2);
         int x, y, wh, fo;
@@ -1590,23 +1590,23 @@ int main(int argc, char** argv) {
         e.SetProfile(q);
         Action nw;
         nw.type = ActType::Screen;
-        nw.mode = "next_window";
+        nw.mode = ActMode::NextWindow;
         uint64_t ask0 = e.screen.windowAsk;
         e.ScreenAction(nw);
         CHECK(e.screen.on && e.screen.source == ScreenSource::Window && e.screen.windowStep == 1 && e.screen.windowAsk == ask0 + 1,
               "screen window: next window switches to windows and asks for the next one");
-        nw.mode = "prev_window";
+        nw.mode = ActMode::PrevWindow;
         e.ScreenAction(nw);
         CHECK(e.screen.windowStep == -1, "screen window: previous window asks for the one before");
         Action nm;
         nm.type = ActType::Screen;
-        nm.mode = "next_monitor";
+        nm.mode = ActMode::NextMonitor;
         e.screen.monitorCount = 2;
         e.ScreenAction(nm);
         CHECK(e.screen.source == ScreenSource::Monitor, "screen window: next monitor goes back to monitors");
         Action sw;
         sw.type = ActType::Screen;
-        sw.mode = "on";
+        sw.mode = ActMode::On;
         sw.window = "chrome";
         e.ScreenAction(sw);
         CHECK(e.screen.source == ScreenSource::Window && e.screen.windowMatch == "chrome",
@@ -1709,7 +1709,7 @@ int main(int argc, char** argv) {
         e.screen.aspect = 9.f / 16.f;
         Action on;
         on.type = ActType::Screen;
-        on.mode = "on";
+        on.mode = ActMode::On;
         e.ScreenAction(on);
         step(2);
         CHECK(e.screen.barVisible && e.screen.barLabels.size() == 6, "screen bar: pointing at the screen shows its button bar");
@@ -1888,7 +1888,7 @@ int main(int argc, char** argv) {
               "screen choice: a picked monitor is saved as the default");
         Action nm;
         nm.type = ActType::Screen;
-        nm.mode = "next_monitor";
+        nm.mode = ActMode::NextMonitor;
         e.screen.monitorCount = 2;
         e.ScreenAction(nm);
         CHECK(e.screen.choiceChanged, "screen choice: switching in the headset asks to remember it");
@@ -1909,7 +1909,7 @@ int main(int argc, char** argv) {
             f.h[0].gripPose = XrPosef{ { 0, 0, 0, 1 }, { -0.2f, 1.2f, -0.3f } };
             Action on;
             on.type = ActType::Screen;
-            on.mode = "on";
+            on.mode = ActMode::On;
             e.ScreenAction(on);
             double t = 0;
             float mn = 1e9f, mx = -1e9f;
@@ -2064,7 +2064,7 @@ int main(int argc, char** argv) {
         CHECK(!e.OffsetPose(1, 0, none), "offsets: nothing is moved while every value is 0");
         Action pa;
         pa.type = ActType::Offsets;
-        pa.mode = "panel";
+        pa.mode = ActMode::Panel;
         e.OffsetsAction(pa);
         step(2);
         CHECK(e.offView.open && e.offView.labels.size() == 27, "offsets: the panel opens with its 27 buttons");
@@ -2172,7 +2172,7 @@ int main(int argc, char** argv) {
         CHECK(e.offGrabHand < 0 && e.offs.o[1][0].pitch == before, "offsets: a grip after that leaves the offsets alone");
         Action off;
         off.type = ActType::Offsets;
-        off.mode = "enable";
+        off.mode = ActMode::Enable;
         e.OffsetsAction(off);
         step(1);
         CHECK(!e.OffsetPose(1, 0, none), "offsets: turning them off gives the game the plain controllers");

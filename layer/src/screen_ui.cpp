@@ -21,7 +21,7 @@ static const char* PlaceName(ScreenPlace p) {
 }
 
 void Engine::ScreenAction(const Action& a) {
-    const std::string& m = a.mode;
+    const ActMode m = a.mode;
     auto turnOn = [&] {
         if (a.place) screen.place = *a.place;
         if (a.monitor >= 0) {
@@ -42,14 +42,14 @@ void Engine::ScreenAction(const Action& a) {
         screen.on = false;
         Toast("Screen off", 1.2);
     };
-    if (m == "on")
+    if (m == ActMode::On)
         turnOn();
-    else if (m == "off")
+    else if (m == ActMode::Off)
         turnOff();
-    else if (m == "next_monitor" || m == "prev_monitor") {
+    else if (m == ActMode::NextMonitor || m == ActMode::PrevMonitor) {
         int n = std::max(1, screen.monitorCount);
         int cur = screen.monitor == 0 ? screen.primaryIndex : screen.monitor;
-        cur = m == "next_monitor" ? cur % n + 1 : (cur + n - 2) % n + 1;
+        cur = m == ActMode::NextMonitor ? cur % n + 1 : (cur + n - 2) % n + 1;
         if (screen.source == ScreenSource::Window)
             cur = screen.monitor == 0 ? screen.primaryIndex : screen.monitor; // back to monitors: start where it was
         screen.monitor = cur;
@@ -60,9 +60,9 @@ void Engine::ScreenAction(const Action& a) {
             scr.placeFront = true;
         }
         Toast("Screen: monitor " + std::to_string(cur) + " of " + std::to_string(n), 1.5);
-    } else if (m == "next_window" || m == "prev_window") {
+    } else if (m == ActMode::NextWindow || m == ActMode::PrevWindow) {
         screen.source = ScreenSource::Window;
-        screen.windowStep = m == "next_window" ? 1 : -1;
+        screen.windowStep = m == ActMode::NextWindow ? 1 : -1;
         screen.windowMatch.clear();
         screen.windowAsk++;
         screen.choiceChanged = true;
@@ -71,20 +71,20 @@ void Engine::ScreenAction(const Action& a) {
             scr.placeFront = true;
         }
         // the layer shows the window's name once it has picked it
-    } else if (m == "choose") {
+    } else if (m == ActMode::Choose) {
         if (!screen.on) {
             screen.on = true;
             scr.placeFront = true;
         }
         OpenPicker();
-    } else if (m == "next_fps") {
+    } else if (m == ActMode::NextFps) {
         const auto& st = prof->screen.fpsSteps;
         size_t i = 0;
         while (i < st.size() && st[i] != screen.fps)
             i++;
         screen.fps = st.empty() ? 30 : st[(i + 1) % st.size()]; // not in the list: starts at the first
         Toast(screen.fps ? "Screen: " + std::to_string(screen.fps) + " fps" : std::string("Screen: every frame"), 1.5);
-    } else if (m == "next_place") {
+    } else if (m == ActMode::NextPlace) {
         const int n = (int)std::size(kScreenPlaces);
         int i = 0;
         while (i < n && screen.place != kScreenPlaces[i])
@@ -99,7 +99,7 @@ void Engine::ScreenAction(const Action& a) {
         else
             turnOn();
     }
-    Log("screen %s: on %d place %s monitor %d fps %d", m.c_str(), screen.on, ScreenPlaceKey(screen.place), screen.monitor, screen.fps);
+    Log("screen %s: on %d place %s monitor %d fps %d", ActModeKey(m), screen.on, ScreenPlaceKey(screen.place), screen.monitor, screen.fps);
 }
 
 void Engine::UpdateScreen() {
@@ -492,7 +492,7 @@ void Engine::BarActivate(ScreenBarButton button) {
             OpenPicker();
         return;
     case ScreenBarButton::FrameRate:
-        a.mode = "next_fps";
+        a.mode = ActMode::NextFps;
         break;
     case ScreenBarButton::Move:
         if (screen.pickOpen && scr.pickMode == PickerMode::Place) {
@@ -520,7 +520,7 @@ void Engine::BarActivate(ScreenBarButton button) {
         OpenKeyboard(-1);
         return;
     case ScreenBarButton::Hide:
-        a.mode = "off";
+        a.mode = ActMode::Off;
         screen.pickOpen = false;
         break;
     }

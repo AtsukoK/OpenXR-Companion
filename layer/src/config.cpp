@@ -153,8 +153,10 @@ static Action ParseAction(const json& j, const std::string& ctx) {
     else
         throw std::runtime_error(ctx + ": unknown action type '" + t + "'");
     Get(j, "keys", a.keys);
-    Get(j, "mode", a.mode);
-    a.mode = Lower(a.mode);
+    std::string modeText;
+    Get(j, "mode", modeText);
+    modeText = Lower(modeText);
+    a.mode = modeText.empty() ? ActMode::Tap : ParseActMode(modeText);
     Get(j, "tap_ms", a.tapMs);
     Get(j, "steps", a.steps);
     Get(j, "wheel", a.wheel);
@@ -167,25 +169,25 @@ static Action ParseAction(const json& j, const std::string& ctx) {
     place = Lower(place);
     Get(j, "monitor", a.monitor);
     Get(j, "window", a.window);
-    if (a.mode.empty()) a.mode = "tap";
-    if (a.type == ActType::Screen && (a.mode == "tap" || a.mode == "hold")) a.mode = "toggle";
+    if (a.type == ActType::Screen && (a.mode == ActMode::Tap || a.mode == ActMode::Hold)) a.mode = ActMode::Toggle;
     if (a.type == ActType::Screen && !place.empty()) {
         ScreenPlace sp;
         if (!ParseScreenPlace(place, sp)) throw std::runtime_error(ctx + ": screen place must be wrist_left, wrist_right, front or head");
         a.place = sp;
     }
     if (a.type == ActType::Mirror) {
-        if (a.mode == "tap" || a.mode == "hold") a.mode = "toggle";
-        if (a.mode != "toggle" && a.mode != "on" && a.mode != "off")
+        if (a.mode == ActMode::Tap || a.mode == ActMode::Hold) a.mode = ActMode::Toggle;
+        if (a.mode != ActMode::Toggle && a.mode != ActMode::On && a.mode != ActMode::Off)
             throw std::runtime_error(ctx + ": headset_mirror mode must be toggle, on or off");
     }
     if (a.type == ActType::Offsets) {
-        if (a.mode == "tap" || a.mode == "hold" || a.mode == "toggle") a.mode = "panel";
-        if (a.mode != "panel" && a.mode != "enable" && a.mode != "on" && a.mode != "off" && a.mode != "grab" && a.mode != "reset")
+        if (a.mode == ActMode::Tap || a.mode == ActMode::Hold || a.mode == ActMode::Toggle) a.mode = ActMode::Panel;
+        if (a.mode != ActMode::Panel && a.mode != ActMode::Enable && a.mode != ActMode::On && a.mode != ActMode::Off &&
+            a.mode != ActMode::Grab && a.mode != ActMode::Reset)
             throw std::runtime_error(ctx + ": controller_offsets mode must be panel, enable, on, off, grab or reset");
     }
     if (a.confirm.empty()) a.confirm = "auto";
-    if (a.type == ActType::Layer && a.mode == "tap") a.mode = "toggle";
+    if (a.type == ActType::Layer && a.mode == ActMode::Tap) a.mode = ActMode::Toggle;
     if (j.contains("target")) {
         std::string tg = j["target"].get<std::string>();
         if (!ParseInput(tg, a.target)) throw std::runtime_error(ctx + ": bad target input '" + tg + "'");
@@ -1132,4 +1134,41 @@ bool ParseScreenPlace(const std::string& key, ScreenPlace& out) {
         }
     }
     return false;
+}
+
+namespace {
+struct ModeName {
+    ActMode mode;
+    const char* key;
+};
+const ModeName kModeNames[] = {
+    { ActMode::Tap, "tap" },
+    { ActMode::Hold, "hold" },
+    { ActMode::Toggle, "toggle" },
+    { ActMode::On, "on" },
+    { ActMode::Off, "off" },
+    { ActMode::NextMonitor, "next_monitor" },
+    { ActMode::PrevMonitor, "prev_monitor" },
+    { ActMode::NextFps, "next_fps" },
+    { ActMode::NextPlace, "next_place" },
+    { ActMode::NextWindow, "next_window" },
+    { ActMode::PrevWindow, "prev_window" },
+    { ActMode::Choose, "choose" },
+    { ActMode::Panel, "panel" },
+    { ActMode::Enable, "enable" },
+    { ActMode::Grab, "grab" },
+    { ActMode::Reset, "reset" },
+};
+} // namespace
+
+ActMode ParseActMode(const std::string& text) {
+    for (const auto& n : kModeNames)
+        if (text == n.key) return n.mode;
+    return ActMode::Unknown;
+}
+
+const char* ActModeKey(ActMode m) {
+    for (const auto& n : kModeNames)
+        if (n.mode == m) return n.key;
+    return "unknown";
 }

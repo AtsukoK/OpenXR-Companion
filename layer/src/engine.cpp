@@ -70,17 +70,17 @@ void Engine::Reset() {
 bool Engine::IsOn(const Action& a) const {
     switch (a.type) {
     case ActType::Key:
-        return a.mode == "toggle" && keyToggles.count(a.keys) > 0;
+        return a.mode == ActMode::Toggle && keyToggles.count(a.keys) > 0;
     case ActType::XrInput:
-        return a.mode == "toggle" && xrToggles.count({ a.target.hand, a.target.comp }) > 0;
+        return a.mode == ActMode::Toggle && xrToggles.count({ a.target.hand, a.target.comp }) > 0;
     case ActType::Layer:
         return layers.count(a.layer) > 0;
     case ActType::Screen:
-        return (a.mode == "toggle" || a.mode == "on") && screen.on && (!a.place || *a.place == screen.place);
+        return (a.mode == ActMode::Toggle || a.mode == ActMode::On) && screen.on && (!a.place || *a.place == screen.place);
     case ActType::Mirror:
-        return a.mode != "off" && mirrorOn;
+        return a.mode != ActMode::Off && mirrorOn;
     case ActType::Offsets:
-        return (a.mode == "panel" && offView.open) || ((a.mode == "enable" || a.mode == "on") && offs.enabled);
+        return (a.mode == ActMode::Panel && offView.open) || ((a.mode == ActMode::Enable || a.mode == ActMode::On) && offs.enabled);
     default:
         return false;
     }
@@ -190,10 +190,10 @@ void Engine::SetLayer(const std::string& l, bool on) {
 
 // Returns true when the action keeps running until EndAction (hold behaviour).
 bool Engine::RunAction(const Action& a, int hand, int bi, bool fromWheel) {
-    bool hold = (a.mode == "hold") && !fromWheel;
+    bool hold = (a.mode == ActMode::Hold) && !fromWheel;
     switch (a.type) {
     case ActType::Key:
-        if (a.mode == "toggle") {
+        if (a.mode == ActMode::Toggle) {
             if (keyToggles.count(a.keys)) {
                 keyToggles.erase(a.keys);
                 Keys::Up(a.keys);
@@ -214,7 +214,7 @@ bool Engine::RunAction(const Action& a, int hand, int bi, bool fromWheel) {
         return false;
     case ActType::XrInput: {
         auto key = std::make_pair(a.target.hand, a.target.comp);
-        if (a.mode == "toggle") {
+        if (a.mode == ActMode::Toggle) {
             if (xrToggles.count(key))
                 xrToggles.erase(key);
             else
@@ -229,13 +229,13 @@ bool Engine::RunAction(const Action& a, int hand, int bi, bool fromWheel) {
         return false;
     }
     case ActType::Layer:
-        if (a.mode == "hold" && !fromWheel) {
+        if (a.mode == ActMode::Hold && !fromWheel) {
             SetLayer(a.layer, true);
             return true;
         }
-        if (a.mode == "on")
+        if (a.mode == ActMode::On)
             SetLayer(a.layer, true);
-        else if (a.mode == "off")
+        else if (a.mode == ActMode::Off)
             SetLayer(a.layer, false);
         else
             SetLayer(a.layer, !layers.count(a.layer));
@@ -274,7 +274,7 @@ bool Engine::RunAction(const Action& a, int hand, int bi, bool fromWheel) {
         OffsetsAction(a);
         return false;
     case ActType::Mirror:
-        mirrorAsk = a.mode == "on" ? MirrorRequest::On : a.mode == "off" ? MirrorRequest::Off : MirrorRequest::Toggle;
+        mirrorAsk = a.mode == ActMode::On ? MirrorRequest::On : a.mode == ActMode::Off ? MirrorRequest::Off : MirrorRequest::Toggle;
         return false;
     case ActType::Adjust:
         adjust = !adjust;
