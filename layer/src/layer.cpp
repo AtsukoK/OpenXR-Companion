@@ -8,6 +8,7 @@
 #include "head_smoothing.h"
 #include "game_offsets.h"
 #include "overlay.h"
+#include "game_input.h"
 #include <openxr/openxr_loader_negotiation.h>
 #include <unordered_map>
 #include <map>
@@ -116,15 +117,12 @@ static bool gAttached = false;
 static int gMinPriority = INT_MAX;
 static std::set<std::string> gOurProfiles;
 
-struct AppBind { int hand, comp, pf; }; // pf: 0 press/value, 1 touch, 2 vec2, 3 x, 4 y
-static std::unordered_map<uint64_t, std::vector<AppBind>> gAppBinds;
-static std::unordered_map<uint64_t, std::vector<XrPath>> gActionSubs;
+static GameInputFilter gInput;         // what the game's button / trigger / stick actions read (under gMx)
 
 static XrSession gSess = XR_NULL_HANDLE;
 static Gfx gGfx;
 static XrSpace gLocal = XR_NULL_HANDLE, gView = XR_NULL_HANDLE, gGripSp[2]{}, gAimSp[2]{};
 static XrTime gPredTime = 0;
-static uint64_t gSyncIdx = 0;
 
 static Engine gEng;
 static void MarkOwnSave();
@@ -137,8 +135,6 @@ struct PoseBind { int hand; PoseKind kind; };
 static std::unordered_map<uint64_t, std::vector<PoseBind>> gPoseBinds; // action -> bindings (under gMx)
 static GameHandOffsets gHandOffsets;
 
-struct Track { uint64_t sync = ~0ull; float prev[2]{}, cur[2]{}; };
-static std::unordered_map<uint64_t, Track> gTrack;
 
 static FILETIME gCfgTimes[5]{};
 static double gLastCfgCheck = 0;
@@ -153,31 +149,11 @@ static std::string S(XrPath p) {
     return buf;
 }
 
-static bool ParseAppPath(const std::string& s, AppBind& b) {
-    const std::string pre[2] = { "/user/hand/left/input/", "/user/hand/right/input/" };
-    for (int h = 0; h < 2; h++) {
-        if (s.rfind(pre[h], 0) != 0) continue;
-        std::string rest = s.substr(pre[h].size());
-        auto sl = rest.find('/');
-        std::string comp = rest.substr(0, sl), feat = sl == std::string::npos ? "" : rest.substr(sl + 1);
-        int c = comp == "select" ? C_TRIGGER : ParseCompName(comp);
-        if (c < 0 || comp == "system") return false;
-        b.hand = h; b.comp = c;
-        if (feat == "touch") b.pf = 1;
-        else if (feat.empty() && c == C_STICK) b.pf = 2;
-        else if (feat == "x") b.pf = 3;
-        else if (feat == "y") b.pf = 4;
-        else if (feat == "click" || feat == "value" || feat == "force" || feat.empty()) b.pf = 0;
-        else return false;
-        return true;
-    }
-    return false;
-}
-
 static void EnsureActions() {
     if (gSet != XR_NULL_HANDLE || gInst == XR_NULL_HANDLE) return;
     gHandPath[0] = P("/user/hand/left");
     gHandPath[1] = P("/user/hand/right");
+    gInput.SetHandPaths(gHandPath[0], gHandPath[1]);
     XrActionSetCreateInfo si{ XR_TYPE_ACTION_SET_CREATE_INFO };
     strcpy_s(si.actionSetName, "openxr_companion_set");
     strcpy_s(si.localizedActionSetName, "OpenXR Companion");
@@ -376,7 +352,7 @@ static XrResult XRAPI_CALL Hook_xrDestroyInstance(XrInstance inst) {
         std::lock_guard l(gMx);
         Keys::Shutdown();
         DrawShutdown();
-        gSet = XR_NULL_HANDLE; gAttached = false; gAppBinds.clear(); gPoseBinds.clear(); gActionSubs.clear(); gOurProfiles.clear();
+        gSet = XR_NULL_HANDLE; gAttached = false; gPoseBinds.clear(); gInput.Clear(); gOurProfiles.clear();
         gMinPriority = INT_MAX; gInst = XR_NULL_HANDLE;
     }
     return N.DestroyInstance(inst);
@@ -392,7 +368,7 @@ static XrResult XRAPI_CALL Hook_xrCreateAction(XrActionSet set, const XrActionCr
     XrResult r = N.CreateAction(set, ci, a);
     if (XR_SUCCEEDED(r)) {
         std::lock_guard l(gMx);
-        gActionSubs[H(*a)].assign(ci->subactionPaths, ci->subactionPaths + ci->countSubactionPaths);
+        gInput.SetSubactionPaths(*a, ci->subactionPaths, ci->countSubactionPaths);
     }
     return r;
 }
@@ -401,7 +377,6 @@ static XrResult XRAPI_CALL Hook_xrSuggestInteractionProfileBindings(XrInstance i
     std::lock_guard l(gMx);
     std::string prof = S(sb->interactionProfile);
     for (uint32_t i = 0; i < sb->countSuggestedBindings; i++) {
-        AppBind b;
         std::string bp = S(sb->suggestedBindings[i].binding);
         PoseBind pb;
         if (ParseHandPosePath(bp, pb.hand, pb.kind)) {
@@ -411,12 +386,9 @@ static XrResult XRAPI_CALL Hook_xrSuggestInteractionProfileBindings(XrInstance i
             if (!dup) v.push_back(pb);
             continue;
         }
-        if (ParseAppPath(bp, b)) {
-            auto& v = gAppBinds[H(sb->suggestedBindings[i].action)];
-            bool dup = false;
-            for (auto& e : v) if (e.hand == b.hand && e.comp == b.comp && e.pf == b.pf) dup = true;
-            if (!dup) v.push_back(b);
-        }
+        int hand, comp;
+        InputFeature feature;
+        if (ParseGameInputPath(bp, hand, comp, feature)) gInput.AddBinding(sb->suggestedBindings[i].action, hand, comp, feature);
     }
     EnsureActions();
     auto table = ProfileTable(prof);
@@ -529,7 +501,7 @@ static XrResult XRAPI_CALL Hook_xrSyncActions(XrSession s, const XrActionsSyncIn
     XrActionsSyncInfo copy = *si;
     copy.countActiveActionSets = (uint32_t)sets.size(); copy.activeActionSets = sets.data();
     XrResult r = N.SyncActions(s, &copy);
-    gSyncIdx++;
+    gInput.NewSync();
     if (r == XR_SUCCESS) ReadInputsAndUpdate();
     CheckConfigChanged();
     return r;
@@ -619,71 +591,16 @@ static XrResult XRAPI_CALL Hook_xrLocateSpacesKHR(XrSession s, const XrSpacesLoc
     return r;
 }
 
-// Work out which hands a query covers: bit 0 left, bit 1 right.
-static int HandsMask(XrPath sub) {
-    if (sub == XR_NULL_PATH) return 3;
-    if (sub == gHandPath[0]) return 1;
-    if (sub == gHandPath[1]) return 2;
-    return 0;
-}
-
-struct Eval { bool any = false, blockedAll = false, blockedSome = false; bool ov = false; Override o; int pf = 0; int freeHand = -1; };
-static Eval Evaluate(XrAction a, XrPath sub) {
-    Eval e;
-    if (!gEng.Active()) return e;
-    auto it = gAppBinds.find(H(a));
-    if (it == gAppBinds.end()) return e;
-    int mask = HandsMask(sub);
-    int nb = 0, nblk = 0;
-    for (auto& b : it->second) {
-        if (!(mask & (1 << b.hand))) continue;
-        e.any = true; nb++;
-        const Override& o = gEng.Ov(b.hand, b.comp);
-        if (o.on && !e.ov) { e.ov = true; e.o = o; e.pf = b.pf; }
-        if (gEng.Blocked(b.hand, b.comp)) nblk++;
-        else e.freeHand = b.hand;
-    }
-    e.blockedAll = nb > 0 && nblk == nb;
-    e.blockedSome = nblk > 0 && nblk < nb;
-    return e;
-}
-
-// Keep changedSinceLastSync honest when we alter values.
-static bool TrackChange(XrAction a, XrPath sub, float v0, float v1) {
-    uint64_t key = H(a) * 1000003ull ^ (uint64_t)sub;
-    Track& t = gTrack[key];
-    if (t.sync != gSyncIdx) { if (t.sync != ~0ull) { t.prev[0] = t.cur[0]; t.prev[1] = t.cur[1]; } else { t.prev[0] = v0; t.prev[1] = v1; } t.sync = gSyncIdx; }
-    t.cur[0] = v0; t.cur[1] = v1;
-    return t.prev[0] != v0 || t.prev[1] != v1;
-}
-
-static bool CanRequery(XrAction a, int hand) {
-    auto it = gActionSubs.find(H(a));
-    if (it == gActionSubs.end()) return false;
-    for (auto p : it->second) if (p == gHandPath[hand]) return true;
-    return false;
-}
-
+// The game reads its buttons, triggers and sticks: the real values, changed where the engine says so.
 static XrResult XRAPI_CALL Hook_xrGetActionStateBoolean(XrSession s, const XrActionStateGetInfo* gi, XrActionStateBoolean* st) {
     XrResult r = N.GetActionStateBoolean(s, gi, st);
     if (XR_FAILED(r) || !gi) return r;
     std::lock_guard l(gMx);
-    Eval e = Evaluate(gi->action, gi->subactionPath);
-    if (!e.any) return r;
-    bool v = st->currentState;
-    if (e.ov) { v = e.pf == 1 ? e.o.touch : e.o.press; st->isActive = XR_TRUE; }
-    else if (e.blockedAll) v = false;
-    else if (e.blockedSome && gi->subactionPath == XR_NULL_PATH) {
-        if (e.freeHand >= 0 && CanRequery(gi->action, e.freeHand)) {
-            XrActionStateGetInfo g2 = *gi; g2.subactionPath = gHandPath[e.freeHand];
-            XrActionStateBoolean s2{ XR_TYPE_ACTION_STATE_BOOLEAN };
-            if (XR_SUCCEEDED(N.GetActionStateBoolean(s, &g2, &s2))) v = s2.currentState; else v = false;
-        } else v = false;
-    }
-    st->currentState = v;
-    bool ch = TrackChange(gi->action, gi->subactionPath, v ? 1.f : 0.f, 0);
-    st->changedSinceLastSync = ch;
-    if (ch) st->lastChangeTime = gPredTime;
+    gInput.Filter(gEng, gi->action, gi->subactionPath, gPredTime, *st, [&](XrPath hand, XrActionStateBoolean& out) {
+        XrActionStateGetInfo one = *gi;
+        one.subactionPath = hand;
+        return XR_SUCCEEDED(N.GetActionStateBoolean(s, &one, &out));
+    });
     return r;
 }
 
@@ -691,24 +608,11 @@ static XrResult XRAPI_CALL Hook_xrGetActionStateFloat(XrSession s, const XrActio
     XrResult r = N.GetActionStateFloat(s, gi, st);
     if (XR_FAILED(r) || !gi) return r;
     std::lock_guard l(gMx);
-    Eval e = Evaluate(gi->action, gi->subactionPath);
-    if (!e.any) return r;
-    float v = st->currentState;
-    if (e.ov) {
-        if (e.pf == 3) v = e.o.x; else if (e.pf == 4) v = e.o.y; else if (e.pf == 1) v = e.o.touch ? 1.f : 0.f; else v = e.o.value;
-        st->isActive = XR_TRUE;
-    } else if (e.blockedAll) v = 0;
-    else if (e.blockedSome && gi->subactionPath == XR_NULL_PATH) {
-        if (e.freeHand >= 0 && CanRequery(gi->action, e.freeHand)) {
-            XrActionStateGetInfo g2 = *gi; g2.subactionPath = gHandPath[e.freeHand];
-            XrActionStateFloat s2{ XR_TYPE_ACTION_STATE_FLOAT };
-            v = XR_SUCCEEDED(N.GetActionStateFloat(s, &g2, &s2)) ? s2.currentState : 0.f;
-        } else v = 0;
-    }
-    st->currentState = v;
-    bool ch = TrackChange(gi->action, gi->subactionPath, v, 0);
-    st->changedSinceLastSync = ch;
-    if (ch) st->lastChangeTime = gPredTime;
+    gInput.Filter(gEng, gi->action, gi->subactionPath, gPredTime, *st, [&](XrPath hand, XrActionStateFloat& out) {
+        XrActionStateGetInfo one = *gi;
+        one.subactionPath = hand;
+        return XR_SUCCEEDED(N.GetActionStateFloat(s, &one, &out));
+    });
     return r;
 }
 
@@ -716,22 +620,11 @@ static XrResult XRAPI_CALL Hook_xrGetActionStateVector2f(XrSession s, const XrAc
     XrResult r = N.GetActionStateVector2f(s, gi, st);
     if (XR_FAILED(r) || !gi) return r;
     std::lock_guard l(gMx);
-    Eval e = Evaluate(gi->action, gi->subactionPath);
-    if (!e.any) return r;
-    XrVector2f v = st->currentState;
-    if (e.ov) { v = { e.o.x, e.o.y }; st->isActive = XR_TRUE; }
-    else if (e.blockedAll) v = { 0, 0 };
-    else if (e.blockedSome && gi->subactionPath == XR_NULL_PATH) {
-        if (e.freeHand >= 0 && CanRequery(gi->action, e.freeHand)) {
-            XrActionStateGetInfo g2 = *gi; g2.subactionPath = gHandPath[e.freeHand];
-            XrActionStateVector2f s2{ XR_TYPE_ACTION_STATE_VECTOR2F };
-            v = XR_SUCCEEDED(N.GetActionStateVector2f(s, &g2, &s2)) ? s2.currentState : XrVector2f{ 0, 0 };
-        } else v = { 0, 0 };
-    }
-    st->currentState = v;
-    bool ch = TrackChange(gi->action, gi->subactionPath, v.x, v.y);
-    st->changedSinceLastSync = ch;
-    if (ch) st->lastChangeTime = gPredTime;
+    gInput.Filter(gEng, gi->action, gi->subactionPath, gPredTime, *st, [&](XrPath hand, XrActionStateVector2f& out) {
+        XrActionStateGetInfo one = *gi;
+        one.subactionPath = hand;
+        return XR_SUCCEEDED(N.GetActionStateVector2f(s, &one, &out));
+    });
     return r;
 }
 

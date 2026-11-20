@@ -8,6 +8,7 @@
 #include "../src/mirror.h"
 #include "../src/game_offsets.h"
 #include "../src/overlay.h"
+#include "../src/game_input.h"
 #include <thread>
 #include <cstdio>
 #include <objidl.h>
@@ -1400,6 +1401,29 @@ int main(int argc, char** argv) {
             g.Release();
             ctx->Release(); fake11::dev->Release(); fake11::dev = nullptr;
         }
+    }
+    { // game input filter: path parsing, values pass through when nothing is held, changedSinceLastSync follows our values
+        int hand = -1, comp = -1; InputFeature f = InputFeature::Value;
+        CHECK(ParseGameInputPath("/user/hand/right/input/trigger/value", hand, comp, f) && hand == 1 && comp == C_TRIGGER && f == InputFeature::Value,
+              "game input: right trigger value parses");
+        CHECK(ParseGameInputPath("/user/hand/left/input/thumbstick", hand, comp, f) && hand == 0 && f == InputFeature::Vector,
+              "game input: a bare thumbstick path is the 2D value");
+        CHECK(!ParseGameInputPath("/user/hand/left/input/system/click", hand, comp, f), "game input: the system button is not ours to change");
+        std::string err;
+        Engine e; e.SetProfile(ParseProfileText(DefaultProfileJson(), err));
+        GameInputFilter gi; gi.SetHandPaths(101, 102);
+        XrAction act = (XrAction)(uintptr_t)77;
+        gi.AddBinding(act, 1, C_TRIGGER, InputFeature::Value);
+        auto noRequery = [](XrPath, XrActionStateFloat&) { return false; };
+        XrActionStateFloat st{ XR_TYPE_ACTION_STATE_FLOAT }; st.currentState = 0.4f; st.isActive = XR_TRUE;
+        gi.NewSync(); gi.Filter(e, act, XR_NULL_PATH, 5, st, noRequery);
+        CHECK(st.currentState == 0.4f && !st.changedSinceLastSync, "game input: nothing held, the game's value passes through");
+        st.currentState = 0.9f;
+        gi.NewSync(); gi.Filter(e, act, XR_NULL_PATH, 6, st, noRequery);
+        CHECK(st.changedSinceLastSync && st.lastChangeTime == 6, "game input: a new value is reported as changed");
+        XrActionStateFloat other{ XR_TYPE_ACTION_STATE_FLOAT }; other.currentState = 0.7f;
+        gi.Filter(e, (XrAction)(uintptr_t)78, XR_NULL_PATH, 7, other, noRequery);
+        CHECK(other.currentState == 0.7f, "game input: an action we don't know is left alone");
     }
     printf("\n%d failures\n", fails);
     Keys::Shutdown();
