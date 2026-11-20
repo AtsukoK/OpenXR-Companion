@@ -45,13 +45,16 @@ public partial class MainForm
             Shown += (s, e) => SetStatus("Updated from v" + args[2] + " to v" + AppVersion.ToString(3) + ". The previous files are in the _previous_version folder. A running VR game keeps the old version until you restart it.", false);
             return;
         }
-        if (args.Length > 1 || !UpdateCheckOn) return; // tests and screenshots never go online
+        if (args.Length > 1 || !UpdateCheckOn)
+            return; // tests and screenshots never go online
         Shown += async (s, e) =>
         {
             var latest = await LatestReleaseAsync();
-            if (latest == null || IsDisposed) return;
+            if (latest == null || IsDisposed)
+                return;
             var (ver, tag) = latest.Value;
-            if (ver <= AppVersion) return;
+            if (ver <= AppVersion)
+                return;
             updateBtn.Text = "Update available: " + tag;
             updateBtn.ToolTipText = "You have v" + AppVersion.ToString(3) + ". Click to update.";
             updateBtn.Visible = true;
@@ -62,12 +65,14 @@ public partial class MainForm
     bool updating;
     async Task UpdateClicked()
     {
-        if (updating) return;
+        if (updating)
+            return;
         string why = Updater.CantUpdateReason();
         if (why != null)
         {
             if (MessageBox.Show(this, "The editor can't update itself here: " + why + ".\n\nOpen the download page instead?", "Update",
-                    MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes) OpenReleasesPage();
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+                OpenReleasesPage();
             return;
         }
         var ask = MessageBox.Show(this,
@@ -75,11 +80,14 @@ public partial class MainForm
             "The editor downloads it from GitHub, checks it, keeps your current version in the _previous_version folder, and restarts. " +
             "Your profiles and settings are not touched.\n\nBest with your VR games closed: a running game keeps the old version until you restart it.\n\n" +
             "Yes = update now, No = open the download page instead.", "Update", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
-        if (ask == DialogResult.No) { OpenReleasesPage(); return; }
-        if (ask != DialogResult.Yes) return;
+        if (ask == DialogResult.No)
+        { OpenReleasesPage(); return; }
+        if (ask != DialogResult.Yes)
+            return;
         if (dirty && MessageBox.Show(this, "You have unsaved changes. Save them before updating?", "Update", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
             Save();
-        updating = true; updateBtn.Enabled = false;
+        updating = true;
+        updateBtn.Enabled = false;
         string was = AppVersion.ToString(3);
         try
         {
@@ -91,10 +99,13 @@ public partial class MainForm
         }
         catch (Exception ex)
         {
-            updating = false; updateBtn.Enabled = true; updateBtn.Text = "Update available";
+            updating = false;
+            updateBtn.Enabled = true;
+            updateBtn.Text = "Update available";
             SetStatus("Update failed: " + ex.Message, true);
             if (MessageBox.Show(this, "The update didn't finish: " + ex.Message + "\n\nYour current version is unchanged. Open the download page instead?", "Update",
-                    MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes) OpenReleasesPage();
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+                OpenReleasesPage();
         }
     }
     static void OpenReleasesPage() { try { Process.Start(new ProcessStartInfo(ReleasesPage) { UseShellExecute = true }); } catch { } }

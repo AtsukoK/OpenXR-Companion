@@ -12,7 +12,8 @@ public static class HeadsetMirrorFile
 
     static JsonObject Read()
     {
-        try { return JsonNode.Parse(File.ReadAllText(Path)) as JsonObject ?? new JsonObject(); }
+        try
+        { return JsonNode.Parse(File.ReadAllText(Path)) as JsonObject ?? new JsonObject(); }
         catch { return new JsonObject(); }
     }
     static void Write(JsonObject j)

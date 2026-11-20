@@ -8,9 +8,18 @@
 
 namespace Keys {
 
-struct K { bool mouse = false; WORD vk = 0; bool ext = false; DWORD mDown = 0, mUp = 0, mData = 0; int wheel = 0; };
+struct K {
+    bool mouse = false;
+    WORD vk = 0;
+    bool ext = false;
+    DWORD mDown = 0, mUp = 0, mData = 0;
+    int wheel = 0;
+};
 
-static std::string Lower(std::string s) { std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return (char)tolower(c); }); return s; }
+static std::string Lower(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return (char)tolower(c); });
+    return s;
+}
 static std::string Trim(const std::string& s) {
     size_t a = s.find_first_not_of(" \t"), b = s.find_last_not_of(" \t");
     return a == std::string::npos ? "" : s.substr(a, b - a + 1);
@@ -19,31 +28,96 @@ static std::string Trim(const std::string& s) {
 static const std::map<std::string, K>& Table() {
     static std::map<std::string, K> t = [] {
         std::map<std::string, K> m;
-        auto k = [&](const char* n, WORD vk, bool ext = false) { K x; x.vk = vk; x.ext = ext; m[n] = x; };
-        for (int i = 1; i <= 24; i++) k(("f" + std::to_string(i)).c_str(), (WORD)(VK_F1 + i - 1));
-        for (char c = 'a'; c <= 'z'; c++) k(std::string(1, c).c_str(), (WORD)toupper(c));
-        for (char c = '0'; c <= '9'; c++) { k(std::string(1, c).c_str(), (WORD)c); k(("num" + std::string(1, c)).c_str(), (WORD)(VK_NUMPAD0 + c - '0')); }
-        k("space", VK_SPACE); k("enter", VK_RETURN); k("return", VK_RETURN); k("esc", VK_ESCAPE); k("escape", VK_ESCAPE);
-        k("tab", VK_TAB); k("backspace", VK_BACK); k("delete", VK_DELETE, true); k("del", VK_DELETE, true);
-        k("insert", VK_INSERT, true); k("ins", VK_INSERT, true); k("home", VK_HOME, true); k("end", VK_END, true);
-        k("pageup", VK_PRIOR, true); k("pgup", VK_PRIOR, true); k("pagedown", VK_NEXT, true); k("pgdn", VK_NEXT, true);
-        k("up", VK_UP, true); k("down", VK_DOWN, true); k("left", VK_LEFT, true); k("right", VK_RIGHT, true);
-        k("ctrl", VK_LCONTROL); k("control", VK_LCONTROL); k("lctrl", VK_LCONTROL); k("rctrl", VK_RCONTROL, true);
-        k("shift", VK_LSHIFT); k("lshift", VK_LSHIFT); k("rshift", VK_RSHIFT);
-        k("alt", VK_LMENU); k("lalt", VK_LMENU); k("ralt", VK_RMENU, true);
-        k("win", VK_LWIN, true); k("capslock", VK_CAPITAL); k("scrolllock", VK_SCROLL); k("pause", VK_PAUSE);
-        k("printscreen", VK_SNAPSHOT, true); k("numlock", VK_NUMLOCK, true);
-        k("numadd", VK_ADD); k("numsub", VK_SUBTRACT); k("nummul", VK_MULTIPLY); k("numdiv", VK_DIVIDE, true);
-        k("numdec", VK_DECIMAL); k("numenter", VK_RETURN, true);
-        k("minus", VK_OEM_MINUS); k("equals", VK_OEM_PLUS); k("comma", VK_OEM_COMMA); k("period", VK_OEM_PERIOD);
-        k("slash", VK_OEM_2); k("grave", VK_OEM_3); k("tilde", VK_OEM_3); k("semicolon", VK_OEM_1);
-        k("quote", VK_OEM_7); k("lbracket", VK_OEM_4); k("rbracket", VK_OEM_6); k("backslash", VK_OEM_5);
-        auto mb = [&](const char* n, DWORD d, DWORD u, DWORD data = 0) { K x; x.mouse = true; x.mDown = d; x.mUp = u; x.mData = data; m[n] = x; };
-        mb("lmb", MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP); mb("rmb", MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP);
+        auto k = [&](const char* n, WORD vk, bool ext = false) {
+            K x;
+            x.vk = vk;
+            x.ext = ext;
+            m[n] = x;
+        };
+        for (int i = 1; i <= 24; i++)
+            k(("f" + std::to_string(i)).c_str(), (WORD)(VK_F1 + i - 1));
+        for (char c = 'a'; c <= 'z'; c++)
+            k(std::string(1, c).c_str(), (WORD)toupper(c));
+        for (char c = '0'; c <= '9'; c++) {
+            k(std::string(1, c).c_str(), (WORD)c);
+            k(("num" + std::string(1, c)).c_str(), (WORD)(VK_NUMPAD0 + c - '0'));
+        }
+        k("space", VK_SPACE);
+        k("enter", VK_RETURN);
+        k("return", VK_RETURN);
+        k("esc", VK_ESCAPE);
+        k("escape", VK_ESCAPE);
+        k("tab", VK_TAB);
+        k("backspace", VK_BACK);
+        k("delete", VK_DELETE, true);
+        k("del", VK_DELETE, true);
+        k("insert", VK_INSERT, true);
+        k("ins", VK_INSERT, true);
+        k("home", VK_HOME, true);
+        k("end", VK_END, true);
+        k("pageup", VK_PRIOR, true);
+        k("pgup", VK_PRIOR, true);
+        k("pagedown", VK_NEXT, true);
+        k("pgdn", VK_NEXT, true);
+        k("up", VK_UP, true);
+        k("down", VK_DOWN, true);
+        k("left", VK_LEFT, true);
+        k("right", VK_RIGHT, true);
+        k("ctrl", VK_LCONTROL);
+        k("control", VK_LCONTROL);
+        k("lctrl", VK_LCONTROL);
+        k("rctrl", VK_RCONTROL, true);
+        k("shift", VK_LSHIFT);
+        k("lshift", VK_LSHIFT);
+        k("rshift", VK_RSHIFT);
+        k("alt", VK_LMENU);
+        k("lalt", VK_LMENU);
+        k("ralt", VK_RMENU, true);
+        k("win", VK_LWIN, true);
+        k("capslock", VK_CAPITAL);
+        k("scrolllock", VK_SCROLL);
+        k("pause", VK_PAUSE);
+        k("printscreen", VK_SNAPSHOT, true);
+        k("numlock", VK_NUMLOCK, true);
+        k("numadd", VK_ADD);
+        k("numsub", VK_SUBTRACT);
+        k("nummul", VK_MULTIPLY);
+        k("numdiv", VK_DIVIDE, true);
+        k("numdec", VK_DECIMAL);
+        k("numenter", VK_RETURN, true);
+        k("minus", VK_OEM_MINUS);
+        k("equals", VK_OEM_PLUS);
+        k("comma", VK_OEM_COMMA);
+        k("period", VK_OEM_PERIOD);
+        k("slash", VK_OEM_2);
+        k("grave", VK_OEM_3);
+        k("tilde", VK_OEM_3);
+        k("semicolon", VK_OEM_1);
+        k("quote", VK_OEM_7);
+        k("lbracket", VK_OEM_4);
+        k("rbracket", VK_OEM_6);
+        k("backslash", VK_OEM_5);
+        auto mb = [&](const char* n, DWORD d, DWORD u, DWORD data = 0) {
+            K x;
+            x.mouse = true;
+            x.mDown = d;
+            x.mUp = u;
+            x.mData = data;
+            m[n] = x;
+        };
+        mb("lmb", MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP);
+        mb("rmb", MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP);
         mb("mmb", MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP);
-        mb("mouse4", MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, XBUTTON1); mb("mouse5", MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, XBUTTON2);
-        K wu; wu.mouse = true; wu.wheel = WHEEL_DELTA; m["wheelup"] = wu;
-        K wd; wd.mouse = true; wd.wheel = -WHEEL_DELTA; m["wheeldown"] = wd;
+        mb("mouse4", MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, XBUTTON1);
+        mb("mouse5", MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, XBUTTON2);
+        K wu;
+        wu.mouse = true;
+        wu.wheel = WHEEL_DELTA;
+        m["wheelup"] = wu;
+        K wd;
+        wd.mouse = true;
+        wd.wheel = -WHEEL_DELTA;
+        m["wheeldown"] = wd;
         return m;
     }();
     return t;
@@ -53,14 +127,26 @@ static bool Parse(const std::string& combo, std::vector<K>& out, std::string& er
     out.clear();
     std::string cur;
     std::vector<std::string> parts;
-    for (char c : combo) { if (c == '+') { parts.push_back(Trim(cur)); cur.clear(); } else cur += c; }
+    for (char c : combo) {
+        if (c == '+') {
+            parts.push_back(Trim(cur));
+            cur.clear();
+        } else
+            cur += c;
+    }
     parts.push_back(Trim(cur));
     for (auto& p : parts) {
         auto it = Table().find(Lower(p));
-        if (it == Table().end()) { err = "unknown key '" + p + "' in '" + combo + "'"; return false; }
+        if (it == Table().end()) {
+            err = "unknown key '" + p + "' in '" + combo + "'";
+            return false;
+        }
         out.push_back(it->second);
     }
-    if (out.empty()) { err = "empty key combo"; return false; }
+    if (out.empty()) {
+        err = "empty key combo";
+        return false;
+    }
     return true;
 }
 
@@ -70,14 +156,25 @@ static std::set<std::string> gHeld; // combos currently held via Down/toggle
 static void FocusGameAlways() {
     DWORD pid = GetCurrentProcessId();
     HWND fg = GetForegroundWindow();
-    DWORD fpid = 0; GetWindowThreadProcessId(fg, &fpid);
+    DWORD fpid = 0;
+    GetWindowThreadProcessId(fg, &fpid);
     if (fpid == pid) return;
-    struct C { DWORD pid; HWND best; } c{ pid, nullptr };
-    EnumWindows([](HWND h, LPARAM lp) -> BOOL {
-        auto* c = (C*)lp; DWORD p = 0; GetWindowThreadProcessId(h, &p);
-        if (p == c->pid && IsWindowVisible(h) && !GetWindow(h, GW_OWNER)) { c->best = h; return FALSE; }
-        return TRUE;
-    }, (LPARAM)&c);
+    struct C {
+        DWORD pid;
+        HWND best;
+    } c{ pid, nullptr };
+    EnumWindows(
+        [](HWND h, LPARAM lp) -> BOOL {
+            auto* c = (C*)lp;
+            DWORD p = 0;
+            GetWindowThreadProcessId(h, &p);
+            if (p == c->pid && IsWindowVisible(h) && !GetWindow(h, GW_OWNER)) {
+                c->best = h;
+                return FALSE;
+            }
+            return TRUE;
+        },
+        (LPARAM)&c);
     if (c.best) SetForegroundWindow(c.best);
 }
 
@@ -85,14 +182,25 @@ static void FocusGame() {
     if (!gFocus) return;
     DWORD pid = GetCurrentProcessId();
     HWND fg = GetForegroundWindow();
-    DWORD fpid = 0; GetWindowThreadProcessId(fg, &fpid);
+    DWORD fpid = 0;
+    GetWindowThreadProcessId(fg, &fpid);
     if (fpid == pid) return;
-    struct C { DWORD pid; HWND best; } c{ pid, nullptr };
-    EnumWindows([](HWND h, LPARAM lp) -> BOOL {
-        auto* c = (C*)lp; DWORD p = 0; GetWindowThreadProcessId(h, &p);
-        if (p == c->pid && IsWindowVisible(h) && !GetWindow(h, GW_OWNER)) { c->best = h; return FALSE; }
-        return TRUE;
-    }, (LPARAM)&c);
+    struct C {
+        DWORD pid;
+        HWND best;
+    } c{ pid, nullptr };
+    EnumWindows(
+        [](HWND h, LPARAM lp) -> BOOL {
+            auto* c = (C*)lp;
+            DWORD p = 0;
+            GetWindowThreadProcessId(h, &p);
+            if (p == c->pid && IsWindowVisible(h) && !GetWindow(h, GW_OWNER)) {
+                c->best = h;
+                return FALSE;
+            }
+            return TRUE;
+        },
+        (LPARAM)&c);
     if (c.best) SetForegroundWindow(c.best);
 }
 
@@ -100,18 +208,37 @@ static void Send(const K& k, bool down) {
     INPUT in{};
     if (k.mouse) {
         in.type = INPUT_MOUSE;
-        if (k.wheel) { if (!down) return; in.mi.dwFlags = MOUSEEVENTF_WHEEL; in.mi.mouseData = (DWORD)k.wheel; }
-        else { in.mi.dwFlags = down ? k.mDown : k.mUp; in.mi.mouseData = k.mData; }
+        if (k.wheel) {
+            if (!down) return;
+            in.mi.dwFlags = MOUSEEVENTF_WHEEL;
+            in.mi.mouseData = (DWORD)k.wheel;
+        } else {
+            in.mi.dwFlags = down ? k.mDown : k.mUp;
+            in.mi.mouseData = k.mData;
+        }
     } else {
         in.type = INPUT_KEYBOARD;
         in.ki.wScan = (WORD)MapVirtualKeyW(k.vk, MAPVK_VK_TO_VSC);
         in.ki.dwFlags = KEYEVENTF_SCANCODE | (k.ext ? KEYEVENTF_EXTENDEDKEY : 0) | (down ? 0 : KEYEVENTF_KEYUP);
-        if (k.vk == VK_PAUSE) { in.ki.wVk = k.vk; in.ki.dwFlags &= ~KEYEVENTF_SCANCODE; }
+        if (k.vk == VK_PAUSE) {
+            in.ki.wVk = k.vk;
+            in.ki.dwFlags &= ~KEYEVENTF_SCANCODE;
+        }
     }
     SendInput(1, &in, sizeof(in));
 }
-static void ComboDown(const std::vector<K>& ks) { for (auto& k : ks) { Send(k, true); Sleep(5); } }
-static void ComboUp(const std::vector<K>& ks) { for (auto it = ks.rbegin(); it != ks.rend(); ++it) { Send(*it, false); Sleep(5); } }
+static void ComboDown(const std::vector<K>& ks) {
+    for (auto& k : ks) {
+        Send(k, true);
+        Sleep(5);
+    }
+}
+static void ComboUp(const std::vector<K>& ks) {
+    for (auto it = ks.rbegin(); it != ks.rend(); ++it) {
+        Send(*it, false);
+        Sleep(5);
+    }
+}
 
 // Worker thread so waits never stall the game's frame.
 static std::mutex gMx;
@@ -132,7 +259,8 @@ static void Post(std::function<void()> f) {
                         std::unique_lock l(gMx);
                         gCv.wait(l, [] { return gStop || !gQ.empty(); });
                         if (gStop && gQ.empty()) return;
-                        job = std::move(gQ.front()); gQ.pop_front();
+                        job = std::move(gQ.front());
+                        gQ.pop_front();
                     }
                     job();
                 }
@@ -143,34 +271,64 @@ static void Post(std::function<void()> f) {
     gCv.notify_one();
 }
 
-bool Validate(const std::string& combo, std::string& err) { std::vector<K> k; return Parse(combo, k, err); }
+bool Validate(const std::string& combo, std::string& err) {
+    std::vector<K> k;
+    return Parse(combo, k, err);
+}
 
 void Tap(const std::string& combo, int holdMs) {
-    std::vector<K> ks; std::string err;
-    if (!Parse(combo, ks, err)) { Log("key: %s", err.c_str()); return; }
-    Post([ks, holdMs] { FocusGame(); ComboDown(ks); Sleep(std::max(holdMs, 10)); ComboUp(ks); });
+    std::vector<K> ks;
+    std::string err;
+    if (!Parse(combo, ks, err)) {
+        Log("key: %s", err.c_str());
+        return;
+    }
+    Post([ks, holdMs] {
+        FocusGame();
+        ComboDown(ks);
+        Sleep(std::max(holdMs, 10));
+        ComboUp(ks);
+    });
 }
 void Down(const std::string& combo) {
-    std::vector<K> ks; std::string err;
-    if (!Parse(combo, ks, err)) { Log("key: %s", err.c_str()); return; }
+    std::vector<K> ks;
+    std::string err;
+    if (!Parse(combo, ks, err)) {
+        Log("key: %s", err.c_str());
+        return;
+    }
     gHeld.insert(combo);
-    Post([ks] { FocusGame(); ComboDown(ks); });
+    Post([ks] {
+        FocusGame();
+        ComboDown(ks);
+    });
 }
 void Up(const std::string& combo) {
-    std::vector<K> ks; std::string err;
+    std::vector<K> ks;
+    std::string err;
     if (!Parse(combo, ks, err)) return;
     gHeld.erase(combo);
     Post([ks] { ComboUp(ks); });
 }
 void ReleaseAll() {
     auto held = gHeld;
-    for (auto& c : held) Up(c);
+    for (auto& c : held)
+        Up(c);
 }
-void SetFocusWindow(bool on) { gFocus = on; }
+void SetFocusWindow(bool on) {
+    gFocus = on;
+}
 
 static std::vector<std::string> SplitSteps(const std::string& s) {
-    std::vector<std::string> out; std::string cur;
-    for (char c : s) { if (c == ';' || c == '\n') { if (!Trim(cur).empty()) out.push_back(Trim(cur)); cur.clear(); } else cur += c; }
+    std::vector<std::string> out;
+    std::string cur;
+    for (char c : s) {
+        if (c == ';' || c == '\n') {
+            if (!Trim(cur).empty()) out.push_back(Trim(cur));
+            cur.clear();
+        } else
+            cur += c;
+    }
     if (!Trim(cur).empty()) out.push_back(Trim(cur));
     return out;
 }
@@ -179,37 +337,76 @@ bool ValidateSequence(const std::string& steps, std::string& err) {
     for (auto& st : SplitSteps(steps)) {
         std::string l = Lower(st);
         std::vector<K> k;
-        if (l.rfind("wait ", 0) == 0) { if (atoi(l.c_str() + 5) <= 0) { err = "bad wait '" + st + "'"; return false; } }
-        else if (l.rfind("down ", 0) == 0) { if (!Parse(st.substr(5), k, err)) return false; }
-        else if (l.rfind("up ", 0) == 0) { if (!Parse(st.substr(3), k, err)) return false; }
-        else if (!Parse(st, k, err)) return false;
+        if (l.rfind("wait ", 0) == 0) {
+            if (atoi(l.c_str() + 5) <= 0) {
+                err = "bad wait '" + st + "'";
+                return false;
+            }
+        } else if (l.rfind("down ", 0) == 0) {
+            if (!Parse(st.substr(5), k, err)) return false;
+        } else if (l.rfind("up ", 0) == 0) {
+            if (!Parse(st.substr(3), k, err)) return false;
+        } else if (!Parse(st, k, err))
+            return false;
     }
     return true;
 }
 
 void Sequence(const std::string& steps) {
     std::string err;
-    if (!ValidateSequence(steps, err)) { Log("sequence: %s", err.c_str()); return; }
+    if (!ValidateSequence(steps, err)) {
+        Log("sequence: %s", err.c_str());
+        return;
+    }
     auto list = SplitSteps(steps);
     Post([list] {
         FocusGame();
         for (auto& st : list) {
-            std::string l = Lower(st); std::vector<K> k; std::string e;
-            if (l.rfind("wait ", 0) == 0) Sleep(std::min(atoi(l.c_str() + 5), 10000));
-            else if (l.rfind("down ", 0) == 0) { Parse(st.substr(5), k, e); ComboDown(k); }
-            else if (l.rfind("up ", 0) == 0) { Parse(st.substr(3), k, e); ComboUp(k); }
-            else { Parse(st, k, e); ComboDown(k); Sleep(50); ComboUp(k); }
+            std::string l = Lower(st);
+            std::vector<K> k;
+            std::string e;
+            if (l.rfind("wait ", 0) == 0)
+                Sleep(std::min(atoi(l.c_str() + 5), 10000));
+            else if (l.rfind("down ", 0) == 0) {
+                Parse(st.substr(5), k, e);
+                ComboDown(k);
+            } else if (l.rfind("up ", 0) == 0) {
+                Parse(st.substr(3), k, e);
+                ComboUp(k);
+            } else {
+                Parse(st, k, e);
+                ComboDown(k);
+                Sleep(50);
+                ComboUp(k);
+            }
         }
     });
 }
 
 static bool gDry = false;
-static int gDx = -1, gDy = -1, gDWheel = 0, gDFocus = 0; static bool gDL = false, gDR = false;
-void SetDryRun(bool on) { gDry = on; gDx = gDy = -1; gDWheel = gDFocus = 0; gDL = gDR = false; }
-void DryState(int& x, int& y, bool& l, bool& r, int& wheel, int& focus) { x = gDx; y = gDy; l = gDL; r = gDR; wheel = gDWheel; focus = gDFocus; }
+static int gDx = -1, gDy = -1, gDWheel = 0, gDFocus = 0;
+static bool gDL = false, gDR = false;
+void SetDryRun(bool on) {
+    gDry = on;
+    gDx = gDy = -1;
+    gDWheel = gDFocus = 0;
+    gDL = gDR = false;
+}
+void DryState(int& x, int& y, bool& l, bool& r, int& wheel, int& focus) {
+    x = gDx;
+    y = gDy;
+    l = gDL;
+    r = gDR;
+    wheel = gDWheel;
+    focus = gDFocus;
+}
 
 void MouseTo(int x, int y) {
-    if (gDry) { gDx = x; gDy = y; return; }
+    if (gDry) {
+        gDx = x;
+        gDy = y;
+        return;
+    }
     Post([x, y] {
         // Per-monitor aware for this call so x, y are real pixels whatever the game's DPI setting.
         using SetCtx = DPI_AWARENESS_CONTEXT(WINAPI*)(DPI_AWARENESS_CONTEXT);
@@ -220,16 +417,34 @@ void MouseTo(int x, int y) {
     });
 }
 void MouseButton(int b, bool down) {
-    if (gDry) { if (b == 0) gDL = down; else if (b == 1) gDR = down; return; }
+    if (gDry) {
+        if (b == 0)
+            gDL = down;
+        else if (b == 1)
+            gDR = down;
+        return;
+    }
     Post([b, down] {
-        INPUT in{}; in.type = INPUT_MOUSE;
-        in.mi.dwFlags = b == 0 ? (down ? MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_LEFTUP) : b == 1 ? (down ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_RIGHTUP) : (down ? MOUSEEVENTF_MIDDLEDOWN : MOUSEEVENTF_MIDDLEUP);
+        INPUT in{};
+        in.type = INPUT_MOUSE;
+        in.mi.dwFlags = b == 0   ? (down ? MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_LEFTUP)
+                        : b == 1 ? (down ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_RIGHTUP)
+                                 : (down ? MOUSEEVENTF_MIDDLEDOWN : MOUSEEVENTF_MIDDLEUP);
         SendInput(1, &in, sizeof(in));
     });
 }
 void MouseWheel(int delta) {
-    if (gDry) { gDWheel += delta; return; }
-    Post([delta] { INPUT in{}; in.type = INPUT_MOUSE; in.mi.dwFlags = MOUSEEVENTF_WHEEL; in.mi.mouseData = (DWORD)delta; SendInput(1, &in, sizeof(in)); });
+    if (gDry) {
+        gDWheel += delta;
+        return;
+    }
+    Post([delta] {
+        INPUT in{};
+        in.type = INPUT_MOUSE;
+        in.mi.dwFlags = MOUSEEVENTF_WHEEL;
+        in.mi.mouseData = (DWORD)delta;
+        SendInput(1, &in, sizeof(in));
+    });
 }
 void BringToFront(uintptr_t hwnd) {
     if (gDry) return;
@@ -241,7 +456,10 @@ void BringToFront(uintptr_t hwnd) {
     });
 }
 void FocusGameNow() {
-    if (gDry) { gDFocus++; return; }
+    if (gDry) {
+        gDFocus++;
+        return;
+    }
     Post([] { FocusGameAlways(); });
 }
 
@@ -254,4 +472,4 @@ void Shutdown() {
     gCv.notify_all();
     if (gThread.joinable()) gThread.join();
 }
-}
+} // namespace Keys

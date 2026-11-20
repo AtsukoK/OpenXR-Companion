@@ -1,0 +1,10 @@
+root = true
+
+[*.cs]
+indent_style = space
+indent_size = 4
+end_of_line = crlf
+# one statement per line, blocks on their own lines
+csharp_preserve_single_line_statements = false
+csharp_preserve_single_line_blocks = true
+csharp_new_line_before_open_brace = types, methods, properties, accessors, anonymous_methods, control_blocks, lambdas, object_collection_array_initializers

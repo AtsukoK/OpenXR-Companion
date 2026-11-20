@@ -4,6 +4,11 @@
 #include "screen.h"
 #include "keys.h"
 #include "mirror.h"
+#include "tracking_log.h"
+#include "head_smoothing.h"
+#include "game_offsets.h"
+#include "overlay.h"
+#include "game_input.h"
 #include <openxr/openxr_loader_negotiation.h>
 #include <unordered_map>
 #include <map>
@@ -41,307 +46,218 @@ static struct {
     PFN_xrApplyHapticFeedback ApplyHapticFeedback;
     PFN_xrGetCurrentInteractionProfile GetCurrentInteractionProfile;
 } N{};
-static XrFns gSwap;      // swapchain calls our panels use (our hooks, so the mirror sees them too)
-static XrFns gSwapNext;  // the next layer's
+static XrFns gSwap;     // swapchain calls our panels use (our hooks, so the mirror sees them too)
+static XrFns gSwapNext; // the next layer's
 static HeadsetMirror gMirror;
 static MirrorSettings gMirrorSet;
-static FILETIME gMirrorFileTime{};
-static double gLastMirrorCheck = -10;
 
 // ---------------------------------------------------------------- head smoothing (experimental)
-// The game is handed a steadied head (direction only; position stays real). In "headset" mode the
-// frame is then submitted with the real head pose, so the compositor shows the steadied picture as is.
-static std::mutex gHeadMx;
-static HeadSmoothSettings gHeadSet;
-static FILETIME gHeadFileTime{};
-static HeavyCam gHeadSm;
-static XrTime gHeadLastT = 0;
-static XrQuaternionf gHeadD{ 0, 0, 0, 1 }; // steadied * inverse(real) for gHeadLastT
-struct HeadRec { XrTime t = 0; XrSpace space = XR_NULL_HANDLE; XrPosef real{ {0,0,0,1}, {0,0,0} }, sm{ {0,0,0,1}, {0,0,0} }; }; // the head, real and steadied, in that space
-static HeadRec gHeadRecs[8];
-static int gHeadRecNext = 0;
-static std::set<uint64_t> gViewSpaces;                // the game's VIEW reference spaces (its head)
-// diagnostics (head smoothing): how this game asks for its head, counted per 10 s
-static int gDiagViewsWorld = 0, gDiagViewsHead = 0, gDiagHeadLocates = 0, gDiagFrames = 0, gDiagFrameNoRec = 0;
-static bool gDiagSaidViews[2] = {}, gDiagSaidLocate = false, gDiagSaidFrame = false;
-static bool gHeadLogged = false;                      // "in use" written for this run of it
-static double gHeadStatT = 0; static float gHeadLagSum = 0, gHeadLagMax = 0; static int gHeadLagN = 0;
-static int gHeadSwapOk = 0, gHeadSwapMiss = 0;
+static HeadSmoother gHeadSmooth;
 
 // ---------------------------------------------------------------- our action set
-enum OA { A_BTN1, A_BTN1T, A_BTN2, A_BTN2T, A_TRIG, A_TRIGT, A_GRIP, A_STICK, A_STICKC, A_STICKT, A_REST, A_MENU, A_GRIPPOSE, A_AIMPOSE, A_HAPTIC, A_COUNT };
-static const struct { const char* name; XrActionType type; } kActs[A_COUNT] = {
-    {"vro_btn1", XR_ACTION_TYPE_BOOLEAN_INPUT}, {"vro_btn1_touch", XR_ACTION_TYPE_BOOLEAN_INPUT},
-    {"vro_btn2", XR_ACTION_TYPE_BOOLEAN_INPUT}, {"vro_btn2_touch", XR_ACTION_TYPE_BOOLEAN_INPUT},
-    {"vro_trigger", XR_ACTION_TYPE_FLOAT_INPUT}, {"vro_trigger_touch", XR_ACTION_TYPE_BOOLEAN_INPUT},
-    {"vro_grip", XR_ACTION_TYPE_FLOAT_INPUT}, {"vro_stick", XR_ACTION_TYPE_VECTOR2F_INPUT},
-    {"vro_stick_click", XR_ACTION_TYPE_BOOLEAN_INPUT}, {"vro_stick_touch", XR_ACTION_TYPE_BOOLEAN_INPUT},
-    {"vro_thumbrest", XR_ACTION_TYPE_BOOLEAN_INPUT}, {"vro_menu", XR_ACTION_TYPE_BOOLEAN_INPUT},
-    {"vro_grip_pose", XR_ACTION_TYPE_POSE_INPUT}, {"vro_aim_pose", XR_ACTION_TYPE_POSE_INPUT},
-    {"vro_haptic", XR_ACTION_TYPE_VIBRATION_OUTPUT},
+enum OA {
+    A_BTN1,
+    A_BTN1T,
+    A_BTN2,
+    A_BTN2T,
+    A_TRIG,
+    A_TRIGT,
+    A_GRIP,
+    A_STICK,
+    A_STICKC,
+    A_STICKT,
+    A_REST,
+    A_MENU,
+    A_GRIPPOSE,
+    A_AIMPOSE,
+    A_HAPTIC,
+    A_COUNT
 };
-struct PB { int act; const char* sub; int hands; }; // hands: 1 left, 2 right, 3 both
-static const PB kCommonPoses[] = { {A_GRIPPOSE, "input/grip/pose", 3}, {A_AIMPOSE, "input/aim/pose", 3}, {A_HAPTIC, "output/haptic", 3} };
+static const struct {
+    const char* name;
+    XrActionType type;
+} kActs[A_COUNT] = {
+    { "vro_btn1", XR_ACTION_TYPE_BOOLEAN_INPUT },        { "vro_btn1_touch", XR_ACTION_TYPE_BOOLEAN_INPUT },
+    { "vro_btn2", XR_ACTION_TYPE_BOOLEAN_INPUT },        { "vro_btn2_touch", XR_ACTION_TYPE_BOOLEAN_INPUT },
+    { "vro_trigger", XR_ACTION_TYPE_FLOAT_INPUT },       { "vro_trigger_touch", XR_ACTION_TYPE_BOOLEAN_INPUT },
+    { "vro_grip", XR_ACTION_TYPE_FLOAT_INPUT },          { "vro_stick", XR_ACTION_TYPE_VECTOR2F_INPUT },
+    { "vro_stick_click", XR_ACTION_TYPE_BOOLEAN_INPUT }, { "vro_stick_touch", XR_ACTION_TYPE_BOOLEAN_INPUT },
+    { "vro_thumbrest", XR_ACTION_TYPE_BOOLEAN_INPUT },   { "vro_menu", XR_ACTION_TYPE_BOOLEAN_INPUT },
+    { "vro_grip_pose", XR_ACTION_TYPE_POSE_INPUT },      { "vro_aim_pose", XR_ACTION_TYPE_POSE_INPUT },
+    { "vro_haptic", XR_ACTION_TYPE_VIBRATION_OUTPUT },
+};
+struct PB {
+    int act;
+    const char* sub;
+    int hands;
+}; // hands: 1 left, 2 right, 3 both
+static const PB kCommonPoses[] = { { A_GRIPPOSE, "input/grip/pose", 3 },
+                                   { A_AIMPOSE, "input/aim/pose", 3 },
+                                   { A_HAPTIC, "output/haptic", 3 } };
 static const PB kTouch[] = {
-    {A_BTN1, "input/x/click", 1}, {A_BTN1T, "input/x/touch", 1}, {A_BTN2, "input/y/click", 1}, {A_BTN2T, "input/y/touch", 1}, {A_MENU, "input/menu/click", 1},
-    {A_BTN1, "input/a/click", 2}, {A_BTN1T, "input/a/touch", 2}, {A_BTN2, "input/b/click", 2}, {A_BTN2T, "input/b/touch", 2},
-    {A_TRIG, "input/trigger/value", 3}, {A_TRIGT, "input/trigger/touch", 3}, {A_GRIP, "input/squeeze/value", 3},
-    {A_STICK, "input/thumbstick", 3}, {A_STICKC, "input/thumbstick/click", 3}, {A_STICKT, "input/thumbstick/touch", 3},
-    {A_REST, "input/thumbrest/touch", 3},
+    { A_BTN1, "input/x/click", 1 },
+    { A_BTN1T, "input/x/touch", 1 },
+    { A_BTN2, "input/y/click", 1 },
+    { A_BTN2T, "input/y/touch", 1 },
+    { A_MENU, "input/menu/click", 1 },
+    { A_BTN1, "input/a/click", 2 },
+    { A_BTN1T, "input/a/touch", 2 },
+    { A_BTN2, "input/b/click", 2 },
+    { A_BTN2T, "input/b/touch", 2 },
+    { A_TRIG, "input/trigger/value", 3 },
+    { A_TRIGT, "input/trigger/touch", 3 },
+    { A_GRIP, "input/squeeze/value", 3 },
+    { A_STICK, "input/thumbstick", 3 },
+    { A_STICKC, "input/thumbstick/click", 3 },
+    { A_STICKT, "input/thumbstick/touch", 3 },
+    { A_REST, "input/thumbrest/touch", 3 },
 };
 static const PB kIndex[] = {
-    {A_BTN1, "input/a/click", 3}, {A_BTN1T, "input/a/touch", 3}, {A_BTN2, "input/b/click", 3}, {A_BTN2T, "input/b/touch", 3},
-    {A_TRIG, "input/trigger/value", 3}, {A_TRIGT, "input/trigger/touch", 3}, {A_GRIP, "input/squeeze/value", 3},
-    {A_STICK, "input/thumbstick", 3}, {A_STICKC, "input/thumbstick/click", 3}, {A_STICKT, "input/thumbstick/touch", 3},
+    { A_BTN1, "input/a/click", 3 },
+    { A_BTN1T, "input/a/touch", 3 },
+    { A_BTN2, "input/b/click", 3 },
+    { A_BTN2T, "input/b/touch", 3 },
+    { A_TRIG, "input/trigger/value", 3 },
+    { A_TRIGT, "input/trigger/touch", 3 },
+    { A_GRIP, "input/squeeze/value", 3 },
+    { A_STICK, "input/thumbstick", 3 },
+    { A_STICKC, "input/thumbstick/click", 3 },
+    { A_STICKT, "input/thumbstick/touch", 3 },
 };
 static const PB kWmr[] = {
-    {A_MENU, "input/menu/click", 3}, {A_GRIP, "input/squeeze/click", 3}, {A_TRIG, "input/trigger/value", 3},
-    {A_STICK, "input/thumbstick", 3}, {A_STICKC, "input/thumbstick/click", 3},
+    { A_MENU, "input/menu/click", 3 },  { A_GRIP, "input/squeeze/click", 3 },      { A_TRIG, "input/trigger/value", 3 },
+    { A_STICK, "input/thumbstick", 3 }, { A_STICKC, "input/thumbstick/click", 3 },
 };
 static const PB kVive[] = {
-    {A_MENU, "input/menu/click", 3}, {A_GRIP, "input/squeeze/click", 3}, {A_TRIG, "input/trigger/value", 3},
-    {A_STICK, "input/trackpad", 3}, {A_STICKC, "input/trackpad/click", 3}, {A_STICKT, "input/trackpad/touch", 3},
+    { A_MENU, "input/menu/click", 3 }, { A_GRIP, "input/squeeze/click", 3 },    { A_TRIG, "input/trigger/value", 3 },
+    { A_STICK, "input/trackpad", 3 },  { A_STICKC, "input/trackpad/click", 3 }, { A_STICKT, "input/trackpad/touch", 3 },
 };
-static const PB kSimple[] = { {A_TRIG, "input/select/click", 3}, {A_MENU, "input/menu/click", 3} };
+static const PB kSimple[] = { { A_TRIG, "input/select/click", 3 }, { A_MENU, "input/menu/click", 3 } };
 
 static std::vector<PB> ProfileTable(const std::string& p) {
     std::vector<PB> v;
-    auto add = [&](const PB* b, size_t n) { v.insert(v.end(), b, b + n); };
+    auto add = [&](const PB* b, size_t n) {
+        v.insert(v.end(), b, b + n);
+    };
     if (p == "/interaction_profiles/oculus/touch_controller" || p == "/interaction_profiles/meta/touch_controller_plus" ||
         p == "/interaction_profiles/facebook/touch_controller_pro" || p == "/interaction_profiles/meta/touch_pro_controller" ||
-        p == "/interaction_profiles/meta/touch_plus_controller") add(kTouch, std::size(kTouch));
-    else if (p == "/interaction_profiles/valve/index_controller") add(kIndex, std::size(kIndex));
-    else if (p == "/interaction_profiles/microsoft/motion_controller" || p == "/interaction_profiles/hp/mixed_reality_controller") add(kWmr, std::size(kWmr));
-    else if (p == "/interaction_profiles/htc/vive_controller") add(kVive, std::size(kVive));
-    else if (p == "/interaction_profiles/khr/simple_controller") add(kSimple, std::size(kSimple));
-    else return v;
+        p == "/interaction_profiles/meta/touch_plus_controller")
+        add(kTouch, std::size(kTouch));
+    else if (p == "/interaction_profiles/valve/index_controller")
+        add(kIndex, std::size(kIndex));
+    else if (p == "/interaction_profiles/microsoft/motion_controller" || p == "/interaction_profiles/hp/mixed_reality_controller")
+        add(kWmr, std::size(kWmr));
+    else if (p == "/interaction_profiles/htc/vive_controller")
+        add(kVive, std::size(kVive));
+    else if (p == "/interaction_profiles/khr/simple_controller")
+        add(kSimple, std::size(kSimple));
+    else
+        return v;
     add(kCommonPoses, std::size(kCommonPoses));
     return v;
 }
 
 // ---------------------------------------------------------------- state
 static std::recursive_mutex gMx;
-static XrActionSet gSet = XR_NULL_HANDLE;
-static XrAction gA[A_COUNT]{};
-static XrPath gHandPath[2]{};
-static bool gAttached = false;
-static int gMinPriority = INT_MAX;
-static std::set<std::string> gOurProfiles;
 
-struct AppBind { int hand, comp, pf; }; // pf: 0 press/value, 1 touch, 2 vec2, 3 x, 4 y
-static std::unordered_map<uint64_t, std::vector<AppBind>> gAppBinds;
-static std::unordered_map<uint64_t, std::vector<XrPath>> gActionSubs;
+// Our own action set: reads the controllers for the menus, next to the game's actions (under gMx).
+struct OurActions {
+    XrActionSet set = XR_NULL_HANDLE;
+    XrAction action[A_COUNT]{};
+    XrPath handPath[2]{};           // /user/hand/left, /user/hand/right
+    bool attached = false;          // attached to the session together with the game's sets
+    int minPriority = INT_MAX;      // lowest priority among the game's action sets
+    std::set<std::string> profiles; // interaction profiles we added bindings to
+};
+static OurActions gOurs;
 
-static XrSession gSess = XR_NULL_HANDLE;
-static Gfx gGfx;
-static XrSpace gLocal = XR_NULL_HANDLE, gView = XR_NULL_HANDLE, gGripSp[2]{}, gAimSp[2]{};
-static XrTime gPredTime = 0;
-static uint64_t gSyncIdx = 0;
+// The game's session and what we made in it (under gMx).
+struct SessionState {
+    XrSession handle = XR_NULL_HANDLE;
+    Gfx gfx;
+    XrSpace local = XR_NULL_HANDLE; // world-locked overlay space
+    XrSpace view = XR_NULL_HANDLE;  // the head
+    XrSpace gripSpace[2]{}, aimSpace[2]{};
+    XrTime predictedTime = 0;      // the last xrWaitFrame's display time
+    bool touchController[2]{};     // Meta Touch controllers (aim ray needs correcting)
+    double lastProfileCheck = -10; // when the interaction profiles were last asked
+};
+static SessionState gSession;
+
+// Files the editor writes: their times when last read, so changes are noticed.
+struct WatchedFiles {
+    FILETIME config[5]{};
+    double lastConfigCheck = 0;
+    FILETIME mirror{};
+    double lastMirrorCheck = -10;
+    FILETIME headSmoothing{};
+};
+static WatchedFiles gFiles;
+
+static GameInputFilter gInput; // what the game's button / trigger / stick actions read (under gMx)
 
 static Engine gEng;
-static Panel gWheelPanel, gToastPanel, gKbPanel, gWristPanel[2], gCursorPanel[2];
-static uint64_t gDrawnWrist[2] = { ~0ull, ~0ull };
-static int gDrawnCursor[2] = { -1, -1 };
-static Panel gDotPanel, gBeamPanel; static bool gDrawnPointer = false;
-static Panel gFingerPanel; static bool gDrawnFinger = false;
-static uint64_t gWinAsk = 0; static std::string gPickedExe, gPickedTitle;
 static void MarkOwnSave();
-static Panel gBarPanel, gPickPanel; static uint64_t gDrawnBar = ~0ull, gDrawnPick = ~0ull;
-static Panel gScreenPanel; static ScreenCapture gCap; static std::vector<uint32_t> gScreenPix; static uint64_t gScreenMsgVer = 0;
-static uint64_t gDrawnKb = ~0ull;
-static Panel gKbBarPanel; static uint64_t gDrawnKbBar = ~0ull;
-static uint64_t gDrawnWheel = ~0ull, gDrawnToast = ~0ull;
-static int gWheelTex = 0;
-static std::vector<uint32_t> gPix;
+static OverlayRenderer gOverlay(gEng); // everything we draw into the headset
 
 // ---------------------------------------------------------------- controller offsets for the game
 // The game's hand pose actions (from its suggested bindings) and the spaces it makes from them.
 // Every pose the game locates for those spaces is turned / moved by the profile's offsets.
-struct PoseBind { int hand, kind; };   // kind 0 grip, 1 aim
-static std::unordered_map<uint64_t, std::vector<PoseBind>> gPoseBinds; // action -> bindings (under gMx)
-struct GameSpace { int hand, kind; };
-struct OffSnap { bool on = false; bool has[2][2]{}; XrPosef o[2][2]{}; float smooth = 0; };
-static std::mutex gOffMx;                  // own lock: the game may locate from its render thread
-static std::unordered_map<uint64_t, GameSpace> gGameSpaces;
-static OffSnap gOff;
-struct SpaceSmooth { SpaceSteady st; };
-static std::map<std::pair<uint64_t, uint64_t>, SpaceSmooth> gSpaceSmooth;
-static Panel gOffPanel; static uint64_t gDrawnOff = ~0ull;
-
-static bool ParsePosePath(const std::string& s, PoseBind& b) {
-    const std::string pre[2] = { "/user/hand/left/input/", "/user/hand/right/input/" };
-    for (int h = 0; h < 2; h++) {
-        if (s.rfind(pre[h], 0) != 0) continue;
-        std::string rest = s.substr(pre[h].size());
-        if (rest == "grip/pose" || rest == "grip_surface/pose" || rest == "palm_ext/pose") { b = { h, 0 }; return true; }
-        if (rest == "aim/pose") { b = { h, 1 }; return true; }
-        return false;
-    }
-    return false;
-}
-
-// Move one located pose: space' = space * Os, base' = base * Ob  ->  pose' = inv(Ob) * pose * Os.
-// Tracking diagnostics for the game's hand poses (grip/aim, located in a world space), under gOffMx.
-// Logs tracking state changes and big jumps at once; every 10 s a summary of reads and of how far
-// our offsets + steadying moved each hand (so a log from a glitch shows whether the layer moved it).
-struct TrackDiag {
-    uint64_t lastFlags = ~0ull; bool havePrev = false; XrPosef prev{}; XrTime prevT = 0;
-    int reads = 0, older = 0, untracked = 0, jumps = 0, changes = 0, lines = 0; // lines: written this 10 s (capped)
-    float movedSum = 0, movedMax = 0, turnedSum = 0, turnedMax = 0; int movedN = 0;
+struct PoseBind {
+    int hand;
+    PoseKind kind;
 };
-static TrackDiag gTrackDiag[2][2]; static double gTrackDiagT = 0;
-static const char* kHandName[2] = { "left", "right" }; static const char* kKindName[2] = { "grip", "aim" };
-static std::string FlagText(uint64_t f) {
-    std::string s;
-    s += (f & XR_SPACE_LOCATION_POSITION_VALID_BIT) ? (f & XR_SPACE_LOCATION_POSITION_TRACKED_BIT ? "position tracked" : "position guessed") : "position LOST";
-    s += ", ";
-    s += (f & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) ? (f & XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT ? "angle tracked" : "angle guessed") : "angle LOST";
-    return s;
-}
-static void TrackDiagRaw(const GameSpace& g, XrTime t, uint64_t flags, const XrPosef& raw) {
-    TrackDiag& d = gTrackDiag[g.hand][g.kind];
-    const char* hn = kHandName[g.hand]; const char* kn = kKindName[g.kind];
-    d.reads++;
-    const uint64_t full = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR_SPACE_LOCATION_POSITION_VALID_BIT |
-                          XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT | XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
-    if ((flags & full) != full) d.untracked++;
-    if (flags != d.lastFlags) { // at most 8 lines per pose per 10 s: a flickering hand must not flood the log
-        if (d.lastFlags != ~0ull) { d.changes++; if (d.lines++ < 8) Log("tracking: %s %s now %s", hn, kn, FlagText(flags).c_str()); }
-        else Log("tracking: %s %s first read: %s", hn, kn, FlagText(flags).c_str());
-        d.lastFlags = flags;
-    }
-    if (t < d.prevT) d.older++;
-    bool posOk = (flags & XR_SPACE_LOCATION_POSITION_VALID_BIT) != 0;
-    if (posOk && t > d.prevT) {
-        if (d.havePrev) {
-            float jump = Len(V(raw.position) - V(d.prev.position));
-            double gap = (t - d.prevT) * 1e-9;
-            if (jump > 0.2f && gap < 0.1) {
-                d.jumps++;
-                if (d.lines++ < 8) Log("tracking: %s %s JUMPED %.0f cm in %.0f ms (from %.2f %.2f %.2f to %.2f %.2f %.2f), %s", hn, kn, jump * 100.f, gap * 1000.0,
-                    d.prev.position.x, d.prev.position.y, d.prev.position.z, raw.position.x, raw.position.y, raw.position.z, FlagText(flags).c_str());
-            }
-        }
-        d.prev = raw; d.prevT = t; d.havePrev = true;
-    }
-}
-static void TrackDiagMoved(const GameSpace& g, const XrPosef& raw, const XrPosef& out) {
-    TrackDiag& d = gTrackDiag[g.hand][g.kind];
-    float m = Len(V(out.position) - V(raw.position));
-    XrQuaternionf dq = QMul(out.orientation, QInv(raw.orientation));
-    float a = 2.f * std::acos(std::min(1.f, std::fabs(dq.w))) * 57.2958f;
-    d.movedSum += m; d.movedMax = std::max(d.movedMax, m); d.turnedSum += a; d.turnedMax = std::max(d.turnedMax, a); d.movedN++;
-}
-static void TrackDiagSummary() {
-    double now = NowSec();
-    if (!gTrackDiagT) { gTrackDiagT = now; return; }
-    if (now - gTrackDiagT < 10.0) return;
-    gTrackDiagT = now;
-    for (int h = 0; h < 2; h++) for (int k = 0; k < 2; k++) {
-        TrackDiag& d = gTrackDiag[h][k];
-        if (!d.reads) continue;
-        float n = (float)std::max(1, d.movedN);
-        Log("tracking 10 s: %s %s reads %d (older time %d, not fully tracked %d, tracking changes %d, jumps %d%s); layer moved it %.1f cm avg / %.1f max, turned %.1f deg avg / %.1f max",
-            kHandName[h], kKindName[k], d.reads, d.older, d.untracked, d.changes, d.jumps, d.lines > 8 ? ", some lines not written" : "",
-            d.movedSum * 100.f / n, d.movedMax * 100.f, d.turnedSum / n, d.turnedMax);
-        d.reads = d.older = d.untracked = d.jumps = d.movedN = d.changes = d.lines = 0; d.movedSum = d.movedMax = d.turnedSum = d.turnedMax = 0;
-    }
-}
+static std::unordered_map<uint64_t, std::vector<PoseBind>> gPoseBinds; // action -> bindings (under gMx)
+static GameHandOffsets gHandOffsets;
 
-static void OffsetLocation(XrSpace space, XrSpace base, XrTime t, XrSpaceLocationFlags& flags, XrPosef& pose, XrSpaceVelocityFlags* vflags, XrVector3f* lin, XrVector3f* ang) {
-    std::lock_guard l(gOffMx);
-    {
-        auto is = gGameSpaces.find((uint64_t)space);
-        if (is != gGameSpaces.end() && !gGameSpaces.count((uint64_t)base)) TrackDiagRaw(is->second, t, flags, pose);
-        TrackDiagSummary();
-    }
-    if (!(flags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)) return;
-    if (!gOff.on || gGameSpaces.empty()) return;
-    auto is = gGameSpaces.find((uint64_t)space), ib = gGameSpaces.find((uint64_t)base);
-    bool hs = is != gGameSpaces.end() && gOff.has[is->second.hand][is->second.kind];
-    bool hb = ib != gGameSpaces.end() && gOff.has[ib->second.hand][ib->second.kind];
-    bool smooth = is != gGameSpaces.end() && ib == gGameSpaces.end() && gOff.smooth > 0.001f;
-    if (!hs && !hb && !smooth) return;
-    XrPosef p = pose;
-    if (hs) {
-        const XrPosef& o = gOff.o[is->second.hand][is->second.kind];
-        // the offset point moves on a lever: its speed gains angular x lever arm
-        if (!hb && lin && ang && vflags && (*vflags & XR_SPACE_VELOCITY_ANGULAR_VALID_BIT) && (*vflags & XR_SPACE_VELOCITY_LINEAR_VALID_BIT)) {
-            Vec3 arm = Rotate(pose.orientation, V(o.position));
-            *lin = X(V(*lin) + Cross(V(*ang), arm));
-        }
-        p = PMul(p, o);
-    }
-    if (hb) p = PMul(PInv(gOff.o[ib->second.hand][ib->second.kind]), p);
-    if (smooth) {
-        SpaceSmooth& ss = gSpaceSmooth[{ (uint64_t)space, (uint64_t)base }];
-        p = ss.st.Step(t, p, flags, gOff.smooth); // untracked poses pass through and restart the filter
-    }
-    if (is != gGameSpaces.end() && ib == gGameSpaces.end()) TrackDiagMoved(is->second, pose, p);
-    pose = p;
+static inline uint64_t H(XrAction a) {
+    return (uint64_t)a;
 }
-
-struct Track { uint64_t sync = ~0ull; float prev[2]{}, cur[2]{}; };
-static std::unordered_map<uint64_t, Track> gTrack;
-
-static FILETIME gCfgTimes[5]{};
-static double gLastCfgCheck = 0;
-
-static inline uint64_t H(XrAction a) { return (uint64_t)a; }
 
 // ---------------------------------------------------------------- helpers
-static XrPath P(const std::string& s) { XrPath p = XR_NULL_PATH; N.StringToPath(gInst, s.c_str(), &p); return p; }
+static XrPath P(const std::string& s) {
+    XrPath p = XR_NULL_PATH;
+    N.StringToPath(gInst, s.c_str(), &p);
+    return p;
+}
 static std::string S(XrPath p) {
-    char buf[XR_MAX_PATH_LENGTH]; uint32_t n = 0;
+    char buf[XR_MAX_PATH_LENGTH];
+    uint32_t n = 0;
     if (XR_FAILED(N.PathToString(gInst, p, sizeof(buf), &n, buf))) return {};
     return buf;
 }
 
-static bool ParseAppPath(const std::string& s, AppBind& b) {
-    const std::string pre[2] = { "/user/hand/left/input/", "/user/hand/right/input/" };
-    for (int h = 0; h < 2; h++) {
-        if (s.rfind(pre[h], 0) != 0) continue;
-        std::string rest = s.substr(pre[h].size());
-        auto sl = rest.find('/');
-        std::string comp = rest.substr(0, sl), feat = sl == std::string::npos ? "" : rest.substr(sl + 1);
-        int c = comp == "select" ? C_TRIGGER : ParseCompName(comp);
-        if (c < 0 || comp == "system") return false;
-        b.hand = h; b.comp = c;
-        if (feat == "touch") b.pf = 1;
-        else if (feat.empty() && c == C_STICK) b.pf = 2;
-        else if (feat == "x") b.pf = 3;
-        else if (feat == "y") b.pf = 4;
-        else if (feat == "click" || feat == "value" || feat == "force" || feat.empty()) b.pf = 0;
-        else return false;
-        return true;
-    }
-    return false;
-}
-
 static void EnsureActions() {
-    if (gSet != XR_NULL_HANDLE || gInst == XR_NULL_HANDLE) return;
-    gHandPath[0] = P("/user/hand/left");
-    gHandPath[1] = P("/user/hand/right");
+    if (gOurs.set != XR_NULL_HANDLE || gInst == XR_NULL_HANDLE) return;
+    gOurs.handPath[0] = P("/user/hand/left");
+    gOurs.handPath[1] = P("/user/hand/right");
+    gInput.SetHandPaths(gOurs.handPath[0], gOurs.handPath[1]);
     XrActionSetCreateInfo si{ XR_TYPE_ACTION_SET_CREATE_INFO };
     strcpy_s(si.actionSetName, "openxr_companion_set");
     strcpy_s(si.localizedActionSetName, "OpenXR Companion");
-    si.priority = gMinPriority == INT_MAX ? 0 : (uint32_t)gMinPriority;
-    XrResult r = N.CreateActionSet(gInst, &si, &gSet);
-    if (XR_FAILED(r)) { Log("CreateActionSet failed %d", r); gSet = XR_NULL_HANDLE; return; }
+    si.priority = gOurs.minPriority == INT_MAX ? 0 : (uint32_t)gOurs.minPriority;
+    XrResult r = N.CreateActionSet(gInst, &si, &gOurs.set);
+    if (XR_FAILED(r)) {
+        Log("CreateActionSet failed %d", r);
+        gOurs.set = XR_NULL_HANDLE;
+        return;
+    }
     for (int i = 0; i < A_COUNT; i++) {
         XrActionCreateInfo ci{ XR_TYPE_ACTION_CREATE_INFO };
         strcpy_s(ci.actionName, kActs[i].name);
         strcpy_s(ci.localizedActionName, kActs[i].name);
         ci.actionType = kActs[i].type;
-        ci.countSubactionPaths = 2; ci.subactionPaths = gHandPath;
-        r = N.CreateAction(gSet, &ci, &gA[i]);
+        ci.countSubactionPaths = 2;
+        ci.subactionPaths = gOurs.handPath;
+        r = N.CreateAction(gOurs.set, &ci, &gOurs.action[i]);
         if (XR_FAILED(r)) Log("CreateAction %s failed %d", kActs[i].name, r);
     }
     Log("our action set created, priority %u", si.priority);
 }
 
 static void ReloadProfile(bool announce) {
-    std::wstring path; std::string err;
+    std::wstring path;
+    std::string err;
     auto p = LoadProfile(path, err);
     if (!p) {
         Log("config error: %s", err.c_str());
@@ -349,8 +265,9 @@ static void ReloadProfile(bool announce) {
         return;
     }
     gEng.SetProfile(p);
-    gDrawnWheel = gDrawnKb = ~0ull; gDrawnWrist[0] = gDrawnWrist[1] = ~0ull; gDrawnPointer = false; gDrawnFinger = false; gDrawnCursor[0] = gDrawnCursor[1] = -1;
-    Log("loaded profile %s (%zu bindings, %zu wheels, enabled=%d)", p->sourceName.c_str(), p->bindings.size(), p->wheels.size(), p->enabled);
+    gOverlay.InvalidateAll();
+    Log("loaded profile %s (%zu bindings, %zu wheels, enabled=%d)", p->sourceName.c_str(), p->bindings.size(), p->wheels.size(),
+        p->enabled);
     if (announce) gEng.Toast("OpenXR Companion: " + p->sourceName + " loaded");
 }
 
@@ -362,30 +279,31 @@ static FILETIME FileTime(const std::wstring& f) {
 // The layer wrote the profile itself: take the new file times without reloading (a reload would close menus).
 static void MarkOwnSave() {
     std::wstring dir = ProfilesDir();
-    gCfgTimes[0] = FileTime(dir + L"\\" + Utf8ToW(ExeName()) + L".json");
-    gCfgTimes[1] = FileTime(dir + L"\\default.json");
-    gCfgTimes[2] = FileTime(dir + L"\\user_defaults.json");
-    gCfgTimes[3] = FileTime(ActiveProfilePath());
-    gCfgTimes[4] = gEng.prof ? FileTime(dir + L"\\" + Utf8ToW(gEng.prof->sourceName)) : FILETIME{};
+    gFiles.config[0] = FileTime(dir + L"\\" + Utf8ToW(ExeName()) + L".json");
+    gFiles.config[1] = FileTime(dir + L"\\default.json");
+    gFiles.config[2] = FileTime(dir + L"\\user_defaults.json");
+    gFiles.config[3] = FileTime(ActiveProfilePath());
+    gFiles.config[4] = gEng.prof ? FileTime(dir + L"\\" + Utf8ToW(gEng.prof->sourceName)) : FILETIME{};
 }
 
 static void CheckConfigChanged() {
     double now = NowSec();
-    if (now - gLastCfgCheck < 1.0) return;
-    gLastCfgCheck = now;
+    if (now - gFiles.lastConfigCheck < 1.0) return;
+    gFiles.lastConfigCheck = now;
     std::wstring dir = ProfilesDir();
-    FILETIME t[5] = { FileTime(dir + L"\\" + Utf8ToW(ExeName()) + L".json"), FileTime(dir + L"\\default.json"), FileTime(dir + L"\\user_defaults.json"),
-                      FileTime(ActiveProfilePath()), gEng.prof ? FileTime(dir + L"\\" + Utf8ToW(gEng.prof->sourceName)) : FILETIME{} };
-    bool changed = memcmp(t, gCfgTimes, sizeof(t)) != 0;
-    bool first = gCfgTimes[1].dwLowDateTime == 0 && gCfgTimes[1].dwHighDateTime == 0;
-    memcpy(gCfgTimes, t, sizeof(t));
+    FILETIME t[5] = { FileTime(dir + L"\\" + Utf8ToW(ExeName()) + L".json"), FileTime(dir + L"\\default.json"),
+                      FileTime(dir + L"\\user_defaults.json"), FileTime(ActiveProfilePath()),
+                      gEng.prof ? FileTime(dir + L"\\" + Utf8ToW(gEng.prof->sourceName)) : FILETIME{} };
+    bool changed = memcmp(t, gFiles.config, sizeof(t)) != 0;
+    bool first = gFiles.config[1].dwLowDateTime == 0 && gFiles.config[1].dwHighDateTime == 0;
+    memcpy(gFiles.config, t, sizeof(t));
     if (changed && !first) ReloadProfile(true);
 }
 
 static bool Locate(XrSpace sp, XrSpace base, XrPosef& out) {
-    if (!sp || !base || !gPredTime) return false;
+    if (!sp || !base || !gSession.predictedTime) return false;
     XrSpaceLocation l{ XR_TYPE_SPACE_LOCATION };
-    if (XR_FAILED(N.LocateSpace(sp, base, gPredTime, &l))) return false;
+    if (XR_FAILED(N.LocateSpace(sp, base, gSession.predictedTime, &l))) return false;
     const XrSpaceLocationFlags need = XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
     if ((l.locationFlags & need) != need) return false;
     out = l.pose;
@@ -393,38 +311,40 @@ static bool Locate(XrSpace sp, XrSpace base, XrPosef& out) {
 }
 
 // Which controllers are in use: checked once a second (the profile changes rarely).
-static bool gTouchCtl[2]{};
-static double gLastIpCheck = -10;
 static void CheckInteractionProfiles(double now) {
-    if (now - gLastIpCheck < 1.0 || !N.GetCurrentInteractionProfile || !gSess) return;
-    gLastIpCheck = now;
+    if (now - gSession.lastProfileCheck < 1.0 || !N.GetCurrentInteractionProfile || !gSession.handle) return;
+    gSession.lastProfileCheck = now;
     for (int h = 0; h < 2; h++) {
         XrInteractionProfileState st{ XR_TYPE_INTERACTION_PROFILE_STATE };
-        if (XR_FAILED(N.GetCurrentInteractionProfile(gSess, gHandPath[h], &st))) continue;
+        if (XR_FAILED(N.GetCurrentInteractionProfile(gSession.handle, gOurs.handPath[h], &st))) continue;
         std::string p = st.interactionProfile ? S(st.interactionProfile) : "";
-        bool touch = p.find("touch") != std::string::npos && (p.find("oculus") != std::string::npos ||
-                     p.find("meta") != std::string::npos || p.find("facebook") != std::string::npos);
-        if (touch != gTouchCtl[h]) Log("%s controller: %s%s", h ? "right" : "left", p.c_str(), touch ? " (Touch: aim correction available)" : "");
-        gTouchCtl[h] = touch;
+        bool touch =
+            p.find("touch") != std::string::npos &&
+            (p.find("oculus") != std::string::npos || p.find("meta") != std::string::npos || p.find("facebook") != std::string::npos);
+        if (touch != gSession.touchController[h])
+            Log("%s controller: %s%s", h ? "right" : "left", p.c_str(), touch ? " (Touch: aim correction available)" : "");
+        gSession.touchController[h] = touch;
     }
 }
-
-static XrPosef gHeadNow{ {0,0,0,1}, {0,0,0} }; static bool gHeadNowValid = false; // head in gLocal, last update
 
 // Head smoothing settings: read when the game starts, then whenever the editor changes the file.
 static void CheckHeadSmoothingFile() {
     FILETIME hft = FileTime(HeadSmoothSettingsPath());
-    if (memcmp(&hft, &gHeadFileTime, sizeof(hft)) == 0) return;
-    gHeadFileTime = hft;
-    HeadSmoothSettings hs; LoadHeadSmoothSettings(hs);
+    if (memcmp(&hft, &gFiles.headSmoothing, sizeof(hft)) == 0) return;
+    gFiles.headSmoothing = hft;
+    HeadSmoothSettings hs;
+    LoadHeadSmoothSettings(hs);
     static bool firstLoad = true;
     if (firstLoad && hs.on && !hs.keepOn) { // safety: never already on when a game starts, unless asked
-        hs.on = false; SwitchOffHeadSmoothing(); gHeadFileTime = FileTime(HeadSmoothSettingsPath());
+        hs.on = false;
+        SwitchOffHeadSmoothing();
+        gFiles.headSmoothing = FileTime(HeadSmoothSettingsPath());
         Log("head smoothing: was on, switched off at game start (keep_on is false)");
     }
     firstLoad = false;
-    bool was; { std::lock_guard hl(gHeadMx); was = gHeadSet.on; gHeadSet = hs; }
-    Log("head smoothing: settings read: %s, mode %s, strength %.2f", hs.on ? "ON" : "off", hs.mode == 1 ? "headset" : "recording", hs.strength);
+    bool was = gHeadSmooth.SetSettings(hs);
+    Log("head smoothing: settings read: %s, mode %s, strength %.2f", hs.on ? "ON" : "off", hs.mode == 1 ? "headset" : "recording",
+        hs.strength);
     if (hs.on != was) gEng.Toast(hs.on ? "Head smoothing ON (experimental: stop if you feel unwell)" : "Head smoothing off", 3.0);
 }
 
@@ -434,84 +354,135 @@ static void ReadInputsAndUpdate() {
     CheckInteractionProfiles(f.t);
     for (int h = 0; h < 2; h++) {
         auto gb = [&](int a) {
-            XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO }; gi.action = gA[a]; gi.subactionPath = gHandPath[h];
+            XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO };
+            gi.action = gOurs.action[a];
+            gi.subactionPath = gOurs.handPath[h];
             XrActionStateBoolean s{ XR_TYPE_ACTION_STATE_BOOLEAN };
-            return XR_SUCCEEDED(N.GetActionStateBoolean(gSess, &gi, &s)) && s.isActive && s.currentState;
+            return XR_SUCCEEDED(N.GetActionStateBoolean(gSession.handle, &gi, &s)) && s.isActive && s.currentState;
         };
         auto gf = [&](int a) {
-            XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO }; gi.action = gA[a]; gi.subactionPath = gHandPath[h];
+            XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO };
+            gi.action = gOurs.action[a];
+            gi.subactionPath = gOurs.handPath[h];
             XrActionStateFloat s{ XR_TYPE_ACTION_STATE_FLOAT };
-            return XR_SUCCEEDED(N.GetActionStateFloat(gSess, &gi, &s)) && s.isActive ? s.currentState : 0.f;
+            return XR_SUCCEEDED(N.GetActionStateFloat(gSession.handle, &gi, &s)) && s.isActive ? s.currentState : 0.f;
         };
         HandRaw& r = f.h[h];
-        r.b1 = gb(A_BTN1); r.b1t = gb(A_BTN1T); r.b2 = gb(A_BTN2); r.b2t = gb(A_BTN2T);
-        r.trig = gf(A_TRIG); r.trigT = gb(A_TRIGT); r.grip = gf(A_GRIP);
+        r.b1 = gb(A_BTN1);
+        r.b1t = gb(A_BTN1T);
+        r.b2 = gb(A_BTN2);
+        r.b2t = gb(A_BTN2T);
+        r.trig = gf(A_TRIG);
+        r.trigT = gb(A_TRIGT);
+        r.grip = gf(A_GRIP);
         {
-            XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO }; gi.action = gA[A_STICK]; gi.subactionPath = gHandPath[h];
+            XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO };
+            gi.action = gOurs.action[A_STICK];
+            gi.subactionPath = gOurs.handPath[h];
             XrActionStateVector2f s{ XR_TYPE_ACTION_STATE_VECTOR2F };
-            if (XR_SUCCEEDED(N.GetActionStateVector2f(gSess, &gi, &s)) && s.isActive) { r.sx = s.currentState.x; r.sy = s.currentState.y; }
+            if (XR_SUCCEEDED(N.GetActionStateVector2f(gSession.handle, &gi, &s)) && s.isActive) {
+                r.sx = s.currentState.x;
+                r.sy = s.currentState.y;
+            }
         }
-        r.sc = gb(A_STICKC); r.st = gb(A_STICKT); r.rest = gb(A_REST); r.menu = gb(A_MENU);
-        r.gripValid = Locate(gGripSp[h], gLocal, r.gripPose);
-        r.aimValid = Locate(gAimSp[h], gLocal, r.aimPose);
-        r.touchCtl = gTouchCtl[h];
+        r.sc = gb(A_STICKC);
+        r.st = gb(A_STICKT);
+        r.rest = gb(A_REST);
+        r.menu = gb(A_MENU);
+        r.gripValid = Locate(gSession.gripSpace[h], gSession.local, r.gripPose);
+        r.aimValid = Locate(gSession.aimSpace[h], gSession.local, r.aimPose);
+        r.touchCtl = gSession.touchController[h];
     }
-    f.headValid = Locate(gView, gLocal, f.head);
-    gHeadNow = f.head; gHeadNowValid = f.headValid;
+    f.headValid = Locate(gSession.view, gSession.local, f.head);
+    gOverlay.SetHead(f.head, f.headValid);
     gEng.Update(f);
 
     for (auto& hq : gEng.haptics) {
-        XrHapticActionInfo hi{ XR_TYPE_HAPTIC_ACTION_INFO }; hi.action = gA[A_HAPTIC]; hi.subactionPath = gHandPath[hq.hand];
+        XrHapticActionInfo hi{ XR_TYPE_HAPTIC_ACTION_INFO };
+        hi.action = gOurs.action[A_HAPTIC];
+        hi.subactionPath = gOurs.handPath[hq.hand];
         XrHapticVibration v{ XR_TYPE_HAPTIC_VIBRATION };
-        v.amplitude = hq.amp; v.duration = (XrDuration)(hq.sec * 1e9); v.frequency = XR_FREQUENCY_UNSPECIFIED;
-        N.ApplyHapticFeedback(gSess, &hi, (XrHapticBaseHeader*)&v);
+        v.amplitude = hq.amp;
+        v.duration = (XrDuration)(hq.sec * 1e9);
+        v.frequency = XR_FREQUENCY_UNSPECIFIED;
+        N.ApplyHapticFeedback(gSession.handle, &hi, (XrHapticBaseHeader*)&v);
     }
     gEng.haptics.clear();
-    {   // what the game's controller poses are moved by, for the LocateSpace hooks
-        OffSnap sn;
-        sn.on = gEng.Active() && gEng.offs.enabled;
-        sn.smooth = sn.on ? gEng.offs.smoothing : 0.f;
-        for (int h = 0; h < 2; h++) for (int k = 0; k < 2; k++) sn.has[h][k] = sn.on && gEng.OffsetPose(h, k, sn.o[h][k]);
-        std::lock_guard o(gOffMx);
-        gOff = sn;
+    { // what the game's controller poses are moved by, for the LocateSpace hooks
+        GameHandOffsets::Settings hs;
+        hs.on = gEng.Active() && gEng.offs.enabled;
+        hs.steadying = hs.on ? gEng.offs.smoothing : 0.f;
+        for (int h = 0; h < 2; h++)
+            for (int k = 0; k < 2; k++)
+                hs.has[h][k] = hs.on && gEng.OffsetPose(h, k, hs.pose[h][k]);
+        gHandOffsets.SetSettings(hs);
     }
     if (gEng.offsSaveRequested && gEng.prof) {
         gEng.offsSaveRequested = false;
         gEng.prof->offsets = gEng.offs;
         std::string err;
-        if (SaveOffsets(*gEng.prof, err)) { MarkOwnSave(); Log("controller offsets saved to %s", gEng.prof->sourceName.c_str()); }
-        else { Log("offsets: save failed: %s", err.c_str()); gEng.Toast("Could not save offsets: " + err, 6.0); }
+        if (SaveOffsets(*gEng.prof, err)) {
+            MarkOwnSave();
+            Log("controller offsets saved to %s", gEng.prof->sourceName.c_str());
+        } else {
+            Log("offsets: save failed: %s", err.c_str());
+            gEng.Toast("Could not save offsets: " + err, 6.0);
+        }
     }
-    if (gEng.mirrorAsk) { // a wheel / wrist button: switch the headset mirror, and remember it for the editor
-        int a = gEng.mirrorAsk; gEng.mirrorAsk = 0;
-        gMirrorSet.on = a == 2 ? true : a == 3 ? false : !gMirrorSet.on;
-        SaveMirrorSettings(gMirrorSet); gMirrorFileTime = FileTime(MirrorSettingsPath());
+    if (gEng.mirrorAsk != MirrorRequest::None) { // a wheel / wrist button: switch the headset mirror, and remember it for the editor
+        MirrorRequest a = gEng.mirrorAsk;
+        gEng.mirrorAsk = MirrorRequest::None;
+        gMirrorSet.on = a == MirrorRequest::On ? true : a == MirrorRequest::Off ? false : !gMirrorSet.on;
+        SaveMirrorSettings(gMirrorSet);
+        gFiles.mirror = FileTime(MirrorSettingsPath());
         gEng.Toast(gMirrorSet.on ? "Headset mirror ON (a window on the desktop)" : "Headset mirror off", 2.0);
     }
-    if (gMirror.ClosedByUser()) { gMirrorSet.on = false; SaveMirrorSettings(gMirrorSet); gMirrorFileTime = FileTime(MirrorSettingsPath()); }
+    if (gMirror.ClosedByUser()) {
+        gMirrorSet.on = false;
+        SaveMirrorSettings(gMirrorSet);
+        gFiles.mirror = FileTime(MirrorSettingsPath());
+    }
     {
         double now = NowSec();
-        if (now - gLastMirrorCheck > 1.0) { // the editor's button writes the file
-            gLastMirrorCheck = now;
+        if (now - gFiles.lastMirrorCheck > 1.0) { // the editor's button writes the file
+            gFiles.lastMirrorCheck = now;
             FILETIME ft = FileTime(MirrorSettingsPath());
-            if (memcmp(&ft, &gMirrorFileTime, sizeof(ft)) != 0) { gMirrorFileTime = ft; LoadMirrorSettings(gMirrorSet); }
+            if (memcmp(&ft, &gFiles.mirror, sizeof(ft)) != 0) {
+                gFiles.mirror = ft;
+                LoadMirrorSettings(gMirrorSet);
+            }
             CheckHeadSmoothingFile();
         }
-        gMirror.eye = gMirrorSet.eye; gMirror.zoom = gMirrorSet.zoom; gMirror.fps = gMirrorSet.fps; gMirror.smoothing = gMirrorSet.smoothing; gMirror.onTop = gMirrorSet.onTop;
-        bool want = gMirrorSet.on && gGfx.api == 11;
-        if (gMirrorSet.on && gGfx.api == 12 && !gMirror.On()) {
+        gMirror.eye = gMirrorSet.eye;
+        gMirror.zoom = gMirrorSet.zoom;
+        gMirror.fps = gMirrorSet.fps;
+        gMirror.smoothing = gMirrorSet.smoothing;
+        gMirror.onTop = gMirrorSet.onTop;
+        bool want = gMirrorSet.on && gSession.gfx.api == 11;
+        if (gMirrorSet.on && gSession.gfx.api == 12 && !gMirror.On()) {
             static bool told = false;
-            if (!told) { told = true; gEng.Toast("Headset mirror: this game uses D3D12, not supported yet", 4.0); }
+            if (!told) {
+                told = true;
+                gEng.Toast("Headset mirror: this game uses D3D12, not supported yet", 4.0);
+            }
         }
         gMirror.SetOn(want);
         gEng.mirrorOn = gMirrorSet.on;
     }
-    if (gEng.reloadRequested) { gEng.reloadRequested = false; ReloadProfile(true); }
+    if (gEng.reloadRequested) {
+        gEng.reloadRequested = false;
+        ReloadProfile(true);
+    }
     if (gEng.saveRequested && gEng.prof) { // leaving adjust mode: keep the new placement
         gEng.saveRequested = false;
         std::string err;
-        if (SavePlacement(*gEng.prof, err)) { MarkOwnSave(); Log("adjust: placement saved to %s", gEng.prof->sourceName.c_str()); }
-        else { Log("adjust: save failed: %s", err.c_str()); gEng.Toast("Could not save positions: " + err, 6.0); }
+        if (SavePlacement(*gEng.prof, err)) {
+            MarkOwnSave();
+            Log("adjust: placement saved to %s", gEng.prof->sourceName.c_str());
+        } else {
+            Log("adjust: save failed: %s", err.c_str());
+            gEng.Toast("Could not save positions: " + err, 6.0);
+        }
     }
 }
 
@@ -521,15 +492,23 @@ static XrResult XRAPI_CALL Hook_xrDestroyInstance(XrInstance inst) {
         std::lock_guard l(gMx);
         Keys::Shutdown();
         DrawShutdown();
-        gSet = XR_NULL_HANDLE; gAttached = false; gAppBinds.clear(); gPoseBinds.clear(); gActionSubs.clear(); gOurProfiles.clear();
-        gMinPriority = INT_MAX; gInst = XR_NULL_HANDLE;
+        gOurs.set = XR_NULL_HANDLE;
+        gOurs.attached = false;
+        gPoseBinds.clear();
+        gInput.Clear();
+        gOurs.profiles.clear();
+        gOurs.minPriority = INT_MAX;
+        gInst = XR_NULL_HANDLE;
     }
     return N.DestroyInstance(inst);
 }
 
 static XrResult XRAPI_CALL Hook_xrCreateActionSet(XrInstance inst, const XrActionSetCreateInfo* ci, XrActionSet* set) {
     XrResult r = N.CreateActionSet(inst, ci, set);
-    if (XR_SUCCEEDED(r)) { std::lock_guard l(gMx); gMinPriority = std::min(gMinPriority, (int)ci->priority); }
+    if (XR_SUCCEEDED(r)) {
+        std::lock_guard l(gMx);
+        gOurs.minPriority = std::min(gOurs.minPriority, (int)ci->priority);
+    }
     return r;
 }
 
@@ -537,7 +516,7 @@ static XrResult XRAPI_CALL Hook_xrCreateAction(XrActionSet set, const XrActionCr
     XrResult r = N.CreateAction(set, ci, a);
     if (XR_SUCCEEDED(r)) {
         std::lock_guard l(gMx);
-        gActionSubs[H(*a)].assign(ci->subactionPaths, ci->subactionPaths + ci->countSubactionPaths);
+        gInput.SetSubactionPaths(*a, ci->subactionPaths, ci->countSubactionPaths);
     }
     return r;
 }
@@ -546,33 +525,31 @@ static XrResult XRAPI_CALL Hook_xrSuggestInteractionProfileBindings(XrInstance i
     std::lock_guard l(gMx);
     std::string prof = S(sb->interactionProfile);
     for (uint32_t i = 0; i < sb->countSuggestedBindings; i++) {
-        AppBind b;
         std::string bp = S(sb->suggestedBindings[i].binding);
         PoseBind pb;
-        if (ParsePosePath(bp, pb)) {
+        if (ParseHandPosePath(bp, pb.hand, pb.kind)) {
             auto& v = gPoseBinds[H(sb->suggestedBindings[i].action)];
             bool dup = false;
-            for (auto& e : v) if (e.hand == pb.hand && e.kind == pb.kind) dup = true;
+            for (auto& e : v)
+                if (e.hand == pb.hand && e.kind == pb.kind) dup = true;
             if (!dup) v.push_back(pb);
             continue;
         }
-        if (ParseAppPath(bp, b)) {
-            auto& v = gAppBinds[H(sb->suggestedBindings[i].action)];
-            bool dup = false;
-            for (auto& e : v) if (e.hand == b.hand && e.comp == b.comp && e.pf == b.pf) dup = true;
-            if (!dup) v.push_back(b);
-        }
+        int hand, comp;
+        InputFeature feature;
+        if (ParseGameInputPath(bp, hand, comp, feature)) gInput.AddBinding(sb->suggestedBindings[i].action, hand, comp, feature);
     }
     EnsureActions();
     auto table = ProfileTable(prof);
-    if (gSet == XR_NULL_HANDLE || table.empty()) {
+    if (gOurs.set == XR_NULL_HANDLE || table.empty()) {
         Log("suggest %s: %u app bindings (not augmented)", prof.c_str(), sb->countSuggestedBindings);
         return N.SuggestInteractionProfileBindings(inst, sb);
     }
     std::vector<XrActionSuggestedBinding> all(sb->suggestedBindings, sb->suggestedBindings + sb->countSuggestedBindings);
     for (auto& e : table)
         for (int h = 0; h < 2; h++)
-            if (e.hands & (1 << h)) all.push_back({ gA[e.act], P(std::string(h ? "/user/hand/right/" : "/user/hand/left/") + e.sub) });
+            if (e.hands & (1 << h))
+                all.push_back({ gOurs.action[e.act], P(std::string(h ? "/user/hand/right/" : "/user/hand/left/") + e.sub) });
     XrInteractionProfileSuggestedBinding copy = *sb;
     copy.countSuggestedBindings = (uint32_t)all.size();
     copy.suggestedBindings = all.data();
@@ -581,7 +558,7 @@ static XrResult XRAPI_CALL Hook_xrSuggestInteractionProfileBindings(XrInstance i
         Log("suggest %s with our bindings failed (%d), retrying app-only", prof.c_str(), r);
         return N.SuggestInteractionProfileBindings(inst, sb);
     }
-    gOurProfiles.insert(prof);
+    gOurs.profiles.insert(prof);
     Log("suggest %s: %u app + %zu ours", prof.c_str(), sb->countSuggestedBindings, all.size() - sb->countSuggestedBindings);
     return r;
 }
@@ -590,42 +567,54 @@ static XrResult XRAPI_CALL Hook_xrCreateSession(XrInstance inst, const XrSession
     XrResult r = N.CreateSession(inst, ci, s);
     if (XR_FAILED(r)) return r;
     std::lock_guard l(gMx);
-    gSess = *s;
-    gGfx.Init(ci->next);
-    Log("session created, graphics api %d", gGfx.api);
-    if (!gGfx.api) Log("graphics API is not D3D11/D3D12: the wheel will not be drawn, bindings still work");
+    gSession.handle = *s;
+    gSession.gfx.Init(ci->next);
+    Log("session created, graphics api %d", gSession.gfx.api);
+    if (!gSession.gfx.api) Log("graphics API is not D3D11/D3D12: the wheel will not be drawn, bindings still work");
     XrReferenceSpaceCreateInfo rs{ XR_TYPE_REFERENCE_SPACE_CREATE_INFO };
     rs.poseInReferenceSpace.orientation.w = 1;
     rs.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL;
-    N.CreateReferenceSpace(gSess, &rs, &gLocal);
+    N.CreateReferenceSpace(gSession.handle, &rs, &gSession.local);
     rs.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_VIEW;
-    N.CreateReferenceSpace(gSess, &rs, &gView);
+    N.CreateReferenceSpace(gSession.handle, &rs, &gSession.view);
     ReloadProfile(true);
     return r;
 }
 
+// What the overlay needs from the session to draw.
+static OverlayContext OverlayCtx() {
+    OverlayContext c;
+    c.session = gSession.handle;
+    c.gfx = &gSession.gfx;
+    c.swap = &gSwap;
+    c.local = gSession.local;
+    c.view = gSession.view;
+    return c;
+}
+
 static void DestroySessionStuff() {
-    gWheelPanel.Destroy(gSwap); gToastPanel.Destroy(gSwap); gKbPanel.Destroy(gSwap); gDrawnKb = ~0ull; gKbBarPanel.Destroy(gSwap); gDrawnKbBar = ~0ull; for (int h = 0; h < 2; h++) { gWristPanel[h].Destroy(gSwap); gDrawnWrist[h] = ~0ull; gCursorPanel[h].Destroy(gSwap); gDrawnCursor[h] = -1; } gDotPanel.Destroy(gSwap); gBeamPanel.Destroy(gSwap); gDrawnPointer = false; gFingerPanel.Destroy(gSwap); gDrawnFinger = false; gScreenPanel.Destroy(gSwap); gCap.Stop(); gBarPanel.Destroy(gSwap); gPickPanel.Destroy(gSwap); gDrawnBar = gDrawnPick = ~0ull; gOffPanel.Destroy(gSwap); gDrawnOff = ~0ull;
-    { std::lock_guard o(gOffMx); gGameSpaces.clear(); gSpaceSmooth.clear(); gOff = OffSnap{}; }
+    gOverlay.Destroy(OverlayCtx());
+    gHandOffsets.Clear();
     for (int h = 0; h < 2; h++) {
-        if (gGripSp[h]) N.DestroySpace(gGripSp[h]);
-        if (gAimSp[h]) N.DestroySpace(gAimSp[h]);
-        gGripSp[h] = gAimSp[h] = XR_NULL_HANDLE;
+        if (gSession.gripSpace[h]) N.DestroySpace(gSession.gripSpace[h]);
+        if (gSession.aimSpace[h]) N.DestroySpace(gSession.aimSpace[h]);
+        gSession.gripSpace[h] = gSession.aimSpace[h] = XR_NULL_HANDLE;
     }
-    if (gLocal) N.DestroySpace(gLocal);
-    if (gView) N.DestroySpace(gView);
-    gLocal = gView = XR_NULL_HANDLE;
+    if (gSession.local) N.DestroySpace(gSession.local);
+    if (gSession.view) N.DestroySpace(gSession.view);
+    gSession.local = gSession.view = XR_NULL_HANDLE;
     gEng.Reset();
     gMirror.Shutdown();
-    gGfx.Release();
-    gSess = XR_NULL_HANDLE; gAttached = false; gPredTime = 0;
-    gDrawnWheel = gDrawnToast = ~0ull;
+    gSession.gfx.Release();
+    gSession.handle = XR_NULL_HANDLE;
+    gOurs.attached = false;
+    gSession.predictedTime = 0;
 }
 
 static XrResult XRAPI_CALL Hook_xrDestroySession(XrSession s) {
     {
         std::lock_guard l(gMx);
-        if (s == gSess) DestroySessionStuff();
+        if (s == gSession.handle) DestroySessionStuff();
     }
     return N.DestroySession(s);
 }
@@ -633,24 +622,27 @@ static XrResult XRAPI_CALL Hook_xrDestroySession(XrSession s) {
 static XrResult XRAPI_CALL Hook_xrAttachSessionActionSets(XrSession s, const XrSessionActionSetsAttachInfo* ai) {
     std::lock_guard l(gMx);
     EnsureActions();
-    if (gSet == XR_NULL_HANDLE || s != gSess) return N.AttachSessionActionSets(s, ai);
-    if (gOurProfiles.empty()) Log("warning: the game suggested no controller profile we know; our inputs will be inactive");
+    if (gOurs.set == XR_NULL_HANDLE || s != gSession.handle) return N.AttachSessionActionSets(s, ai);
+    if (gOurs.profiles.empty()) Log("warning: the game suggested no controller profile we know; our inputs will be inactive");
     std::vector<XrActionSet> sets(ai->actionSets, ai->actionSets + ai->countActionSets);
-    sets.push_back(gSet);
+    sets.push_back(gOurs.set);
     XrSessionActionSetsAttachInfo copy = *ai;
-    copy.countActionSets = (uint32_t)sets.size(); copy.actionSets = sets.data();
+    copy.countActionSets = (uint32_t)sets.size();
+    copy.actionSets = sets.data();
     XrResult r = N.AttachSessionActionSets(s, &copy);
     if (XR_FAILED(r)) {
         Log("attach with our set failed (%d), retrying without", r);
         return N.AttachSessionActionSets(s, ai);
     }
-    gAttached = true;
+    gOurs.attached = true;
     for (int h = 0; h < 2; h++) {
         XrActionSpaceCreateInfo ci{ XR_TYPE_ACTION_SPACE_CREATE_INFO };
         ci.poseInActionSpace.orientation.w = 1;
-        ci.subactionPath = gHandPath[h];
-        ci.action = gA[A_GRIPPOSE]; N.CreateActionSpace(s, &ci, &gGripSp[h]);
-        ci.action = gA[A_AIMPOSE]; N.CreateActionSpace(s, &ci, &gAimSp[h]);
+        ci.subactionPath = gOurs.handPath[h];
+        ci.action = gOurs.action[A_GRIPPOSE];
+        N.CreateActionSpace(s, &ci, &gSession.gripSpace[h]);
+        ci.action = gOurs.action[A_AIMPOSE];
+        N.CreateActionSpace(s, &ci, &gSession.aimSpace[h]);
     }
     Log("action sets attached (%u app + ours)", ai->countActionSets);
     return r;
@@ -658,13 +650,14 @@ static XrResult XRAPI_CALL Hook_xrAttachSessionActionSets(XrSession s, const XrS
 
 static XrResult XRAPI_CALL Hook_xrSyncActions(XrSession s, const XrActionsSyncInfo* si) {
     std::lock_guard l(gMx);
-    if (!gAttached || s != gSess || !si) return N.SyncActions(s, si);
+    if (!gOurs.attached || s != gSession.handle || !si) return N.SyncActions(s, si);
     std::vector<XrActiveActionSet> sets(si->activeActionSets, si->activeActionSets + si->countActiveActionSets);
-    sets.push_back({ gSet, XR_NULL_PATH });
+    sets.push_back({ gOurs.set, XR_NULL_PATH });
     XrActionsSyncInfo copy = *si;
-    copy.countActiveActionSets = (uint32_t)sets.size(); copy.activeActionSets = sets.data();
+    copy.countActiveActionSets = (uint32_t)sets.size();
+    copy.activeActionSets = sets.data();
     XrResult r = N.SyncActions(s, &copy);
-    gSyncIdx++;
+    gInput.NewSync();
     if (r == XR_SUCCESS) ReadInputsAndUpdate();
     CheckConfigChanged();
     return r;
@@ -677,193 +670,59 @@ static XrResult XRAPI_CALL Hook_xrCreateActionSpace(XrSession s, const XrActionS
     auto it = gPoseBinds.find(H(ci->action));
     if (it == gPoseBinds.end() || it->second.empty()) return r;
     int hand = -1;
-    if (ci->subactionPath == gHandPath[0]) hand = 0;
-    else if (ci->subactionPath == gHandPath[1]) hand = 1;
+    if (ci->subactionPath == gOurs.handPath[0])
+        hand = 0;
+    else if (ci->subactionPath == gOurs.handPath[1])
+        hand = 1;
     else if (ci->subactionPath == XR_NULL_PATH) { // no hand given: only if the action is bound to one hand
         hand = it->second[0].hand;
-        for (auto& b : it->second) if (b.hand != hand) hand = -1;
+        for (auto& b : it->second)
+            if (b.hand != hand) hand = -1;
     }
-    if (hand < 0) { Log("game pose space: hand unknown, offsets not applied"); return r; }
-    int kind = -1;
-    for (auto& b : it->second) if (b.hand == hand && kind < 0) kind = b.kind;
-    if (kind < 0) return r;
-    { std::lock_guard o(gOffMx); gGameSpaces[(uint64_t)*sp] = { hand, kind }; }
+    if (hand < 0) {
+        Log("game pose space: hand unknown, offsets not applied");
+        return r;
+    }
+    const PoseBind* bind = nullptr; // the first binding of this action on that hand
+    for (auto& b : it->second)
+        if (b.hand == hand) {
+            bind = &b;
+            break;
+        }
+    if (!bind) return r;
+    PoseKind kind = bind->kind;
+    gHandOffsets.AddSpace(*sp, hand, kind);
     const XrPosef& g = ci->poseInActionSpace;
-    XrQuaternionf gq = g.orientation; float ga = 2.f * std::acos(std::min(1.f, std::fabs(gq.w))) * 57.2958f;
+    XrQuaternionf gq = g.orientation;
+    float ga = 2.f * std::acos(std::min(1.f, std::fabs(gq.w))) * 57.2958f;
     float gm = std::sqrt(g.position.x * g.position.x + g.position.y * g.position.y + g.position.z * g.position.z) * 100.f;
     if (ga > 0.5f || gm > 0.1f) // the game moves its hand point itself: our offsets turn about that point, not the controller's
-        Log("game pose space: %s %s (the game's own offset: %.1f deg, %.1f cm)", hand ? "right" : "left", kind ? "aim" : "grip", ga, gm);
-    else Log("game pose space: %s %s", hand ? "right" : "left", kind ? "aim" : "grip");
+        Log("game pose space: %s %s (the game's own offset: %.1f deg, %.1f cm)", hand ? "right" : "left",
+            kind == PoseKind::Aim ? "aim" : "grip", ga, gm);
+    else
+        Log("game pose space: %s %s", hand ? "right" : "left", kind == PoseKind::Aim ? "aim" : "grip");
     return r;
 }
 
 static XrResult XRAPI_CALL Hook_xrDestroySpace(XrSpace sp) {
-    {
-        std::lock_guard o(gOffMx);
-        gGameSpaces.erase((uint64_t)sp);
-        for (auto it = gSpaceSmooth.begin(); it != gSpaceSmooth.end();)
-            if (it->first.first == (uint64_t)sp || it->first.second == (uint64_t)sp) it = gSpaceSmooth.erase(it); else ++it;
-    }
-    { std::lock_guard hl(gHeadMx); gViewSpaces.erase((uint64_t)sp); }
+    gHandOffsets.RemoveSpace(sp);
+    gHeadSmooth.RemoveViewSpace(sp);
     return N.DestroySpace(sp);
 }
 
-// One step of the heavy camera for the head at time t: returns the turn from the real head to the steadied one.
-// Called with gHeadMx held. false = head smoothing is off.
-// The steadied direction for each recent time (the game asks for several times per frame, e.g. Unreal's
-// game and render threads): an older time gets the camera it had then, not the newest one.
-struct HeadHist { XrTime t = 0; XrQuaternionf sm{ 0,0,0,1 }; };
-static HeadHist gHeadHist[64]; static int gHeadHistNext = 0;
-static XrQuaternionf HeadAt(XrTime t, const XrQuaternionf& fallback) {
-    const HeadHist *lo = nullptr, *hi = nullptr; // the nearest times before and after t
-    for (auto& h : gHeadHist) {
-        if (!h.t) continue;
-        if (h.t <= t && (!lo || h.t > lo->t)) lo = &h;
-        if (h.t >= t && (!hi || h.t < hi->t)) hi = &h;
-    }
-    if (lo && hi && hi->t > lo->t) { // in between two: blend by time
-        float k = (float)(t - lo->t) / (float)(hi->t - lo->t);
-        XrQuaternionf a = lo->sm, b = hi->sm;
-        if (a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w < 0) b = { -b.x, -b.y, -b.z, -b.w };
-        XrQuaternionf q{ a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k, a.z + (b.z - a.z) * k, a.w + (b.w - a.w) * k };
-        float l = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
-        return l > 1e-6f ? XrQuaternionf{ q.x / l, q.y / l, q.z / l, q.w / l } : a;
-    }
-    if (lo) return lo->sm;
-    if (hi) return hi->sm;
-    return fallback;
-}
-static bool HeadStep(XrTime t, const XrQuaternionf& real, XrQuaternionf& D) {
-    if (!gHeadSet.on || gHeadSet.strength <= 0.001f) {
-        if (gHeadLogged) { Log("head smoothing: stopped"); gHeadLogged = false; }
-        gHeadSm.Reset(); gHeadLastT = 0; gHeadD = { 0, 0, 0, 1 }; for (auto& h : gHeadHist) h = HeadHist{}; return false;
-    }
-    if (t > gHeadLastT) { // a newer time: one step (asked again for the same or an older time: the same turn)
-        float dt = gHeadLastT && t > gHeadLastT ? std::min(0.1f, (float)((t - gHeadLastT) * 1e-9)) : 0.f;
-        XrQuaternionf sm = gHeadSm.Apply(real, dt, gHeadSet.strength);
-        gHeadD = QMul(sm, QInv(real));
-        gHeadLastT = t;
-        gHeadHist[gHeadHistNext] = { t, sm }; gHeadHistNext = (gHeadHistNext + 1) % 64;
-        if (!gHeadLogged) { gHeadLogged = true; gHeadStatT = NowSec(); Log("head smoothing: in use, mode %s, strength %.2f (about %.2f s of camera lag)", gHeadSet.mode == 1 ? "headset" : "recording", gHeadSet.strength, 0.12f * gHeadSet.strength); }
-        float lag = 2.f * std::acos(std::min(1.f, std::fabs(gHeadD.w))) * 57.2958f;
-        gHeadLagSum += lag; gHeadLagMax = std::max(gHeadLagMax, lag); gHeadLagN++;
-        if (NowSec() - gHeadStatT > 10.0 && gHeadLagN > 0) {
-            Log("head smoothing: last 10 s the camera trailed your head by %.1f deg on average, %.1f deg at most%s", gHeadLagSum / gHeadLagN, gHeadLagMax,
-                gHeadSet.mode == 1 ? (" ; frames shown as steadied: " + std::to_string(gHeadSwapOk) + ", not matched: " + std::to_string(gHeadSwapMiss)).c_str() : "");
-            Log("head smoothing: calls in 10 s: eye views in world %d, eye views relative to head %d, head reads %d, frames %d (no head record for %d)",
-                gDiagViewsWorld, gDiagViewsHead, gDiagHeadLocates, gDiagFrames, gDiagFrameNoRec);
-            gHeadStatT = NowSec(); gHeadLagSum = gHeadLagMax = 0; gHeadLagN = 0; gHeadSwapOk = gHeadSwapMiss = 0;
-            gDiagViewsWorld = gDiagViewsHead = gDiagHeadLocates = gDiagFrames = gDiagFrameNoRec = 0;
-        }
-    }
-    D = QMul(HeadAt(t, real), QInv(real)); // the camera for this time, whatever the real head is in this call
-    return true;
-}
-static void HeadRecord(XrTime t, XrSpace space, const XrPosef& real, const XrPosef& sm) {
-    if (gHeadSet.mode != 1) return;
-    int last = (gHeadRecNext + 7) % 8;
-    HeadRec& r = (gHeadRecs[last].t == t && gHeadRecs[last].space == space) ? gHeadRecs[last] : gHeadRecs[gHeadRecNext];
-    if (&r == &gHeadRecs[gHeadRecNext]) gHeadRecNext = (gHeadRecNext + 1) % 8;
-    r.t = t; r.space = space; r.real = real; r.sm = sm;
-}
-
-// Games that ask for the eye views in their world (most Unity / native games): steady them here.
-static XrResult XRAPI_CALL Hook_xrLocateViews(XrSession s, const XrViewLocateInfo* li, XrViewState* vs, uint32_t cap, uint32_t* cnt, XrView* views) {
+// Games that ask for the eye views in their world (most Unity / native games): steadied here.
+static XrResult XRAPI_CALL Hook_xrLocateViews(XrSession s, const XrViewLocateInfo* li, XrViewState* vs, uint32_t cap, uint32_t* cnt,
+                                              XrView* views) {
     XrResult r = N.LocateViews(s, li, vs, cap, cnt, views);
     if (XR_FAILED(r) || !li || !vs || !cnt || !views || cap == 0) return r;
-    std::lock_guard hl(gHeadMx);
-    bool rel = gViewSpaces.count((uint64_t)li->space) > 0;
-    if (gHeadSet.on) {
-        (rel ? gDiagViewsHead : gDiagViewsWorld)++;
-        if (!gDiagSaidViews[rel]) { gDiagSaidViews[rel] = true; Log("head smoothing: the game asks for its eye views %s", rel ? "relative to its head (Unreal style)" : "in its world"); }
-    }
-    if (rel) return r; // eyes relative to the head (Unreal): the head itself is steadied in LocateSpace
-    if (!(vs->viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT)) return r;
-    uint32_t n = std::min(*cnt, cap);
-    if (n == 0) return r;
-    Vec3 c{};
-    for (uint32_t i = 0; i < n; i++) c = c + V(views[i].pose.position);
-    c = c * (1.f / n);
-    XrQuaternionf D;
-    if (!HeadStep(li->displayTime, views[0].pose.orientation, D)) return r;
-    XrPosef realHead{ views[0].pose.orientation, X(c) }, smHead{ QMul(D, views[0].pose.orientation), X(c) };
-    for (uint32_t i = 0; i < n; i++) {
-        XrPosef& p = views[i].pose;
-        Vec3 off = Rotate(D, V(p.position) - c);
-        p.orientation = QMul(D, p.orientation);
-        p.position = X(c + off);
-    }
-    HeadRecord(li->displayTime, li->space, realHead, smHead);
+    gHeadSmooth.OnLocateViews(*li, *vs, std::min(*cnt, cap), views);
     return r;
-}
-
-// Games that read the head (their VIEW space) on its own and the eyes relative to it (Unreal): steady the head here.
-static void HeadLocation(XrSpace space, XrSpace base, XrTime t, XrSpaceLocationFlags flags, XrPosef& pose) {
-    if (!(flags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)) return;
-    std::lock_guard hl(gHeadMx);
-    if (!gViewSpaces.count((uint64_t)space) || gViewSpaces.count((uint64_t)base)) return;
-    if (gHeadSet.on) { gDiagHeadLocates++; if (!gDiagSaidLocate) { gDiagSaidLocate = true; Log("head smoothing: the game reads its head on its own (Unreal style): steadying it there"); } }
-    XrQuaternionf D;
-    if (!HeadStep(t, pose.orientation, D)) return;
-    XrPosef real = pose;
-    pose.orientation = QMul(D, pose.orientation);
-    HeadRecord(t, base, real, pose);
-}
-
-// "headset" mode: hand the compositor the real head pose for views the game rendered from the steadied one.
-static const XrFrameEndInfo* HeadSmoothEndFrame(const XrFrameEndInfo* fi) {
-    static XrFrameEndInfo out;
-    static std::vector<XrCompositionLayerProjection> projs;
-    static std::vector<XrCompositionLayerProjectionView> pviews;
-    static std::vector<const XrCompositionLayerBaseHeader*> ptrs;
-    std::lock_guard hl(gHeadMx);
-    if (gHeadSet.on && fi) {
-        gDiagFrames++;
-        for (uint32_t i = 0; i < fi->layerCount; i++) if (fi->layers[i] && fi->layers[i]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION && !gDiagSaidFrame) {
-            gDiagSaidFrame = true;
-            auto* pl = (const XrCompositionLayerProjection*)fi->layers[i];
-            Log("head smoothing: the game hands in its frames in space %llx (%s), %u views", (unsigned long long)(uint64_t)pl->space,
-                gViewSpaces.count((uint64_t)pl->space) ? "its head space" : "a world space", pl->viewCount);
-        }
-    }
-    if (!gHeadSet.on || gHeadSet.mode != 1 || !fi) return fi;
-    size_t nv = 0, np = 0;
-    for (uint32_t i = 0; i < fi->layerCount; i++) if (fi->layers[i] && fi->layers[i]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION) {
-        np++; nv += ((const XrCompositionLayerProjection*)fi->layers[i])->viewCount;
-    }
-    if (!np) return fi;
-    projs.assign(np, {}); pviews.assign(nv, {}); ptrs.assign(fi->layers, fi->layers + fi->layerCount);
-    bool changed = false; size_t pi = 0, vi = 0;
-    for (uint32_t i = 0; i < fi->layerCount; i++) {
-        if (!fi->layers[i] || fi->layers[i]->type != XR_TYPE_COMPOSITION_LAYER_PROJECTION) continue;
-        auto* src = (const XrCompositionLayerProjection*)fi->layers[i];
-        XrCompositionLayerProjection& p = projs[pi++];
-        p = *src; p.views = pviews.data() + vi;
-        const HeadRec* rec = nullptr; XrTime best = 3000000; // within 3 ms of the frame's time
-        for (auto& h : gHeadRecs) {
-            if (!h.t || h.space != src->space) continue;
-            XrTime d = h.t > fi->displayTime ? h.t - fi->displayTime : fi->displayTime - h.t;
-            if (d <= best) { best = d; rec = &h; }
-        }
-        if (!rec) gDiagFrameNoRec++;
-        XrPosef fix = rec ? PMul(rec->real, PInv(rec->sm)) : XrPosef{ {0,0,0,1}, {0,0,0} }; // steadied head -> real head
-        for (uint32_t k = 0; k < src->viewCount; k++) {
-            XrCompositionLayerProjectionView& v = pviews[vi++];
-            v = src->views[k];
-            if (rec) { v.pose = PMul(fix, v.pose); changed = true; }
-        }
-        ptrs[i] = (const XrCompositionLayerBaseHeader*)&p;
-    }
-    if (changed) gHeadSwapOk++; else gHeadSwapMiss++;
-    if (!changed) return fi;
-    out = *fi; out.layers = ptrs.data();
-    return &out;
 }
 
 static XrResult XRAPI_CALL Hook_xrCreateReferenceSpace(XrSession s, const XrReferenceSpaceCreateInfo* ci, XrSpace* sp) {
     XrResult r = N.CreateReferenceSpace(s, ci, sp);
     if (XR_SUCCEEDED(r) && ci && sp && ci->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_VIEW) {
-        std::lock_guard hl(gHeadMx); gViewSpaces.insert((uint64_t)*sp);
+        gHeadSmooth.AddViewSpace(*sp);
         Log("game made a VIEW space (its head): head smoothing steadies it there too");
     }
     return r;
@@ -872,23 +731,28 @@ static XrResult XRAPI_CALL Hook_xrCreateReferenceSpace(XrSession s, const XrRefe
 static XrResult XRAPI_CALL Hook_xrLocateSpace(XrSpace sp, XrSpace base, XrTime t, XrSpaceLocation* loc) {
     XrResult r = N.LocateSpace(sp, base, t, loc);
     if (XR_FAILED(r) || !loc) return r;
-    HeadLocation(sp, base, t, loc->locationFlags, loc->pose);
+    gHeadSmooth.OnLocateSpace(sp, base, t, loc->locationFlags, loc->pose);
     XrSpaceVelocity* vel = nullptr;
-    for (auto* n = (XrBaseOutStructure*)loc->next; n; n = n->next) if (n->type == XR_TYPE_SPACE_VELOCITY) vel = (XrSpaceVelocity*)n;
-    OffsetLocation(sp, base, t, loc->locationFlags, loc->pose, vel ? &vel->velocityFlags : nullptr, vel ? &vel->linearVelocity : nullptr, vel ? &vel->angularVelocity : nullptr);
+    for (auto* n = (XrBaseOutStructure*)loc->next; n; n = n->next)
+        if (n->type == XR_TYPE_SPACE_VELOCITY) vel = (XrSpaceVelocity*)n;
+    gHandOffsets.Apply(sp, base, t, loc->locationFlags, loc->pose, vel ? &vel->velocityFlags : nullptr,
+                       vel ? &vel->linearVelocity : nullptr, vel ? &vel->angularVelocity : nullptr);
     return r;
 }
 
 static void OffsetLocations(const XrSpacesLocateInfo* li, XrSpaceLocations* sl) {
     if (!li || !sl || !sl->locations) return;
     XrSpaceVelocities* vel = nullptr;
-    for (auto* n = (XrBaseOutStructure*)sl->next; n; n = n->next) if (n->type == XR_TYPE_SPACE_VELOCITIES) vel = (XrSpaceVelocities*)n;
+    for (auto* n = (XrBaseOutStructure*)sl->next; n; n = n->next)
+        if (n->type == XR_TYPE_SPACE_VELOCITIES) vel = (XrSpaceVelocities*)n;
     uint32_t n = std::min(li->spaceCount, sl->locationCount);
-    for (uint32_t i = 0; i < n; i++) HeadLocation(li->spaces[i], li->baseSpace, li->time, sl->locations[i].locationFlags, sl->locations[i].pose);
+    for (uint32_t i = 0; i < n; i++)
+        gHeadSmooth.OnLocateSpace(li->spaces[i], li->baseSpace, li->time, sl->locations[i].locationFlags, sl->locations[i].pose);
     for (uint32_t i = 0; i < n; i++) {
         bool hv = vel && vel->velocities && i < vel->velocityCount;
-        OffsetLocation(li->spaces[i], li->baseSpace, li->time, sl->locations[i].locationFlags, sl->locations[i].pose,
-            hv ? &vel->velocities[i].velocityFlags : nullptr, hv ? &vel->velocities[i].linearVelocity : nullptr, hv ? &vel->velocities[i].angularVelocity : nullptr);
+        gHandOffsets.Apply(li->spaces[i], li->baseSpace, li->time, sl->locations[i].locationFlags, sl->locations[i].pose,
+                           hv ? &vel->velocities[i].velocityFlags : nullptr, hv ? &vel->velocities[i].linearVelocity : nullptr,
+                           hv ? &vel->velocities[i].angularVelocity : nullptr);
     }
 }
 static XrResult XRAPI_CALL Hook_xrLocateSpaces(XrSession s, const XrSpacesLocateInfo* li, XrSpaceLocations* sl) {
@@ -902,71 +766,16 @@ static XrResult XRAPI_CALL Hook_xrLocateSpacesKHR(XrSession s, const XrSpacesLoc
     return r;
 }
 
-// Work out which hands a query covers: bit 0 left, bit 1 right.
-static int HandsMask(XrPath sub) {
-    if (sub == XR_NULL_PATH) return 3;
-    if (sub == gHandPath[0]) return 1;
-    if (sub == gHandPath[1]) return 2;
-    return 0;
-}
-
-struct Eval { bool any = false, blockedAll = false, blockedSome = false; bool ov = false; Override o; int pf = 0; int freeHand = -1; };
-static Eval Evaluate(XrAction a, XrPath sub) {
-    Eval e;
-    if (!gEng.Active()) return e;
-    auto it = gAppBinds.find(H(a));
-    if (it == gAppBinds.end()) return e;
-    int mask = HandsMask(sub);
-    int nb = 0, nblk = 0;
-    for (auto& b : it->second) {
-        if (!(mask & (1 << b.hand))) continue;
-        e.any = true; nb++;
-        const Override& o = gEng.Ov(b.hand, b.comp);
-        if (o.on && !e.ov) { e.ov = true; e.o = o; e.pf = b.pf; }
-        if (gEng.Blocked(b.hand, b.comp)) nblk++;
-        else e.freeHand = b.hand;
-    }
-    e.blockedAll = nb > 0 && nblk == nb;
-    e.blockedSome = nblk > 0 && nblk < nb;
-    return e;
-}
-
-// Keep changedSinceLastSync honest when we alter values.
-static bool TrackChange(XrAction a, XrPath sub, float v0, float v1) {
-    uint64_t key = H(a) * 1000003ull ^ (uint64_t)sub;
-    Track& t = gTrack[key];
-    if (t.sync != gSyncIdx) { if (t.sync != ~0ull) { t.prev[0] = t.cur[0]; t.prev[1] = t.cur[1]; } else { t.prev[0] = v0; t.prev[1] = v1; } t.sync = gSyncIdx; }
-    t.cur[0] = v0; t.cur[1] = v1;
-    return t.prev[0] != v0 || t.prev[1] != v1;
-}
-
-static bool CanRequery(XrAction a, int hand) {
-    auto it = gActionSubs.find(H(a));
-    if (it == gActionSubs.end()) return false;
-    for (auto p : it->second) if (p == gHandPath[hand]) return true;
-    return false;
-}
-
+// The game reads its buttons, triggers and sticks: the real values, changed where the engine says so.
 static XrResult XRAPI_CALL Hook_xrGetActionStateBoolean(XrSession s, const XrActionStateGetInfo* gi, XrActionStateBoolean* st) {
     XrResult r = N.GetActionStateBoolean(s, gi, st);
     if (XR_FAILED(r) || !gi) return r;
     std::lock_guard l(gMx);
-    Eval e = Evaluate(gi->action, gi->subactionPath);
-    if (!e.any) return r;
-    bool v = st->currentState;
-    if (e.ov) { v = e.pf == 1 ? e.o.touch : e.o.press; st->isActive = XR_TRUE; }
-    else if (e.blockedAll) v = false;
-    else if (e.blockedSome && gi->subactionPath == XR_NULL_PATH) {
-        if (e.freeHand >= 0 && CanRequery(gi->action, e.freeHand)) {
-            XrActionStateGetInfo g2 = *gi; g2.subactionPath = gHandPath[e.freeHand];
-            XrActionStateBoolean s2{ XR_TYPE_ACTION_STATE_BOOLEAN };
-            if (XR_SUCCEEDED(N.GetActionStateBoolean(s, &g2, &s2))) v = s2.currentState; else v = false;
-        } else v = false;
-    }
-    st->currentState = v;
-    bool ch = TrackChange(gi->action, gi->subactionPath, v ? 1.f : 0.f, 0);
-    st->changedSinceLastSync = ch;
-    if (ch) st->lastChangeTime = gPredTime;
+    gInput.Filter(gEng, gi->action, gi->subactionPath, gSession.predictedTime, *st, [&](XrPath hand, XrActionStateBoolean& out) {
+        XrActionStateGetInfo one = *gi;
+        one.subactionPath = hand;
+        return XR_SUCCEEDED(N.GetActionStateBoolean(s, &one, &out));
+    });
     return r;
 }
 
@@ -974,24 +783,11 @@ static XrResult XRAPI_CALL Hook_xrGetActionStateFloat(XrSession s, const XrActio
     XrResult r = N.GetActionStateFloat(s, gi, st);
     if (XR_FAILED(r) || !gi) return r;
     std::lock_guard l(gMx);
-    Eval e = Evaluate(gi->action, gi->subactionPath);
-    if (!e.any) return r;
-    float v = st->currentState;
-    if (e.ov) {
-        if (e.pf == 3) v = e.o.x; else if (e.pf == 4) v = e.o.y; else if (e.pf == 1) v = e.o.touch ? 1.f : 0.f; else v = e.o.value;
-        st->isActive = XR_TRUE;
-    } else if (e.blockedAll) v = 0;
-    else if (e.blockedSome && gi->subactionPath == XR_NULL_PATH) {
-        if (e.freeHand >= 0 && CanRequery(gi->action, e.freeHand)) {
-            XrActionStateGetInfo g2 = *gi; g2.subactionPath = gHandPath[e.freeHand];
-            XrActionStateFloat s2{ XR_TYPE_ACTION_STATE_FLOAT };
-            v = XR_SUCCEEDED(N.GetActionStateFloat(s, &g2, &s2)) ? s2.currentState : 0.f;
-        } else v = 0;
-    }
-    st->currentState = v;
-    bool ch = TrackChange(gi->action, gi->subactionPath, v, 0);
-    st->changedSinceLastSync = ch;
-    if (ch) st->lastChangeTime = gPredTime;
+    gInput.Filter(gEng, gi->action, gi->subactionPath, gSession.predictedTime, *st, [&](XrPath hand, XrActionStateFloat& out) {
+        XrActionStateGetInfo one = *gi;
+        one.subactionPath = hand;
+        return XR_SUCCEEDED(N.GetActionStateFloat(s, &one, &out));
+    });
     return r;
 }
 
@@ -999,38 +795,31 @@ static XrResult XRAPI_CALL Hook_xrGetActionStateVector2f(XrSession s, const XrAc
     XrResult r = N.GetActionStateVector2f(s, gi, st);
     if (XR_FAILED(r) || !gi) return r;
     std::lock_guard l(gMx);
-    Eval e = Evaluate(gi->action, gi->subactionPath);
-    if (!e.any) return r;
-    XrVector2f v = st->currentState;
-    if (e.ov) { v = { e.o.x, e.o.y }; st->isActive = XR_TRUE; }
-    else if (e.blockedAll) v = { 0, 0 };
-    else if (e.blockedSome && gi->subactionPath == XR_NULL_PATH) {
-        if (e.freeHand >= 0 && CanRequery(gi->action, e.freeHand)) {
-            XrActionStateGetInfo g2 = *gi; g2.subactionPath = gHandPath[e.freeHand];
-            XrActionStateVector2f s2{ XR_TYPE_ACTION_STATE_VECTOR2F };
-            v = XR_SUCCEEDED(N.GetActionStateVector2f(s, &g2, &s2)) ? s2.currentState : XrVector2f{ 0, 0 };
-        } else v = { 0, 0 };
-    }
-    st->currentState = v;
-    bool ch = TrackChange(gi->action, gi->subactionPath, v.x, v.y);
-    st->changedSinceLastSync = ch;
-    if (ch) st->lastChangeTime = gPredTime;
+    gInput.Filter(gEng, gi->action, gi->subactionPath, gSession.predictedTime, *st, [&](XrPath hand, XrActionStateVector2f& out) {
+        XrActionStateGetInfo one = *gi;
+        one.subactionPath = hand;
+        return XR_SUCCEEDED(N.GetActionStateVector2f(s, &one, &out));
+    });
     return r;
 }
 
 static XrResult XRAPI_CALL Hook_xrWaitFrame(XrSession s, const XrFrameWaitInfo* wi, XrFrameState* fs) {
     XrResult r = N.WaitFrame(s, wi, fs);
-    if (XR_SUCCEEDED(r) && fs) { std::lock_guard l(gMx); gPredTime = fs->predictedDisplayTime; }
+    if (XR_SUCCEEDED(r) && fs) {
+        std::lock_guard l(gMx);
+        gSession.predictedTime = fs->predictedDisplayTime;
+    }
     return r;
 }
 
 static void MirrorFrame(const std::vector<const XrCompositionLayerBaseHeader*>& layers, XrTime t) {
-    gMirror.Frame(gGfx.d11, gGfx.ctx, layers, t, [](XrSpace sp, XrSpace base, XrTime tt, XrPosef& out) {
+    gMirror.Frame(gSession.gfx.d11, gSession.gfx.ctx, layers, t, [](XrSpace sp, XrSpace base, XrTime tt, XrPosef& out) {
         XrSpaceLocation l{ XR_TYPE_SPACE_LOCATION };
         if (XR_FAILED(N.LocateSpace(sp, base, tt, &l))) return false; // raw: our own spaces, never the game's offsets
         const XrSpaceLocationFlags need = XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
         if ((l.locationFlags & need) != need) return false;
-        out = l.pose; return true;
+        out = l.pose;
+        return true;
     });
 }
 
@@ -1064,330 +853,16 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
     // The lock covers our work only, never the runtime's xrEndFrame: that can wait for the compositor
     // for milliseconds, and the game's input thread (xrSyncActions, xrGetActionState*) needs this lock.
     std::unique_lock l(gMx);
-    if (s == gSess) fi = HeadSmoothEndFrame(fi);
-    if (s != gSess || !fi || !gEng.Active() || !gGfx.api) {
-        if (s == gSess && fi && gMirror.On() && gGfx.api == 11) MirrorFrame(std::vector<const XrCompositionLayerBaseHeader*>(fi->layers, fi->layers + fi->layerCount), fi->displayTime);
+    if (s == gSession.handle) fi = gHeadSmooth.OnEndFrame(fi);
+    if (s != gSession.handle || !fi || !gEng.Active() || !gSession.gfx.api) {
+        if (s == gSession.handle && fi && gMirror.On() && gSession.gfx.api == 11)
+            MirrorFrame(std::vector<const XrCompositionLayerBaseHeader*>(fi->layers, fi->layers + fi->layerCount), fi->displayTime);
         l.unlock();
         return N.EndFrame(s, fi);
     }
-    std::vector<const XrCompositionLayerBaseHeader*> layers(fi->layers, fi->layers + fi->layerCount);
-    XrCompositionLayerQuad kbq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, wq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, tq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, kq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, rq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, cq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, pq[4]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, fq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } };
-    const Profile& p = *gEng.prof;
-    XrCompositionLayerQuad sq{ XR_TYPE_COMPOSITION_LAYER_QUAD };
-
-    // Mirrored desktop monitor, under the menus. Captured on its own thread while it is on.
-    if (gEng.screen.shown && gLocal) {
-        const ScreenStyle& S = p.screen;
-        int maxW = S.maxPx > 0 ? S.maxPx : (sizeof(void*) == 4 ? 1280 : 1920); // 32-bit games are short on memory
-        ScreenView& sv = gEng.screen;
-        if (sv.source == "window" && (sv.windowAsk != gWinAsk || !IsWindow((HWND)sv.hwnd) || gCap.WindowGone())) {
-            bool asked = sv.windowAsk != gWinAsk; gWinAsk = sv.windowAsk;
-            auto wins = ScreenCapture::Windows();
-            auto low = [](std::string s) { for (auto& c : s) c = (char)tolower((unsigned char)c); return s; };
-            int cur = -1;
-            for (int i = 0; i < (int)wins.size(); i++) if (wins[i].hwnd == sv.hwnd) cur = i;
-            int pick = -1;
-            if (!sv.windowTitle.empty()) // the window picked last time, if it's still open with the same title
-                for (int i = 0; i < (int)wins.size() && pick < 0; i++) if (wins[i].title == sv.windowTitle) pick = i;
-            if (pick >= 0) {}
-            else if (!sv.windowMatch.empty()) {
-                std::string m = low(sv.windowMatch);
-                for (int i = 0; i < (int)wins.size() && pick < 0; i++) if (low(wins[i].title).find(m) != std::string::npos || low(wins[i].exe).find(m) != std::string::npos) pick = i;
-                if (pick < 0) gEng.Toast("Screen: no open window matches '" + sv.windowMatch + "'", 3.0);
-            } else if (!wins.empty()) {
-                int step = sv.windowStep ? sv.windowStep : 0;
-                pick = cur < 0 ? (step < 0 ? (int)wins.size() - 1 : 0) : ((cur + step) % (int)wins.size() + (int)wins.size()) % (int)wins.size();
-            }
-            sv.windowStep = 0; sv.windowMatch.clear(); sv.windowTitle.clear();
-            if (pick < 0) { // nothing to show: back to the monitor
-                if (wins.empty()) gEng.Toast("Screen: no window to show", 2.5);
-                sv.source = "monitor"; sv.hwnd = 0;
-            } else {
-                bool changed = wins[pick].hwnd != sv.hwnd;
-                sv.hwnd = wins[pick].hwnd;
-                if (asked || changed) gEng.Toast("Screen: " + (wins[pick].title.size() > 48 ? wins[pick].title.substr(0, 45) + "..." : wins[pick].title), 2.0);
-                Log("screen window: %s (%s)", wins[pick].title.c_str(), wins[pick].exe.c_str());
-                std::string exe = low(wins[pick].exe); size_t dot = exe.rfind('.'); if (dot != std::string::npos) exe = exe.substr(0, dot);
-                gPickedExe = exe; gPickedTitle = wins[pick].title;
-            }
-        }
-        // Picked in the headset: that monitor / window is the default from now on.
-        if (sv.choiceChanged && sv.windowAsk == gWinAsk) {
-            sv.choiceChanged = false;
-            ScreenStyle& PS = gEng.prof->screen;
-            PS.source = sv.source;
-            if (sv.source == "window") { PS.window = gPickedExe; PS.windowTitle = gPickedTitle; }
-            else PS.monitor = sv.monitor;
-            std::string err;
-            if (SaveScreenChoice(*gEng.prof, err)) { MarkOwnSave(); Log("screen: remembered %s", sv.source == "window" ? gPickedTitle.c_str() : ("monitor " + std::to_string(sv.monitor)).c_str()); }
-            else Log("screen: could not remember the choice: %s", err.c_str());
-        }
-        if (sv.source != "window") sv.hwnd = 0;
-        if (sv.wantChoices) { // picker list: monitors, then open windows
-            sv.wantChoices = false;
-            std::vector<ScreenChoice> ch;
-            auto mons = ScreenCapture::Monitors();
-            for (int i = 0; i < (int)mons.size(); i++) {
-                ScreenChoice c; c.monitor = i + 1;
-                c.label = "Monitor " + std::to_string(i + 1) + (mons[i].primary ? " (main)" : "") + "\n" + std::to_string(mons[i].w) + " x " + std::to_string(mons[i].h);
-                int curMon = sv.monitor == 0 ? sv.primaryIndex : sv.monitor;
-                c.current = sv.source != "window" && curMon == i + 1;
-                ch.push_back(c);
-            }
-            for (auto& w : ScreenCapture::Windows()) {
-                ScreenChoice c; c.hwnd = w.hwnd;
-                std::string exe = w.exe; size_t dot = exe.rfind('.'); if (dot != std::string::npos) exe = exe.substr(0, dot);
-                std::string t = w.title.size() > 60 ? w.title.substr(0, 57) + "..." : w.title;
-                c.label = exe + "\n" + t;
-                c.current = sv.source == "window" && sv.hwnd == w.hwnd;
-                ch.push_back(c);
-            }
-            sv.choices = std::move(ch); sv.choicesVersion++;
-        }
-        gCap.Configure(sv.monitor, sv.hwnd, sv.fps, maxW, S.cursor, S.opacity);
-        int n, prim, shown; std::string msg; uint64_t mv;
-        gCap.Status(n, prim, shown, msg, mv);
-        if (n > 0) { gEng.screen.monitorCount = n; gEng.screen.primaryIndex = prim; }
-        gCap.Rect(gEng.screen.monX, gEng.screen.monY, gEng.screen.monW, gEng.screen.monH);
-        if (gScreenPanel.w > 0) gEng.screen.aspect = (float)gScreenPanel.h / gScreenPanel.w;
-        if (mv != gScreenMsgVer) {
-            gScreenMsgVer = mv;
-            if (msg.find("can't") != std::string::npos || msg.find("no monitor") != std::string::npos) gEng.Toast("Screen: " + msg, 4.0);
-        }
-        int fw, fh;
-        if (gCap.TakeFrame(gScreenPix, fw, fh)) {
-            if (gScreenPanel.sc && (gScreenPanel.w != fw || gScreenPanel.h != fh)) gScreenPanel.Destroy(gSwap);
-            if (!gScreenPanel.sc) gScreenPanel.Create(gSess, gGfx, gSwap, fw, fh);
-            if (gScreenPanel.sc) gScreenPanel.Upload(gGfx, gSwap, gScreenPix);
-        }
-        // a quad layer shows from both sides: hide the screen when the head is behind it
-        bool screenFront = true;
-        if (gHeadNowValid) {
-            const XrPosef& sp = gEng.screen.pose;
-            screenFront = Dot(Rotate(sp.orientation, { 0, 0, 1 }), V(gHeadNow.position) - V(sp.position)) > 0.f;
-        }
-        if (gScreenPanel.ready && gEng.screen.poseValid && gScreenPanel.w > 0 && screenFront) {
-            sq.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-            sq.space = gLocal;
-            sq.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-            sq.subImage.swapchain = gScreenPanel.sc;
-            sq.subImage.imageRect = { {0, 0}, {gScreenPanel.w, gScreenPanel.h} };
-            sq.pose = gEng.screen.pose;
-            sq.size = { gEng.screen.widthM, gEng.screen.widthM * gScreenPanel.h / gScreenPanel.w };
-            layers.push_back((const XrCompositionLayerBaseHeader*)&sq);
-        }
-        // button bar under the screen and the picker in front of it
-        static XrCompositionLayerQuad bq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, kq2{ XR_TYPE_COMPOSITION_LAYER_QUAD };
-        auto drawPanel = [&](Panel& pn, uint64_t& drawn, int W, int H, const std::string& title, const std::vector<std::string>& labels, int cols, int hover, int pressed,
-                             XrCompositionLayerQuad& q, const XrPosef& pose, float wM, float hM) {
-            if (pn.sc && (pn.w != W || pn.h != H)) { pn.Destroy(gSwap); drawn = ~0ull; }
-            if (!pn.sc) pn.Create(gSess, gGfx, gSwap, W, H);
-            if (pn.sc && drawn != gEng.screen.uiVersion) { std::vector<uint32_t> px; DrawList(px, W, H, title, labels, cols, hover, pressed, p.style); if (pn.Upload(gGfx, gSwap, px)) drawn = gEng.screen.uiVersion; }
-            if (!pn.ready) return;
-            q = XrCompositionLayerQuad{ XR_TYPE_COMPOSITION_LAYER_QUAD };
-            q.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT; q.space = gLocal; q.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-            q.subImage.swapchain = pn.sc; q.subImage.imageRect = { {0, 0}, {W, H} };
-            q.pose = pose; q.size = { wM, hM };
-            layers.push_back((const XrCompositionLayerBaseHeader*)&q);
-        };
-        if (sv.barVisible && sv.poseValid && screenFront)
-            drawPanel(gBarPanel, gDrawnBar, 1200, (int)(1200 * sv.barH / sv.barW), "", sv.barLabels, (int)sv.barLabels.size(), sv.barHover, sv.barPressed, bq, sv.barPose, sv.barW, sv.barH);
-        if (sv.pickOpen && sv.poseValid && screenFront)
-            drawPanel(gPickPanel, gDrawnPick, 1000, (int)(1000 * sv.pickH / sv.pickW), sv.pickTitle, sv.pickLabels, sv.pickCols, sv.pickHover, sv.pickPressed, kq2, sv.pickPose, sv.pickW, sv.pickH);
-    } else if (gCap.Running() || gScreenPanel.sc) {
-        gCap.Stop(); gScreenPanel.Destroy(gSwap); gScreenPix.clear(); gScreenPix.shrink_to_fit();
-        gBarPanel.Destroy(gSwap); gPickPanel.Destroy(gSwap); gDrawnBar = gDrawnPick = ~0ull;
-    }
-
-    if (gEng.view.visible && gLocal) {
-        int tex = p.style.texSize;
-        if (gWheelPanel.sc && gWheelTex != tex) { gWheelPanel.Destroy(gSwap); gDrawnWheel = ~0ull; }
-        if (!gWheelPanel.sc && gWheelPanel.Create(gSess, gGfx, gSwap, tex, tex)) gWheelTex = tex;
-        if (gWheelPanel.sc && gDrawnWheel != gEng.view.version) {
-            DrawWheel(gPix, tex, p, gEng.view);
-            if (gEng.view.alpha < 0.999f) { // see-through (premultiplied: scale every channel)
-                uint32_t a = (uint32_t)(std::min(std::max(gEng.view.alpha, 0.f), 1.f) * 256.f);
-                for (auto& px : gPix) {
-                    uint32_t rb = ((px & 0x00FF00FFu) * a >> 8) & 0x00FF00FFu, ga = (((px >> 8) & 0x00FF00FFu) * a) & 0xFF00FF00u;
-                    px = rb | ga;
-                }
-            }
-            if (gWheelPanel.Upload(gGfx, gSwap, gPix)) gDrawnWheel = gEng.view.version;
-        }
-        if (gWheelPanel.ready) {
-            wq.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-            wq.space = gLocal;
-            wq.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-            wq.subImage.swapchain = gWheelPanel.sc;
-            wq.subImage.imageRect = { {0, 0}, {gWheelPanel.w, gWheelPanel.h} };
-            wq.pose = gEng.view.pose;
-            wq.size = { gEng.view.size, gEng.view.size };
-            layers.push_back((const XrCompositionLayerBaseHeader*)&wq);
-        }
-    }
-    if (gEng.kb.visible && gLocal) {
-        const int KW = 1500;
-        float uw, uh; KbLayout(uw, uh);
-        const int KH = (int)(KW * uh / uw);
-        if (!gKbPanel.sc) gKbPanel.Create(gSess, gGfx, gSwap, KW, KH);
-        if (gKbPanel.sc && gDrawnKb != gEng.kb.version) {
-            DrawKeyboard(gPix, KW, KH, gEng.kb, p.style);
-            if (gKbPanel.Upload(gGfx, gSwap, gPix)) gDrawnKb = gEng.kb.version;
-        }
-        if (gKbPanel.ready) {
-            kq.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-            kq.space = gLocal;
-            kq.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-            kq.subImage.swapchain = gKbPanel.sc;
-            kq.subImage.imageRect = { {0, 0}, {KW, KH} };
-            kq.pose = gEng.kb.pose;
-            kq.size = { gEng.kb.widthM, gEng.kb.heightM };
-            layers.push_back((const XrCompositionLayerBaseHeader*)&kq);
-        }
-        { // the docking bar under it
-            const KeyboardView& K = gEng.kb;
-            const int BW = 1200, BH = std::max(40, (int)(BW * K.barH / K.barW));
-            if (gKbBarPanel.sc && (gKbBarPanel.w != BW || gKbBarPanel.h != BH)) { gKbBarPanel.Destroy(gSwap); gDrawnKbBar = ~0ull; }
-            if (!gKbBarPanel.sc) gKbBarPanel.Create(gSess, gGfx, gSwap, BW, BH);
-            if (gKbBarPanel.sc && gDrawnKbBar != K.barVersion && !K.barLabels.empty()) {
-                std::vector<uint32_t> px; DrawList(px, BW, BH, "", K.barLabels, (int)K.barLabels.size(), K.barHover, K.barPressed, p.style);
-                if (gKbBarPanel.Upload(gGfx, gSwap, px)) gDrawnKbBar = K.barVersion;
-            }
-            if (gKbBarPanel.ready) {
-                kbq.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT; kbq.space = gLocal; kbq.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-                kbq.subImage.swapchain = gKbBarPanel.sc; kbq.subImage.imageRect = { {0, 0}, {BW, BH} };
-                kbq.pose = K.barPose; kbq.size = { K.barW, K.barH };
-                layers.push_back((const XrCompositionLayerBaseHeader*)&kbq);
-            }
-        }
-    }
-    for (int h = 0; h < 2; h++) {
-        const WristView& wv = gEng.wrist[h];
-        if (!wv.visible || !gLocal) continue;
-        const int WS = 512;
-        Panel& pn = gWristPanel[h];
-        if (!pn.sc) pn.Create(gSess, gGfx, gSwap, WS, WS);
-        if (pn.sc && gDrawnWrist[h] != wv.version) {
-            DrawWrist(gPix, WS, p, p.wrist[h], wv);
-            if (pn.Upload(gGfx, gSwap, gPix)) gDrawnWrist[h] = wv.version;
-        }
-        if (pn.ready) {
-            auto& q = rq[h];
-            q.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-            q.space = gLocal;
-            q.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-            q.subImage.swapchain = pn.sc;
-            q.subImage.imageRect = { {0, 0}, {WS, WS} };
-            q.pose = wv.pose;
-            q.size = { wv.sizeM, wv.sizeM };
-            layers.push_back((const XrCompositionLayerBaseHeader*)&q);
-        }
-        // Touch cursor on top of the panel: redrawn only when its look changes, moved every frame.
-        if (pn.ready && wv.cursor) {
-            const int CS = 128;
-            Panel& cp = gCursorPanel[h];
-            if (!cp.sc) cp.Create(gSess, gGfx, gSwap, CS, CS);
-            if (cp.sc && gDrawnCursor[h] != wv.cursorLevel) {
-                std::vector<uint32_t> px;
-                DrawCursor(px, CS, wv.cursorLevel, p.style);
-                if (cp.Upload(gGfx, gSwap, px)) gDrawnCursor[h] = wv.cursorLevel;
-            }
-            if (cp.ready) {
-                auto& q = cq[h];
-                q.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-                q.space = gLocal;
-                q.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-                q.subImage.swapchain = cp.sc;
-                q.subImage.imageRect = { {0, 0}, {CS, CS} };
-                q.pose = wv.cursorPose;
-                q.size = { wv.cursorSize, wv.cursorSize };
-                layers.push_back((const XrCompositionLayerBaseHeader*)&q);
-            }
-        }
-    }
-    // Controller offsets panel
-    static XrCompositionLayerQuad oq{ XR_TYPE_COMPOSITION_LAYER_QUAD };
-    if (gEng.offView.open && gLocal) {
-        const OffsetView& ov = gEng.offView;
-        const int OW = 900, OH = (int)(OW * ov.h / ov.w);
-        if (gOffPanel.sc && (gOffPanel.w != OW || gOffPanel.h != OH)) { gOffPanel.Destroy(gSwap); gDrawnOff = ~0ull; }
-        if (!gOffPanel.sc) gOffPanel.Create(gSess, gGfx, gSwap, OW, OH);
-        if (gOffPanel.sc && gDrawnOff != ov.version) { std::vector<uint32_t> px; DrawList(px, OW, OH, ov.title, ov.labels, ov.cols, ov.hover, ov.pressed, p.style); if (gOffPanel.Upload(gGfx, gSwap, px)) gDrawnOff = ov.version; }
-        if (gOffPanel.ready) {
-            oq = XrCompositionLayerQuad{ XR_TYPE_COMPOSITION_LAYER_QUAD };
-            oq.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT; oq.space = gLocal; oq.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-            oq.subImage.swapchain = gOffPanel.sc; oq.subImage.imageRect = { {0, 0}, {OW, OH} };
-            oq.pose = ov.pose; oq.size = { ov.w, ov.h };
-            layers.push_back((const XrCompositionLayerBaseHeader*)&oq);
-        }
-    } else if (gOffPanel.sc) { gOffPanel.Destroy(gSwap); gDrawnOff = ~0ull; }
-    // Laser pointers, on top of everything: beam from the controller, dot where it hits.
-    if (gLocal && (gEng.pointer[0].on || gEng.pointer[1].on)) {
-        const int DS = 64, BW = 16, BH = 256;
-        if (!gDotPanel.sc) gDotPanel.Create(gSess, gGfx, gSwap, DS, DS);
-        if (!gBeamPanel.sc) gBeamPanel.Create(gSess, gGfx, gSwap, BW, BH);
-        if (!gDrawnPointer && gDotPanel.sc && gBeamPanel.sc) {
-            std::vector<uint32_t> px;
-            DrawPointerDot(px, DS, p.style); bool a = gDotPanel.Upload(gGfx, gSwap, px);
-            DrawBeam(px, BW, BH, p.style); bool b = gBeamPanel.Upload(gGfx, gSwap, px);
-            gDrawnPointer = a && b;
-        }
-        for (int h = 0; h < 2; h++) {
-            const PointerView& P = gEng.pointer[h];
-            if (!P.on || !gDotPanel.ready || !gBeamPanel.ready) continue;
-            auto& b = pq[h * 2]; auto& d = pq[h * 2 + 1];
-            b.layerFlags = d.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-            b.space = d.space = gLocal;
-            b.eyeVisibility = d.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-            b.subImage.swapchain = gBeamPanel.sc; b.subImage.imageRect = { {0, 0}, {BW, BH} };
-            b.pose = P.beamPose; b.size = { 0.0035f, P.beamLen };
-            d.subImage.swapchain = gDotPanel.sc; d.subImage.imageRect = { {0, 0}, {DS, DS} };
-            d.pose = P.dotPose; d.size = { P.dotSize, P.dotSize };
-            layers.push_back((const XrCompositionLayerBaseHeader*)&b);
-            if (P.dot) layers.push_back((const XrCompositionLayerBaseHeader*)&d);
-        }
-    }
-    // Fingertip silhouettes near wrist panels.
-    if (gLocal && (gEng.pointer[0].finger || gEng.pointer[1].finger)) {
-        const int FW = 64, FH = 256;
-        if (!gFingerPanel.sc) gFingerPanel.Create(gSess, gGfx, gSwap, FW, FH);
-        if (!gDrawnFinger && gFingerPanel.sc) {
-            std::vector<uint32_t> px;
-            DrawFinger(px, FW, FH, p.style);
-            gDrawnFinger = gFingerPanel.Upload(gGfx, gSwap, px);
-        }
-        for (int h = 0; h < 2; h++) {
-            const PointerView& P = gEng.pointer[h];
-            if (!P.finger || !gFingerPanel.ready) continue;
-            auto& q = fq[h];
-            q.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-            q.space = gLocal;
-            q.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-            q.subImage.swapchain = gFingerPanel.sc; q.subImage.imageRect = { {0, 0}, {FW, FH} };
-            q.pose = P.fingerPose; q.size = { P.fingerW, P.fingerLen };
-            layers.push_back((const XrCompositionLayerBaseHeader*)&q);
-        }
-    }
-    if (NowSec() < gEng.toastUntil && gView) {
-        const int TW = 1024, TH = 128;
-        if (!gToastPanel.sc) gToastPanel.Create(gSess, gGfx, gSwap, TW, TH);
-        if (gToastPanel.sc && gDrawnToast != gEng.toastVersion) {
-            DrawToast(gPix, TW, TH, gEng.toast, p.style);
-            if (gToastPanel.Upload(gGfx, gSwap, gPix)) gDrawnToast = gEng.toastVersion;
-        }
-        if (gToastPanel.ready) {
-            tq.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-            tq.space = gView;
-            tq.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-            tq.subImage.swapchain = gToastPanel.sc;
-            tq.subImage.imageRect = { {0, 0}, {TW, TH} };
-            tq.pose.orientation.w = 1;
-            tq.pose.position = { 0, -0.14f, -0.6f };
-            tq.size = { 0.32f, 0.04f };
-            layers.push_back((const XrCompositionLayerBaseHeader*)&tq);
-        }
-    }
-    if (gMirror.On() && gGfx.api == 11) MirrorFrame(layers, fi->displayTime);
+    LayerList layers(fi->layers, fi->layers + fi->layerCount);
+    gOverlay.Render(OverlayCtx(), layers);
+    if (gMirror.On() && gSession.gfx.api == 11) MirrorFrame(layers, fi->displayTime);
     XrFrameEndInfo copy = *fi;
     copy.layerCount = (uint32_t)layers.size();
     copy.layers = layers.data();
@@ -1400,61 +875,98 @@ static XrResult XRAPI_CALL Hook_xrGetInstanceProcAddr(XrInstance inst, const cha
     XrResult r = gNextGipa(inst, name, fn);
     if (XR_FAILED(r) || !name) return r;
     std::string n = name;
-#define HOOK(x) if (n == "xr" #x) { *fn = (PFN_xrVoidFunction)Hook_xr##x; return r; }
-    HOOK(GetInstanceProcAddr) HOOK(DestroyInstance) HOOK(CreateSession) HOOK(DestroySession)
-    HOOK(CreateActionSet) HOOK(CreateAction) HOOK(SuggestInteractionProfileBindings) HOOK(AttachSessionActionSets)
-    HOOK(SyncActions) HOOK(GetActionStateBoolean) HOOK(GetActionStateFloat) HOOK(GetActionStateVector2f)
-    HOOK(WaitFrame) HOOK(EndFrame)
-    HOOK(CreateActionSpace) HOOK(CreateReferenceSpace) HOOK(DestroySpace) HOOK(LocateSpace) HOOK(LocateViews)
-    HOOK(CreateSwapchain) HOOK(DestroySwapchain) HOOK(EnumerateSwapchainImages) HOOK(AcquireSwapchainImage) HOOK(ReleaseSwapchainImage)
-    if (n == "xrLocateSpaces") { N.LocateSpaces = (PFN_xrLocateSpaces)*fn; *fn = (PFN_xrVoidFunction)Hook_xrLocateSpaces; return r; }
-    if (n == "xrLocateSpacesKHR") { N.LocateSpacesKHR = (PFN_xrLocateSpacesKHR)*fn; *fn = (PFN_xrVoidFunction)Hook_xrLocateSpacesKHR; return r; }
+#define HOOK(x)                                                                                                                            \
+    if (n == "xr" #x) {                                                                                                                    \
+        *fn = (PFN_xrVoidFunction)Hook_xr##x;                                                                                              \
+        return r;                                                                                                                          \
+    }
+    HOOK(GetInstanceProcAddr)
+    HOOK(DestroyInstance)
+    HOOK(CreateSession)
+    HOOK(DestroySession)
+    HOOK(CreateActionSet)
+    HOOK(CreateAction)
+    HOOK(SuggestInteractionProfileBindings)
+    HOOK(AttachSessionActionSets) HOOK(SyncActions) HOOK(GetActionStateBoolean) HOOK(GetActionStateFloat) HOOK(GetActionStateVector2f)
+        HOOK(WaitFrame) HOOK(EndFrame) HOOK(CreateActionSpace) HOOK(CreateReferenceSpace) HOOK(DestroySpace) HOOK(LocateSpace)
+            HOOK(LocateViews) HOOK(CreateSwapchain) HOOK(DestroySwapchain) HOOK(EnumerateSwapchainImages) HOOK(AcquireSwapchainImage)
+                HOOK(ReleaseSwapchainImage) if (n == "xrLocateSpaces") {
+        N.LocateSpaces = (PFN_xrLocateSpaces)*fn;
+        *fn = (PFN_xrVoidFunction)Hook_xrLocateSpaces;
+        return r;
+    }
+    if (n == "xrLocateSpacesKHR") {
+        N.LocateSpacesKHR = (PFN_xrLocateSpacesKHR)*fn;
+        *fn = (PFN_xrVoidFunction)Hook_xrLocateSpacesKHR;
+        return r;
+    }
 #undef HOOK
     return r;
 }
 
-static XrResult XRAPI_CALL Hook_xrCreateApiLayerInstance(const XrInstanceCreateInfo* info, const XrApiLayerCreateInfo* li, XrInstance* inst) {
+static XrResult XRAPI_CALL Hook_xrCreateApiLayerInstance(const XrInstanceCreateInfo* info, const XrApiLayerCreateInfo* li,
+                                                         XrInstance* inst) {
     LogInit();
     if (!li || !li->nextInfo) return XR_ERROR_INITIALIZATION_FAILED;
+    gOverlay.onProfileSaved = MarkOwnSave;
     gNextGipa = li->nextInfo->nextGetInstanceProcAddr;
     XrApiLayerCreateInfo chain = *li;
     chain.nextInfo = li->nextInfo->next;
     XrResult r = li->nextInfo->nextCreateApiLayerInstance(info, &chain, inst);
     if (XR_FAILED(r)) return r;
     gInst = *inst;
-    auto get = [&](const char* nm, auto& f) { gNextGipa(gInst, nm, (PFN_xrVoidFunction*)&f); };
-    get("xrDestroyInstance", N.DestroyInstance); get("xrCreateSession", N.CreateSession); get("xrDestroySession", N.DestroySession);
-    get("xrCreateActionSet", N.CreateActionSet); get("xrCreateAction", N.CreateAction);
+    auto get = [&](const char* nm, auto& f) {
+        gNextGipa(gInst, nm, (PFN_xrVoidFunction*)&f);
+    };
+    get("xrDestroyInstance", N.DestroyInstance);
+    get("xrCreateSession", N.CreateSession);
+    get("xrDestroySession", N.DestroySession);
+    get("xrCreateActionSet", N.CreateActionSet);
+    get("xrCreateAction", N.CreateAction);
     get("xrSuggestInteractionProfileBindings", N.SuggestInteractionProfileBindings);
-    get("xrAttachSessionActionSets", N.AttachSessionActionSets); get("xrSyncActions", N.SyncActions);
-    get("xrGetActionStateBoolean", N.GetActionStateBoolean); get("xrGetActionStateFloat", N.GetActionStateFloat);
+    get("xrAttachSessionActionSets", N.AttachSessionActionSets);
+    get("xrSyncActions", N.SyncActions);
+    get("xrGetActionStateBoolean", N.GetActionStateBoolean);
+    get("xrGetActionStateFloat", N.GetActionStateFloat);
     get("xrGetActionStateVector2f", N.GetActionStateVector2f);
-    get("xrWaitFrame", N.WaitFrame); get("xrEndFrame", N.EndFrame);
-    get("xrStringToPath", N.StringToPath); get("xrPathToString", N.PathToString);
-    get("xrCreateActionSpace", N.CreateActionSpace); get("xrCreateReferenceSpace", N.CreateReferenceSpace);
-    get("xrDestroySpace", N.DestroySpace); get("xrLocateSpace", N.LocateSpace); get("xrLocateViews", N.LocateViews);
+    get("xrWaitFrame", N.WaitFrame);
+    get("xrEndFrame", N.EndFrame);
+    get("xrStringToPath", N.StringToPath);
+    get("xrPathToString", N.PathToString);
+    get("xrCreateActionSpace", N.CreateActionSpace);
+    get("xrCreateReferenceSpace", N.CreateReferenceSpace);
+    get("xrDestroySpace", N.DestroySpace);
+    get("xrLocateSpace", N.LocateSpace);
+    get("xrLocateViews", N.LocateViews);
     get("xrApplyHapticFeedback", N.ApplyHapticFeedback);
     get("xrGetCurrentInteractionProfile", N.GetCurrentInteractionProfile);
-    get("xrEnumerateSwapchainFormats", gSwapNext.EnumerateSwapchainFormats); get("xrCreateSwapchain", gSwapNext.CreateSwapchain);
-    get("xrDestroySwapchain", gSwapNext.DestroySwapchain); get("xrEnumerateSwapchainImages", gSwapNext.EnumerateSwapchainImages);
-    get("xrAcquireSwapchainImage", gSwapNext.AcquireSwapchainImage); get("xrWaitSwapchainImage", gSwapNext.WaitSwapchainImage);
+    get("xrEnumerateSwapchainFormats", gSwapNext.EnumerateSwapchainFormats);
+    get("xrCreateSwapchain", gSwapNext.CreateSwapchain);
+    get("xrDestroySwapchain", gSwapNext.DestroySwapchain);
+    get("xrEnumerateSwapchainImages", gSwapNext.EnumerateSwapchainImages);
+    get("xrAcquireSwapchainImage", gSwapNext.AcquireSwapchainImage);
+    get("xrWaitSwapchainImage", gSwapNext.WaitSwapchainImage);
     get("xrReleaseSwapchainImage", gSwapNext.ReleaseSwapchainImage);
     gSwap = gSwapNext; // our panels go through the hooks too, so the mirror can draw them
-    gSwap.CreateSwapchain = Hook_xrCreateSwapchain; gSwap.DestroySwapchain = Hook_xrDestroySwapchain;
+    gSwap.CreateSwapchain = Hook_xrCreateSwapchain;
+    gSwap.DestroySwapchain = Hook_xrDestroySwapchain;
     gSwap.EnumerateSwapchainImages = Hook_xrEnumerateSwapchainImages;
-    gSwap.AcquireSwapchainImage = Hook_xrAcquireSwapchainImage; gSwap.ReleaseSwapchainImage = Hook_xrReleaseSwapchainImage;
+    gSwap.AcquireSwapchainImage = Hook_xrAcquireSwapchainImage;
+    gSwap.ReleaseSwapchainImage = Hook_xrReleaseSwapchainImage;
     LoadMirrorSettings(gMirrorSet);
     CheckHeadSmoothingFile();
-    Log("instance created for '%s' (%s), OpenXR Companion layer built %s %s", info->applicationInfo.applicationName, ExeName().c_str(), __DATE__, __TIME__);
-    { std::lock_guard hl(gHeadMx); Log("head smoothing at start: %s", gHeadSet.on ? (gHeadSet.mode == 1 ? "on, in the headset" : "on, for recording") : "off (switch it on in the editor while the game runs, or tick Keep it on)"); }
+    Log("instance created for '%s' (%s), OpenXR Companion layer built %s %s", info->applicationInfo.applicationName, ExeName().c_str(),
+        __DATE__, __TIME__);
+    Log("head smoothing at start: %s", gHeadSmooth.StateText().c_str());
     return r;
 }
 
-extern "C" __declspec(dllexport) XrResult XRAPI_CALL xrNegotiateLoaderApiLayerInterface(
-    const XrNegotiateLoaderInfo* li, const char* layerName, XrNegotiateApiLayerRequest* req) {
+extern "C" __declspec(dllexport) XrResult XRAPI_CALL xrNegotiateLoaderApiLayerInterface(const XrNegotiateLoaderInfo* li,
+                                                                                        const char* layerName,
+                                                                                        XrNegotiateApiLayerRequest* req) {
     if (!li || !req || li->structType != XR_LOADER_INTERFACE_STRUCT_LOADER_INFO ||
-        req->structType != XR_LOADER_INTERFACE_STRUCT_API_LAYER_REQUEST ||
-        li->minInterfaceVersion > XR_CURRENT_LOADER_API_LAYER_VERSION || li->maxInterfaceVersion < XR_CURRENT_LOADER_API_LAYER_VERSION)
+        req->structType != XR_LOADER_INTERFACE_STRUCT_API_LAYER_REQUEST || li->minInterfaceVersion > XR_CURRENT_LOADER_API_LAYER_VERSION ||
+        li->maxInterfaceVersion < XR_CURRENT_LOADER_API_LAYER_VERSION)
         return XR_ERROR_INITIALIZATION_FAILED;
     if (layerName && strcmp(layerName, LAYER_NAME) != 0) return XR_ERROR_INITIALIZATION_FAILED;
     req->layerInterfaceVersion = XR_CURRENT_LOADER_API_LAYER_VERSION;

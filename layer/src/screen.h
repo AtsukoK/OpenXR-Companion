@@ -8,8 +8,15 @@
 // (mipmaps) and hands over premultiplied BGRA pixels, so it works the same for D3D11,
 // D3D12 and 32-bit games. Frames come at most `fps` times a second (0 = whenever the
 // desktop changes); nothing is captured while the desktop doesn't change.
-struct MonitorInfo { std::wstring device; int x = 0, y = 0, w = 0, h = 0; bool primary = false; };
-struct WindowInfo { uintptr_t hwnd = 0; std::string title, exe; };
+struct MonitorInfo {
+    std::wstring device;
+    int x = 0, y = 0, w = 0, h = 0;
+    bool primary = false;
+};
+struct WindowInfo {
+    uintptr_t hwnd = 0;
+    std::string title, exe;
+};
 
 class ScreenCapture {
 public:
@@ -29,6 +36,7 @@ public:
     static std::vector<MonitorInfo> Monitors(); // left to right, then top to bottom
     static std::vector<WindowInfo> Windows();   // windows that can be shown, by program then title
     struct Impl;
+
 private:
     Impl* d = nullptr;
 };

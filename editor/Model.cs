@@ -20,38 +20,95 @@ public static class Inputs
         var l = new List<string>();
         foreach (var (h, b1, b2) in new[] { ("left", "x", "y"), ("right", "a", "b") })
         {
-            l.Add($"{h}.{b1}"); l.Add($"{h}.{b1}.touch"); l.Add($"{h}.{b2}"); l.Add($"{h}.{b2}.touch");
-            l.Add($"{h}.trigger"); l.Add($"{h}.trigger.touch"); l.Add($"{h}.grip");
-            l.Add($"{h}.thumbstick"); l.Add($"{h}.thumbstick.touch");
-            l.Add($"{h}.thumbstick.up"); l.Add($"{h}.thumbstick.down"); l.Add($"{h}.thumbstick.left"); l.Add($"{h}.thumbstick.right");
-            l.Add($"{h}.thumbrest"); l.Add($"{h}.menu");
+            l.Add($"{h}.{b1}");
+            l.Add($"{h}.{b1}.touch");
+            l.Add($"{h}.{b2}");
+            l.Add($"{h}.{b2}.touch");
+            l.Add($"{h}.trigger");
+            l.Add($"{h}.trigger.touch");
+            l.Add($"{h}.grip");
+            l.Add($"{h}.thumbstick");
+            l.Add($"{h}.thumbstick.touch");
+            l.Add($"{h}.thumbstick.up");
+            l.Add($"{h}.thumbstick.down");
+            l.Add($"{h}.thumbstick.left");
+            l.Add($"{h}.thumbstick.right");
+            l.Add($"{h}.thumbrest");
+            l.Add($"{h}.menu");
         }
         return l.ToArray();
     }
 }
-public class InputConv : ChoiceConverter { protected override IEnumerable<string> Values(ITypeDescriptorContext c) => Inputs.All; }
-public class GestureConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "press", "tap", "hold", "double_tap", "while_held" }; }
-public class BlockConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "trigger", "all" }; }
-public class BlockOpenConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "minimal", "hand", "all" }; }
-public class TypeConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "key", "sequence", "xr_input", "wheel", "back", "close", "layer", "reload", "keyboard", "page", "adjust", "screen", "controller_offsets", "headset_mirror" }; }
-public class ModeConv : ChoiceConverter { protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "tap", "hold", "toggle", "on", "off", "next_monitor", "prev_monitor", "next_window", "prev_window", "choose", "next_fps", "next_place", "panel", "enable", "grab", "reset" }; }
-public class ConfirmConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "auto", "release", "stick_return", "button" }; }
-public class AnchorConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "hand", "hand_locked", "head", "head_locked" }; }
-public class MethodConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "thumbstick", "point", "both" }; }
-public class SelHandConv : ChoiceConverter { protected override bool Exclusive => true; protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "opener", "left", "right" }; }
-public class CompConv : ChoiceConverter { protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "trigger", "grip", "primary", "secondary", "thumbstick", "menu" }; }
-public class WheelNameConv : ChoiceConverter { protected override IEnumerable<string> Values(ITypeDescriptorContext c) => MainForm.Current?.Profile?.Wheels.Keys.ToArray() ?? Array.Empty<string>(); }
+public class InputConv : ChoiceConverter
+{
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => Inputs.All;
+}
+public class GestureConv : ChoiceConverter
+{
+    protected override bool Exclusive => true;
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "press", "tap", "hold", "double_tap", "while_held" };
+}
+public class BlockConv : ChoiceConverter
+{
+    protected override bool Exclusive => true;
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "trigger", "all" };
+}
+public class BlockOpenConv : ChoiceConverter
+{
+    protected override bool Exclusive => true;
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "minimal", "hand", "all" };
+}
+public class TypeConv : ChoiceConverter
+{
+    protected override bool Exclusive => true;
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "key", "sequence", "xr_input", "wheel", "back", "close", "layer", "reload", "keyboard", "page", "adjust", "screen", "controller_offsets", "headset_mirror" };
+}
+public class ModeConv : ChoiceConverter
+{
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "tap", "hold", "toggle", "on", "off", "next_monitor", "prev_monitor", "next_window", "prev_window", "choose", "next_fps", "next_place", "panel", "enable", "grab", "reset" };
+}
+public class ConfirmConv : ChoiceConverter
+{
+    protected override bool Exclusive => true;
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "auto", "release", "stick_return", "button" };
+}
+public class AnchorConv : ChoiceConverter
+{
+    protected override bool Exclusive => true;
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "hand", "hand_locked", "head", "head_locked" };
+}
+public class MethodConv : ChoiceConverter
+{
+    protected override bool Exclusive => true;
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "thumbstick", "point", "both" };
+}
+public class SelHandConv : ChoiceConverter
+{
+    protected override bool Exclusive => true;
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "opener", "left", "right" };
+}
+public class CompConv : ChoiceConverter
+{
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "trigger", "grip", "primary", "secondary", "thumbstick", "menu" };
+}
+public class WheelNameConv : ChoiceConverter
+{
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => MainForm.Current?.Profile?.Wheels.Keys.ToArray() ?? Array.Empty<string>();
+}
 public class LayerConv : ChoiceConverter
 {
     protected override IEnumerable<string> Values(ITypeDescriptorContext c)
     {
         var p = MainForm.Current?.Profile;
-        if (p == null) return Array.Empty<string>();
+        if (p == null)
+            return Array.Empty<string>();
         var s = new SortedSet<string>();
         foreach (var b in p.Bindings)
         {
-            if (!string.IsNullOrEmpty(b.Action?.Layer)) s.Add(b.Action.Layer);
-            foreach (var l in (b.Layers ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) s.Add(l);
+            if (!string.IsNullOrEmpty(b.Action?.Layer))
+                s.Add(b.Action.Layer);
+            foreach (var l in (b.Layers ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                s.Add(l);
         }
         return s;
     }
@@ -264,11 +321,14 @@ public static class OpenWindows
         bool filled = false;
         cb.DropDown += (s, e) =>
         {
-            if (filled) return;
+            if (filled)
+                return;
             filled = true;
             string keep = cb.Text;
             cb.BeginUpdate();
-            foreach (var n in Names()) if (!cb.Items.Contains(n)) cb.Items.Add(n);
+            foreach (var n in Names())
+                if (!cb.Items.Contains(n))
+                    cb.Items.Add(n);
             cb.EndUpdate();
             cb.Text = keep;
         };
@@ -278,7 +338,8 @@ public static class OpenWindows
         var l = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in System.Diagnostics.Process.GetProcesses())
         {
-            try { if (p.MainWindowHandle != IntPtr.Zero && !string.IsNullOrWhiteSpace(p.MainWindowTitle) && p.Id != Environment.ProcessId) { l.Add(p.ProcessName); } }
+            try
+            { if (p.MainWindowHandle != IntPtr.Zero && !string.IsNullOrWhiteSpace(p.MainWindowTitle) && p.Id != Environment.ProcessId) { l.Add(p.ProcessName); } }
             catch { }
             finally { p.Dispose(); }
         }
@@ -293,7 +354,8 @@ public static class Monitors
     public static Choice[] Choices(bool withKeep)
     {
         var l = new List<Choice>();
-        if (withKeep) l.Add(new("", "Keep the current one"));
+        if (withKeep)
+            l.Add(new("", "Keep the current one"));
         l.Add(new("0", "Main monitor"));
         var s = Sorted();
         for (int i = 0; i < s.Length; i++)
@@ -301,7 +363,8 @@ public static class Monitors
             string where = s.Length < 2 ? "" : i == 0 ? ", leftmost" : i == s.Length - 1 ? ", rightmost" : "";
             l.Add(new((i + 1).ToString(), $"Monitor {i + 1}: {s[i].Bounds.Width}x{s[i].Bounds.Height}{(s[i].Primary ? " (main)" : "")}{where}"));
         }
-        for (int i = s.Length; i < 4; i++) l.Add(new((i + 1).ToString(), $"Monitor {i + 1} (not connected now)"));
+        for (int i = s.Length; i < 4; i++)
+            l.Add(new((i + 1).ToString(), $"Monitor {i + 1} (not connected now)"));
         return l.ToArray();
     }
 }

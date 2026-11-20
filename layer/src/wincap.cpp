@@ -26,15 +26,23 @@ struct WindowCapture {
 };
 
 bool WinCapSupported() {
-    try { return wgc::GraphicsCaptureSession::IsSupported(); } catch (...) { return false; }
+    try {
+        return wgc::GraphicsCaptureSession::IsSupported();
+    } catch (...) {
+        return false;
+    }
 }
 
 WindowCapture* WinCapOpen(HWND hwnd, ID3D11Device* d3d, std::string& err) {
     try {
         winrt::init_apartment(winrt::apartment_type::multi_threaded);
-    } catch (...) {} // already initialised on this thread
+    } catch (...) {
+    } // already initialised on this thread
     try {
-        if (!wgc::GraphicsCaptureSession::IsSupported()) { err = "window capture needs Windows 10 version 1903 or newer"; return nullptr; }
+        if (!wgc::GraphicsCaptureSession::IsSupported()) {
+            err = "window capture needs Windows 10 version 1903 or newer";
+            return nullptr;
+        }
         auto wc = new WindowCapture;
         auto interop = winrt::get_activation_factory<wgc::GraphicsCaptureItem, IGraphicsCaptureItemInterop>();
         winrt::check_hresult(interop->CreateForWindow(hwnd, winrt::guid_of<wgc::GraphicsCaptureItem>(), winrt::put_abi(wc->item)));
@@ -44,18 +52,27 @@ WindowCapture* WinCapOpen(HWND hwnd, ID3D11Device* d3d, std::string& err) {
         winrt::check_hresult(CreateDirect3D11DeviceFromDXGIDevice(dxgi.get(), insp.put()));
         wc->dev = insp.as<wd3d::IDirect3DDevice>();
         wc->size = wc->item.Size();
-        wc->pool = wgc::Direct3D11CaptureFramePool::CreateFreeThreaded(wc->dev,
-            winrt::Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, wc->size);
+        wc->pool = wgc::Direct3D11CaptureFramePool::CreateFreeThreaded(
+            wc->dev, winrt::Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, wc->size);
         wc->session = wc->pool.CreateCaptureSession(wc->item);
-        try { wc->session.IsCursorCaptureEnabled(false); } catch (...) {} // we draw our own pointer dot
-        try { wc->session.IsBorderRequired(false); } catch (...) {}       // Windows 11: no yellow border
+        try {
+            wc->session.IsCursorCaptureEnabled(false);
+        } catch (...) {
+        } // we draw our own pointer dot
+        try {
+            wc->session.IsBorderRequired(false);
+        } catch (...) {
+        } // Windows 11: no yellow border
         wc->item.Closed([wc](auto&&, auto&&) { wc->closed = true; });
         wc->session.StartCapture();
         return wc;
     } catch (const winrt::hresult_error& e) {
-        char b[64]; snprintf(b, sizeof b, "0x%08lX", (unsigned long)e.code().value);
+        char b[64];
+        snprintf(b, sizeof b, "0x%08lX", (unsigned long)e.code().value);
         err = std::string("window capture failed (") + b + ")";
-    } catch (...) { err = "window capture failed"; }
+    } catch (...) {
+        err = "window capture failed";
+    }
     return nullptr;
 }
 
@@ -73,13 +90,21 @@ ID3D11Texture2D* WinCapNext(WindowCapture* wc, int& cw, int& ch, bool& closed) {
         auto access = frame.Surface().as<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>();
         ID3D11Texture2D* tex = nullptr;
         winrt::check_hresult(access->GetInterface(IID_PPV_ARGS(&tex)));
-        cw = cs.Width; ch = cs.Height;
+        cw = cs.Width;
+        ch = cs.Height;
         return tex; // the caller releases it; the frame itself goes back to the pool here
-    } catch (...) { closed = true; return nullptr; }
+    } catch (...) {
+        closed = true;
+        return nullptr;
+    }
 }
 
 void WinCapClose(WindowCapture* wc) {
     if (!wc) return;
-    try { if (wc->session) wc->session.Close(); if (wc->pool) wc->pool.Close(); } catch (...) {}
+    try {
+        if (wc->session) wc->session.Close();
+        if (wc->pool) wc->pool.Close();
+    } catch (...) {
+    }
     delete wc;
 }

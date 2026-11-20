@@ -23,4 +23,4 @@ void BringToFront(uintptr_t hwnd);       // before clicking a mirrored window th
 void SetDryRun(bool on);
 void DryState(int& x, int& y, bool& left, bool& right, int& wheel, int& focus);
 void Shutdown();
-}
+} // namespace Keys

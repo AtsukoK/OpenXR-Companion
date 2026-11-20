@@ -41,7 +41,10 @@ static std::wstring RealDataDir() {
     return d;
 }
 std::wstring DataDir() {
-    if (const wchar_t* t = _wgetenv(L"OPENXR_COMPANION_TEST_DATA"); t && *t) { CreateDirectoryW(t, nullptr); return t; } // tests only
+    if (const wchar_t* t = _wgetenv(L"OPENXR_COMPANION_TEST_DATA"); t && *t) {
+        CreateDirectoryW(t, nullptr);
+        return t;
+    } // tests only
     static const std::wstring real = RealDataDir();
     return real;
 }
@@ -62,10 +65,18 @@ static std::string ExeNameNow() {
     std::transform(r.begin(), r.end(), r.begin(), [](unsigned char c) { return (char)tolower(c); });
     return r;
 }
-std::string ExeName() { static const std::string n = ExeNameNow(); return n; } // the process never changes
+std::string ExeName() {
+    static const std::string n = ExeNameNow();
+    return n;
+} // the process never changes
 double NowSec() {
-    static LARGE_INTEGER f = [] { LARGE_INTEGER x; QueryPerformanceFrequency(&x); return x; }();
-    LARGE_INTEGER c; QueryPerformanceCounter(&c);
+    static LARGE_INTEGER f = [] {
+        LARGE_INTEGER x;
+        QueryPerformanceFrequency(&x);
+        return x;
+    }();
+    LARGE_INTEGER c;
+    QueryPerformanceCounter(&c);
     return (double)c.QuadPart / (double)f.QuadPart;
 }
 void LogInit() {
@@ -79,9 +90,13 @@ void LogInit() {
 void Log(const char* fmt, ...) {
     std::lock_guard l(gLogMx);
     if (!gLog) return;
-    SYSTEMTIME t; GetLocalTime(&t);
+    SYSTEMTIME t;
+    GetLocalTime(&t);
     fprintf(gLog, "%02d:%02d:%02d.%03d ", t.wHour, t.wMinute, t.wSecond, t.wMilliseconds);
-    va_list a; va_start(a, fmt); vfprintf(gLog, fmt, a); va_end(a);
+    va_list a;
+    va_start(a, fmt);
+    vfprintf(gLog, fmt, a);
+    va_end(a);
     fputc('\n', gLog);
     fflush(gLog);
 }
@@ -103,16 +118,28 @@ XrQuaternionf QuatFromBasis(Vec3 x, Vec3 y, Vec3 z) {
     XrQuaternionf q;
     if (tr > 0) {
         float s = std::sqrt(tr + 1.f) * 2.f;
-        q.w = 0.25f * s; q.x = (m21 - m12) / s; q.y = (m02 - m20) / s; q.z = (m10 - m01) / s;
+        q.w = 0.25f * s;
+        q.x = (m21 - m12) / s;
+        q.y = (m02 - m20) / s;
+        q.z = (m10 - m01) / s;
     } else if (m00 > m11 && m00 > m22) {
         float s = std::sqrt(1.f + m00 - m11 - m22) * 2.f;
-        q.w = (m21 - m12) / s; q.x = 0.25f * s; q.y = (m01 + m10) / s; q.z = (m02 + m20) / s;
+        q.w = (m21 - m12) / s;
+        q.x = 0.25f * s;
+        q.y = (m01 + m10) / s;
+        q.z = (m02 + m20) / s;
     } else if (m11 > m22) {
         float s = std::sqrt(1.f + m11 - m00 - m22) * 2.f;
-        q.w = (m02 - m20) / s; q.x = (m01 + m10) / s; q.y = 0.25f * s; q.z = (m12 + m21) / s;
+        q.w = (m02 - m20) / s;
+        q.x = (m01 + m10) / s;
+        q.y = 0.25f * s;
+        q.z = (m12 + m21) / s;
     } else {
         float s = std::sqrt(1.f + m22 - m00 - m11) * 2.f;
-        q.w = (m10 - m01) / s; q.x = (m02 + m20) / s; q.y = (m12 + m21) / s; q.z = 0.25f * s;
+        q.w = (m10 - m01) / s;
+        q.x = (m02 + m20) / s;
+        q.y = (m12 + m21) / s;
+        q.z = 0.25f * s;
     }
     return q;
 }
@@ -127,15 +154,18 @@ XrQuaternionf BillboardTo(Vec3 center, Vec3 eye) {
 }
 
 XrQuaternionf QMul(const XrQuaternionf& a, const XrQuaternionf& b) {
-    return { a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
-             a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
-             a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
-             a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z };
+    return { a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y, a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+             a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w, a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z };
 }
 XrPosef PMul(const XrPosef& a, const XrPosef& b) {
     XrQuaternionf q = QMul(a.orientation, b.orientation);
     float l = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
-    if (l > 1e-6f) { q.x /= l; q.y /= l; q.z /= l; q.w /= l; }
+    if (l > 1e-6f) {
+        q.x /= l;
+        q.y /= l;
+        q.z /= l;
+        q.w /= l;
+    }
     return { q, X(V(a.position) + Rotate(a.orientation, V(b.position))) };
 }
 XrPosef PInv(const XrPosef& a) {
@@ -143,7 +173,8 @@ XrPosef PInv(const XrPosef& a) {
     return { qi, X(Rotate(qi, V(a.position) * -1.f)) };
 }
 XrPosef YawFrame(const XrPosef& head) {
-    Vec3 f = Rotate(head.orientation, { 0, 0, -1 }); f.y = 0;
+    Vec3 f = Rotate(head.orientation, { 0, 0, -1 });
+    f.y = 0;
     if (Len(f) < 1e-3f) f = { 0, 0, -1 };
     f = Norm(f);
     Vec3 z = f * -1.f, y{ 0, 1, 0 };
@@ -157,7 +188,10 @@ static float OneEuroAlpha(float cutoffHz, float dt) {
 
 XrPosef PoseSmoother::Apply(const XrPosef& in, float dt, float strength) {
     if (strength <= 0.001f || !init || dt <= 0.f || dt > 0.25f) { // off, first frame, or a long pause: no smoothing
-        s = last = in; init = true; speed = turn = 0; return in;
+        s = last = in;
+        init = true;
+        speed = turn = 0;
+        return in;
     }
     // how fast the raw pose is moving (itself lightly smoothed, 1 Hz)
     Vec3 dp = V(in.position) - V(last.position);
@@ -174,17 +208,23 @@ XrPosef PoseSmoother::Apply(const XrPosef& in, float dt, float strength) {
         float e = (std::min(strength, 10.f) - 1.f) / 9.f;
         minC = 0.35f * std::pow(0.05f / 0.35f, e);
         float k = std::pow(0.1f, e);
-        openP *= k; openR *= k;
+        openP *= k;
+        openR *= k;
     }
-    float aP = OneEuroAlpha(minC + openP * speed, dt);   // 6 Hz more per m/s
-    float aR = OneEuroAlpha(minC + openR * turn, dt);    // 1.5 Hz more per rad/s
+    float aP = OneEuroAlpha(minC + openP * speed, dt); // 6 Hz more per m/s
+    float aR = OneEuroAlpha(minC + openR * turn, dt);  // 1.5 Hz more per rad/s
     Vec3 p = V(s.position) + (V(in.position) - V(s.position)) * aP;
     // nlerp the angle, taking the short way round
     XrQuaternionf a = s.orientation, b = in.orientation;
     if (a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w < 0) b = { -b.x, -b.y, -b.z, -b.w };
     XrQuaternionf q{ a.x + (b.x - a.x) * aR, a.y + (b.y - a.y) * aR, a.z + (b.z - a.z) * aR, a.w + (b.w - a.w) * aR };
     float l = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
-    if (l > 1e-6f) { q.x /= l; q.y /= l; q.z /= l; q.w /= l; }
+    if (l > 1e-6f) {
+        q.x /= l;
+        q.y /= l;
+        q.z /= l;
+        q.w /= l;
+    }
     s = { q, X(p) };
     return s;
 }
@@ -192,14 +232,19 @@ XrPosef PoseSmoother::Apply(const XrPosef& in, float dt, float strength) {
 XrPosef SpaceSteady::Step(XrTime t, const XrPosef& raw, uint64_t flags, float strength) {
     const uint64_t need = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR_SPACE_LOCATION_POSITION_VALID_BIT |
                           XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT | XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
-    if ((flags & need) != need || strength <= 0.001f) { Reset(); return raw; }
+    if ((flags & need) != need || strength <= 0.001f) {
+        Reset();
+        return raw;
+    }
     const Rec* use = nullptr;
     if (t > last) { // a newer time: one filter step
         float dt = last ? (float)((t - last) * 1e-9) : 0.f;
         XrPosef out = f.Apply(raw, dt, strength);
         last = t;
-        Rec& r = hist[next]; next = (next + 1) % 16;
-        r.t = t; r.dq = QMul(out.orientation, QInv(raw.orientation));
+        Rec& r = hist[next];
+        next = (next + 1) % 16;
+        r.t = t;
+        r.dq = QMul(out.orientation, QInv(raw.orientation));
         r.dp = X(V(out.position) - V(raw.position));
         return out;
     }

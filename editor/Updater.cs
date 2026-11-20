@@ -26,8 +26,10 @@ public static class Updater
         string d = InstallDir;
         if (!File.Exists(Path.Combine(d, "OpenXRCompanion.dll")) || !File.Exists(Path.Combine(d, "XR_APILAYER_NOVENDOR_openxr_companion.json")))
             return "the editor is not in an OpenXR Companion folder";
-        if (File.Exists(Path.Combine(d, "OpenXRCompanionEditor.dll"))) return "this is a development build";
-        try { var t = Path.Combine(d, ".write_test"); File.WriteAllText(t, ""); File.Delete(t); }
+        if (File.Exists(Path.Combine(d, "OpenXRCompanionEditor.dll")))
+            return "this is a development build";
+        try
+        { var t = Path.Combine(d, ".write_test"); File.WriteAllText(t, ""); File.Delete(t); }
         catch { return "the folder is read-only (for example under Program Files); download the zip instead"; }
         return null;
     }
@@ -41,7 +43,8 @@ public static class Updater
         foreach (var a in doc.RootElement.GetProperty("assets").EnumerateArray())
         {
             string name = a.GetProperty("name").GetString() ?? "";
-            if (!name.StartsWith("OpenXRCompanion-", StringComparison.OrdinalIgnoreCase) || !name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)) continue;
+            if (!name.StartsWith("OpenXRCompanion-", StringComparison.OrdinalIgnoreCase) || !name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                continue;
             r.ZipUrl = a.GetProperty("browser_download_url").GetString() ?? "";
             r.Size = a.TryGetProperty("size", out var sz) ? sz.GetInt64() : 0;
             if (a.TryGetProperty("digest", out var dg) && dg.ValueKind == JsonValueKind.String && (dg.GetString() ?? "").StartsWith("sha256:"))
@@ -49,7 +52,8 @@ public static class Updater
         }
         if (!r.ZipUrl.StartsWith("https://github.com/AtsukoK/OpenXR-Companion/releases/download/", StringComparison.OrdinalIgnoreCase))
             throw new Exception("the release has no zip to download");
-        if (r.Sha256.Length != 64) throw new Exception("GitHub lists no checksum for the zip, so it can't be checked");
+        if (r.Sha256.Length != 64)
+            throw new Exception("GitHub lists no checksum for the zip, so it can't be checked");
         return r;
     }
 
@@ -64,7 +68,9 @@ public static class Updater
     public static async Task<string> RunAsync(Release r, Action<int, string> progress)
     {
         string work = Path.Combine(Path.GetTempPath(), "OpenXRCompanionUpdate");
-        try { if (Directory.Exists(work)) Directory.Delete(work, true); } catch { }
+        try
+        { if (Directory.Exists(work)) Directory.Delete(work, true); }
+        catch { }
         Directory.CreateDirectory(work);
         string zip = Path.Combine(work, "update.zip");
 
@@ -76,29 +82,37 @@ public static class Updater
             long total = resp.Content.Headers.ContentLength ?? r.Size;
             await using var src = await resp.Content.ReadAsStreamAsync();
             await using var dst = File.Create(zip);
-            var buf = new byte[1 << 16]; long got = 0; int n, lastPct = -1;
+            var buf = new byte[1 << 16];
+            long got = 0;
+            int n, lastPct = -1;
             while ((n = await src.ReadAsync(buf)) > 0)
             {
-                await dst.WriteAsync(buf.AsMemory(0, n)); got += n;
+                await dst.WriteAsync(buf.AsMemory(0, n));
+                got += n;
                 int pct = total > 0 ? (int)(got * 100 / total) : -1;
-                if (pct != lastPct) { lastPct = pct; progress(pct, "Downloading " + r.Tag + (pct >= 0 ? " (" + pct + "%)" : "") + "..."); }
+                if (pct != lastPct)
+                { lastPct = pct; progress(pct, "Downloading " + r.Tag + (pct >= 0 ? " (" + pct + "%)" : "") + "..."); }
             }
         }
 
         // 2. checksum
         progress(-1, "Checking the download...");
         string hash;
-        await using (var f = File.OpenRead(zip)) hash = Convert.ToHexString(await SHA256.HashDataAsync(f)).ToLowerInvariant();
-        if (hash != r.Sha256) throw new Exception("the download doesn't match GitHub's checksum (nothing was changed)");
+        await using (var f = File.OpenRead(zip))
+            hash = Convert.ToHexString(await SHA256.HashDataAsync(f)).ToLowerInvariant();
+        if (hash != r.Sha256)
+            throw new Exception("the download doesn't match GitHub's checksum (nothing was changed)");
 
         // 3. unpack and check it looks right
         progress(-1, "Unpacking...");
         string stage = Path.Combine(work, "files");
         ZipFile.ExtractToDirectory(zip, stage);
         string root = Path.Combine(stage, "OpenXRCompanion");
-        if (!Directory.Exists(root)) root = stage;
+        if (!Directory.Exists(root))
+            root = stage;
         foreach (var need in new[] { "OpenXRCompanionEditor.exe", "OpenXRCompanion.dll", "XR_APILAYER_NOVENDOR_openxr_companion.json" })
-            if (!File.Exists(Path.Combine(root, need))) throw new Exception("the zip is missing " + need + " (nothing was changed)");
+            if (!File.Exists(Path.Combine(root, need)))
+                throw new Exception("the zip is missing " + need + " (nothing was changed)");
         var files = Directory.GetFiles(root, "*", SearchOption.AllDirectories)
             .Select(p => Path.GetRelativePath(root, p))
             .Where(rel => !rel.Contains("..") && !Path.IsPathRooted(rel))
@@ -107,11 +121,14 @@ public static class Updater
         // 4. back up what is there now
         progress(-1, "Saving the current version to " + BackupName + "...");
         string dir = InstallDir, backup = Path.Combine(dir, BackupName);
-        try { if (Directory.Exists(backup)) Directory.Delete(backup, true); } catch { }
+        try
+        { if (Directory.Exists(backup)) Directory.Delete(backup, true); }
+        catch { }
         foreach (var rel in files)
         {
             string cur = Path.Combine(dir, rel);
-            if (!File.Exists(cur)) continue;
+            if (!File.Exists(cur))
+                continue;
             string b = Path.Combine(backup, rel);
             Directory.CreateDirectory(Path.GetDirectoryName(b)!);
             File.Copy(cur, b, true);
@@ -126,9 +143,11 @@ public static class Updater
             {
                 string target = Path.Combine(dir, rel), old = target + ".old";
                 Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                if (File.Exists(old)) { try { File.Delete(old); } catch { old = target + "." + Guid.NewGuid().ToString("N")[..8] + ".old"; } }
+                if (File.Exists(old))
+                { try { File.Delete(old); } catch { old = target + "." + Guid.NewGuid().ToString("N")[..8] + ".old"; } }
                 bool had = File.Exists(target);
-                if (had) File.Move(target, old);
+                if (had)
+                    File.Move(target, old);
                 done.Add((target, had ? old : null));
                 File.Copy(Path.Combine(root, rel), target);
             }
@@ -138,12 +157,18 @@ public static class Updater
             for (int i = done.Count - 1; i >= 0; i--)
             {
                 var (target, old) = done[i];
-                try { if (File.Exists(target)) File.Delete(target); } catch { }
-                try { if (old != null) File.Move(old, target); } catch { }
+                try
+                { if (File.Exists(target)) File.Delete(target); }
+                catch { }
+                try
+                { if (old != null) File.Move(old, target); }
+                catch { }
             }
             throw;
         }
-        try { Directory.Delete(work, true); } catch { }
+        try
+        { Directory.Delete(work, true); }
+        catch { }
         return Path.Combine(dir, "OpenXRCompanionEditor.exe");
     }
 
@@ -152,9 +177,12 @@ public static class Updater
     {
         try
         {
-            if (CantUpdateReason() != null) return;
+            if (CantUpdateReason() != null)
+                return;
             foreach (var f in Directory.GetFiles(InstallDir, "*.old", SearchOption.AllDirectories))
-                try { File.Delete(f); } catch { }
+                try
+                { File.Delete(f); }
+                catch { }
         }
         catch { }
     }
