@@ -36,7 +36,7 @@ struct WheelView {
     float alpha = 1.f;      // see-through while adjusting other things (1 = solid)
 };
 // Keyboard layout in key units (one letter key = 1x1).
-enum KbKind { KB_KEY, KB_SHIFT, KB_CAPS, KB_CTRL, KB_ALT, KB_CLOSE };
+enum KbKind { KB_KEY, KB_SHIFT, KB_CAPS, KB_CTRL, KB_ALT, KB_CLOSE, KB_MOVE };
 struct KbKey { std::string label, shiftLabel, combo; float x, y, w, h; int kind; bool letter; bool repeat; };
 const std::vector<KbKey>& KbLayout(float& unitsW, float& unitsH);
 
@@ -47,6 +47,7 @@ struct KeyboardView {
     int hover[2] = { -1, -1 };
     int pressed = -1;
     bool shift = false, caps = false, ctrl = false, alt = false;
+    bool moving = false; // Move key: grab it with a grip to place it, stick = size
     uint64_t version = 0;
     // button bar under the keyboard: docking with the screen
     XrPosef barPose{ {0,0,0,1}, {0,0,0} };

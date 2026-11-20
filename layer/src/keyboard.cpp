@@ -36,9 +36,10 @@ const std::vector<KbKey>& KbLayout(float& W, float& Hh) {
     add("Shift", "", "", 2.75f, KB_SHIFT);
     row();
     add("Ctrl", "", "", 1.5f, KB_CTRL); add("Alt", "", "", 1.5f, KB_ALT);
-    add("Space", "", "Space", 5, KB_KEY, false, true); add("Del", "", "Delete", 1, KB_KEY, false, true);
+    add("Space", "", "Space", 3.5f, KB_KEY, false, true); add("Del", "", "Delete", 1, KB_KEY, false, true);
     add("←", "", "Left", 1, KB_KEY, false, true); add("↑", "", "Up", 1, KB_KEY, false, true);
     add("↓", "", "Down", 1, KB_KEY, false, true); add("→", "", "Right", 1, KB_KEY, false, true);
+    add("Move", "", "", 1.5f, KB_MOVE);
     add("Close", "", "", 2, KB_CLOSE);
     return keys;
 }
@@ -66,6 +67,7 @@ void Engine::OpenKeyboard(int bi) {
 }
 
 void Engine::CloseKeyboard() {
+    if (kb.moving) { kb.moving = false; if (grab.target == 4) grab = GrabRun{}; saveRequested = true; }
     kb.visible = false; kb.version++;
     kbRepeatKey = kbRepeatHand = -1;
     Log("keyboard closed");
@@ -101,6 +103,12 @@ void Engine::KbPress(int i, int hand) {
     case KB_CTRL: kb.ctrl = !kb.ctrl; break;
     case KB_ALT: kb.alt = !kb.alt; break;
     case KB_CLOSE: CloseKeyboard(); return;
+    case KB_MOVE:
+        if (!kb.moving && prof->dock.mode == 2 && screen.shown) { Toast("Docked under the screen: use Adjust dock to place it", 3.0); break; }
+        kb.moving = !kb.moving;
+        if (kb.moving) Toast("Grab the keyboard with a grip to move it, stick = size. Press Done when finished", 4.0);
+        else { if (grab.target == 4) grab = GrabRun{}; saveRequested = true; }
+        break;
     default: {
         std::string combo;
         if (kb.ctrl) combo += "Ctrl+";
@@ -118,8 +126,9 @@ void Engine::KbPress(int i, int hand) {
 
 // Adjust mode: grab the keyboard with a grip and put it anywhere; the grabbing hand's stick changes its width.
 void Engine::UpdateAdjustKeyboard() {
-    if (grab.target == 4 && (!adjust || !kb.visible)) grab = GrabRun{};
-    if (!adjust || !kb.visible || (grab.target >= 0 && grab.target != 4)) return;
+    bool placing = adjust || kb.moving;
+    if (grab.target == 4 && (!placing || !kb.visible)) grab = GrabRun{};
+    if (!placing || !kb.visible || (grab.target >= 0 && grab.target != 4)) return;
     if (prof->dock.mode == 2 && screen.shown) return; // docked under the screen: Adjust dock places it
     if (grab.target < 0) {
         for (int h = 0; h < 2; h++) {
@@ -170,6 +179,7 @@ void Engine::UpdateKeyboard() {
         bool down = cur[h][C_TRIGGER][F_PRESS], edge = down && !prev[h][C_TRIGGER][F_PRESS];
         if (edge && kb.hover[h] >= 0) {
             int k = kb.hover[h];
+            if (kb.moving && keys[k].kind != KB_MOVE) continue; // being moved: only Done works
             KbPress(k, h);
             if (!kb.visible) return;
             if (keys[k].repeat) { kbRepeatKey = k; kbRepeatHand = h; kbNextRepeat = now + 0.45; }

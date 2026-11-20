@@ -433,7 +433,7 @@ void DrawKeyboard(std::vector<uint32_t>& out, int W, int Hp, const KeyboardView&
         float w = k.w * sx - sx * 0.10f, h = k.h * sy - sy * 0.12f;
         bool hov = kb.hover[0] == i || kb.hover[1] == i;
         bool latched = (k.kind == KB_SHIFT && kb.shift) || (k.kind == KB_CAPS && kb.caps) ||
-                       (k.kind == KB_CTRL && kb.ctrl) || (k.kind == KB_ALT && kb.alt);
+                       (k.kind == KB_CTRL && kb.ctrl) || (k.kind == KB_ALT && kb.alt) || (k.kind == KB_MOVE && kb.moving);
         uint32_t col = st.segment;
         if (latched) col = st.accent & 0xA0FFFFFF;
         if (hov) col = st.hover;
@@ -445,6 +445,7 @@ void DrawKeyboard(std::vector<uint32_t>& out, int W, int Hp, const KeyboardView&
         std::string label = k.label;
         if (k.letter) label = showUpper ? k.shiftLabel : k.label;
         else if (k.kind == KB_KEY && kb.shift) label = k.shiftLabel;
+        else if (k.kind == KB_MOVE && kb.moving) label = "Done";
         SolidBrush darkB{ Color(0xFF101418) };
         RectF rc(x, y, w, h);
         bool big = label.size() <= 2 || (unsigned char)label[0] >= 0x80;
