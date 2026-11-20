@@ -840,7 +840,16 @@ public partial class MainForm : Form
     internal static string ActiveProfile
     {
         get { try { var n = File.ReadAllText(ActiveFile).Trim(); if (n.Length > 0 && File.Exists(Path.Combine(ProfilesDir, n))) return n; } catch { } return StartProfile; }
-        set { try { Directory.CreateDirectory(DataDir); File.WriteAllText(ActiveFile, value); } catch { } }
+        set // only when it changes: every write makes a running game reload its profile (menus close)
+        {
+            try
+            {
+                Directory.CreateDirectory(DataDir);
+                string cur = File.Exists(ActiveFile) ? File.ReadAllText(ActiveFile).Trim() : null;
+                if (cur != value) File.WriteAllText(ActiveFile, value);
+            }
+            catch { }
+        }
     }
 
     void RefreshProfileList(string select)

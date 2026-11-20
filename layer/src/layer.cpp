@@ -688,7 +688,12 @@ static XrResult XRAPI_CALL Hook_xrCreateActionSpace(XrSession s, const XrActionS
     for (auto& b : it->second) if (b.hand == hand && kind < 0) kind = b.kind;
     if (kind < 0) return r;
     { std::lock_guard o(gOffMx); gGameSpaces[(uint64_t)*sp] = { hand, kind }; }
-    Log("game pose space: %s %s", hand ? "right" : "left", kind ? "aim" : "grip");
+    const XrPosef& g = ci->poseInActionSpace;
+    XrQuaternionf gq = g.orientation; float ga = 2.f * std::acos(std::min(1.f, std::fabs(gq.w))) * 57.2958f;
+    float gm = std::sqrt(g.position.x * g.position.x + g.position.y * g.position.y + g.position.z * g.position.z) * 100.f;
+    if (ga > 0.5f || gm > 0.1f) // the game moves its hand point itself: our offsets turn about that point, not the controller's
+        Log("game pose space: %s %s (the game's own offset: %.1f deg, %.1f cm)", hand ? "right" : "left", kind ? "aim" : "grip", ga, gm);
+    else Log("game pose space: %s %s", hand ? "right" : "left", kind ? "aim" : "grip");
     return r;
 }
 

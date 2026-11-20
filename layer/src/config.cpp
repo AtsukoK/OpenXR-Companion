@@ -442,7 +442,7 @@ void PrepareDefaults() {
             if (MoveFileW(def.c_str(), user.c_str())) {
                 Log("defaults: your default.json had changes, kept as user_defaults.json (and selected)");
                 SetActiveProfileName("user_defaults.json");
-                std::ofstream n(dir + L"\.defaults_moved_notice", std::ios::binary); n << "show once in the editor"; // the editor tells the user, then deletes it
+                std::ofstream n(dir + L"\\.defaults_moved_notice", std::ios::binary); n << "show once in the editor"; // the editor tells the user, then deletes it
             }
         }
         std::ofstream m(marker, std::ios::binary); m << "default.json = standard, user_defaults.json = yours";
