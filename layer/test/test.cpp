@@ -787,7 +787,9 @@ int main(int argc, char** argv) {
                 int W = m.grabW, Hh = m.grabH;
                 auto at = [&](int x, int y) { return m.grabbed[(size_t)y * W + x] & 0xFFFFFF; };
                 // quad: 0.2 m wide at 0.5 m with 45 degree half-angles -> 20% of the eye's width either side of the centre
-                int qx = (int)(W * 0.1f);
+                // steadying (on by default) crops to 1 - 2 * (4% margin + 7% headroom) of the eye's width
+                float cw = m.smoothing > 0.001f ? 1.f - 2 * (0.04f + 0.07f) : 1.f;
+                int qx = (int)(W * 0.1f / cw);
                 CHECK(at(W / 2, Hh / 2) == 0xFF0000, "mirror: the panel shows in the middle, in front of the game");
                 CHECK(at(W / 2 + qx - 6, Hh / 2) == 0xFF0000 && at(W / 2 + qx + 6, Hh / 2) == 0x0000FF, "mirror: the panel's edge is where the headset shows it");
                 CHECK(at(10, 10) == 0x0000FF, "mirror: the game's picture fills the rest");

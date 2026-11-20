@@ -603,28 +603,29 @@ const char* DefaultProfileJson() {
   },
   "screen": { "monitor": 0, "fps": 30, "fps_steps": [10, 15, 30, 60, 0], "place": "wrist_left", "wrist_width_m": 0.16, "width_m": 0.8, "distance_m": 0.9 },
   "wrist_left": {
-    "enabled": true, "mirror": false, "face": "inner", "text_up": "custom", "rotate_deg": -140.3, "press": "both", "columns": 3,
-    "size_m": 0.073, "toward_elbow_m": 0.06, "lift_m": 0.022, "side_m": 0.085,
+    "enabled": true, "mirror": false, "face": "inner", "text_up": "custom", "rotate_deg": -145.4, "press": "both", "columns": 3,
+    "size_m": 0.063, "toward_elbow_m": 0.074, "lift_m": 0.013, "side_m": 0.087,
     "start_page": "Left hand main",
     "pages": {
       "Left hand main": { "title": "Left hand", "items": [
-        { "label": "Keyboard", "action": { "type": "keyboard" } },
+        { "label": "Quick save", "action": { "type": "key", "keys": "F5" } },
         { "label": "Pause", "action": { "type": "key", "keys": "Esc" } },
-        { "label": "Map", "action": { "type": "key", "keys": "M" } },
-        { "label": "Inventory", "action": { "type": "key", "keys": "I" } },
-        { "label": "Walk toggle", "action": { "type": "key", "keys": "LCtrl", "mode": "toggle" } },
-        { "label": "More", "action": { "type": "page", "page": "Left hand more (sub-page)" } }
+        { "label": "Monitor", "action": { "type": "screen", "mode": "toggle", "place": "wrist_left" } },
+        { "label": "Keyboard", "action": { "type": "keyboard" } },
+        { "label": "More", "action": { "type": "page", "page": "Left hand more (sub-page)" } },
+        { "label": "L-Ctrl toggle", "enabled": false, "action": { "type": "key", "keys": "LCtrl", "mode": "toggle" } },
+        { "label": "L-Shift toggle", "enabled": false, "action": { "type": "key", "keys": "LShift", "mode": "toggle" } },
+        { "label": "Right-click", "enabled": false, "action": { "type": "key", "keys": "RMB" } }
       ] },
       "Left hand more (sub-page)": { "title": "More", "items": [
-        { "label": "Quick save", "action": { "type": "key", "keys": "F5" } },
         { "label": "Quick load", "action": { "type": "key", "keys": "F9" } },
-        { "label": "Screenshot", "action": { "type": "key", "keys": "F12" } },
-        { "label": "Adjust positions", "action": { "type": "adjust" } },
         { "label": "Reload profile", "action": { "type": "reload" } },
-        { "label": "Screen", "action": { "type": "page", "page": "Screen (sub-page)" } },
+        { "label": "Calibrate Positions", "action": { "type": "adjust" } },
         { "label": "Controller offsets", "action": { "type": "controller_offsets", "mode": "panel" } },
         { "label": "Headset mirror", "action": { "type": "headset_mirror", "mode": "toggle" } },
-        { "label": "Hide", "action": { "type": "close" } }
+        { "label": "Screen options", "action": { "type": "page", "page": "Screen (sub-page)" } },
+        { "label": "Screenshot", "enabled": false, "action": { "type": "key", "keys": "F12" } },
+        { "label": "Hide", "enabled": false, "action": { "type": "close" } }
       ] },
       "Screen (sub-page)": { "title": "Screen", "items": [
         { "label": "On my wrist", "action": { "type": "screen", "mode": "toggle", "place": "wrist_left" } },

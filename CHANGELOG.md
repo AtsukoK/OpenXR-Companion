@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.2.8 (2026-11-20)
+
+### New
+- **New default left wrist panel** with the screen and calibration tools close at hand: Quick save, Pause, **Monitor** (screen on your wrist), Keyboard and More; under More: Quick load, Reload profile, **Calibrate Positions**, **Controller offsets**, **Headset mirror** and **Screen options** (place, monitor, window, frame rate). Smaller panel, placed a little further up the arm. Only new profiles get it; yours stays as it is (or add the buttons in the editor).
+
+### Fixed
+- **Headset mirror with steadying on no longer shows the picture's edges.** The crop leaves some room around it, and the steadied view never trails far enough to run past the edge of the game's picture.
+- Headset mirror is sharper: smooth shrinking when the window is smaller than the eye picture, and a sharper stretch when it is bigger.
+- The mirrored screen is hidden when seen from behind.
+
 ## v0.2.7 (2026-11-19)
 
 ### New

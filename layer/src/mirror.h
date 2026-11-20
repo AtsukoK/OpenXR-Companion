@@ -60,6 +60,7 @@ private:
     ID3D11RasterizerState* rast = nullptr;
     ID3DDeviceContextState* state = nullptr;
     ID3D11Texture2D* eyeCopy = nullptr;
+    bool eyeMips = false; // eyeCopy has a mip chain (made each frame)
     ID3D11ShaderResourceView* eyeSrv = nullptr;
     D3D11_TEXTURE2D_DESC eyeDesc{};
     int64_t eyeFmt = 0;

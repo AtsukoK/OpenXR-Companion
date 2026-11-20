@@ -132,8 +132,22 @@ V vs(uint id : SV_VertexID) {
     o.uv = float2((id & 1) ? UV.z : UV.x, (id & 2) ? UV.w : UV.y);
     return o;
 }
+// Catmull-Rom from 9 bilinear taps: a sharper stretch than plain linear when the window is bigger than the picture
+float4 Bicubic(float2 uv) {
+    float w, h; T.GetDimensions(w, h);
+    float2 sz = float2(w, h), p = uv * sz, t1 = floor(p - 0.5) + 0.5, f = p - t1;
+    float2 w0 = f * (-0.5 + f * (1.0 - 0.5 * f)), w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+    float2 w2 = f * (0.5 + f * (2.0 - 1.5 * f)), w3 = f * f * (-0.5 + 0.5 * f);
+    float2 w12 = w1 + w2, o12 = w2 / w12;
+    float2 t0 = (t1 - 1) / sz, t3 = (t1 + 2) / sz, t12 = (t1 + o12) / sz;
+    float4 c = 0;
+    c += T.SampleLevel(S, float2(t0.x, t0.y), 0) * w0.x * w0.y;   c += T.SampleLevel(S, float2(t12.x, t0.y), 0) * w12.x * w0.y;  c += T.SampleLevel(S, float2(t3.x, t0.y), 0) * w3.x * w0.y;
+    c += T.SampleLevel(S, float2(t0.x, t12.y), 0) * w0.x * w12.y; c += T.SampleLevel(S, float2(t12.x, t12.y), 0) * w12.x * w12.y; c += T.SampleLevel(S, float2(t3.x, t12.y), 0) * w3.x * w12.y;
+    c += T.SampleLevel(S, float2(t0.x, t3.y), 0) * w0.x * w3.y;   c += T.SampleLevel(S, float2(t12.x, t3.y), 0) * w12.x * w3.y;  c += T.SampleLevel(S, float2(t3.x, t3.y), 0) * w3.x * w3.y;
+    return saturate(c);
+}
 float4 ps(V i) : SV_Target {
-    float4 c = T.Sample(S, i.uv);
+    float4 c = Mode.y > 0.5 ? Bicubic(i.uv) : T.Sample(S, i.uv); // shrinking uses the mipmaps (trilinear)
     if (Mode.x < 0.5) return float4(c.rgb, 1);          // opaque
     if (Mode.x > 1.5) return float4(c.rgb * c.a, c.a);  // straight alpha -> premultiplied
     return c;                                           // premultiplied
@@ -271,16 +285,23 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
     if (!eyeCopy || eyeDesc.Width != (UINT)rc.extent.width || eyeDesc.Height != (UINT)rc.extent.height || eyeDesc.Format != td.Format || eyeFmt != esw.format) {
         SAFE_RELEASE(eyeSrv); SAFE_RELEASE(eyeCopy);
         D3D11_TEXTURE2D_DESC cdsc{};
-        cdsc.Width = rc.extent.width; cdsc.Height = rc.extent.height; cdsc.MipLevels = 1; cdsc.ArraySize = 1; cdsc.Format = td.Format;
-        cdsc.SampleDesc.Count = 1; cdsc.Usage = D3D11_USAGE_DEFAULT; cdsc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-        if (FAILED(dev->CreateTexture2D(&cdsc, nullptr, &eyeCopy))) { Log("mirror: copy texture failed (format %d)", td.Format); failed = true; return; }
-        D3D11_SHADER_RESOURCE_VIEW_DESC sd{}; sd.Format = ViewFormat(td.Format, esw.format); sd.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D; sd.Texture2D.MipLevels = 1;
-        if (FAILED(dev->CreateShaderResourceView(eyeCopy, &sd, &eyeSrv))) { Log("mirror: eye view failed (format %d / %lld)", td.Format, (long long)esw.format); failed = true; return; }
+        cdsc.Width = rc.extent.width; cdsc.Height = rc.extent.height; cdsc.MipLevels = 0; cdsc.ArraySize = 1; cdsc.Format = td.Format; // full mip chain, for smooth shrinking
+        cdsc.SampleDesc.Count = 1; cdsc.Usage = D3D11_USAGE_DEFAULT;
+        cdsc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET; cdsc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
+        D3D11_SHADER_RESOURCE_VIEW_DESC sd{}; sd.Format = ViewFormat(td.Format, esw.format); sd.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D; sd.Texture2D.MipLevels = (UINT)-1;
+        eyeMips = SUCCEEDED(dev->CreateTexture2D(&cdsc, nullptr, &eyeCopy)) && SUCCEEDED(dev->CreateShaderResourceView(eyeCopy, &sd, &eyeSrv));
+        if (!eyeMips) { // format can't make mipmaps: one level, as before
+            SAFE_RELEASE(eyeSrv); SAFE_RELEASE(eyeCopy);
+            cdsc.MipLevels = 1; cdsc.BindFlags = D3D11_BIND_SHADER_RESOURCE; cdsc.MiscFlags = 0; sd.Texture2D.MipLevels = 1;
+            if (FAILED(dev->CreateTexture2D(&cdsc, nullptr, &eyeCopy))) { Log("mirror: copy texture failed (format %d)", td.Format); failed = true; return; }
+        }
+        if (!eyeSrv && FAILED(dev->CreateShaderResourceView(eyeCopy, &sd, &eyeSrv))) { Log("mirror: eye view failed (format %d / %lld)", td.Format, (long long)esw.format); failed = true; return; }
         eyeDesc = cdsc; eyeFmt = esw.format;
-        Log("mirror: eye %dx%d format %d (asked %lld)", rc.extent.width, rc.extent.height, td.Format, (long long)esw.format);
+        Log("mirror: eye %dx%d format %d (asked %lld) mips %d", rc.extent.width, rc.extent.height, td.Format, (long long)esw.format, (int)eyeMips);
     }
     D3D11_BOX box{ (UINT)rc.offset.x, (UINT)rc.offset.y, 0, (UINT)(rc.offset.x + rc.extent.width), (UINT)(rc.offset.y + rc.extent.height), 1 };
     ctx->CopySubresourceRegion(eyeCopy, 0, 0, 0, 0, etex, D3D11CalcSubresource(0, view.subImage.imageArrayIndex, td.MipLevels), &box);
+    if (eyeMips) ctx->GenerateMips(eyeSrv);
 
     // Crop: centred on where the eye looks straight ahead, zoomed, then cut to the window's shape.
     const XrFovf& fov = view.fov;
@@ -297,9 +318,17 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
     // Also keep a small margin from every edge (the corners of the eye picture are masked too).
     (void)cu;
     const float m = 0.04f;
+    bool steady = smoothing > 0.001f;
+    if (steady) { // leave headroom round the crop so the steadied camera can lag without showing the picture's edges
+        const float hr = 0.07f, maxc = 1.f - 2 * (m + hr);
+        float s = std::min({ 1.f, maxc / cw, maxc / ch });
+        cw *= s; ch *= s;
+    }
     float cl = std::clamp(0.5f - cw / 2, std::min(m, (1.f - cw) / 2), std::max(1.f - m - cw, (1.f - cw) / 2));
     float ct = std::clamp(cv - ch / 2, std::min(m, (1.f - ch) / 2), std::max(1.f - m - ch, (1.f - ch) / 2));
 
+    // window pixels per eye pixel: above 1 the picture is stretched -> sharper bicubic stretch
+    bool magnify = W / (cw * ex) > 1.02f;
     struct CB { float P[4][4]; float UV[4]; float Mode[4]; } c{};
     ID3D11DeviceContext1* c1 = nullptr;
     if (FAILED(ctx->QueryInterface(IID_PPV_ARGS(&c1)))) { failed = true; return; }
@@ -315,7 +344,7 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
     ctx->VSSetConstantBuffers(0, 1, &cb); ctx->PSSetConstantBuffers(0, 1, &cb);
     ctx->PSSetSamplers(0, 1, &samp);
     auto draw = [&](ID3D11ShaderResourceView* srv, float mode, ID3D11BlendState* bs) {
-        c.Mode[0] = mode;
+        c.Mode[0] = mode; c.Mode[1] = srv == eyeSrv && magnify ? 1.f : 0.f;
         ctx->UpdateSubresource(cb, 0, nullptr, &c, 0, 0);
         ctx->OMSetBlendState(bs, nullptr, 0xffffffff);
         ctx->PSSetShaderResources(0, 1, &srv);
@@ -324,10 +353,29 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
     // Steadied camera: the head's real position, its direction smoothed (shakes ironed out, real turns
     // followed). Everything, the game's picture included, is drawn as seen from it.
     XrPosef cam = view.pose;
-    bool steady = smoothing > 0.001f;
     if (steady) {
         float dt = lastT && t > lastT ? (float)((t - lastT) * 1e-9) : 0.f;
         cam.orientation = camSmooth.Apply(view.pose, dt, smoothing).orientation;
+        // Never lag so far that the window runs past the eye picture's edge (or its masked border):
+        // pull the camera back toward the real eye just enough to stay inside the headroom.
+        const XrQuaternionf& real = view.pose.orientation;
+        Vec3 f = RotateInv(real, Rotate(cam.orientation, { 0, 0, -1 }));
+        if (f.z < -0.01f) {
+            float dx = f.x / -f.z, dy = f.y / -f.z;
+            float lx = (dx > 0 ? 1 - m - cl - cw : cl - m) * (tR - tL);
+            float ly = (dy > 0 ? ct - m : 1 - m - ct - ch) * (tU - tD);
+            lx = std::max(lx * 0.85f, 0.f); ly = std::max(ly * 0.85f, 0.f); // spare a little for roll
+            float k = 1.f;
+            if (std::fabs(dx) > lx) k = std::min(k, lx / std::fabs(dx));
+            if (std::fabs(dy) > ly) k = std::min(k, ly / std::fabs(dy));
+            if (k < 1.f) { // nlerp real -> smoothed by k
+                XrQuaternionf a = real, b = cam.orientation;
+                if (a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w < 0) { b.x = -b.x; b.y = -b.y; b.z = -b.z; b.w = -b.w; }
+                XrQuaternionf q{ a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k, a.z + (b.z - a.z) * k, a.w + (b.w - a.w) * k };
+                float n = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+                if (n > 1e-6f) { q.x /= n; q.y /= n; q.z /= n; q.w /= n; cam.orientation = q; }
+            }
+        } else cam.orientation = real;
     } else camSmooth.Reset();
     lastT = t;
     XrPosef eyeInv = PInv(cam);
