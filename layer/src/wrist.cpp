@@ -127,7 +127,7 @@ void Engine::UpdateWrist(int h) {
     const WristStyle& src = prof->WristPages(h); // whose pages are shown
     WristView& wv = wrist[h]; WristRun& R = wrun[h];
     auto hide = [&] {
-        if (grab.target == h) grab = GrabRun{};
+        if (grab.target == WristGrab(h)) grab = GrabRun{};
         if (wv.visible) { wv.visible = false; wv.hover = -1; wv.version++; Log("%s wrist panel hidden", h ? "right" : "left"); }
     };
     auto root = src.pages.find(src.start);
@@ -190,14 +190,14 @@ void Engine::UpdateWrist(int h) {
     bool settled = now - R.shownAt > 0.2; // nothing fires in the first moment
 
     // Adjust mode: the other hand's grip grabs the panel; it follows that hand, and its stick resizes.
-    if (grab.target == h && (!adjust || !cur[o][C_GRIP][F_PRESS] || !hr.gripValid)) {
+    if (grab.target == WristGrab(h) && (!adjust || !cur[o][C_GRIP][F_PRESS] || !hr.gripValid)) {
         grab = GrabRun{};
         if (prof->haptics) haptics.push_back({ o, prof->hapticAmp * 0.6f, 0.015f });
     }
-    if (adjust && grab.target < 0 && hr.gripValid && cur[o][C_GRIP][F_PRESS] && !prev[o][C_GRIP][F_PRESS]
+    if (adjust && !grab.Active() && hr.gripValid && cur[o][C_GRIP][F_PRESS] && !prev[o][C_GRIP][F_PRESS]
         && Len(V(hr.gripPose.position) - c) < W.size * 0.7f + 0.08f)
-        StartGrab(h, o, pose);
-    if (grab.target == h) {
+        StartGrab(WristGrab(h), o, pose);
+    if (grab.target == WristGrab(h)) {
         WristStyle& Wm = prof->wrist[h];
         // Keeps the grabbing hand's angle; saved relative to this arm's controller.
         Wm.pose = { true, PMul(PInv(fr.h[h].gripPose), GrabbedPose()) };

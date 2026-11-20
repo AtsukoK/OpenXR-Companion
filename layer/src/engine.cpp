@@ -285,7 +285,7 @@ void Engine::ProcessBindings() {
 
 // Adjust mode, wheel: grab the open wheel with the other hand's grip and move it; its stick resizes.
 void Engine::UpdateAdjustWheel() {
-    if (grab.target == 2 && (!adjust || !wr.open)) grab = GrabRun{};
+    if (grab.target == GrabTarget::Wheel && (!adjust || !wr.open)) grab = GrabRun{};
     // Adjust mode shows the main wheel by itself (again shortly after it is closed), following the hand.
     if (adjust && wr.open) adjustClosedAt = -1;
     else if (adjust && !kb.visible && prof->style.anchor.rfind("hand", 0) == 0) { // wheels in front of you aren't brought out: they got in the way (open one with its button to place it)
@@ -301,14 +301,14 @@ void Engine::UpdateAdjustWheel() {
             adjustClosedAt = -1;
         }
     }
-    if (!adjust || !wr.open || (grab.target >= 0 && grab.target != 2)) return;
+    if (!adjust || !wr.open || (grab.Active() && grab.target != GrabTarget::Wheel)) return;
     int g = 1 - wr.openerHand;
     const HandRaw& hr = fr.h[g];
     Style& st = prof->style;
     Vec3 c = V(wr.pose.position);
-    if (grab.target < 0) {
+    if (!grab.Active()) {
         bool edge = cur[g][C_GRIP][F_PRESS] && !prev[g][C_GRIP][F_PRESS];
-        if (edge && hr.gripValid && Len(V(hr.gripPose.position) - c) < st.radius + 0.08f) StartGrab(2, g, wr.pose);
+        if (edge && hr.gripValid && Len(V(hr.gripPose.position) - c) < st.radius + 0.08f) StartGrab(GrabTarget::Wheel, g, wr.pose);
         return;
     }
     if (!cur[g][C_GRIP][F_PRESS] || !hr.gripValid) {
@@ -323,7 +323,7 @@ void Engine::UpdateAdjustWheel() {
     wr.pose = obj;
 }
 
-void Engine::StartGrab(int target, int hand, const XrPosef& obj) {
+void Engine::StartGrab(GrabTarget target, int hand, const XrPosef& obj) {
     grab = GrabRun{}; grab.target = target; grab.hand = hand;
     grab.rel = PMul(PInv(fr.h[hand].gripPose), obj);
     if (prof->haptics) haptics.push_back({ hand, prof->hapticAmp, 0.02f });
@@ -526,7 +526,7 @@ void Engine::UpdatePointers() {
         if (offView.open && h != offGrabHand) test(offView.pose, offView.w / 2, offView.h / 2);
         int panel = 1 - h; // a hand points at the panel on the other arm
         const WristView& wv = wrist[panel];
-        bool wristUp = wv.visible && grab.target != panel;
+        bool wristUp = wv.visible && grab.target != WristGrab(panel);
         float dPanel = wristUp ? Len(V(wv.pose.position) - o) : 1e9f;
         // The laser stays until the touch cursor actually takes over (no gap where neither shows).
         if (wristUp && prof->wrist[panel].press != "poke" && !wv.cursor)
@@ -607,8 +607,8 @@ void Engine::ComputeBlocks() {
 void Engine::UpdateAdjustFade() {
     float want = 1.f;
     if (adjust && view.visible) {
-        if (grab.target == 2) want = 1.f;
-        else if (grab.target >= 0) want = 0.12f;
+        if (grab.target == GrabTarget::Wheel) want = 1.f;
+        else if (grab.Active()) want = 0.12f;
         else {
             float d = 1e9f;
             Vec3 c = V(view.pose.position);
@@ -741,29 +741,29 @@ void Engine::UpdateScreen() {
     bool wasShown = screen.shown;
     screen.shown = screen.on || adjust; // adjust mode shows it so it can be moved
     if (screen.shown && !wasShown) screenPlaceFront = true;
-    if (grab.target == 3 && !screen.shown) grab = GrabRun{};
+    if (grab.target == GrabTarget::Screen && !screen.shown) grab = GrabRun{};
     if (!screen.shown) { ApplyDock(); ScreenInteract(); return; }
     ScreenStyle& S = prof->screen;
     ScreenPose();
-    if (screen.poseValid && screen.place != "front" && grab.target != 3) {
+    if (screen.poseValid && screen.place != "front" && grab.target != GrabTarget::Screen) {
         float dt = (float)std::clamp(now - lastNow, 0.0, 0.25);
         screen.pose = screenSmooth.Apply(screen.pose, dt, S.smoothing);
     } else screenSmooth.Reset();
     ApplyDock(); // docked: the screen sits at the keyboard (or the keyboard at the screen) before pointing is checked
     ScreenInteract();
-    if (!adjust || !screen.poseValid || (grab.target >= 0 && grab.target != 3)) return;
+    if (!adjust || !screen.poseValid || (grab.Active() && grab.target != GrabTarget::Screen)) return;
     if (kb.visible && prof->dock.mode != 0) return; // docked: Adjust dock (on the keyboard's bar) places it
 
     // Adjust mode: a grip near the screen grabs it; it keeps the hand's angle, the stick resizes.
     bool onWrist = screen.place == "wrist_left" || screen.place == "wrist_right";
     int wh = screen.place == "wrist_left" ? 0 : 1;
     Vec3 c = V(screen.pose.position);
-    if (grab.target < 0) {
+    if (!grab.Active()) {
         for (int g = 0; g < 2; g++) {
             if (onWrist && g == wh) continue; // the arm it sits on can't grab it
             const HandRaw& hr = fr.h[g];
             if (!hr.gripValid || !cur[g][C_GRIP][F_PRESS] || prev[g][C_GRIP][F_PRESS]) continue;
-            if (Len(V(hr.gripPose.position) - c) < screen.widthM * 0.6f + 0.08f) { StartGrab(3, g, screen.pose); break; }
+            if (Len(V(hr.gripPose.position) - c) < screen.widthM * 0.6f + 0.08f) { StartGrab(GrabTarget::Screen, g, screen.pose); break; }
         }
         return;
     }

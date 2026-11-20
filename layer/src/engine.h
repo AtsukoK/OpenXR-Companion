@@ -136,6 +136,10 @@ struct OffsetView {
     uint64_t version = 0;
 };
 
+// Things that can be grabbed with a grip and placed by hand.
+enum class GrabTarget { None = -1, LeftWrist = 0, RightWrist = 1, Wheel, Screen, Keyboard, Dock };
+inline GrabTarget WristGrab(int hand) { return hand == 0 ? GrabTarget::LeftWrist : GrabTarget::RightWrist; }
+
 struct HapticReq { int hand; float amp; float sec; };
 // Laser pointer of one controller: a beam from the controller and a dot where it hits a wheel,
 // the keyboard or a wrist panel. Shown only while it is aimed at one of them.
@@ -209,9 +213,16 @@ private:
     std::vector<Pulse> pulses;
     WheelRun wr;
     double now = 0, lastNow = 0;
-    struct GrabRun { int target = -1; int hand = -1; Vec3 off; XrPosef rel{ {0,0,0,1}, {0,0,0} }; }; // target: 0/1 wrist panel, 2 wheel, 3 screen, 4 keyboard, 5 the docked one (Adjust dock)
+    // What a grip is holding while things are being placed by hand.
+    struct GrabRun {
+        GrabTarget target = GrabTarget::None;
+        int hand = -1;
+        Vec3 off;
+        XrPosef rel{ {0,0,0,1}, {0,0,0} };
+        bool Active() const { return target != GrabTarget::None; }
+    };
     // grabbing: the thing keeps the position and angle it had in the grabbing hand
-    void StartGrab(int target, int hand, const XrPosef& obj);
+    void StartGrab(GrabTarget target, int hand, const XrPosef& obj);
     XrPosef GrabbedPose() const;
     XrPosef WheelFrame(int hand) const;
     GrabRun grab;

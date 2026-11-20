@@ -67,7 +67,7 @@ void Engine::OpenKeyboard(int bi) {
 }
 
 void Engine::CloseKeyboard() {
-    if (kb.moving) { kb.moving = false; if (grab.target == 4) grab = GrabRun{}; saveRequested = true; }
+    if (kb.moving) { kb.moving = false; if (grab.target == GrabTarget::Keyboard) grab = GrabRun{}; saveRequested = true; }
     kb.visible = false; kb.version++;
     kbRepeatKey = kbRepeatHand = -1;
     Log("keyboard closed");
@@ -122,15 +122,15 @@ void Engine::KbPress(int i, int hand) {
 // Adjust mode: grab the keyboard with a grip and put it anywhere; the grabbing hand's stick changes its width.
 void Engine::UpdateAdjustKeyboard() {
     bool placing = adjust || kb.moving;
-    if (grab.target == 4 && (!placing || !kb.visible)) grab = GrabRun{};
-    if (!placing || !kb.visible || (grab.target >= 0 && grab.target != 4)) return;
+    if (grab.target == GrabTarget::Keyboard && (!placing || !kb.visible)) grab = GrabRun{};
+    if (!placing || !kb.visible || (grab.Active() && grab.target != GrabTarget::Keyboard)) return;
     if (prof->dock.mode == 2 && screen.shown) return; // docked under the screen: Adjust dock places it
-    if (grab.target < 0) {
+    if (!grab.Active()) {
         for (int h = 0; h < 2; h++) {
             const HandRaw& hr = fr.h[h];
             if (!hr.gripValid || !cur[h][C_GRIP][F_PRESS] || prev[h][C_GRIP][F_PRESS]) continue;
             Vec3 l = RotateInv(kb.pose.orientation, V(hr.gripPose.position) - V(kb.pose.position));
-            if (std::fabs(l.x) < kb.widthM / 2 + 0.06f && std::fabs(l.y) < kb.heightM / 2 + 0.06f && std::fabs(l.z) < 0.12f) { StartGrab(4, h, kb.pose); return; }
+            if (std::fabs(l.x) < kb.widthM / 2 + 0.06f && std::fabs(l.y) < kb.heightM / 2 + 0.06f && std::fabs(l.z) < 0.12f) { StartGrab(GrabTarget::Keyboard, h, kb.pose); return; }
         }
         return;
     }
@@ -201,15 +201,15 @@ XrPosef Engine::DockRel() const {
 
 void Engine::ApplyDock() {
     DockStyle& D = prof->dock;
-    if (!kb.visible) { dockAdjust = false; if (grab.target == 5) grab = GrabRun{}; return; }
-    if (D.mode == 0 || !screen.shown || !screen.poseValid) { if (grab.target == 5) grab = GrabRun{}; return; }
+    if (!kb.visible) { dockAdjust = false; if (grab.target == GrabTarget::Dock) grab = GrabRun{}; return; }
+    if (D.mode == 0 || !screen.shown || !screen.poseValid) { if (grab.target == GrabTarget::Dock) grab = GrabRun{}; return; }
     XrPosef rel = DockRel();
     if (D.mode == 1) { screen.pose = PMul(kb.pose, rel); screen.widthM = DockScreenWidth(); }
     else kb.pose = PMul(screen.pose, PInv(rel));
-    if (!dockAdjust || (grab.target >= 0 && grab.target != 5)) return;
+    if (!dockAdjust || (grab.Active() && grab.target != GrabTarget::Dock)) return;
 
     // Adjust dock: grab the one that follows (the screen, or the keyboard) and put it where you like.
-    if (grab.target < 0) {
+    if (!grab.Active()) {
         for (int h = 0; h < 2; h++) {
             const HandRaw& hr = fr.h[h];
             if (!hr.gripValid || !cur[h][C_GRIP][F_PRESS] || prev[h][C_GRIP][F_PRESS]) continue;
@@ -220,7 +220,7 @@ void Engine::ApplyDock() {
                 Vec3 l = RotateInv(kb.pose.orientation, gp - V(kb.pose.position));
                 isClose = std::fabs(l.x) < kb.widthM / 2 + 0.06f && std::fabs(l.y) < kb.heightM / 2 + 0.06f && std::fabs(l.z) < 0.12f;
             }
-            if (isClose) { StartGrab(5, h, D.mode == 1 ? screen.pose : kb.pose); return; }
+            if (isClose) { StartGrab(GrabTarget::Dock, h, D.mode == 1 ? screen.pose : kb.pose); return; }
         }
         return;
     }
@@ -247,9 +247,9 @@ void Engine::KbToggleMove() {
     if (!kb.moving && prof->dock.mode == 2 && screen.shown) { Toast("Docked under the screen: use Adjust dock to place it", 3.0); return; }
     kb.moving = !kb.moving;
     if (kb.moving) {
-        if (dockAdjust) { dockAdjust = false; if (grab.target == 5) grab = GrabRun{}; }
+        if (dockAdjust) { dockAdjust = false; if (grab.target == GrabTarget::Dock) grab = GrabRun{}; }
         Toast("Grab the keyboard with a grip to move it, stick = size. Press Done when finished", 4.0);
-    } else { if (grab.target == 4) grab = GrabRun{}; saveRequested = true; Toast("Keyboard position saved", 2.0); }
+    } else { if (grab.target == GrabTarget::Keyboard) grab = GrabRun{}; saveRequested = true; Toast("Keyboard position saved", 2.0); }
     kb.version++;
 }
 
@@ -297,7 +297,7 @@ void Engine::KbBarActivate(int cell) {
     case 2:
         if (D.mode == 0) { Toast("Dock the screen or the keys first", 2.5); break; }
         dockAdjust = !dockAdjust;
-        if (dockAdjust && kb.moving) { kb.moving = false; if (grab.target == 4) grab = GrabRun{}; }
+        if (dockAdjust && kb.moving) { kb.moving = false; if (grab.target == GrabTarget::Keyboard) grab = GrabRun{}; }
         if (dockAdjust) Toast(D.mode == 1 ? "Grab the screen with a grip to place it (stick: size)" : "Grab the keyboard with a grip to place it", 4.0);
         else { saveRequested = true; Toast("Dock saved", 2.0); }
         break;
