@@ -27,8 +27,8 @@ void Engine::SetProfile(std::shared_ptr<Profile> p) {
         } else if (screen.on)
             scr.placeFront = true;
         offs = prof->offsets; // controller offsets: the file's values (also after the editor saves)
-        off.sel = offs.linkHands ? 2 : (off.sel == 2 ? 1 : off.sel);
-        off.kind = offs.aimSame ? 2 : (off.kind == 2 ? 0 : off.kind);
+        offsetsPanel.run_.sel = offs.linkHands ? 2 : (offsetsPanel.run_.sel == 2 ? 1 : offsetsPanel.run_.sel);
+        offsetsPanel.run_.kind = offs.aimSame ? 2 : (offsetsPanel.run_.kind == 2 ? 0 : offsetsPanel.run_.kind);
     }
 }
 
@@ -45,10 +45,10 @@ void Engine::Reset() {
     adjustClosedAt = -1;
     offView.open = false;
     offView.version++;
-    off.grabArmed = false;
+    offsetsPanel.run_.grabArmed = false;
     offGrabHand = -1;
-    off.uiHand = -1;
-    off.saveAt = -1;
+    offsetsPanel.run_.uiHand = -1;
+    offsetsPanel.run_.saveAt = -1;
     if (scr.mouseL) Keys::MouseButton(0, false);
     if (scr.mouseR) Keys::MouseButton(1, false);
     scr.mouseL = scr.mouseR = false;
@@ -533,8 +533,8 @@ void Engine::ComputeBlocks() {
         want[h][C_TRIGGER] = want[h][C_BTN1] = want[h][C_STICK] = true;
     }
     if (scr.uiHand >= 0) want[scr.uiHand][C_TRIGGER] = true;
-    if (off.uiHand >= 0) want[off.uiHand][C_TRIGGER] = want[off.uiHand][C_STICK] = true;
-    if (off.grabArmed || offGrabHand >= 0) want[0][C_GRIP] = want[1][C_GRIP] = true; // grab-to-set uses the grips
+    if (offsetsPanel.run_.uiHand >= 0) want[offsetsPanel.run_.uiHand][C_TRIGGER] = want[offsetsPanel.run_.uiHand][C_STICK] = true;
+    if (offsetsPanel.run_.grabArmed || offGrabHand >= 0) want[0][C_GRIP] = want[1][C_GRIP] = true; // grab-to-set uses the grips
     for (int h = 0; h < 2; h++) // the pressing (other) hand's trigger belongs to the panel while over a button
         if (wrist[h].visible && wrist[h].hover >= 0) want[1 - h][C_TRIGGER] = true;
     for (int h = 0; h < 2; h++)
@@ -605,7 +605,7 @@ void Engine::Update(const Frame& f) {
     UpdateWrist(1);
     UpdateScreen(); // places a docked screen/keyboard too, before the screen takes the pointer
     UpdateKbBar();
-    UpdateOffsets();
+    offsetsPanel.Update();
     ComputeBlocks();
     UpdatePointers();
     lastNow = now;
@@ -632,4 +632,12 @@ void Engine::Update(const Frame& f) {
         }
         view.size = prof->style.radius * 2.f;
     }
+}
+
+bool Engine::OffsetPose(int hand, int kind, XrPosef& out) const {
+    return offsetsPanel.OffsetPose(hand, kind, out);
+}
+
+void Engine::OffsetsAction(const Action& a) {
+    offsetsPanel.OffsetsAction(a);
 }

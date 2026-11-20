@@ -1,5 +1,6 @@
 #pragma once
 #include "config.h"
+#include "offsets_panel.h"
 #include <set>
 
 struct HandRaw {
@@ -187,7 +188,11 @@ struct PointerView {
 };
 
 class Engine {
+    friend class OffsetsPanel;
+
 public:
+    void OffsetsAction(const Action& a); // panel, enable, on, off, grab, reset
+    bool OffsetPose(int hand, int kind, XrPosef& out) const;
     std::shared_ptr<Profile> prof;
     WheelView view;
     KeyboardView kb;
@@ -201,8 +206,6 @@ public:
     bool mirrorOn = false;                         // set by the layer
     int offGrabHand = -1;                          // grab-to-set running on this hand (its grip is held)
     // The pose the game's grip (kind 0) or aim (kind 1) space of a hand is moved by; false = leave it.
-    bool OffsetPose(int hand, int kind, XrPosef& out) const;
-    void OffsetsAction(const Action& a); // panel, enable, on, off, grab, reset
     std::string toast;
     uint64_t toastVersion = 0;
     double toastUntil = 0;
@@ -224,6 +227,7 @@ public:
     void ScreenAction(const Action& a); // screen on/off, monitor, frame rate, place
 
 private:
+    OffsetsPanel offsetsPanel{ *this };
     struct BState {
         bool armed = false;
         double armTime = 0;
@@ -333,23 +337,6 @@ private:
     void ScreenPose();
 
     // ---------------- controller offsets panel (offsets.cpp)
-    struct OffsetsRun {
-        int sel = 2;             // 0 left, 1 right, 2 both hands (linked)
-        int kind = 2;            // 0 grip, 1 aim, 2 both
-        int step = 1;            // index into the step sizes
-        bool grabArmed = false;  // waiting for a grip to start grab-to-set
-        double grabArmedAt = -1; // it gives up after a few seconds without a grip
-        XrQuaternionf grabStart{ 0, 0, 0, 1 };
-        HandOffset grabFrom[2]; // [kind] at the start of the grab
-        int uiHand = -1, repeatCell = -1;
-        double repeatAt = 0, flashUntil = 0, saveAt = -1;
-    } off;
-    void OpenOffsets();
-    void UpdateOffsets();
-    void BuildOffsetPanel();
-    void OffsetCell(int cell, bool repeat);
-    void OffsetsChanged();
-    HandOffset& EditOffset(int hand, int kind);
 
     // ---------------- bindings, wheel, pointers (engine.cpp, wheel.cpp)
     bool Down(const InputId& i) const { return cur[i.hand][i.comp][i.feat]; }
