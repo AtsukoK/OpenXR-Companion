@@ -261,7 +261,7 @@ void Engine::UpdateKbBar() {
         D.mode == 1 ? "Undock\nscreen" : "Dock screen\nabove keys",
         D.mode == 2 ? "Undock\nkeys" : "Dock keys\nunder screen",
         dockAdjust ? "Done\nadjusting" : "Adjust\ndock",
-        kb.moving ? "Done\nmoving" : "Move\nkeyboard",
+        kb.moving ? "Done\nadjusting" : "Adjust\nkeyboard",
         "Close\nkeyboard" };
     if (labels != kb.barLabels) { kb.barLabels = labels; kb.barVersion++; }
     kb.barW = kb.widthM * 0.9f; kb.barH = kb.barW / 10.8f;
