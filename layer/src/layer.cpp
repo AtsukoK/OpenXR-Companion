@@ -7,6 +7,7 @@
 #include "tracking_log.h"
 #include "head_smoothing.h"
 #include "game_offsets.h"
+#include "overlay.h"
 #include <openxr/openxr_loader_negotiation.h>
 #include <unordered_map>
 #include <map>
@@ -126,20 +127,8 @@ static XrTime gPredTime = 0;
 static uint64_t gSyncIdx = 0;
 
 static Engine gEng;
-static Panel gWheelPanel, gToastPanel, gKbPanel, gWristPanel[2], gCursorPanel[2];
-static uint64_t gDrawnWrist[2] = { ~0ull, ~0ull };
-static int gDrawnCursor[2] = { -1, -1 };
-static Panel gDotPanel, gBeamPanel; static bool gDrawnPointer = false;
-static Panel gFingerPanel; static bool gDrawnFinger = false;
-static uint64_t gWinAsk = 0; static std::string gPickedExe, gPickedTitle;
 static void MarkOwnSave();
-static Panel gBarPanel, gPickPanel; static uint64_t gDrawnBar = ~0ull, gDrawnPick = ~0ull;
-static Panel gScreenPanel; static ScreenCapture gCap; static std::vector<uint32_t> gScreenPix; static uint64_t gScreenMsgVer = 0;
-static uint64_t gDrawnKb = ~0ull;
-static Panel gKbBarPanel; static uint64_t gDrawnKbBar = ~0ull;
-static uint64_t gDrawnWheel = ~0ull, gDrawnToast = ~0ull;
-static int gWheelTex = 0;
-static std::vector<uint32_t> gPix;
+static OverlayRenderer gOverlay(gEng);   // everything we draw into the headset
 
 // ---------------------------------------------------------------- controller offsets for the game
 // The game's hand pose actions (from its suggested bindings) and the spaces it makes from them.
@@ -147,7 +136,6 @@ static std::vector<uint32_t> gPix;
 struct PoseBind { int hand; PoseKind kind; };
 static std::unordered_map<uint64_t, std::vector<PoseBind>> gPoseBinds; // action -> bindings (under gMx)
 static GameHandOffsets gHandOffsets;
-static Panel gOffPanel; static uint64_t gDrawnOff = ~0ull;
 
 struct Track { uint64_t sync = ~0ull; float prev[2]{}, cur[2]{}; };
 static std::unordered_map<uint64_t, Track> gTrack;
@@ -217,7 +205,7 @@ static void ReloadProfile(bool announce) {
         return;
     }
     gEng.SetProfile(p);
-    gDrawnWheel = gDrawnKb = ~0ull; gDrawnWrist[0] = gDrawnWrist[1] = ~0ull; gDrawnPointer = false; gDrawnFinger = false; gDrawnCursor[0] = gDrawnCursor[1] = -1;
+    gOverlay.InvalidateAll();
     Log("loaded profile %s (%zu bindings, %zu wheels, enabled=%d)", p->sourceName.c_str(), p->bindings.size(), p->wheels.size(), p->enabled);
     if (announce) gEng.Toast("OpenXR Companion: " + p->sourceName + " loaded");
 }
@@ -277,7 +265,6 @@ static void CheckInteractionProfiles(double now) {
     }
 }
 
-static XrPosef gHeadNow{ {0,0,0,1}, {0,0,0} }; static bool gHeadNowValid = false; // head in gLocal, last update
 
 // Head smoothing settings: read when the game starts, then whenever the editor changes the file.
 static void CheckHeadSmoothingFile() {
@@ -325,7 +312,7 @@ static void ReadInputsAndUpdate() {
         r.touchCtl = gTouchCtl[h];
     }
     f.headValid = Locate(gView, gLocal, f.head);
-    gHeadNow = f.head; gHeadNowValid = f.headValid;
+    gOverlay.SetHead(f.head, f.headValid);
     gEng.Update(f);
 
     for (auto& hq : gEng.haptics) {
@@ -472,8 +459,19 @@ static XrResult XRAPI_CALL Hook_xrCreateSession(XrInstance inst, const XrSession
     return r;
 }
 
+// What the overlay needs from the session to draw.
+static OverlayContext OverlayCtx() {
+    OverlayContext c;
+    c.session = gSess;
+    c.gfx = &gGfx;
+    c.swap = &gSwap;
+    c.local = gLocal;
+    c.view = gView;
+    return c;
+}
+
 static void DestroySessionStuff() {
-    gWheelPanel.Destroy(gSwap); gToastPanel.Destroy(gSwap); gKbPanel.Destroy(gSwap); gDrawnKb = ~0ull; gKbBarPanel.Destroy(gSwap); gDrawnKbBar = ~0ull; for (int h = 0; h < 2; h++) { gWristPanel[h].Destroy(gSwap); gDrawnWrist[h] = ~0ull; gCursorPanel[h].Destroy(gSwap); gDrawnCursor[h] = -1; } gDotPanel.Destroy(gSwap); gBeamPanel.Destroy(gSwap); gDrawnPointer = false; gFingerPanel.Destroy(gSwap); gDrawnFinger = false; gScreenPanel.Destroy(gSwap); gCap.Stop(); gBarPanel.Destroy(gSwap); gPickPanel.Destroy(gSwap); gDrawnBar = gDrawnPick = ~0ull; gOffPanel.Destroy(gSwap); gDrawnOff = ~0ull;
+    gOverlay.Destroy(OverlayCtx());
     gHandOffsets.Clear();
     for (int h = 0; h < 2; h++) {
         if (gGripSp[h]) N.DestroySpace(gGripSp[h]);
@@ -487,7 +485,6 @@ static void DestroySessionStuff() {
     gMirror.Shutdown();
     gGfx.Release();
     gSess = XR_NULL_HANDLE; gAttached = false; gPredTime = 0;
-    gDrawnWheel = gDrawnToast = ~0ull;
 }
 
 static XrResult XRAPI_CALL Hook_xrDestroySession(XrSession s) {
@@ -790,323 +787,8 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
         l.unlock();
         return N.EndFrame(s, fi);
     }
-    std::vector<const XrCompositionLayerBaseHeader*> layers(fi->layers, fi->layers + fi->layerCount);
-    XrCompositionLayerQuad kbq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, wq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, tq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, kq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, rq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, cq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, pq[4]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } }, fq[2]{ { XR_TYPE_COMPOSITION_LAYER_QUAD }, { XR_TYPE_COMPOSITION_LAYER_QUAD } };
-    const Profile& p = *gEng.prof;
-    XrCompositionLayerQuad sq{ XR_TYPE_COMPOSITION_LAYER_QUAD };
-
-    // Mirrored desktop monitor, under the menus. Captured on its own thread while it is on.
-    if (gEng.screen.shown && gLocal) {
-        const ScreenStyle& S = p.screen;
-        int maxW = S.maxPx > 0 ? S.maxPx : (sizeof(void*) == 4 ? 1280 : 1920); // 32-bit games are short on memory
-        ScreenView& sv = gEng.screen;
-        if (sv.source == "window" && (sv.windowAsk != gWinAsk || !IsWindow((HWND)sv.hwnd) || gCap.WindowGone())) {
-            bool asked = sv.windowAsk != gWinAsk; gWinAsk = sv.windowAsk;
-            auto wins = ScreenCapture::Windows();
-            auto low = [](std::string s) { for (auto& c : s) c = (char)tolower((unsigned char)c); return s; };
-            int cur = -1;
-            for (int i = 0; i < (int)wins.size(); i++) if (wins[i].hwnd == sv.hwnd) cur = i;
-            int pick = -1;
-            if (!sv.windowTitle.empty()) // the window picked last time, if it's still open with the same title
-                for (int i = 0; i < (int)wins.size() && pick < 0; i++) if (wins[i].title == sv.windowTitle) pick = i;
-            if (pick >= 0) {}
-            else if (!sv.windowMatch.empty()) {
-                std::string m = low(sv.windowMatch);
-                for (int i = 0; i < (int)wins.size() && pick < 0; i++) if (low(wins[i].title).find(m) != std::string::npos || low(wins[i].exe).find(m) != std::string::npos) pick = i;
-                if (pick < 0) gEng.Toast("Screen: no open window matches '" + sv.windowMatch + "'", 3.0);
-            } else if (!wins.empty()) {
-                int step = sv.windowStep ? sv.windowStep : 0;
-                pick = cur < 0 ? (step < 0 ? (int)wins.size() - 1 : 0) : ((cur + step) % (int)wins.size() + (int)wins.size()) % (int)wins.size();
-            }
-            sv.windowStep = 0; sv.windowMatch.clear(); sv.windowTitle.clear();
-            if (pick < 0) { // nothing to show: back to the monitor
-                if (wins.empty()) gEng.Toast("Screen: no window to show", 2.5);
-                sv.source = "monitor"; sv.hwnd = 0;
-            } else {
-                bool changed = wins[pick].hwnd != sv.hwnd;
-                sv.hwnd = wins[pick].hwnd;
-                if (asked || changed) gEng.Toast("Screen: " + (wins[pick].title.size() > 48 ? wins[pick].title.substr(0, 45) + "..." : wins[pick].title), 2.0);
-                Log("screen window: %s (%s)", wins[pick].title.c_str(), wins[pick].exe.c_str());
-                std::string exe = low(wins[pick].exe); size_t dot = exe.rfind('.'); if (dot != std::string::npos) exe = exe.substr(0, dot);
-                gPickedExe = exe; gPickedTitle = wins[pick].title;
-            }
-        }
-        // Picked in the headset: that monitor / window is the default from now on.
-        if (sv.choiceChanged && sv.windowAsk == gWinAsk) {
-            sv.choiceChanged = false;
-            ScreenStyle& PS = gEng.prof->screen;
-            PS.source = sv.source;
-            if (sv.source == "window") { PS.window = gPickedExe; PS.windowTitle = gPickedTitle; }
-            else PS.monitor = sv.monitor;
-            std::string err;
-            if (SaveScreenChoice(*gEng.prof, err)) { MarkOwnSave(); Log("screen: remembered %s", sv.source == "window" ? gPickedTitle.c_str() : ("monitor " + std::to_string(sv.monitor)).c_str()); }
-            else Log("screen: could not remember the choice: %s", err.c_str());
-        }
-        if (sv.source != "window") sv.hwnd = 0;
-        if (sv.wantChoices) { // picker list: monitors, then open windows
-            sv.wantChoices = false;
-            std::vector<ScreenChoice> ch;
-            auto mons = ScreenCapture::Monitors();
-            for (int i = 0; i < (int)mons.size(); i++) {
-                ScreenChoice c; c.monitor = i + 1;
-                c.label = "Monitor " + std::to_string(i + 1) + (mons[i].primary ? " (main)" : "") + "\n" + std::to_string(mons[i].w) + " x " + std::to_string(mons[i].h);
-                int curMon = sv.monitor == 0 ? sv.primaryIndex : sv.monitor;
-                c.current = sv.source != "window" && curMon == i + 1;
-                ch.push_back(c);
-            }
-            for (auto& w : ScreenCapture::Windows()) {
-                ScreenChoice c; c.hwnd = w.hwnd;
-                std::string exe = w.exe; size_t dot = exe.rfind('.'); if (dot != std::string::npos) exe = exe.substr(0, dot);
-                std::string t = w.title.size() > 60 ? w.title.substr(0, 57) + "..." : w.title;
-                c.label = exe + "\n" + t;
-                c.current = sv.source == "window" && sv.hwnd == w.hwnd;
-                ch.push_back(c);
-            }
-            sv.choices = std::move(ch); sv.choicesVersion++;
-        }
-        gCap.Configure(sv.monitor, sv.hwnd, sv.fps, maxW, S.cursor, S.opacity);
-        int n, prim, shown; std::string msg; uint64_t mv;
-        gCap.Status(n, prim, shown, msg, mv);
-        if (n > 0) { gEng.screen.monitorCount = n; gEng.screen.primaryIndex = prim; }
-        gCap.Rect(gEng.screen.monX, gEng.screen.monY, gEng.screen.monW, gEng.screen.monH);
-        if (gScreenPanel.w > 0) gEng.screen.aspect = (float)gScreenPanel.h / gScreenPanel.w;
-        if (mv != gScreenMsgVer) {
-            gScreenMsgVer = mv;
-            if (msg.find("can't") != std::string::npos || msg.find("no monitor") != std::string::npos) gEng.Toast("Screen: " + msg, 4.0);
-        }
-        int fw, fh;
-        if (gCap.TakeFrame(gScreenPix, fw, fh)) {
-            if (gScreenPanel.sc && (gScreenPanel.w != fw || gScreenPanel.h != fh)) gScreenPanel.Destroy(gSwap);
-            if (!gScreenPanel.sc) gScreenPanel.Create(gSess, gGfx, gSwap, fw, fh);
-            if (gScreenPanel.sc) gScreenPanel.Upload(gGfx, gSwap, gScreenPix);
-        }
-        // a quad layer shows from both sides: hide the screen when the head is behind it
-        bool screenFront = true;
-        if (gHeadNowValid) {
-            const XrPosef& sp = gEng.screen.pose;
-            screenFront = Dot(Rotate(sp.orientation, { 0, 0, 1 }), V(gHeadNow.position) - V(sp.position)) > 0.f;
-        }
-        if (gScreenPanel.ready && gEng.screen.poseValid && gScreenPanel.w > 0 && screenFront) {
-            sq.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-            sq.space = gLocal;
-            sq.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-            sq.subImage.swapchain = gScreenPanel.sc;
-            sq.subImage.imageRect = { {0, 0}, {gScreenPanel.w, gScreenPanel.h} };
-            sq.pose = gEng.screen.pose;
-            sq.size = { gEng.screen.widthM, gEng.screen.widthM * gScreenPanel.h / gScreenPanel.w };
-            layers.push_back((const XrCompositionLayerBaseHeader*)&sq);
-        }
-        // button bar under the screen and the picker in front of it
-        static XrCompositionLayerQuad bq{ XR_TYPE_COMPOSITION_LAYER_QUAD }, kq2{ XR_TYPE_COMPOSITION_LAYER_QUAD };
-        auto drawPanel = [&](Panel& pn, uint64_t& drawn, int W, int H, const std::string& title, const std::vector<std::string>& labels, int cols, int hover, int pressed,
-                             XrCompositionLayerQuad& q, const XrPosef& pose, float wM, float hM) {
-            if (pn.sc && (pn.w != W || pn.h != H)) { pn.Destroy(gSwap); drawn = ~0ull; }
-            if (!pn.sc) pn.Create(gSess, gGfx, gSwap, W, H);
-            if (pn.sc && drawn != gEng.screen.uiVersion) { std::vector<uint32_t> px; DrawList(px, W, H, title, labels, cols, hover, pressed, p.style); if (pn.Upload(gGfx, gSwap, px)) drawn = gEng.screen.uiVersion; }
-            if (!pn.ready) return;
-            q = XrCompositionLayerQuad{ XR_TYPE_COMPOSITION_LAYER_QUAD };
-            q.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT; q.space = gLocal; q.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-            q.subImage.swapchain = pn.sc; q.subImage.imageRect = { {0, 0}, {W, H} };
-            q.pose = pose; q.size = { wM, hM };
-            layers.push_back((const XrCompositionLayerBaseHeader*)&q);
-        };
-        if (sv.barVisible && sv.poseValid && screenFront)
-            drawPanel(gBarPanel, gDrawnBar, 1200, (int)(1200 * sv.barH / sv.barW), "", sv.barLabels, (int)sv.barLabels.size(), sv.barHover, sv.barPressed, bq, sv.barPose, sv.barW, sv.barH);
-        if (sv.pickOpen && sv.poseValid && screenFront)
-            drawPanel(gPickPanel, gDrawnPick, 1000, (int)(1000 * sv.pickH / sv.pickW), sv.pickTitle, sv.pickLabels, sv.pickCols, sv.pickHover, sv.pickPressed, kq2, sv.pickPose, sv.pickW, sv.pickH);
-    } else if (gCap.Running() || gScreenPanel.sc) {
-        gCap.Stop(); gScreenPanel.Destroy(gSwap); gScreenPix.clear(); gScreenPix.shrink_to_fit();
-        gBarPanel.Destroy(gSwap); gPickPanel.Destroy(gSwap); gDrawnBar = gDrawnPick = ~0ull;
-    }
-
-    if (gEng.view.visible && gLocal) {
-        int tex = p.style.texSize;
-        if (gWheelPanel.sc && gWheelTex != tex) { gWheelPanel.Destroy(gSwap); gDrawnWheel = ~0ull; }
-        if (!gWheelPanel.sc && gWheelPanel.Create(gSess, gGfx, gSwap, tex, tex)) gWheelTex = tex;
-        if (gWheelPanel.sc && gDrawnWheel != gEng.view.version) {
-            DrawWheel(gPix, tex, p, gEng.view);
-            if (gEng.view.alpha < 0.999f) { // see-through (premultiplied: scale every channel)
-                uint32_t a = (uint32_t)(std::min(std::max(gEng.view.alpha, 0.f), 1.f) * 256.f);
-                for (auto& px : gPix) {
-                    uint32_t rb = ((px & 0x00FF00FFu) * a >> 8) & 0x00FF00FFu, ga = (((px >> 8) & 0x00FF00FFu) * a) & 0xFF00FF00u;
-                    px = rb | ga;
-                }
-            }
-            if (gWheelPanel.Upload(gGfx, gSwap, gPix)) gDrawnWheel = gEng.view.version;
-        }
-        if (gWheelPanel.ready) {
-            wq.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-            wq.space = gLocal;
-            wq.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-            wq.subImage.swapchain = gWheelPanel.sc;
-            wq.subImage.imageRect = { {0, 0}, {gWheelPanel.w, gWheelPanel.h} };
-            wq.pose = gEng.view.pose;
-            wq.size = { gEng.view.size, gEng.view.size };
-            layers.push_back((const XrCompositionLayerBaseHeader*)&wq);
-        }
-    }
-    if (gEng.kb.visible && gLocal) {
-        const int KW = 1500;
-        float uw, uh; KbLayout(uw, uh);
-        const int KH = (int)(KW * uh / uw);
-        if (!gKbPanel.sc) gKbPanel.Create(gSess, gGfx, gSwap, KW, KH);
-        if (gKbPanel.sc && gDrawnKb != gEng.kb.version) {
-            DrawKeyboard(gPix, KW, KH, gEng.kb, p.style);
-            if (gKbPanel.Upload(gGfx, gSwap, gPix)) gDrawnKb = gEng.kb.version;
-        }
-        if (gKbPanel.ready) {
-            kq.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-            kq.space = gLocal;
-            kq.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-            kq.subImage.swapchain = gKbPanel.sc;
-            kq.subImage.imageRect = { {0, 0}, {KW, KH} };
-            kq.pose = gEng.kb.pose;
-            kq.size = { gEng.kb.widthM, gEng.kb.heightM };
-            layers.push_back((const XrCompositionLayerBaseHeader*)&kq);
-        }
-        { // the docking bar under it
-            const KeyboardView& K = gEng.kb;
-            const int BW = 1200, BH = std::max(40, (int)(BW * K.barH / K.barW));
-            if (gKbBarPanel.sc && (gKbBarPanel.w != BW || gKbBarPanel.h != BH)) { gKbBarPanel.Destroy(gSwap); gDrawnKbBar = ~0ull; }
-            if (!gKbBarPanel.sc) gKbBarPanel.Create(gSess, gGfx, gSwap, BW, BH);
-            if (gKbBarPanel.sc && gDrawnKbBar != K.barVersion && !K.barLabels.empty()) {
-                std::vector<uint32_t> px; DrawList(px, BW, BH, "", K.barLabels, (int)K.barLabels.size(), K.barHover, K.barPressed, p.style);
-                if (gKbBarPanel.Upload(gGfx, gSwap, px)) gDrawnKbBar = K.barVersion;
-            }
-            if (gKbBarPanel.ready) {
-                kbq.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT; kbq.space = gLocal; kbq.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-                kbq.subImage.swapchain = gKbBarPanel.sc; kbq.subImage.imageRect = { {0, 0}, {BW, BH} };
-                kbq.pose = K.barPose; kbq.size = { K.barW, K.barH };
-                layers.push_back((const XrCompositionLayerBaseHeader*)&kbq);
-            }
-        }
-    }
-    for (int h = 0; h < 2; h++) {
-        const WristView& wv = gEng.wrist[h];
-        if (!wv.visible || !gLocal) continue;
-        const int WS = 512;
-        Panel& pn = gWristPanel[h];
-        if (!pn.sc) pn.Create(gSess, gGfx, gSwap, WS, WS);
-        if (pn.sc && gDrawnWrist[h] != wv.version) {
-            DrawWrist(gPix, WS, p, p.wrist[h], wv);
-            if (pn.Upload(gGfx, gSwap, gPix)) gDrawnWrist[h] = wv.version;
-        }
-        if (pn.ready) {
-            auto& q = rq[h];
-            q.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-            q.space = gLocal;
-            q.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-            q.subImage.swapchain = pn.sc;
-            q.subImage.imageRect = { {0, 0}, {WS, WS} };
-            q.pose = wv.pose;
-            q.size = { wv.sizeM, wv.sizeM };
-            layers.push_back((const XrCompositionLayerBaseHeader*)&q);
-        }
-        // Touch cursor on top of the panel: redrawn only when its look changes, moved every frame.
-        if (pn.ready && wv.cursor) {
-            const int CS = 128;
-            Panel& cp = gCursorPanel[h];
-            if (!cp.sc) cp.Create(gSess, gGfx, gSwap, CS, CS);
-            if (cp.sc && gDrawnCursor[h] != wv.cursorLevel) {
-                std::vector<uint32_t> px;
-                DrawCursor(px, CS, wv.cursorLevel, p.style);
-                if (cp.Upload(gGfx, gSwap, px)) gDrawnCursor[h] = wv.cursorLevel;
-            }
-            if (cp.ready) {
-                auto& q = cq[h];
-                q.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-                q.space = gLocal;
-                q.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-                q.subImage.swapchain = cp.sc;
-                q.subImage.imageRect = { {0, 0}, {CS, CS} };
-                q.pose = wv.cursorPose;
-                q.size = { wv.cursorSize, wv.cursorSize };
-                layers.push_back((const XrCompositionLayerBaseHeader*)&q);
-            }
-        }
-    }
-    // Controller offsets panel
-    static XrCompositionLayerQuad oq{ XR_TYPE_COMPOSITION_LAYER_QUAD };
-    if (gEng.offView.open && gLocal) {
-        const OffsetView& ov = gEng.offView;
-        const int OW = 900, OH = (int)(OW * ov.h / ov.w);
-        if (gOffPanel.sc && (gOffPanel.w != OW || gOffPanel.h != OH)) { gOffPanel.Destroy(gSwap); gDrawnOff = ~0ull; }
-        if (!gOffPanel.sc) gOffPanel.Create(gSess, gGfx, gSwap, OW, OH);
-        if (gOffPanel.sc && gDrawnOff != ov.version) { std::vector<uint32_t> px; DrawList(px, OW, OH, ov.title, ov.labels, ov.cols, ov.hover, ov.pressed, p.style); if (gOffPanel.Upload(gGfx, gSwap, px)) gDrawnOff = ov.version; }
-        if (gOffPanel.ready) {
-            oq = XrCompositionLayerQuad{ XR_TYPE_COMPOSITION_LAYER_QUAD };
-            oq.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT; oq.space = gLocal; oq.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-            oq.subImage.swapchain = gOffPanel.sc; oq.subImage.imageRect = { {0, 0}, {OW, OH} };
-            oq.pose = ov.pose; oq.size = { ov.w, ov.h };
-            layers.push_back((const XrCompositionLayerBaseHeader*)&oq);
-        }
-    } else if (gOffPanel.sc) { gOffPanel.Destroy(gSwap); gDrawnOff = ~0ull; }
-    // Laser pointers, on top of everything: beam from the controller, dot where it hits.
-    if (gLocal && (gEng.pointer[0].on || gEng.pointer[1].on)) {
-        const int DS = 64, BW = 16, BH = 256;
-        if (!gDotPanel.sc) gDotPanel.Create(gSess, gGfx, gSwap, DS, DS);
-        if (!gBeamPanel.sc) gBeamPanel.Create(gSess, gGfx, gSwap, BW, BH);
-        if (!gDrawnPointer && gDotPanel.sc && gBeamPanel.sc) {
-            std::vector<uint32_t> px;
-            DrawPointerDot(px, DS, p.style); bool a = gDotPanel.Upload(gGfx, gSwap, px);
-            DrawBeam(px, BW, BH, p.style); bool b = gBeamPanel.Upload(gGfx, gSwap, px);
-            gDrawnPointer = a && b;
-        }
-        for (int h = 0; h < 2; h++) {
-            const PointerView& P = gEng.pointer[h];
-            if (!P.on || !gDotPanel.ready || !gBeamPanel.ready) continue;
-            auto& b = pq[h * 2]; auto& d = pq[h * 2 + 1];
-            b.layerFlags = d.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-            b.space = d.space = gLocal;
-            b.eyeVisibility = d.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-            b.subImage.swapchain = gBeamPanel.sc; b.subImage.imageRect = { {0, 0}, {BW, BH} };
-            b.pose = P.beamPose; b.size = { 0.0035f, P.beamLen };
-            d.subImage.swapchain = gDotPanel.sc; d.subImage.imageRect = { {0, 0}, {DS, DS} };
-            d.pose = P.dotPose; d.size = { P.dotSize, P.dotSize };
-            layers.push_back((const XrCompositionLayerBaseHeader*)&b);
-            if (P.dot) layers.push_back((const XrCompositionLayerBaseHeader*)&d);
-        }
-    }
-    // Fingertip silhouettes near wrist panels.
-    if (gLocal && (gEng.pointer[0].finger || gEng.pointer[1].finger)) {
-        const int FW = 64, FH = 256;
-        if (!gFingerPanel.sc) gFingerPanel.Create(gSess, gGfx, gSwap, FW, FH);
-        if (!gDrawnFinger && gFingerPanel.sc) {
-            std::vector<uint32_t> px;
-            DrawFinger(px, FW, FH, p.style);
-            gDrawnFinger = gFingerPanel.Upload(gGfx, gSwap, px);
-        }
-        for (int h = 0; h < 2; h++) {
-            const PointerView& P = gEng.pointer[h];
-            if (!P.finger || !gFingerPanel.ready) continue;
-            auto& q = fq[h];
-            q.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-            q.space = gLocal;
-            q.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-            q.subImage.swapchain = gFingerPanel.sc; q.subImage.imageRect = { {0, 0}, {FW, FH} };
-            q.pose = P.fingerPose; q.size = { P.fingerW, P.fingerLen };
-            layers.push_back((const XrCompositionLayerBaseHeader*)&q);
-        }
-    }
-    if (NowSec() < gEng.toastUntil && gView) {
-        const int TW = 1024, TH = 128;
-        if (!gToastPanel.sc) gToastPanel.Create(gSess, gGfx, gSwap, TW, TH);
-        if (gToastPanel.sc && gDrawnToast != gEng.toastVersion) {
-            DrawToast(gPix, TW, TH, gEng.toast, p.style);
-            if (gToastPanel.Upload(gGfx, gSwap, gPix)) gDrawnToast = gEng.toastVersion;
-        }
-        if (gToastPanel.ready) {
-            tq.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-            tq.space = gView;
-            tq.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-            tq.subImage.swapchain = gToastPanel.sc;
-            tq.subImage.imageRect = { {0, 0}, {TW, TH} };
-            tq.pose.orientation.w = 1;
-            tq.pose.position = { 0, -0.14f, -0.6f };
-            tq.size = { 0.32f, 0.04f };
-            layers.push_back((const XrCompositionLayerBaseHeader*)&tq);
-        }
-    }
+    LayerList layers(fi->layers, fi->layers + fi->layerCount);
+    gOverlay.Render(OverlayCtx(), layers);
     if (gMirror.On() && gGfx.api == 11) MirrorFrame(layers, fi->displayTime);
     XrFrameEndInfo copy = *fi;
     copy.layerCount = (uint32_t)layers.size();
@@ -1136,6 +818,7 @@ static XrResult XRAPI_CALL Hook_xrGetInstanceProcAddr(XrInstance inst, const cha
 static XrResult XRAPI_CALL Hook_xrCreateApiLayerInstance(const XrInstanceCreateInfo* info, const XrApiLayerCreateInfo* li, XrInstance* inst) {
     LogInit();
     if (!li || !li->nextInfo) return XR_ERROR_INITIALIZATION_FAILED;
+    gOverlay.onProfileSaved = MarkOwnSave;
     gNextGipa = li->nextInfo->nextGetInstanceProcAddr;
     XrApiLayerCreateInfo chain = *li;
     chain.nextInfo = li->nextInfo->next;

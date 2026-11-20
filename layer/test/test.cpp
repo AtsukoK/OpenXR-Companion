@@ -7,6 +7,7 @@
 #include "../src/screen.h"
 #include "../src/mirror.h"
 #include "../src/game_offsets.h"
+#include "../src/overlay.h"
 #include <thread>
 #include <cstdio>
 #include <objidl.h>
@@ -161,6 +162,35 @@ namespace fake12 {
     static XrResult XRAPI_CALL Wait(XrSwapchain, const XrSwapchainImageWaitInfo*) { return XR_SUCCESS; }
     static XrResult XRAPI_CALL Release(XrSwapchain, const XrSwapchainImageReleaseInfo*) { return XR_SUCCESS; }
 }
+// ---------------- the overlay (OverlayRenderer) on a software D3D11 device, with pretend swapchains
+namespace fake11 {
+    static ID3D11Device* dev = nullptr;
+    static std::map<uint64_t, std::vector<ID3D11Texture2D*>> chains;
+    static uint64_t nextChain = 0x5000;
+    static XrResult XRAPI_CALL Formats(XrSession, uint32_t cap, uint32_t* n, int64_t* f) { *n = 1; if (cap && f) f[0] = DXGI_FORMAT_B8G8R8A8_UNORM; return XR_SUCCESS; }
+    static XrResult XRAPI_CALL Create(XrSession, const XrSwapchainCreateInfo* ci, XrSwapchain* sc) {
+        uint64_t h = nextChain++;
+        for (int i = 0; i < 3; i++) {
+            D3D11_TEXTURE2D_DESC td{}; td.Width = ci->width; td.Height = ci->height; td.MipLevels = 1; td.ArraySize = 1;
+            td.Format = DXGI_FORMAT_B8G8R8A8_UNORM; td.SampleDesc.Count = 1; td.Usage = D3D11_USAGE_DEFAULT; td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+            ID3D11Texture2D* t = nullptr; dev->CreateTexture2D(&td, nullptr, &t); chains[h].push_back(t);
+        }
+        *sc = (XrSwapchain)(uintptr_t)h; return XR_SUCCESS;
+    }
+    static XrResult XRAPI_CALL Destroy(XrSwapchain sc) {
+        for (auto t : chains[(uint64_t)sc]) t->Release();
+        chains.erase((uint64_t)sc); return XR_SUCCESS;
+    }
+    static XrResult XRAPI_CALL Images(XrSwapchain sc, uint32_t cap, uint32_t* n, XrSwapchainImageBaseHeader* h) {
+        auto& c = chains[(uint64_t)sc]; *n = (uint32_t)c.size();
+        if (cap && h) for (uint32_t i = 0; i < cap && i < c.size(); i++) ((XrSwapchainImageD3D11KHR*)h)[i].texture = c[i];
+        return XR_SUCCESS;
+    }
+    static XrResult XRAPI_CALL Acquire(XrSwapchain, const XrSwapchainImageAcquireInfo*, uint32_t* i) { *i = 0; return XR_SUCCESS; }
+    static XrResult XRAPI_CALL Wait(XrSwapchain, const XrSwapchainImageWaitInfo*) { return XR_SUCCESS; }
+    static XrResult XRAPI_CALL Release(XrSwapchain, const XrSwapchainImageReleaseInfo*) { return XR_SUCCESS; }
+}
+
 // Uploads several frames through Panel::Upload and reads one image back. false + why when D3D12/WARP is missing.
 static bool D3D12PanelRun(std::vector<uint32_t>& got, uint32_t& want, int& uploads, double& msPerUpload, std::string& why) {
     IDXGIFactory4* fac = nullptr; IDXGIAdapter* warp = nullptr; ID3D12Device* dev = nullptr; ID3D12CommandQueue* q = nullptr;
@@ -1338,6 +1368,38 @@ int main(int argc, char** argv) {
         XrPosef gone{ { 0, 0, 0, 1 }, { 0, 1, 0 } };
         go.Apply(hand, world, 3, tracked, gone, nullptr, nullptr, nullptr);
         CHECK(gone.position.z == 0.f, "game offsets: a destroyed space is no longer moved");
+    }
+    { // overlay: what is visible ends up as quad layers in the frame, nothing when hidden, swapchains freed at the end
+        ID3D11DeviceContext* ctx = nullptr;
+        D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, D3D11_SDK_VERSION, &fake11::dev, nullptr, &ctx);
+        if (!fake11::dev) {
+            printf("skip: overlay (no D3D11 WARP device)\n");
+        } else {
+            XrFns f; f.EnumerateSwapchainFormats = fake11::Formats; f.CreateSwapchain = fake11::Create; f.DestroySwapchain = fake11::Destroy;
+            f.EnumerateSwapchainImages = fake11::Images; f.AcquireSwapchainImage = fake11::Acquire; f.WaitSwapchainImage = fake11::Wait; f.ReleaseSwapchainImage = fake11::Release;
+            XrGraphicsBindingD3D11KHR gb{ XR_TYPE_GRAPHICS_BINDING_D3D11_KHR }; gb.device = fake11::dev;
+            Gfx g; g.Init(&gb);
+            std::string err;
+            Engine e; e.SetProfile(ParseProfileText(DefaultProfileJson(), err));
+            OverlayRenderer ov(e);
+            OverlayContext c; c.session = (XrSession)(uintptr_t)2; c.gfx = &g; c.swap = &f;
+            c.local = (XrSpace)(uintptr_t)3; c.view = (XrSpace)(uintptr_t)4;
+            LayerList layers;
+            ov.Render(c, layers);
+            CHECK(layers.empty(), "overlay: nothing visible, nothing added to the frame");
+            e.kb.visible = true; e.kb.barLabels = { "A", "B" }; e.kb.version++; e.kb.barVersion++;
+            e.toast = "hello"; e.toastUntil = NowSec() + 5; e.toastVersion++;
+            ov.Render(c, layers);
+            int quads = 0, inView = 0;
+            for (auto* l : layers) if (l->type == XR_TYPE_COMPOSITION_LAYER_QUAD) { quads++; if (((const XrCompositionLayerQuad*)l)->space == c.view) inView++; }
+            CHECK(quads == 3, ("overlay: the keyboard, its bar and a toast are 3 quads, got " + std::to_string(quads)).c_str());
+            CHECK(inView == 1, "overlay: the toast is head-locked, the rest world-locked");
+            CHECK(fake11::chains.size() == 3, "overlay: one swapchain each");
+            ov.Destroy(c);
+            CHECK(fake11::chains.empty(), "overlay: every swapchain is freed when the session ends");
+            g.Release();
+            ctx->Release(); fake11::dev->Release(); fake11::dev = nullptr;
+        }
     }
     printf("\n%d failures\n", fails);
     Keys::Shutdown();
