@@ -17,11 +17,17 @@ struct Gfx {
     ID3D11DeviceContext* ctx = nullptr;
     ID3D12Device* d12 = nullptr;
     ID3D12CommandQueue* queue = nullptr;
-    ID3D12CommandAllocator* alloc = nullptr;
-    ID3D12GraphicsCommandList* list = nullptr;
+    // D3D12 uploads: a ring of command lists, so an upload never waits for the game's GPU work.
+    // A slot is only waited for when it comes round again (three uploads later, normally long done).
+    static const int kRing = 3;
+    ID3D12CommandAllocator* alloc[kRing]{};
+    ID3D12GraphicsCommandList* list[kRing]{};
+    UINT64 slotFence[kRing]{};
+    int slot = 0;
     ID3D12Fence* fence = nullptr;
     UINT64 fenceVal = 0;
     HANDLE ev = nullptr;
+    void WaitFence(UINT64 v); // until the GPU has passed v (no-op when it has)
     void Init(const void* bindingChain);
     void Release();
 };
@@ -37,7 +43,11 @@ public:
 private:
     bool swapRB = false;
     std::vector<void*> imgs;
-    ID3D12Resource* upload = nullptr;
+    ID3D12Resource* upload[Gfx::kRing]{};  // D3D12: one staging buffer per ring slot of this panel
+    UINT64 uploadFence[Gfx::kRing]{};
+    UINT64 uploadSize[Gfx::kRing]{};
+    int uploadNext = 0;
+    ID3D12Fence* fence = nullptr;          // the Gfx fence (outlives the panel), for Destroy
 };
 
 // CPU drawing (GDI+), output is premultiplied BGRA.

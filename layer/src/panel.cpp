@@ -25,9 +25,11 @@ void Gfx::Init(const void* chain) {
             auto* b = (const XrGraphicsBindingD3D12KHR*)h;
             d12 = b->device; d12->AddRef();
             queue = b->queue; queue->AddRef();
-            d12->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&alloc));
-            d12->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, alloc, nullptr, IID_PPV_ARGS(&list));
-            if (list) list->Close();
+            for (int i = 0; i < kRing; i++) {
+                d12->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&alloc[i]));
+                if (alloc[i]) d12->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, alloc[i], nullptr, IID_PPV_ARGS(&list[i]));
+                if (list[i]) list[i]->Close();
+            }
             d12->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
             ev = CreateEventW(nullptr, FALSE, FALSE, nullptr);
             api = 12;
@@ -38,10 +40,17 @@ void Gfx::Init(const void* chain) {
 }
 void Gfx::Release() {
     if (ctx) ctx->Release(); if (d11) d11->Release();
-    if (list) list->Release(); if (alloc) alloc->Release(); if (fence) fence->Release();
+    if (fence) WaitFence(fenceVal); // nothing of ours still running on the GPU
+    for (int i = 0; i < kRing; i++) { if (list[i]) list[i]->Release(); if (alloc[i]) alloc[i]->Release(); }
+    if (fence) fence->Release();
     if (queue) queue->Release(); if (d12) d12->Release();
     if (ev) CloseHandle(ev);
     *this = Gfx{};
+}
+
+void Gfx::WaitFence(UINT64 v) {
+    if (!fence || fence->GetCompletedValue() >= v) return;
+    if (ev && SUCCEEDED(fence->SetEventOnCompletion(v, ev))) WaitForSingleObject(ev, 1000);
 }
 
 // ---------- swapchain panel ----------
@@ -96,39 +105,45 @@ bool Panel::Upload(Gfx& g, const XrFns& f, const std::vector<uint32_t>& px) {
 
     if (g.api == 11) {
         g.ctx->UpdateSubresource((ID3D11Texture2D*)imgs[idx], 0, nullptr, src, w * 4, 0);
-    } else if (g.api == 12 && g.list) {
+    } else if (g.api == 12 && g.fence) {
         auto* tex = (ID3D12Resource*)imgs[idx];
         D3D12_RESOURCE_DESC desc = tex->GetDesc();
         D3D12_PLACED_SUBRESOURCE_FOOTPRINT fp{}; UINT64 total = 0;
         g.d12->GetCopyableFootprints(&desc, 0, 1, 0, &fp, nullptr, nullptr, &total);
-        if (!upload) {
+        fence = g.fence;
+        int u = uploadNext; uploadNext = (uploadNext + 1) % Gfx::kRing;
+        g.WaitFence(uploadFence[u]); // this staging buffer's last copy (three uploads ago) is done
+        if (upload[u] && uploadSize[u] < total) { upload[u]->Release(); upload[u] = nullptr; }
+        if (!upload[u]) {
             D3D12_HEAP_PROPERTIES hp{ D3D12_HEAP_TYPE_UPLOAD };
             D3D12_RESOURCE_DESC bd{};
             bd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER; bd.Width = total; bd.Height = 1; bd.DepthOrArraySize = 1;
             bd.MipLevels = 1; bd.SampleDesc.Count = 1; bd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-            g.d12->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &bd, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&upload));
+            if (SUCCEEDED(g.d12->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &bd, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&upload[u])))) uploadSize[u] = total;
         }
-        if (upload) {
-            uint8_t* m = nullptr; D3D12_RANGE rr{ 0, 0 };
-            upload->Map(0, &rr, (void**)&m);
+        int k = g.slot; g.slot = (g.slot + 1) % Gfx::kRing;
+        g.WaitFence(g.slotFence[k]); // this command allocator's last use is done
+        uint8_t* m = nullptr; D3D12_RANGE rr{ 0, 0 };
+        if (upload[u] && g.alloc[k] && g.list[k] && SUCCEEDED(upload[u]->Map(0, &rr, (void**)&m)) && m) {
             for (int y = 0; y < h; y++) memcpy(m + fp.Offset + (size_t)y * fp.Footprint.RowPitch, src + (size_t)y * w, (size_t)w * 4);
-            upload->Unmap(0, nullptr);
-            g.alloc->Reset();
-            g.list->Reset(g.alloc, nullptr);
+            upload[u]->Unmap(0, nullptr);
+            g.alloc[k]->Reset();
+            g.list[k]->Reset(g.alloc[k], nullptr);
             D3D12_RESOURCE_BARRIER b{}; b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
             b.Transition.pResource = tex; b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
             b.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET; b.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
-            g.list->ResourceBarrier(1, &b);
+            g.list[k]->ResourceBarrier(1, &b);
             D3D12_TEXTURE_COPY_LOCATION dst{ tex, D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX }; dst.SubresourceIndex = 0;
-            D3D12_TEXTURE_COPY_LOCATION sl{ upload, D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT }; sl.PlacedFootprint = fp;
-            g.list->CopyTextureRegion(&dst, 0, 0, 0, &sl, nullptr);
+            D3D12_TEXTURE_COPY_LOCATION sl{ upload[u], D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT }; sl.PlacedFootprint = fp;
+            g.list[k]->CopyTextureRegion(&dst, 0, 0, 0, &sl, nullptr);
             std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
-            g.list->ResourceBarrier(1, &b);
-            g.list->Close();
-            ID3D12CommandList* lists[] = { g.list };
+            g.list[k]->ResourceBarrier(1, &b);
+            g.list[k]->Close();
+            ID3D12CommandList* lists[] = { g.list[k] };
             g.queue->ExecuteCommandLists(1, lists);
+            // No CPU wait: the copy is queued before the image is released, so the compositor sees it in order.
             g.queue->Signal(g.fence, ++g.fenceVal);
-            if (g.fence->GetCompletedValue() < g.fenceVal) { g.fence->SetEventOnCompletion(g.fenceVal, g.ev); WaitForSingleObject(g.ev, 1000); }
+            g.slotFence[k] = g.fenceVal; uploadFence[u] = g.fenceVal;
         }
     }
     XrSwapchainImageReleaseInfo ri{ XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO };
@@ -140,8 +155,12 @@ bool Panel::Upload(Gfx& g, const XrFns& f, const std::vector<uint32_t>& px) {
 void Panel::Destroy(const XrFns& f) {
     if (sc != XR_NULL_HANDLE && f.DestroySwapchain) f.DestroySwapchain(sc);
     sc = XR_NULL_HANDLE;
-    if (upload) upload->Release();
-    upload = nullptr;
+    if (fence) { // the GPU may still be copying from our staging buffers
+        UINT64 v = 0; for (auto f2 : uploadFence) v = std::max(v, f2);
+        if (fence->GetCompletedValue() < v) fence->SetEventOnCompletion(v, nullptr); // nullptr event: blocks until done
+    }
+    for (int i = 0; i < Gfx::kRing; i++) { if (upload[i]) upload[i]->Release(); upload[i] = nullptr; uploadFence[i] = uploadSize[i] = 0; }
+    uploadNext = 0;
     imgs.clear(); ready = false;
 }
 

@@ -2,6 +2,7 @@
 #include <filesystem>
 #include <fstream>
 #include "../src/panel.h"
+#include <dxgi1_4.h>
 #include "../src/keys.h"
 #include "../src/screen.h"
 #include "../src/mirror.h"
@@ -142,6 +143,78 @@ static bool RunHeadSmoothingThroughLayer(bool unrealStyle, XrTime startT, std::v
         shownYaw.push_back(fakert::gotFrame ? YawDeg(fakert::submitted[0].orientation) : -999.f);
     }
     return true;
+}
+
+// ---------------- D3D12 panel uploads on a software GPU (WARP), with a pretend swapchain of 3 images
+namespace fake12 {
+    static std::vector<ID3D12Resource*> imgs; static uint32_t next = 0, acquired = 0;
+    static XrResult XRAPI_CALL Formats(XrSession, uint32_t cap, uint32_t* n, int64_t* f) { *n = 1; if (cap && f) f[0] = DXGI_FORMAT_B8G8R8A8_UNORM; return XR_SUCCESS; }
+    static XrResult XRAPI_CALL Create(XrSession, const XrSwapchainCreateInfo*, XrSwapchain* sc) { *sc = (XrSwapchain)(uintptr_t)0x1234; return XR_SUCCESS; }
+    static XrResult XRAPI_CALL Destroy(XrSwapchain) { return XR_SUCCESS; }
+    static XrResult XRAPI_CALL Images(XrSwapchain, uint32_t cap, uint32_t* n, XrSwapchainImageBaseHeader* h) {
+        *n = (uint32_t)imgs.size();
+        if (cap && h) for (uint32_t i = 0; i < cap && i < imgs.size(); i++) ((XrSwapchainImageD3D12KHR*)h)[i].texture = imgs[i];
+        return XR_SUCCESS;
+    }
+    static XrResult XRAPI_CALL Acquire(XrSwapchain, const XrSwapchainImageAcquireInfo*, uint32_t* i) { *i = acquired = next; next = (next + 1) % (uint32_t)imgs.size(); return XR_SUCCESS; }
+    static XrResult XRAPI_CALL Wait(XrSwapchain, const XrSwapchainImageWaitInfo*) { return XR_SUCCESS; }
+    static XrResult XRAPI_CALL Release(XrSwapchain, const XrSwapchainImageReleaseInfo*) { return XR_SUCCESS; }
+}
+// Uploads several frames through Panel::Upload and reads one image back. false + why when D3D12/WARP is missing.
+static bool D3D12PanelRun(std::vector<uint32_t>& got, uint32_t& want, int& uploads, double& msPerUpload, std::string& why) {
+    IDXGIFactory4* fac = nullptr; IDXGIAdapter* warp = nullptr; ID3D12Device* dev = nullptr; ID3D12CommandQueue* q = nullptr;
+    if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&fac))) || FAILED(fac->EnumWarpAdapter(IID_PPV_ARGS(&warp))) ||
+        FAILED(D3D12CreateDevice(warp, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&dev)))) { why = "(no D3D12 WARP device)"; return false; }
+    D3D12_COMMAND_QUEUE_DESC qd{}; qd.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+    dev->CreateCommandQueue(&qd, IID_PPV_ARGS(&q));
+    const int W = 64, H = 32;
+    for (int i = 0; i < 3; i++) {
+        D3D12_HEAP_PROPERTIES hp{ D3D12_HEAP_TYPE_DEFAULT };
+        D3D12_RESOURCE_DESC td{}; td.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D; td.Width = W; td.Height = H; td.DepthOrArraySize = 1; td.MipLevels = 1;
+        td.Format = DXGI_FORMAT_B8G8R8A8_UNORM; td.SampleDesc.Count = 1; td.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        ID3D12Resource* t = nullptr; dev->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &td, D3D12_RESOURCE_STATE_RENDER_TARGET, nullptr, IID_PPV_ARGS(&t));
+        fake12::imgs.push_back(t);
+    }
+    XrFns f; f.EnumerateSwapchainFormats = fake12::Formats; f.CreateSwapchain = fake12::Create; f.DestroySwapchain = fake12::Destroy;
+    f.EnumerateSwapchainImages = fake12::Images; f.AcquireSwapchainImage = fake12::Acquire; f.WaitSwapchainImage = fake12::Wait; f.ReleaseSwapchainImage = fake12::Release;
+    XrGraphicsBindingD3D12KHR gb{ XR_TYPE_GRAPHICS_BINDING_D3D12_KHR }; gb.device = dev; gb.queue = q;
+    Gfx g; g.Init(&gb);
+    Panel pn;
+    bool ok = pn.Create((XrSession)(uintptr_t)1, g, f, W, H);
+    std::vector<uint32_t> px(W * H);
+    uploads = 10;
+    double t0 = NowSec();
+    for (int i = 0; i < uploads && ok; i++) { want = 0xFF000000u | (uint32_t)(i * 20) << 16 | 0x3366u; std::fill(px.begin(), px.end(), want); ok = pn.Upload(g, f, px); }
+    msPerUpload = (NowSec() - t0) * 1000.0 / uploads;
+    if (ok) { // read back the last image written
+        ID3D12Resource* tex = fake12::imgs[fake12::acquired];
+        D3D12_RESOURCE_DESC desc = tex->GetDesc(); D3D12_PLACED_SUBRESOURCE_FOOTPRINT fp{}; UINT64 total = 0;
+        dev->GetCopyableFootprints(&desc, 0, 1, 0, &fp, nullptr, nullptr, &total);
+        D3D12_HEAP_PROPERTIES hp{ D3D12_HEAP_TYPE_READBACK };
+        D3D12_RESOURCE_DESC bd{}; bd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER; bd.Width = total; bd.Height = 1; bd.DepthOrArraySize = 1; bd.MipLevels = 1; bd.SampleDesc.Count = 1; bd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        ID3D12Resource* rb = nullptr; dev->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &bd, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&rb));
+        ID3D12CommandAllocator* al = nullptr; ID3D12GraphicsCommandList* l = nullptr;
+        dev->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&al));
+        dev->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, al, nullptr, IID_PPV_ARGS(&l));
+        D3D12_RESOURCE_BARRIER b{}; b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION; b.Transition.pResource = tex; b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        b.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET; b.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE; l->ResourceBarrier(1, &b);
+        D3D12_TEXTURE_COPY_LOCATION src{ tex, D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX }; src.SubresourceIndex = 0;
+        D3D12_TEXTURE_COPY_LOCATION dst{ rb, D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT }; dst.PlacedFootprint = fp;
+        l->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+        std::swap(b.Transition.StateBefore, b.Transition.StateAfter); l->ResourceBarrier(1, &b);
+        l->Close(); ID3D12CommandList* ls[] = { l }; q->ExecuteCommandLists(1, ls);
+        q->Signal(g.fence, ++g.fenceVal); g.WaitFence(g.fenceVal);
+        uint8_t* m = nullptr; D3D12_RANGE rr{ 0, (SIZE_T)total }; rb->Map(0, &rr, (void**)&m);
+        got.resize(W * H);
+        for (int y = 0; y < H; y++) memcpy(got.data() + y * W, m + fp.Offset + (size_t)y * fp.Footprint.RowPitch, W * 4);
+        rb->Unmap(0, nullptr); rb->Release(); l->Release(); al->Release();
+    }
+    pn.Destroy(f); g.Release();
+    for (auto t : fake12::imgs) t->Release();
+    fake12::imgs.clear();
+    q->Release(); dev->Release(); warp->Release(); fac->Release();
+    if (!ok) why = "(panel create/upload failed)";
+    return ok;
 }
 
 int main(int argc, char** argv) {
@@ -586,6 +659,18 @@ int main(int argc, char** argv) {
     }
 
 
+    // ---------------- D3D12 panel uploads (queued, no CPU wait for the game's GPU work)
+    {
+        std::vector<uint32_t> got; uint32_t want = 0; int n = 0; double ms = 0; std::string why;
+        bool ran = D3D12PanelRun(got, want, n, ms, why);
+        CHECK(ran, ("D3D12 panel: uploads run on a software GPU " + why).c_str());
+        if (ran) {
+            bool all = !got.empty(); for (auto c : got) if (c != want) all = false;
+            char b[160]; snprintf(b, sizeof b, "D3D12 panel: the last of %d uploads reaches the swapchain image (%08X, wanted %08X)", n, got.empty() ? 0u : got[0], want);
+            CHECK(all, b);
+            snprintf(b, sizeof b, "D3D12 panel: %.2f ms per upload", ms); printf("info: %s\n", b);
+        }
+    }
     // ---------------- head smoothing through the real layer DLL and a pretend runtime (Unreal-style and Unity-style games)
     {
         wchar_t tmp[MAX_PATH]; GetTempPathW(MAX_PATH, tmp);
