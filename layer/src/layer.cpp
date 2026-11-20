@@ -50,12 +50,9 @@ static XrFns gSwap;     // swapchain calls our panels use (our hooks, so the mir
 static XrFns gSwapNext; // the next layer's
 static HeadsetMirror gMirror;
 static MirrorSettings gMirrorSet;
-static FILETIME gMirrorFileTime{};
-static double gLastMirrorCheck = -10;
 
 // ---------------------------------------------------------------- head smoothing (experimental)
 static HeadSmoother gHeadSmooth;
-static FILETIME gHeadFileTime{};
 
 // ---------------------------------------------------------------- our action set
 enum OA {
@@ -162,19 +159,42 @@ static std::vector<PB> ProfileTable(const std::string& p) {
 
 // ---------------------------------------------------------------- state
 static std::recursive_mutex gMx;
-static XrActionSet gSet = XR_NULL_HANDLE;
-static XrAction gA[A_COUNT]{};
-static XrPath gHandPath[2]{};
-static bool gAttached = false;
-static int gMinPriority = INT_MAX;
-static std::set<std::string> gOurProfiles;
+
+// Our own action set: reads the controllers for the menus, next to the game's actions (under gMx).
+struct OurActions {
+    XrActionSet set = XR_NULL_HANDLE;
+    XrAction action[A_COUNT]{};
+    XrPath handPath[2]{};           // /user/hand/left, /user/hand/right
+    bool attached = false;          // attached to the session together with the game's sets
+    int minPriority = INT_MAX;      // lowest priority among the game's action sets
+    std::set<std::string> profiles; // interaction profiles we added bindings to
+};
+static OurActions gOurs;
+
+// The game's session and what we made in it (under gMx).
+struct SessionState {
+    XrSession handle = XR_NULL_HANDLE;
+    Gfx gfx;
+    XrSpace local = XR_NULL_HANDLE; // world-locked overlay space
+    XrSpace view = XR_NULL_HANDLE;  // the head
+    XrSpace gripSpace[2]{}, aimSpace[2]{};
+    XrTime predictedTime = 0;      // the last xrWaitFrame's display time
+    bool touchController[2]{};     // Meta Touch controllers (aim ray needs correcting)
+    double lastProfileCheck = -10; // when the interaction profiles were last asked
+};
+static SessionState gSession;
+
+// Files the editor writes: their times when last read, so changes are noticed.
+struct WatchedFiles {
+    FILETIME config[5]{};
+    double lastConfigCheck = 0;
+    FILETIME mirror{};
+    double lastMirrorCheck = -10;
+    FILETIME headSmoothing{};
+};
+static WatchedFiles gFiles;
 
 static GameInputFilter gInput; // what the game's button / trigger / stick actions read (under gMx)
-
-static XrSession gSess = XR_NULL_HANDLE;
-static Gfx gGfx;
-static XrSpace gLocal = XR_NULL_HANDLE, gView = XR_NULL_HANDLE, gGripSp[2]{}, gAimSp[2]{};
-static XrTime gPredTime = 0;
 
 static Engine gEng;
 static void MarkOwnSave();
@@ -189,9 +209,6 @@ struct PoseBind {
 };
 static std::unordered_map<uint64_t, std::vector<PoseBind>> gPoseBinds; // action -> bindings (under gMx)
 static GameHandOffsets gHandOffsets;
-
-static FILETIME gCfgTimes[5]{};
-static double gLastCfgCheck = 0;
 
 static inline uint64_t H(XrAction a) {
     return (uint64_t)a;
@@ -211,18 +228,18 @@ static std::string S(XrPath p) {
 }
 
 static void EnsureActions() {
-    if (gSet != XR_NULL_HANDLE || gInst == XR_NULL_HANDLE) return;
-    gHandPath[0] = P("/user/hand/left");
-    gHandPath[1] = P("/user/hand/right");
-    gInput.SetHandPaths(gHandPath[0], gHandPath[1]);
+    if (gOurs.set != XR_NULL_HANDLE || gInst == XR_NULL_HANDLE) return;
+    gOurs.handPath[0] = P("/user/hand/left");
+    gOurs.handPath[1] = P("/user/hand/right");
+    gInput.SetHandPaths(gOurs.handPath[0], gOurs.handPath[1]);
     XrActionSetCreateInfo si{ XR_TYPE_ACTION_SET_CREATE_INFO };
     strcpy_s(si.actionSetName, "openxr_companion_set");
     strcpy_s(si.localizedActionSetName, "OpenXR Companion");
-    si.priority = gMinPriority == INT_MAX ? 0 : (uint32_t)gMinPriority;
-    XrResult r = N.CreateActionSet(gInst, &si, &gSet);
+    si.priority = gOurs.minPriority == INT_MAX ? 0 : (uint32_t)gOurs.minPriority;
+    XrResult r = N.CreateActionSet(gInst, &si, &gOurs.set);
     if (XR_FAILED(r)) {
         Log("CreateActionSet failed %d", r);
-        gSet = XR_NULL_HANDLE;
+        gOurs.set = XR_NULL_HANDLE;
         return;
     }
     for (int i = 0; i < A_COUNT; i++) {
@@ -231,8 +248,8 @@ static void EnsureActions() {
         strcpy_s(ci.localizedActionName, kActs[i].name);
         ci.actionType = kActs[i].type;
         ci.countSubactionPaths = 2;
-        ci.subactionPaths = gHandPath;
-        r = N.CreateAction(gSet, &ci, &gA[i]);
+        ci.subactionPaths = gOurs.handPath;
+        r = N.CreateAction(gOurs.set, &ci, &gOurs.action[i]);
         if (XR_FAILED(r)) Log("CreateAction %s failed %d", kActs[i].name, r);
     }
     Log("our action set created, priority %u", si.priority);
@@ -262,31 +279,31 @@ static FILETIME FileTime(const std::wstring& f) {
 // The layer wrote the profile itself: take the new file times without reloading (a reload would close menus).
 static void MarkOwnSave() {
     std::wstring dir = ProfilesDir();
-    gCfgTimes[0] = FileTime(dir + L"\\" + Utf8ToW(ExeName()) + L".json");
-    gCfgTimes[1] = FileTime(dir + L"\\default.json");
-    gCfgTimes[2] = FileTime(dir + L"\\user_defaults.json");
-    gCfgTimes[3] = FileTime(ActiveProfilePath());
-    gCfgTimes[4] = gEng.prof ? FileTime(dir + L"\\" + Utf8ToW(gEng.prof->sourceName)) : FILETIME{};
+    gFiles.config[0] = FileTime(dir + L"\\" + Utf8ToW(ExeName()) + L".json");
+    gFiles.config[1] = FileTime(dir + L"\\default.json");
+    gFiles.config[2] = FileTime(dir + L"\\user_defaults.json");
+    gFiles.config[3] = FileTime(ActiveProfilePath());
+    gFiles.config[4] = gEng.prof ? FileTime(dir + L"\\" + Utf8ToW(gEng.prof->sourceName)) : FILETIME{};
 }
 
 static void CheckConfigChanged() {
     double now = NowSec();
-    if (now - gLastCfgCheck < 1.0) return;
-    gLastCfgCheck = now;
+    if (now - gFiles.lastConfigCheck < 1.0) return;
+    gFiles.lastConfigCheck = now;
     std::wstring dir = ProfilesDir();
     FILETIME t[5] = { FileTime(dir + L"\\" + Utf8ToW(ExeName()) + L".json"), FileTime(dir + L"\\default.json"),
                       FileTime(dir + L"\\user_defaults.json"), FileTime(ActiveProfilePath()),
                       gEng.prof ? FileTime(dir + L"\\" + Utf8ToW(gEng.prof->sourceName)) : FILETIME{} };
-    bool changed = memcmp(t, gCfgTimes, sizeof(t)) != 0;
-    bool first = gCfgTimes[1].dwLowDateTime == 0 && gCfgTimes[1].dwHighDateTime == 0;
-    memcpy(gCfgTimes, t, sizeof(t));
+    bool changed = memcmp(t, gFiles.config, sizeof(t)) != 0;
+    bool first = gFiles.config[1].dwLowDateTime == 0 && gFiles.config[1].dwHighDateTime == 0;
+    memcpy(gFiles.config, t, sizeof(t));
     if (changed && !first) ReloadProfile(true);
 }
 
 static bool Locate(XrSpace sp, XrSpace base, XrPosef& out) {
-    if (!sp || !base || !gPredTime) return false;
+    if (!sp || !base || !gSession.predictedTime) return false;
     XrSpaceLocation l{ XR_TYPE_SPACE_LOCATION };
-    if (XR_FAILED(N.LocateSpace(sp, base, gPredTime, &l))) return false;
+    if (XR_FAILED(N.LocateSpace(sp, base, gSession.predictedTime, &l))) return false;
     const XrSpaceLocationFlags need = XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
     if ((l.locationFlags & need) != need) return false;
     out = l.pose;
@@ -294,36 +311,34 @@ static bool Locate(XrSpace sp, XrSpace base, XrPosef& out) {
 }
 
 // Which controllers are in use: checked once a second (the profile changes rarely).
-static bool gTouchCtl[2]{};
-static double gLastIpCheck = -10;
 static void CheckInteractionProfiles(double now) {
-    if (now - gLastIpCheck < 1.0 || !N.GetCurrentInteractionProfile || !gSess) return;
-    gLastIpCheck = now;
+    if (now - gSession.lastProfileCheck < 1.0 || !N.GetCurrentInteractionProfile || !gSession.handle) return;
+    gSession.lastProfileCheck = now;
     for (int h = 0; h < 2; h++) {
         XrInteractionProfileState st{ XR_TYPE_INTERACTION_PROFILE_STATE };
-        if (XR_FAILED(N.GetCurrentInteractionProfile(gSess, gHandPath[h], &st))) continue;
+        if (XR_FAILED(N.GetCurrentInteractionProfile(gSession.handle, gOurs.handPath[h], &st))) continue;
         std::string p = st.interactionProfile ? S(st.interactionProfile) : "";
         bool touch =
             p.find("touch") != std::string::npos &&
             (p.find("oculus") != std::string::npos || p.find("meta") != std::string::npos || p.find("facebook") != std::string::npos);
-        if (touch != gTouchCtl[h])
+        if (touch != gSession.touchController[h])
             Log("%s controller: %s%s", h ? "right" : "left", p.c_str(), touch ? " (Touch: aim correction available)" : "");
-        gTouchCtl[h] = touch;
+        gSession.touchController[h] = touch;
     }
 }
 
 // Head smoothing settings: read when the game starts, then whenever the editor changes the file.
 static void CheckHeadSmoothingFile() {
     FILETIME hft = FileTime(HeadSmoothSettingsPath());
-    if (memcmp(&hft, &gHeadFileTime, sizeof(hft)) == 0) return;
-    gHeadFileTime = hft;
+    if (memcmp(&hft, &gFiles.headSmoothing, sizeof(hft)) == 0) return;
+    gFiles.headSmoothing = hft;
     HeadSmoothSettings hs;
     LoadHeadSmoothSettings(hs);
     static bool firstLoad = true;
     if (firstLoad && hs.on && !hs.keepOn) { // safety: never already on when a game starts, unless asked
         hs.on = false;
         SwitchOffHeadSmoothing();
-        gHeadFileTime = FileTime(HeadSmoothSettingsPath());
+        gFiles.headSmoothing = FileTime(HeadSmoothSettingsPath());
         Log("head smoothing: was on, switched off at game start (keep_on is false)");
     }
     firstLoad = false;
@@ -340,17 +355,17 @@ static void ReadInputsAndUpdate() {
     for (int h = 0; h < 2; h++) {
         auto gb = [&](int a) {
             XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO };
-            gi.action = gA[a];
-            gi.subactionPath = gHandPath[h];
+            gi.action = gOurs.action[a];
+            gi.subactionPath = gOurs.handPath[h];
             XrActionStateBoolean s{ XR_TYPE_ACTION_STATE_BOOLEAN };
-            return XR_SUCCEEDED(N.GetActionStateBoolean(gSess, &gi, &s)) && s.isActive && s.currentState;
+            return XR_SUCCEEDED(N.GetActionStateBoolean(gSession.handle, &gi, &s)) && s.isActive && s.currentState;
         };
         auto gf = [&](int a) {
             XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO };
-            gi.action = gA[a];
-            gi.subactionPath = gHandPath[h];
+            gi.action = gOurs.action[a];
+            gi.subactionPath = gOurs.handPath[h];
             XrActionStateFloat s{ XR_TYPE_ACTION_STATE_FLOAT };
-            return XR_SUCCEEDED(N.GetActionStateFloat(gSess, &gi, &s)) && s.isActive ? s.currentState : 0.f;
+            return XR_SUCCEEDED(N.GetActionStateFloat(gSession.handle, &gi, &s)) && s.isActive ? s.currentState : 0.f;
         };
         HandRaw& r = f.h[h];
         r.b1 = gb(A_BTN1);
@@ -362,10 +377,10 @@ static void ReadInputsAndUpdate() {
         r.grip = gf(A_GRIP);
         {
             XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO };
-            gi.action = gA[A_STICK];
-            gi.subactionPath = gHandPath[h];
+            gi.action = gOurs.action[A_STICK];
+            gi.subactionPath = gOurs.handPath[h];
             XrActionStateVector2f s{ XR_TYPE_ACTION_STATE_VECTOR2F };
-            if (XR_SUCCEEDED(N.GetActionStateVector2f(gSess, &gi, &s)) && s.isActive) {
+            if (XR_SUCCEEDED(N.GetActionStateVector2f(gSession.handle, &gi, &s)) && s.isActive) {
                 r.sx = s.currentState.x;
                 r.sy = s.currentState.y;
             }
@@ -374,23 +389,23 @@ static void ReadInputsAndUpdate() {
         r.st = gb(A_STICKT);
         r.rest = gb(A_REST);
         r.menu = gb(A_MENU);
-        r.gripValid = Locate(gGripSp[h], gLocal, r.gripPose);
-        r.aimValid = Locate(gAimSp[h], gLocal, r.aimPose);
-        r.touchCtl = gTouchCtl[h];
+        r.gripValid = Locate(gSession.gripSpace[h], gSession.local, r.gripPose);
+        r.aimValid = Locate(gSession.aimSpace[h], gSession.local, r.aimPose);
+        r.touchCtl = gSession.touchController[h];
     }
-    f.headValid = Locate(gView, gLocal, f.head);
+    f.headValid = Locate(gSession.view, gSession.local, f.head);
     gOverlay.SetHead(f.head, f.headValid);
     gEng.Update(f);
 
     for (auto& hq : gEng.haptics) {
         XrHapticActionInfo hi{ XR_TYPE_HAPTIC_ACTION_INFO };
-        hi.action = gA[A_HAPTIC];
-        hi.subactionPath = gHandPath[hq.hand];
+        hi.action = gOurs.action[A_HAPTIC];
+        hi.subactionPath = gOurs.handPath[hq.hand];
         XrHapticVibration v{ XR_TYPE_HAPTIC_VIBRATION };
         v.amplitude = hq.amp;
         v.duration = (XrDuration)(hq.sec * 1e9);
         v.frequency = XR_FREQUENCY_UNSPECIFIED;
-        N.ApplyHapticFeedback(gSess, &hi, (XrHapticBaseHeader*)&v);
+        N.ApplyHapticFeedback(gSession.handle, &hi, (XrHapticBaseHeader*)&v);
     }
     gEng.haptics.clear();
     { // what the game's controller poses are moved by, for the LocateSpace hooks
@@ -419,21 +434,21 @@ static void ReadInputsAndUpdate() {
         gEng.mirrorAsk = MirrorRequest::None;
         gMirrorSet.on = a == MirrorRequest::On ? true : a == MirrorRequest::Off ? false : !gMirrorSet.on;
         SaveMirrorSettings(gMirrorSet);
-        gMirrorFileTime = FileTime(MirrorSettingsPath());
+        gFiles.mirror = FileTime(MirrorSettingsPath());
         gEng.Toast(gMirrorSet.on ? "Headset mirror ON (a window on the desktop)" : "Headset mirror off", 2.0);
     }
     if (gMirror.ClosedByUser()) {
         gMirrorSet.on = false;
         SaveMirrorSettings(gMirrorSet);
-        gMirrorFileTime = FileTime(MirrorSettingsPath());
+        gFiles.mirror = FileTime(MirrorSettingsPath());
     }
     {
         double now = NowSec();
-        if (now - gLastMirrorCheck > 1.0) { // the editor's button writes the file
-            gLastMirrorCheck = now;
+        if (now - gFiles.lastMirrorCheck > 1.0) { // the editor's button writes the file
+            gFiles.lastMirrorCheck = now;
             FILETIME ft = FileTime(MirrorSettingsPath());
-            if (memcmp(&ft, &gMirrorFileTime, sizeof(ft)) != 0) {
-                gMirrorFileTime = ft;
+            if (memcmp(&ft, &gFiles.mirror, sizeof(ft)) != 0) {
+                gFiles.mirror = ft;
                 LoadMirrorSettings(gMirrorSet);
             }
             CheckHeadSmoothingFile();
@@ -443,8 +458,8 @@ static void ReadInputsAndUpdate() {
         gMirror.fps = gMirrorSet.fps;
         gMirror.smoothing = gMirrorSet.smoothing;
         gMirror.onTop = gMirrorSet.onTop;
-        bool want = gMirrorSet.on && gGfx.api == 11;
-        if (gMirrorSet.on && gGfx.api == 12 && !gMirror.On()) {
+        bool want = gMirrorSet.on && gSession.gfx.api == 11;
+        if (gMirrorSet.on && gSession.gfx.api == 12 && !gMirror.On()) {
             static bool told = false;
             if (!told) {
                 told = true;
@@ -477,12 +492,12 @@ static XrResult XRAPI_CALL Hook_xrDestroyInstance(XrInstance inst) {
         std::lock_guard l(gMx);
         Keys::Shutdown();
         DrawShutdown();
-        gSet = XR_NULL_HANDLE;
-        gAttached = false;
+        gOurs.set = XR_NULL_HANDLE;
+        gOurs.attached = false;
         gPoseBinds.clear();
         gInput.Clear();
-        gOurProfiles.clear();
-        gMinPriority = INT_MAX;
+        gOurs.profiles.clear();
+        gOurs.minPriority = INT_MAX;
         gInst = XR_NULL_HANDLE;
     }
     return N.DestroyInstance(inst);
@@ -492,7 +507,7 @@ static XrResult XRAPI_CALL Hook_xrCreateActionSet(XrInstance inst, const XrActio
     XrResult r = N.CreateActionSet(inst, ci, set);
     if (XR_SUCCEEDED(r)) {
         std::lock_guard l(gMx);
-        gMinPriority = std::min(gMinPriority, (int)ci->priority);
+        gOurs.minPriority = std::min(gOurs.minPriority, (int)ci->priority);
     }
     return r;
 }
@@ -526,14 +541,15 @@ static XrResult XRAPI_CALL Hook_xrSuggestInteractionProfileBindings(XrInstance i
     }
     EnsureActions();
     auto table = ProfileTable(prof);
-    if (gSet == XR_NULL_HANDLE || table.empty()) {
+    if (gOurs.set == XR_NULL_HANDLE || table.empty()) {
         Log("suggest %s: %u app bindings (not augmented)", prof.c_str(), sb->countSuggestedBindings);
         return N.SuggestInteractionProfileBindings(inst, sb);
     }
     std::vector<XrActionSuggestedBinding> all(sb->suggestedBindings, sb->suggestedBindings + sb->countSuggestedBindings);
     for (auto& e : table)
         for (int h = 0; h < 2; h++)
-            if (e.hands & (1 << h)) all.push_back({ gA[e.act], P(std::string(h ? "/user/hand/right/" : "/user/hand/left/") + e.sub) });
+            if (e.hands & (1 << h))
+                all.push_back({ gOurs.action[e.act], P(std::string(h ? "/user/hand/right/" : "/user/hand/left/") + e.sub) });
     XrInteractionProfileSuggestedBinding copy = *sb;
     copy.countSuggestedBindings = (uint32_t)all.size();
     copy.suggestedBindings = all.data();
@@ -542,7 +558,7 @@ static XrResult XRAPI_CALL Hook_xrSuggestInteractionProfileBindings(XrInstance i
         Log("suggest %s with our bindings failed (%d), retrying app-only", prof.c_str(), r);
         return N.SuggestInteractionProfileBindings(inst, sb);
     }
-    gOurProfiles.insert(prof);
+    gOurs.profiles.insert(prof);
     Log("suggest %s: %u app + %zu ours", prof.c_str(), sb->countSuggestedBindings, all.size() - sb->countSuggestedBindings);
     return r;
 }
@@ -551,16 +567,16 @@ static XrResult XRAPI_CALL Hook_xrCreateSession(XrInstance inst, const XrSession
     XrResult r = N.CreateSession(inst, ci, s);
     if (XR_FAILED(r)) return r;
     std::lock_guard l(gMx);
-    gSess = *s;
-    gGfx.Init(ci->next);
-    Log("session created, graphics api %d", gGfx.api);
-    if (!gGfx.api) Log("graphics API is not D3D11/D3D12: the wheel will not be drawn, bindings still work");
+    gSession.handle = *s;
+    gSession.gfx.Init(ci->next);
+    Log("session created, graphics api %d", gSession.gfx.api);
+    if (!gSession.gfx.api) Log("graphics API is not D3D11/D3D12: the wheel will not be drawn, bindings still work");
     XrReferenceSpaceCreateInfo rs{ XR_TYPE_REFERENCE_SPACE_CREATE_INFO };
     rs.poseInReferenceSpace.orientation.w = 1;
     rs.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL;
-    N.CreateReferenceSpace(gSess, &rs, &gLocal);
+    N.CreateReferenceSpace(gSession.handle, &rs, &gSession.local);
     rs.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_VIEW;
-    N.CreateReferenceSpace(gSess, &rs, &gView);
+    N.CreateReferenceSpace(gSession.handle, &rs, &gSession.view);
     ReloadProfile(true);
     return r;
 }
@@ -568,11 +584,11 @@ static XrResult XRAPI_CALL Hook_xrCreateSession(XrInstance inst, const XrSession
 // What the overlay needs from the session to draw.
 static OverlayContext OverlayCtx() {
     OverlayContext c;
-    c.session = gSess;
-    c.gfx = &gGfx;
+    c.session = gSession.handle;
+    c.gfx = &gSession.gfx;
     c.swap = &gSwap;
-    c.local = gLocal;
-    c.view = gView;
+    c.local = gSession.local;
+    c.view = gSession.view;
     return c;
 }
 
@@ -580,25 +596,25 @@ static void DestroySessionStuff() {
     gOverlay.Destroy(OverlayCtx());
     gHandOffsets.Clear();
     for (int h = 0; h < 2; h++) {
-        if (gGripSp[h]) N.DestroySpace(gGripSp[h]);
-        if (gAimSp[h]) N.DestroySpace(gAimSp[h]);
-        gGripSp[h] = gAimSp[h] = XR_NULL_HANDLE;
+        if (gSession.gripSpace[h]) N.DestroySpace(gSession.gripSpace[h]);
+        if (gSession.aimSpace[h]) N.DestroySpace(gSession.aimSpace[h]);
+        gSession.gripSpace[h] = gSession.aimSpace[h] = XR_NULL_HANDLE;
     }
-    if (gLocal) N.DestroySpace(gLocal);
-    if (gView) N.DestroySpace(gView);
-    gLocal = gView = XR_NULL_HANDLE;
+    if (gSession.local) N.DestroySpace(gSession.local);
+    if (gSession.view) N.DestroySpace(gSession.view);
+    gSession.local = gSession.view = XR_NULL_HANDLE;
     gEng.Reset();
     gMirror.Shutdown();
-    gGfx.Release();
-    gSess = XR_NULL_HANDLE;
-    gAttached = false;
-    gPredTime = 0;
+    gSession.gfx.Release();
+    gSession.handle = XR_NULL_HANDLE;
+    gOurs.attached = false;
+    gSession.predictedTime = 0;
 }
 
 static XrResult XRAPI_CALL Hook_xrDestroySession(XrSession s) {
     {
         std::lock_guard l(gMx);
-        if (s == gSess) DestroySessionStuff();
+        if (s == gSession.handle) DestroySessionStuff();
     }
     return N.DestroySession(s);
 }
@@ -606,10 +622,10 @@ static XrResult XRAPI_CALL Hook_xrDestroySession(XrSession s) {
 static XrResult XRAPI_CALL Hook_xrAttachSessionActionSets(XrSession s, const XrSessionActionSetsAttachInfo* ai) {
     std::lock_guard l(gMx);
     EnsureActions();
-    if (gSet == XR_NULL_HANDLE || s != gSess) return N.AttachSessionActionSets(s, ai);
-    if (gOurProfiles.empty()) Log("warning: the game suggested no controller profile we know; our inputs will be inactive");
+    if (gOurs.set == XR_NULL_HANDLE || s != gSession.handle) return N.AttachSessionActionSets(s, ai);
+    if (gOurs.profiles.empty()) Log("warning: the game suggested no controller profile we know; our inputs will be inactive");
     std::vector<XrActionSet> sets(ai->actionSets, ai->actionSets + ai->countActionSets);
-    sets.push_back(gSet);
+    sets.push_back(gOurs.set);
     XrSessionActionSetsAttachInfo copy = *ai;
     copy.countActionSets = (uint32_t)sets.size();
     copy.actionSets = sets.data();
@@ -618,15 +634,15 @@ static XrResult XRAPI_CALL Hook_xrAttachSessionActionSets(XrSession s, const XrS
         Log("attach with our set failed (%d), retrying without", r);
         return N.AttachSessionActionSets(s, ai);
     }
-    gAttached = true;
+    gOurs.attached = true;
     for (int h = 0; h < 2; h++) {
         XrActionSpaceCreateInfo ci{ XR_TYPE_ACTION_SPACE_CREATE_INFO };
         ci.poseInActionSpace.orientation.w = 1;
-        ci.subactionPath = gHandPath[h];
-        ci.action = gA[A_GRIPPOSE];
-        N.CreateActionSpace(s, &ci, &gGripSp[h]);
-        ci.action = gA[A_AIMPOSE];
-        N.CreateActionSpace(s, &ci, &gAimSp[h]);
+        ci.subactionPath = gOurs.handPath[h];
+        ci.action = gOurs.action[A_GRIPPOSE];
+        N.CreateActionSpace(s, &ci, &gSession.gripSpace[h]);
+        ci.action = gOurs.action[A_AIMPOSE];
+        N.CreateActionSpace(s, &ci, &gSession.aimSpace[h]);
     }
     Log("action sets attached (%u app + ours)", ai->countActionSets);
     return r;
@@ -634,9 +650,9 @@ static XrResult XRAPI_CALL Hook_xrAttachSessionActionSets(XrSession s, const XrS
 
 static XrResult XRAPI_CALL Hook_xrSyncActions(XrSession s, const XrActionsSyncInfo* si) {
     std::lock_guard l(gMx);
-    if (!gAttached || s != gSess || !si) return N.SyncActions(s, si);
+    if (!gOurs.attached || s != gSession.handle || !si) return N.SyncActions(s, si);
     std::vector<XrActiveActionSet> sets(si->activeActionSets, si->activeActionSets + si->countActiveActionSets);
-    sets.push_back({ gSet, XR_NULL_PATH });
+    sets.push_back({ gOurs.set, XR_NULL_PATH });
     XrActionsSyncInfo copy = *si;
     copy.countActiveActionSets = (uint32_t)sets.size();
     copy.activeActionSets = sets.data();
@@ -654,9 +670,9 @@ static XrResult XRAPI_CALL Hook_xrCreateActionSpace(XrSession s, const XrActionS
     auto it = gPoseBinds.find(H(ci->action));
     if (it == gPoseBinds.end() || it->second.empty()) return r;
     int hand = -1;
-    if (ci->subactionPath == gHandPath[0])
+    if (ci->subactionPath == gOurs.handPath[0])
         hand = 0;
-    else if (ci->subactionPath == gHandPath[1])
+    else if (ci->subactionPath == gOurs.handPath[1])
         hand = 1;
     else if (ci->subactionPath == XR_NULL_PATH) { // no hand given: only if the action is bound to one hand
         hand = it->second[0].hand;
@@ -755,7 +771,7 @@ static XrResult XRAPI_CALL Hook_xrGetActionStateBoolean(XrSession s, const XrAct
     XrResult r = N.GetActionStateBoolean(s, gi, st);
     if (XR_FAILED(r) || !gi) return r;
     std::lock_guard l(gMx);
-    gInput.Filter(gEng, gi->action, gi->subactionPath, gPredTime, *st, [&](XrPath hand, XrActionStateBoolean& out) {
+    gInput.Filter(gEng, gi->action, gi->subactionPath, gSession.predictedTime, *st, [&](XrPath hand, XrActionStateBoolean& out) {
         XrActionStateGetInfo one = *gi;
         one.subactionPath = hand;
         return XR_SUCCEEDED(N.GetActionStateBoolean(s, &one, &out));
@@ -767,7 +783,7 @@ static XrResult XRAPI_CALL Hook_xrGetActionStateFloat(XrSession s, const XrActio
     XrResult r = N.GetActionStateFloat(s, gi, st);
     if (XR_FAILED(r) || !gi) return r;
     std::lock_guard l(gMx);
-    gInput.Filter(gEng, gi->action, gi->subactionPath, gPredTime, *st, [&](XrPath hand, XrActionStateFloat& out) {
+    gInput.Filter(gEng, gi->action, gi->subactionPath, gSession.predictedTime, *st, [&](XrPath hand, XrActionStateFloat& out) {
         XrActionStateGetInfo one = *gi;
         one.subactionPath = hand;
         return XR_SUCCEEDED(N.GetActionStateFloat(s, &one, &out));
@@ -779,7 +795,7 @@ static XrResult XRAPI_CALL Hook_xrGetActionStateVector2f(XrSession s, const XrAc
     XrResult r = N.GetActionStateVector2f(s, gi, st);
     if (XR_FAILED(r) || !gi) return r;
     std::lock_guard l(gMx);
-    gInput.Filter(gEng, gi->action, gi->subactionPath, gPredTime, *st, [&](XrPath hand, XrActionStateVector2f& out) {
+    gInput.Filter(gEng, gi->action, gi->subactionPath, gSession.predictedTime, *st, [&](XrPath hand, XrActionStateVector2f& out) {
         XrActionStateGetInfo one = *gi;
         one.subactionPath = hand;
         return XR_SUCCEEDED(N.GetActionStateVector2f(s, &one, &out));
@@ -791,13 +807,13 @@ static XrResult XRAPI_CALL Hook_xrWaitFrame(XrSession s, const XrFrameWaitInfo* 
     XrResult r = N.WaitFrame(s, wi, fs);
     if (XR_SUCCEEDED(r) && fs) {
         std::lock_guard l(gMx);
-        gPredTime = fs->predictedDisplayTime;
+        gSession.predictedTime = fs->predictedDisplayTime;
     }
     return r;
 }
 
 static void MirrorFrame(const std::vector<const XrCompositionLayerBaseHeader*>& layers, XrTime t) {
-    gMirror.Frame(gGfx.d11, gGfx.ctx, layers, t, [](XrSpace sp, XrSpace base, XrTime tt, XrPosef& out) {
+    gMirror.Frame(gSession.gfx.d11, gSession.gfx.ctx, layers, t, [](XrSpace sp, XrSpace base, XrTime tt, XrPosef& out) {
         XrSpaceLocation l{ XR_TYPE_SPACE_LOCATION };
         if (XR_FAILED(N.LocateSpace(sp, base, tt, &l))) return false; // raw: our own spaces, never the game's offsets
         const XrSpaceLocationFlags need = XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
@@ -837,16 +853,16 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
     // The lock covers our work only, never the runtime's xrEndFrame: that can wait for the compositor
     // for milliseconds, and the game's input thread (xrSyncActions, xrGetActionState*) needs this lock.
     std::unique_lock l(gMx);
-    if (s == gSess) fi = gHeadSmooth.OnEndFrame(fi);
-    if (s != gSess || !fi || !gEng.Active() || !gGfx.api) {
-        if (s == gSess && fi && gMirror.On() && gGfx.api == 11)
+    if (s == gSession.handle) fi = gHeadSmooth.OnEndFrame(fi);
+    if (s != gSession.handle || !fi || !gEng.Active() || !gSession.gfx.api) {
+        if (s == gSession.handle && fi && gMirror.On() && gSession.gfx.api == 11)
             MirrorFrame(std::vector<const XrCompositionLayerBaseHeader*>(fi->layers, fi->layers + fi->layerCount), fi->displayTime);
         l.unlock();
         return N.EndFrame(s, fi);
     }
     LayerList layers(fi->layers, fi->layers + fi->layerCount);
     gOverlay.Render(OverlayCtx(), layers);
-    if (gMirror.On() && gGfx.api == 11) MirrorFrame(layers, fi->displayTime);
+    if (gMirror.On() && gSession.gfx.api == 11) MirrorFrame(layers, fi->displayTime);
     XrFrameEndInfo copy = *fi;
     copy.layerCount = (uint32_t)layers.size();
     copy.layers = layers.data();
@@ -866,10 +882,11 @@ static XrResult XRAPI_CALL Hook_xrGetInstanceProcAddr(XrInstance inst, const cha
     }
     HOOK(GetInstanceProcAddr)
     HOOK(DestroyInstance)
-    HOOK(CreateSession) HOOK(DestroySession) HOOK(CreateActionSet) HOOK(CreateAction) HOOK(SuggestInteractionProfileBindings)
-        HOOK(AttachSessionActionSets) HOOK(SyncActions) HOOK(GetActionStateBoolean) HOOK(GetActionStateFloat) HOOK(GetActionStateVector2f)
-            HOOK(WaitFrame) HOOK(EndFrame) HOOK(CreateActionSpace) HOOK(CreateReferenceSpace) HOOK(DestroySpace) HOOK(LocateSpace)
-                HOOK(LocateViews) HOOK(CreateSwapchain) HOOK(DestroySwapchain) HOOK(EnumerateSwapchainImages) HOOK(AcquireSwapchainImage)
+    HOOK(CreateSession)
+    HOOK(DestroySession) HOOK(CreateActionSet) HOOK(CreateAction) HOOK(SuggestInteractionProfileBindings) HOOK(AttachSessionActionSets)
+        HOOK(SyncActions) HOOK(GetActionStateBoolean) HOOK(GetActionStateFloat) HOOK(GetActionStateVector2f) HOOK(WaitFrame) HOOK(EndFrame)
+            HOOK(CreateActionSpace) HOOK(CreateReferenceSpace) HOOK(DestroySpace) HOOK(LocateSpace) HOOK(LocateViews) HOOK(CreateSwapchain)
+                HOOK(DestroySwapchain) HOOK(EnumerateSwapchainImages) HOOK(AcquireSwapchainImage)
                     HOOK(ReleaseSwapchainImage) if (n == "xrLocateSpaces") {
         N.LocateSpaces = (PFN_xrLocateSpaces)*fn;
         *fn = (PFN_xrVoidFunction)Hook_xrLocateSpaces;
