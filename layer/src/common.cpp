@@ -22,8 +22,9 @@ std::string WToUtf8(const std::wstring& w) {
     WideCharToMultiByte(CP_UTF8, 0, w.data(), (int)w.size(), s.data(), n, nullptr, nullptr);
     return s;
 }
-std::wstring DataDir() {
-    if (const wchar_t* t = _wgetenv(L"OPENXR_COMPANION_TEST_DATA")) { CreateDirectoryW(t, nullptr); return t; } // tests only
+// The real data folder, worked out once (it was looked up, migrated and created again on every call,
+// several times a second from the game's input thread).
+static std::wstring RealDataDir() {
     PWSTR p = nullptr;
     std::wstring d;
     if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &p))) d = p;
@@ -39,12 +40,17 @@ std::wstring DataDir() {
     CreateDirectoryW(d.c_str(), nullptr);
     return d;
 }
+std::wstring DataDir() {
+    if (const wchar_t* t = _wgetenv(L"OPENXR_COMPANION_TEST_DATA"); t && *t) { CreateDirectoryW(t, nullptr); return t; } // tests only
+    static const std::wstring real = RealDataDir();
+    return real;
+}
 std::wstring ProfilesDir() {
     std::wstring d = DataDir() + L"\\profiles";
-    CreateDirectoryW(d.c_str(), nullptr);
+    CreateDirectoryW(d.c_str(), nullptr); // one cheap call; someone may have deleted it
     return d;
 }
-std::string ExeName() {
+static std::string ExeNameNow() {
     wchar_t buf[MAX_PATH]{};
     GetModuleFileNameW(nullptr, buf, MAX_PATH);
     std::wstring w = buf;
@@ -56,6 +62,7 @@ std::string ExeName() {
     std::transform(r.begin(), r.end(), r.begin(), [](unsigned char c) { return (char)tolower(c); });
     return r;
 }
+std::string ExeName() { static const std::string n = ExeNameNow(); return n; } // the process never changes
 double NowSec() {
     static LARGE_INTEGER f = [] { LARGE_INTEGER x; QueryPerformanceFrequency(&x); return x; }();
     LARGE_INTEGER c; QueryPerformanceCounter(&c);

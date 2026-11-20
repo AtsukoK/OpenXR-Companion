@@ -186,7 +186,7 @@ static bool ParsePosePath(const std::string& s, PoseBind& b) {
 // our offsets + steadying moved each hand (so a log from a glitch shows whether the layer moved it).
 struct TrackDiag {
     uint64_t lastFlags = ~0ull; bool havePrev = false; XrPosef prev{}; XrTime prevT = 0;
-    int reads = 0, older = 0, untracked = 0, jumps = 0;
+    int reads = 0, older = 0, untracked = 0, jumps = 0, changes = 0, lines = 0; // lines: written this 10 s (capped)
     float movedSum = 0, movedMax = 0, turnedSum = 0, turnedMax = 0; int movedN = 0;
 };
 static TrackDiag gTrackDiag[2][2]; static double gTrackDiagT = 0;
@@ -205,8 +205,8 @@ static void TrackDiagRaw(const GameSpace& g, XrTime t, uint64_t flags, const XrP
     const uint64_t full = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR_SPACE_LOCATION_POSITION_VALID_BIT |
                           XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT | XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
     if ((flags & full) != full) d.untracked++;
-    if (flags != d.lastFlags) {
-        if (d.lastFlags != ~0ull) Log("tracking: %s %s now %s", hn, kn, FlagText(flags).c_str());
+    if (flags != d.lastFlags) { // at most 8 lines per pose per 10 s: a flickering hand must not flood the log
+        if (d.lastFlags != ~0ull) { d.changes++; if (d.lines++ < 8) Log("tracking: %s %s now %s", hn, kn, FlagText(flags).c_str()); }
         else Log("tracking: %s %s first read: %s", hn, kn, FlagText(flags).c_str());
         d.lastFlags = flags;
     }
@@ -218,7 +218,7 @@ static void TrackDiagRaw(const GameSpace& g, XrTime t, uint64_t flags, const XrP
             double gap = (t - d.prevT) * 1e-9;
             if (jump > 0.2f && gap < 0.1) {
                 d.jumps++;
-                Log("tracking: %s %s JUMPED %.0f cm in %.0f ms (from %.2f %.2f %.2f to %.2f %.2f %.2f), %s", hn, kn, jump * 100.f, gap * 1000.0,
+                if (d.lines++ < 8) Log("tracking: %s %s JUMPED %.0f cm in %.0f ms (from %.2f %.2f %.2f to %.2f %.2f %.2f), %s", hn, kn, jump * 100.f, gap * 1000.0,
                     d.prev.position.x, d.prev.position.y, d.prev.position.z, raw.position.x, raw.position.y, raw.position.z, FlagText(flags).c_str());
             }
         }
@@ -241,9 +241,10 @@ static void TrackDiagSummary() {
         TrackDiag& d = gTrackDiag[h][k];
         if (!d.reads) continue;
         float n = (float)std::max(1, d.movedN);
-        Log("tracking 10 s: %s %s reads %d (older time %d, not fully tracked %d, jumps %d); layer moved it %.1f cm avg / %.1f max, turned %.1f deg avg / %.1f max",
-            kHandName[h], kKindName[k], d.reads, d.older, d.untracked, d.jumps, d.movedSum * 100.f / n, d.movedMax * 100.f, d.turnedSum / n, d.turnedMax);
-        d.reads = d.older = d.untracked = d.jumps = d.movedN = 0; d.movedSum = d.movedMax = d.turnedSum = d.turnedMax = 0;
+        Log("tracking 10 s: %s %s reads %d (older time %d, not fully tracked %d, tracking changes %d, jumps %d%s); layer moved it %.1f cm avg / %.1f max, turned %.1f deg avg / %.1f max",
+            kHandName[h], kKindName[k], d.reads, d.older, d.untracked, d.changes, d.jumps, d.lines > 8 ? ", some lines not written" : "",
+            d.movedSum * 100.f / n, d.movedMax * 100.f, d.turnedSum / n, d.turnedMax);
+        d.reads = d.older = d.untracked = d.jumps = d.movedN = d.changes = d.lines = 0; d.movedSum = d.movedMax = d.turnedSum = d.turnedMax = 0;
     }
 }
 
