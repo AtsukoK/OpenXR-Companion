@@ -11,14 +11,15 @@ void Engine::UpdateAdjustWheel() {
     if (adjust && wr.open)
         adjustClosedAt = -1;
     else if (adjust && !kb.visible &&
-             prof->style.anchor.rfind("hand", 0) ==
-                 0) { // wheels in front of you aren't brought out: they got in the way (open one with its button to place it)
+             IsHandAnchor(
+                 prof->style
+                     .anchor)) { // wheels in front of you aren't brought out: they got in the way (open one with its button to place it)
         if (adjustClosedAt < 0) adjustClosedAt = now;
         if (now - adjustClosedAt > 0.6 && !prof->wheels.empty()) {
             int hand = fr.h[1].gripValid ? 1 : 0;
             Action a;
             a.type = ActType::Wheel;
-            a.confirm = "button";
+            a.confirm = ConfirmMode::Button;
             a.wheel = prof->wheels.count(hand ? "right" : "left") ? (hand ? "right" : "left") : prof->wheels.begin()->first;
             for (auto& b : prof->bindings) // prefer the wheel this hand really opens
                 if (b.enabled && b.action.type == ActType::Wheel && !b.chord.empty() && b.chord.back().hand == hand &&
@@ -47,7 +48,7 @@ void Engine::UpdateAdjustWheel() {
         return;
     }
     XrPosef obj = GrabbedPose(); // keeps the hand's angle: tilt and turn it however you like
-    st.poses[st.anchor] = { true, PMul(PInv(WheelFrame(wr.openerHand)), obj) };
+    st.poses[EnumKey(kWheelAnchorNames, st.anchor)] = { true, PMul(PInv(WheelFrame(wr.openerHand)), obj) };
     float dt = (float)std::clamp(now - lastNow, 0.0, 0.1);
     st.radius = std::clamp(st.radius * (1.f + hr.sy * dt * 0.8f), 0.05f, 0.4f);
     wr.pose = obj;

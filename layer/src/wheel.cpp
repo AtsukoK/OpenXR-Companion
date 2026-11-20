@@ -10,17 +10,17 @@ static constexpr float kPi = 3.14159265f;
 XrPosef Engine::WheelFrame(int hand) const {
     XrPosef f = YawFrame(fr.head);
     const Style& st = prof->style;
-    if ((st.anchor == "hand" || st.anchor == "hand_locked") && fr.h[hand].gripValid) f.position = fr.h[hand].gripPose.position;
+    if (IsHandAnchor(st.anchor) && fr.h[hand].gripValid) f.position = fr.h[hand].gripPose.position;
     return f;
 }
 
 XrPosef Engine::WheelPose(int hand) const {
     const Style& st = prof->style;
-    auto fp = st.poses.find(st.anchor);
+    auto fp = st.poses.find(EnumKey(kWheelAnchorNames, st.anchor));
     if (fp != st.poses.end() && fp->second.set) return PMul(WheelFrame(hand), fp->second.p);
     Vec3 head = V(fr.head.position);
     Vec3 center;
-    bool handAnchor = st.anchor == "hand" || st.anchor == "hand_locked";
+    bool handAnchor = IsHandAnchor(st.anchor);
     if (handAnchor && fr.h[hand].gripValid) {
         Vec3 g = V(fr.h[hand].gripPose.position);
         Vec3 toward = head - g;
@@ -52,28 +52,28 @@ void Engine::OpenWheel(const Action& a, int bi, int hand) {
     wr.opener = bi;
     wr.openerHand = hand;
     const Selection& sel = prof->sel;
-    wr.selHand = sel.hand == "left" ? 0 : sel.hand == "right" ? 1 : hand;
+    wr.selHand = sel.hand == SelectHand::Left ? 0 : sel.hand == SelectHand::Right ? 1 : hand;
     wr.confirm = a.confirm;
-    if (wr.confirm == "auto" && bi < 0)
-        wr.confirm = "button"; // opened from a wrist button
-    else if (wr.confirm == "auto") {
+    if (wr.confirm == ConfirmMode::Auto && bi < 0)
+        wr.confirm = ConfirmMode::Button; // opened from a wrist button
+    else if (wr.confirm == ConfirmMode::Auto) {
         const Binding& b = prof->bindings[bi];
         const InputId& t = b.chord.back();
         if (t.feat == F_TOUCH)
-            wr.confirm = "stick_return";
-        else if (b.gesture == "while_held" || b.gesture == "hold")
-            wr.confirm = "release";
+            wr.confirm = ConfirmMode::StickReturn;
+        else if (b.gesture == Gesture::WhileHeld || b.gesture == Gesture::Hold)
+            wr.confirm = ConfirmMode::Release;
         else
-            wr.confirm = "button";
+            wr.confirm = ConfirmMode::Button;
     }
     wr.openTime = now;
     wr.pose = WheelPose(hand);
-    wr.locked = prof->style.anchor == "hand_locked" || prof->style.anchor == "head_locked";
+    wr.locked = IsLockedAnchor(prof->style.anchor);
     // If the stick is already pushed, wait for it to centre first.
     float m = std::hypot(fr.h[wr.selHand].sx, fr.h[wr.selHand].sy);
     wr.stickOut = false;
     if (m > sel.deadzone) wr.hoverSince = -1; // marker: ignore until centred
-    Log("wheel '%s' open, confirm=%s", a.wheel.c_str(), wr.confirm.c_str());
+    Log("wheel '%s' open, confirm=%s", a.wheel.c_str(), EnumKey(kConfirmModeNames, wr.confirm));
     Dirty();
 }
 
@@ -133,8 +133,8 @@ void Engine::UpdateWheel() {
         if (mag < sel.deadzone * 0.6f) wr.hoverSince = now;
         out = false;
     }
-    bool useStick = sel.method != "point";
-    bool usePoint = sel.method == "point" || sel.method == "both";
+    bool useStick = sel.method != SelectMethod::Point;
+    bool usePoint = sel.method == SelectMethod::Point || sel.method == SelectMethod::Both;
     int newHover = wr.hovered;
 
     if (useStick && out) newHover = Sector(hr.sx, hr.sy, n);
@@ -156,7 +156,7 @@ void Engine::UpdateWheel() {
     }
 
     // Stick-return confirm: pick the hovered item when the stick comes back to the centre.
-    if (useStick && wr.confirm == "stick_return" && wr.stickOut && !out && wr.hovered >= 0) {
+    if (useStick && wr.confirm == ConfirmMode::StickReturn && wr.stickOut && !out && wr.hovered >= 0) {
         wr.stickOut = false;
         Select(wr.hovered);
         return;
@@ -170,8 +170,8 @@ void Engine::UpdateWheel() {
         Dirty();
     }
     // Release-confirm wheels open submenus by resting on them.
-    if (wr.confirm == "release" && wr.hovered >= 0 && sel.submenuDwellMs > 0 && w->items[wr.hovered].action.type == ActType::Wheel &&
-        (now - wr.hoverSince) * 1000 >= sel.submenuDwellMs) {
+    if (wr.confirm == ConfirmMode::Release && wr.hovered >= 0 && sel.submenuDwellMs > 0 &&
+        w->items[wr.hovered].action.type == ActType::Wheel && (now - wr.hoverSince) * 1000 >= sel.submenuDwellMs) {
         Select(wr.hovered);
         return;
     }

@@ -58,15 +58,15 @@ bool Engine::WristPoseNow(int h, XrPosef& pose, Vec3& n) const {
     Vec3 ax = Rotate(q, { 1, 0, 0 }), Z = Rotate(q, { 0, 0, 1 });
     // OpenXR grip space: +X points out of the palm on the left hand and into it on the right.
     Vec3 palmOut = h == 0 ? ax : ax * -1.f;
-    n = W.face == "inner" ? palmOut : palmOut * -1.f;
+    n = W.face == ArmSide::Inner ? palmOut : palmOut * -1.f;
     // fingers: top of the text toward the fingers (hand held up, palm toward the face).
     // along_arm: text runs along the forearm, left to right as seen with the arm held across the body.
     // between: halfway between the two, for an arm held half raised.
     Vec3 yFingers = Z * -1.f;
     Vec3 xAlong = h == 0 ? Z * -1.f : Z;
     Vec3 yAlong = Cross(n, xAlong);
-    Vec3 y = W.textUp == "along_arm" ? yAlong : W.textUp == "between" ? Norm(yFingers + yAlong) : yFingers;
-    if (W.textUp == "custom") { // turned by rotate_deg from along_arm, around the panel normal
+    Vec3 y = W.textUp == TextUp::AlongArm ? yAlong : W.textUp == TextUp::Between ? Norm(yFingers + yAlong) : yFingers;
+    if (W.textUp == TextUp::Custom) { // turned by rotate_deg from along_arm, around the panel normal
         float a = W.rotateDeg * kDeg;
         y = Norm(yAlong * std::cos(a) + Cross(n, yAlong) * std::sin(a));
     }
@@ -241,7 +241,7 @@ void Engine::UpdateWrist(int h) {
     int o = 1 - h; // the pressing hand
     const HandRaw& hr = fr.h[o];
     int hover = -1;
-    bool canPoke = W.press != "point", canPoint = W.press != "poke";
+    bool canPoke = W.press != PressMethod::Point, canPoint = W.press != PressMethod::Poke;
     auto toPanel = [&](Vec3 p, float& u, float& v, float& depth) {
         Vec3 l = RotateInv(pose.orientation, p - c);
         u = l.x / W.size + 0.5f;

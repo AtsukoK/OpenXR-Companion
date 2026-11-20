@@ -384,8 +384,8 @@ int main(int argc, char** argv) {
     CHECK(p != nullptr, ("built-in default profile parses " + err).c_str());
     if (!p) return 1;
     p->notifications = true;
-    p->sel.method = "thumbstick"; // the tests drive the stick, whatever the user picked
-    p->blockWhileOpen = "hand";
+    p->sel.method = SelectMethod::Thumbstick; // the tests drive the stick, whatever the user picked
+    p->blockWhileOpen = BlockWhileOpen::Hand;
     {
         for (auto& b : p->bindings)
             if (b.action.type == ActType::Wheel) b.enabled = false;
@@ -395,12 +395,12 @@ int main(int argc, char** argv) {
         InputId r;
         ParseInput("right.thumbrest", r);
         ob.chord.push_back(r);
-        ob.gesture = "double_tap";
+        ob.gesture = Gesture::DoubleTap;
         ob.doubleTapMs = 400;
-        ob.block = "none";
+        ob.block = BindingBlock::None;
         ob.action.type = ActType::Wheel;
         ob.action.wheel = "right";
-        ob.action.confirm = "stick_return";
+        ob.action.confirm = ConfirmMode::StickReturn;
         p->bindings.insert(p->bindings.begin(), ob);
     }
     Engine e;
@@ -482,8 +482,8 @@ int main(int argc, char** argv) {
         ParseInput("left.grip", a);
         ParseInput("left.thumbstick.click", b);
         lb.chord = { a, b };
-        lb.gesture = "while_held";
-        lb.block = "trigger";
+        lb.gesture = Gesture::WhileHeld;
+        lb.block = BindingBlock::Trigger;
         lb.action.type = ActType::Layer;
         lb.action.mode = ActMode::Hold;
         lb.action.layer = "testshift";
@@ -511,7 +511,7 @@ int main(int argc, char** argv) {
         InputId m;
         ParseInput("left.menu", m);
         kbB.chord.push_back(m);
-        kbB.gesture = "press";
+        kbB.gesture = Gesture::Press;
         kbB.action.type = ActType::Keyboard;
         p->bindings.push_back(kbB);
         e.SetProfile(p);
@@ -616,8 +616,8 @@ int main(int argc, char** argv) {
         p->wrist[0].pages["second"] = second;
         p->wrist[0].enabled = true;
         p->wrist[0].start = "wristtest";
-        p->wrist[0].face = "inner";
-        p->wrist[0].press = "both";
+        p->wrist[0].face = ArmSide::Inner;
+        p->wrist[0].press = PressMethod::Both;
         e.SetProfile(p);
         f.head = XrPosef{ { 0, 0, 0, 1 }, { 0, 1.6f, 0 } }; // looking straight ahead (-Z)
         // Left grip turned so the palm side faces the eyes, 0.4 m in front.
@@ -760,12 +760,12 @@ int main(int argc, char** argv) {
         InputId r;
         ParseInput("right.secondary.touch", r);
         ob.chord.push_back(r);
-        ob.gesture = "double_tap";
+        ob.gesture = Gesture::DoubleTap;
         ob.doubleTapMs = 400;
-        ob.block = "none";
+        ob.block = BindingBlock::None;
         ob.action.type = ActType::Wheel;
         ob.action.wheel = "right";
-        ob.action.confirm = "stick_return";
+        ob.action.confirm = ConfirmMode::StickReturn;
         q->bindings.insert(q->bindings.begin(), ob);
         Engine e;
         e.SetProfile(q);
@@ -812,11 +812,11 @@ int main(int argc, char** argv) {
         InputId ai;
         ParseInput("left.x", ai);
         ab.chord.push_back(ai);
-        ab.gesture = "press";
-        ab.block = "trigger";
+        ab.gesture = Gesture::Press;
+        ab.block = BindingBlock::Trigger;
         ab.action.type = ActType::Adjust;
         q->bindings.push_back(ab);
-        q->style.anchor = "hand_locked"; // a wheel at the hand is brought out in adjust mode (one in front of you is not)
+        q->style.anchor = WheelAnchor::HandLocked; // a wheel at the hand is brought out in adjust mode (one in front of you is not)
         float elbow0 = q->wrist[0].towardElbow, size0 = q->wrist[0].size, down0 = q->style.headDown, dist0 = q->style.distance,
               rad0 = q->style.radius;
         Engine e;
@@ -899,7 +899,8 @@ int main(int argc, char** argv) {
         f.h[0].sy = -1;
         step(10);
         f.h[0].sy = 0;
-        CHECK(q->style.poses.count(q->style.anchor) && q->style.poses[q->style.anchor].set &&
+        CHECK(q->style.poses.count(EnumKey(kWheelAnchorNames, q->style.anchor)) &&
+                  q->style.poses[EnumKey(kWheelAnchorNames, q->style.anchor)].set &&
                   std::fabs(V(e.view.pose.position).y - (wc.y + 0.05f)) < 0.004f,
               "adjust: dragging the wheel up raises it and keeps that spot");
         step(30);
@@ -926,11 +927,11 @@ int main(int argc, char** argv) {
         InputId ai;
         ParseInput("left.x", ai);
         ab.chord.push_back(ai);
-        ab.gesture = "press";
-        ab.block = "trigger";
+        ab.gesture = Gesture::Press;
+        ab.block = BindingBlock::Trigger;
         ab.action.type = ActType::Adjust;
         q->bindings.push_back(ab);
-        q->style.anchor = "head_locked";
+        q->style.anchor = WheelAnchor::HeadLocked;
         Engine e;
         e.SetProfile(q);
         Frame f;
@@ -966,8 +967,8 @@ int main(int argc, char** argv) {
             InputId ai;
             ParseInput(in, ai);
             ab.chord.push_back(ai);
-            ab.gesture = "press";
-            ab.block = "trigger";
+            ab.gesture = Gesture::Press;
+            ab.block = BindingBlock::Trigger;
             ab.action.type = t;
             q->bindings.push_back(ab);
         };
@@ -1043,8 +1044,8 @@ int main(int argc, char** argv) {
         InputId ai;
         ParseInput("right.a", ai);
         ab.chord.push_back(ai);
-        ab.gesture = "press";
-        ab.block = "trigger";
+        ab.gesture = Gesture::Press;
+        ab.block = BindingBlock::Trigger;
         ab.action.type = ActType::Keyboard;
         q->bindings.push_back(ab);
         Engine e;
@@ -1126,7 +1127,7 @@ int main(int argc, char** argv) {
         q->wrist[0].towardElbow = 0.2f;
         q->wrist[0].side = -0.01f;
         q->wrist[1].size = 0.13f;
-        q->wrist[0].textUp = "custom";
+        q->wrist[0].textUp = TextUp::Custom;
         q->wrist[0].rotateDeg = 33.f;
         q->dock.mode = DockMode::KeysUnderScreen;
         q->dock.pose = { true, XrPosef{ { 0, 0, 0, 1 }, { 0.01f, 0.2f, -0.03f } } };
@@ -1141,7 +1142,7 @@ int main(int argc, char** argv) {
         auto back = ParseProfileText(ss.str(), err);
         CHECK(ok && back && std::fabs(back->style.handUp - 0.17f) < 1e-4f && std::fabs(back->style.radius - 0.15f) < 1e-4f &&
                   std::fabs(back->wrist[0].towardElbow - 0.2f) < 1e-4f && std::fabs(back->wrist[0].side + 0.01f) < 1e-4f &&
-                  std::fabs(back->wrist[1].size - 0.13f) < 1e-4f && back->wrist[0].textUp == "custom" &&
+                  std::fabs(back->wrist[1].size - 0.13f) < 1e-4f && back->wrist[0].textUp == TextUp::Custom &&
                   std::fabs(back->wrist[0].rotateDeg - 33.f) < 0.1f && back->wheels.size() == q->wheels.size(),
               ("adjust: positions are saved to the profile file and the rest is kept " + serr).c_str());
         CHECK(back && back->dock.mode == DockMode::KeysUnderScreen && back->dock.pose.set &&
@@ -1477,7 +1478,7 @@ int main(int argc, char** argv) {
         b.chord.push_back(i);
         b.chordText = "left.menu";
         b.action = adj;
-        b.block = "none";
+        b.block = BindingBlock::None;
         q->bindings.push_back(b);
         e.SetProfile(q);
         f.h[0].menu = true;

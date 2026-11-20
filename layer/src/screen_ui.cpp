@@ -200,7 +200,7 @@ void Engine::ScreenPose() {
         const XrQuaternionf& q = hr.gripPose.orientation;
         Vec3 ax = Rotate(q, { 1, 0, 0 }), Z = Rotate(q, { 0, 0, 1 });
         Vec3 palmOut = h == 0 ? ax : ax * -1.f;
-        Vec3 n = S.face == "inner" ? palmOut : palmOut * -1.f;
+        Vec3 n = S.face == ArmSide::Inner ? palmOut : palmOut * -1.f;
         // Landscape along the forearm, read with the arm held across the body (like a watch); rotate_deg turns it.
         Vec3 xAlong = h == 0 ? Z * -1.f : Z;
         Vec3 yAlong = Cross(n, xAlong);

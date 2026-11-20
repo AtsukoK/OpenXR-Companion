@@ -247,7 +247,7 @@ bool Engine::RunAction(const Action& a, int hand, int bi, bool fromWheel) {
             return false;
         }
         OpenWheel(a, bi, hand);
-        return wr.open && wr.confirm == "release";
+        return wr.open && wr.confirm == ConfirmMode::Release;
     case ActType::Back:
         if (wr.open) {
             if (wr.stack.size() > 1) {
@@ -305,7 +305,7 @@ void Engine::EndAction(const Action& a, int bi) {
         SetLayer(a.layer, false);
         break;
     case ActType::Wheel:
-        if (wr.open && wr.opener == bi && wr.confirm == "release") {
+        if (wr.open && wr.opener == bi && wr.confirm == ConfirmMode::Release) {
             if (wr.hovered >= 0)
                 Select(wr.hovered);
             else
@@ -323,7 +323,7 @@ void Engine::Fire(int bi) {
     s.fired = true;
     Log("fire '%s' (%s)", b.name.c_str(), b.chordText.c_str());
     bool holds = RunAction(b.action, b.chord.back().hand, bi, false);
-    bool wantsEnd = holds && (b.gesture == "press" || b.gesture == "hold" || b.gesture == "while_held");
+    bool wantsEnd = holds && (b.gesture == Gesture::Press || b.gesture == Gesture::Hold || b.gesture == Gesture::WhileHeld);
     if (wantsEnd)
         s.needEnd = true;
     else if (holds)
@@ -349,24 +349,26 @@ void Engine::ProcessBindings() {
         double dur = now - s.armTime;
         if (!Down(trig)) {
             s.armed = false;
-            if (b.gesture == "tap" && dur * 1000 < b.tapMs) {
+            if (b.gesture == Gesture::Tap && dur * 1000 < b.tapMs) {
                 bool otherFired = false;
                 for (int j = 0; j < (int)B.size(); j++)
                     if (j != i && bs[j].fired && bs[j].armTime == s.armTime && B[j].chord.back() == trig) otherFired = true;
                 if (!otherFired) Fire(i);
             }
-            if (b.gesture == "hold" && !s.fired && b.tapPassthrough) pulses.push_back({ trig.hand, trig.comp, MakeOv(trig), now + 0.08 });
+            if (b.gesture == Gesture::Hold && !s.fired && b.tapPassthrough)
+                pulses.push_back({ trig.hand, trig.comp, MakeOv(trig), now + 0.08 });
             EndB(i);
             continue;
         }
-        if (b.gesture == "hold" && !s.fired && dur * 1000 >= b.holdMs) Fire(i);
+        if (b.gesture == Gesture::Hold && !s.fired && dur * 1000 >= b.holdMs) Fire(i);
     }
     // A double tap on a .touch input only counts touches that never become a real press:
     // pressing the button (e.g. B twice fast to loot) cancels it, so it can't open a wheel.
     // (Thumbrest and menu report touch and press as the same thing, so they're left alone.)
     for (int i = 0; i < (int)B.size(); i++) {
         const InputId& t = B[i].chord.back();
-        if (B[i].gesture == "double_tap" && t.feat == F_TOUCH && t.comp != C_THUMBREST && t.comp != C_MENU && cur[t.hand][t.comp][F_PRESS])
+        if (B[i].gesture == Gesture::DoubleTap && t.feat == F_TOUCH && t.comp != C_THUMBREST && t.comp != C_MENU &&
+            cur[t.hand][t.comp][F_PRESS])
             bs[i].lastTap = -1;
     }
     // New presses: arm the most specific matching bindings.
@@ -399,9 +401,9 @@ void Engine::ProcessBindings() {
         s.armed = true;
         s.armTime = now;
         s.fired = false;
-        if (b.gesture == "press" || b.gesture == "while_held")
+        if (b.gesture == Gesture::Press || b.gesture == Gesture::WhileHeld)
             Fire(i);
-        else if (b.gesture == "double_tap") {
+        else if (b.gesture == Gesture::DoubleTap) {
             if (s.lastTap >= 0 && (now - s.lastTap) * 1000 <= b.doubleTapMs) {
                 s.lastTap = -1;
                 Fire(i);
@@ -443,7 +445,7 @@ void Engine::UpdatePointers() {
             best = t;
             bestQ = pose.orientation;
         };
-        if (wr.open && h == wr.selHand && (prof->sel.method == "point" || prof->sel.method == "both"))
+        if (wr.open && h == wr.selHand && (prof->sel.method == SelectMethod::Point || prof->sel.method == SelectMethod::Both))
             test(wr.pose, prof->style.radius, prof->style.radius);
         if (kb.visible) test(kb.pose, kb.widthM / 2, kb.heightM / 2);
         if (screen.interactive && screen.hoverHand == h)
@@ -456,7 +458,7 @@ void Engine::UpdatePointers() {
         bool wristUp = wv.visible && grab.target != WristGrab(panel);
         float dPanel = wristUp ? Len(V(wv.pose.position) - o) : 1e9f;
         // The laser stays until the touch cursor actually takes over (no gap where neither shows).
-        if (wristUp && prof->wrist[panel].press != "poke" && !wv.cursor) test(wv.pose, wv.sizeM / 2, wv.sizeM / 2);
+        if (wristUp && prof->wrist[panel].press != PressMethod::Poke && !wv.cursor) test(wv.pose, wv.sizeM / 2, wv.sizeM / 2);
         // Fingertip silhouette: where the poke tip is, so you can find your "finger" before it reaches the panel.
         if (wristUp && prof->pointer.finger && dPanel < 0.5f) { // on every panel: it also shows where the laser starts
             const float len = 0.09f;
@@ -469,7 +471,7 @@ void Engine::UpdatePointers() {
         if (best > 1e8f) {
             // Guide laser: a wrist panel is up but this hand isn't aimed at it yet. Show a short beam
             // so the ray can be found and steered onto the panel. Hidden while the touch cursor shows.
-            if (!(wristUp && prof->pointer.guide && prof->wrist[panel].press != "poke" && !wv.cursor && dPanel < 0.8f)) continue;
+            if (!(wristUp && prof->pointer.guide && prof->wrist[panel].press != PressMethod::Poke && !wv.cursor && dPanel < 0.8f)) continue;
             float len = std::clamp(dPanel * 1.3f, 0.12f, 0.6f);
             P.on = true;
             P.dot = false;
@@ -492,23 +494,23 @@ void Engine::ComputeBlocks() {
     for (int i = 0; i < (int)bs.size(); i++) {
         if (!bs[i].armed) continue;
         const Binding& b = prof->bindings[i];
-        if (b.block == "trigger") {
+        if (b.block == BindingBlock::Trigger) {
             auto& t = b.chord.back();
             want[t.hand][t.comp] = true;
-        } else if (b.block == "all")
+        } else if (b.block == BindingBlock::All)
             for (auto& t : b.chord)
                 want[t.hand][t.comp] = true;
     }
     if (wr.open) {
-        const std::string& m = prof->blockWhileOpen;
-        if (m == "all") {
+        const BlockWhileOpen m = prof->blockWhileOpen;
+        if (m == BlockWhileOpen::All) {
             for (auto& h : want)
                 for (auto& c : h)
                     c = true;
-        } else if (m == "hand") {
+        } else if (m == BlockWhileOpen::Hand) {
             for (int c = 0; c < C_COUNT; c++)
                 want[wr.selHand][c] = want[wr.openerHand][c] = true;
-        } else if (m == "minimal") {
+        } else if (m == BlockWhileOpen::Minimal) {
             want[wr.selHand][C_STICK] = true;
             if (prof->sel.confirmComp >= 0) want[wr.selHand][prof->sel.confirmComp] = true;
             if (prof->sel.cancelComp >= 0) want[wr.selHand][prof->sel.cancelComp] = true;
@@ -572,7 +574,7 @@ void Engine::Update(const Frame& f) {
         const PointerStyle& P = prof->pointer;
         for (int h = 0; h < 2; h++) {
             HandRaw& hr = fr.h[h];
-            bool on = P.correction == "always" || (P.correction == "auto" && hr.touchCtl);
+            bool on = P.correction == LaserCorrection::Always || (P.correction == LaserCorrection::Auto && hr.touchCtl);
             if (!on || !hr.aimValid) continue;
             XrQuaternionf q = hr.aimPose.orientation;
             float a = -P.pitchDeg * 3.14159265f / 180.f * 0.5f; // about local +X; negative = down

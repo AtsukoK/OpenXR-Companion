@@ -161,8 +161,9 @@ static Action ParseAction(const json& j, const std::string& ctx) {
     Get(j, "steps", a.steps);
     Get(j, "wheel", a.wheel);
     Get(j, "page", a.page);
-    Get(j, "confirm", a.confirm);
-    a.confirm = Lower(a.confirm);
+    std::string confirm;
+    Get(j, "confirm", confirm);
+    if (!confirm.empty() && !ParseEnum(kConfirmModeNames, Lower(confirm), a.confirm)) a.confirm = ConfirmMode::Button;
     Get(j, "layer", a.layer);
     std::string place;
     Get(j, "place", place);
@@ -186,7 +187,6 @@ static Action ParseAction(const json& j, const std::string& ctx) {
             a.mode != ActMode::Grab && a.mode != ActMode::Reset)
             throw std::runtime_error(ctx + ": controller_offsets mode must be panel, enable, on, off, grab or reset");
     }
-    if (a.confirm.empty()) a.confirm = "auto";
     if (a.type == ActType::Layer && a.mode == ActMode::Tap) a.mode = ActMode::Toggle;
     if (j.contains("target")) {
         std::string tg = j["target"].get<std::string>();
@@ -228,8 +228,9 @@ static void ParsePoses(const json& j, std::map<std::string, FreePose>& m) {
 }
 
 static void ParseStyle(const json& j, Style& s) {
-    Get(j, "anchor", s.anchor);
-    s.anchor = Lower(s.anchor);
+    std::string anchor;
+    Get(j, "anchor", anchor);
+    if (!anchor.empty() && !ParseEnum(kWheelAnchorNames, Lower(anchor), s.anchor)) s.anchor = WheelAnchor::Head;
     Get(j, "radius_m", s.radius);
     Get(j, "head_distance_m", s.distance);
     Get(j, "head_down_m", s.headDown);
@@ -255,10 +256,12 @@ static void ParseStyle(const json& j, Style& s) {
 }
 
 static void ParseSel(const json& j, Selection& s) {
-    Get(j, "method", s.method);
-    s.method = Lower(s.method);
-    Get(j, "hand", s.hand);
-    s.hand = Lower(s.hand);
+    std::string method;
+    Get(j, "method", method);
+    if (!method.empty() && !ParseEnum(kSelectMethodNames, Lower(method), s.method)) s.method = SelectMethod::Thumbstick;
+    std::string hand;
+    Get(j, "hand", hand);
+    if (!hand.empty() && !ParseEnum(kSelectHandNames, Lower(hand), s.hand)) s.hand = SelectHand::Opener;
     Get(j, "deadzone", s.deadzone);
     if (j.contains("confirm_button")) s.confirmComp = ParseCompName(j["confirm_button"].get<std::string>());
     if (j.contains("cancel_button")) s.cancelComp = ParseCompName(j["cancel_button"].get<std::string>());
@@ -270,8 +273,9 @@ static void ParseSel(const json& j, Selection& s) {
 static std::shared_ptr<Profile> ParseProfile(const json& j) {
     auto p = std::make_shared<Profile>();
     Get(j, "enabled", p->enabled);
-    Get(j, "block_while_open", p->blockWhileOpen);
-    p->blockWhileOpen = Lower(p->blockWhileOpen);
+    std::string block;
+    Get(j, "block_while_open", block);
+    if (!block.empty() && !ParseEnum(kBlockWhileOpenNames, Lower(block), p->blockWhileOpen)) p->blockWhileOpen = BlockWhileOpen::None;
     if (j.contains("thresholds")) {
         auto& t = j["thresholds"];
         Get(t, "press_on", p->pressOn);
@@ -288,9 +292,9 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
     if (j.contains("pointer")) {
         auto& k = j["pointer"];
         auto& P = p->pointer;
-        Get(k, "correction", P.correction);
-        P.correction = Lower(P.correction);
-        if (P.correction != "auto" && P.correction != "always" && P.correction != "off") P.correction = "auto";
+        std::string correction;
+        Get(k, "correction", correction);
+        if (!correction.empty() && !ParseEnum(kLaserCorrectionNames, Lower(correction), P.correction)) P.correction = LaserCorrection::Auto;
         Get(k, "pitch_down_deg", P.pitchDeg);
         Get(k, "down_m", P.downM);
         Get(k, "forward_m", P.forwardM);
@@ -380,9 +384,9 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
         Get(k, "lift_m", S.lift);
         Get(k, "side_m", S.side);
         Get(k, "rotate_deg", S.rotateDeg);
-        Get(k, "face", S.face);
-        S.face = Lower(S.face);
-        if (S.face != "back" && S.face != "inner") S.face = "back";
+        std::string face;
+        Get(k, "face", face);
+        if (!face.empty() && !ParseEnum(kArmSideNames, Lower(face), S.face)) S.face = ArmSide::Back;
         Get(k, "width_m", S.width);
         Get(k, "distance_m", S.distance);
         Get(k, "below_eyes_m", S.below);
@@ -421,18 +425,18 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
                 B.chord.push_back(id);
             }
             if (B.chord.empty()) throw std::runtime_error(ctx + ": no input");
-            Get(b, "gesture", B.gesture);
-            B.gesture = Lower(B.gesture);
-            static const char* okG[] = { "press", "tap", "hold", "double_tap", "while_held" };
-            if (std::find_if(std::begin(okG), std::end(okG), [&](const char* g) { return B.gesture == g; }) == std::end(okG))
-                throw std::runtime_error(ctx + ": unknown gesture '" + B.gesture + "'");
+            std::string gesture;
+            Get(b, "gesture", gesture);
+            if (!gesture.empty() && !ParseEnum(kGestureNames, Lower(gesture), B.gesture))
+                throw std::runtime_error(ctx + ": unknown gesture '" + gesture + "'");
             Get(b, "hold_ms", B.holdMs);
             Get(b, "tap_ms", B.tapMs);
             Get(b, "double_tap_ms", B.doubleTapMs);
             B.layers = StrList(b, "layers");
             B.notLayers = StrList(b, "not_layers");
-            Get(b, "block", B.block);
-            B.block = Lower(B.block);
+            std::string block;
+            Get(b, "block", block);
+            if (!block.empty() && !ParseEnum(kBindingBlockNames, Lower(block), B.block)) B.block = BindingBlock::None;
             Get(b, "tap_passthrough", B.tapPassthrough);
             B.action = ParseAction(b.value("action", json::object()), ctx);
             p->bindings.push_back(std::move(B));
@@ -507,11 +511,12 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
             if (W.pages.empty()) throw std::runtime_error(tag + ": no pages");
             throw std::runtime_error(tag + ": first page '" + W.start + "' does not exist");
         }
-        Get(w, "face", W.face);
-        W.face = Lower(W.face);
-        Get(w, "text_up", W.textUp);
-        W.textUp = Lower(W.textUp);
-        if (W.textUp != "fingers" && W.textUp != "between" && W.textUp != "along_arm" && W.textUp != "custom")
+        std::string face;
+        Get(w, "face", face);
+        bool faceOk = face.empty() || ParseEnum(kArmSideNames, Lower(face), W.face);
+        std::string textUp;
+        Get(w, "text_up", textUp);
+        if (!textUp.empty() && !ParseEnum(kTextUpNames, Lower(textUp), W.textUp))
             throw std::runtime_error(tag + ": text_up must be fingers, between, along_arm or custom");
         Get(w, "rotate_deg", W.rotateDeg);
         Get(w, "size_m", W.size);
@@ -523,15 +528,15 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
         Get(w, "gaze_deg", W.gazeDeg);
         Get(w, "show_ms", W.showMs);
         Get(w, "hide_ms", W.hideMs);
-        Get(w, "press", W.press);
-        W.press = Lower(W.press);
+        std::string press;
+        Get(w, "press", press);
+        bool pressOk = press.empty() || ParseEnum(kPressMethodNames, Lower(press), W.press);
         W.size = std::clamp(W.size, 0.05f, 0.4f);
         W.columns = std::clamp(W.columns, 1, 4);
         W.facingDeg = std::clamp(W.facingDeg, 5.f, 80.f);
         W.gazeDeg = std::clamp(W.gazeDeg, 5.f, 60.f);
-        if (W.face != "inner" && W.face != "back") throw std::runtime_error(tag + ": face must be inner or back");
-        if (W.press != "poke" && W.press != "point" && W.press != "both")
-            throw std::runtime_error(tag + ": press must be poke, point or both");
+        if (!faceOk) throw std::runtime_error(tag + ": face must be inner or back");
+        if (!pressOk) throw std::runtime_error(tag + ": press must be poke, point or both");
     };
     if (j.contains("wrist_panel")) { // older profiles: one panel with a "hand"
         auto& w = j["wrist_panel"];
@@ -752,8 +757,8 @@ bool SavePlacement(const Profile& p, std::string& err) {
             w["toward_elbow_m"] = r(W.towardElbow);
             w["lift_m"] = r(W.lift);
             w["side_m"] = r(W.side);
-            w["text_up"] = W.textUp;
-            if (W.textUp == "custom") w["rotate_deg"] = std::round(W.rotateDeg * 10.f) / 10.f;
+            w["text_up"] = EnumKey(kTextUpNames, W.textUp);
+            if (W.textUp == TextUp::Custom) w["rotate_deg"] = std::round(W.rotateDeg * 10.f) / 10.f;
             if (W.pose.set)
                 w["pose"] = PoseJson(W.pose);
             else

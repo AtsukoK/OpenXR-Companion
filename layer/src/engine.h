@@ -240,7 +240,7 @@ private:
         bool open = false;
         std::vector<const Wheel*> stack;
         int hovered = -1, opener = -1, openerHand = 1, selHand = 1;
-        std::string confirm;
+        ConfirmMode confirm = ConfirmMode::Auto;
         double hoverSince = 0, openTime = 0;
         bool stickOut = false, locked = false;
         XrPosef pose{ { 0, 0, 0, 1 }, { 0, 0, 0 } };

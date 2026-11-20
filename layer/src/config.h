@@ -20,6 +20,104 @@ int ParseCompName(const std::string& s); // "trigger", "primary", ... -> Comp or
 
 enum class ActType { None, Key, Sequence, XrInput, Wheel, Back, Close, Layer, Reload, Keyboard, Page, Adjust, Screen, Offsets, Mirror };
 
+// Text <-> enum tables for profile settings: { value, "text in the file" }.
+template <class E>
+struct EnumName {
+    E value;
+    const char* key;
+};
+template <class E, size_t N>
+bool ParseEnum(const EnumName<E> (&table)[N], const std::string& text, E& out) {
+    for (const auto& n : table) {
+        if (text == n.key) {
+            out = n.value;
+            return true;
+        }
+    }
+    return false;
+}
+template <class E, size_t N>
+const char* EnumKey(const EnumName<E> (&table)[N], E value) {
+    for (const auto& n : table)
+        if (n.value == value) return n.key;
+    return "";
+}
+
+// How a binding's input has to be used to fire it.
+enum class Gesture { Press, Tap, Hold, DoubleTap, WhileHeld };
+inline constexpr EnumName<Gesture> kGestureNames[] = { { Gesture::Press, "press" },
+                                                       { Gesture::Tap, "tap" },
+                                                       { Gesture::Hold, "hold" },
+                                                       { Gesture::DoubleTap, "double_tap" },
+                                                       { Gesture::WhileHeld, "while_held" } };
+
+// How a wheel item is chosen: on letting go of the opener, on letting the stick back, or with a button.
+enum class ConfirmMode { Auto, Release, StickReturn, Button };
+inline constexpr EnumName<ConfirmMode> kConfirmModeNames[] = { { ConfirmMode::Auto, "auto" },
+                                                               { ConfirmMode::Release, "release" },
+                                                               { ConfirmMode::StickReturn, "stick_return" },
+                                                               { ConfirmMode::Button, "button" } };
+
+// Which hand picks wheel items.
+enum class SelectHand { Opener, Left, Right };
+inline constexpr EnumName<SelectHand> kSelectHandNames[] = { { SelectHand::Opener, "opener" },
+                                                             { SelectHand::Left, "left" },
+                                                             { SelectHand::Right, "right" } };
+
+// What of a binding's input the game stops seeing.
+enum class BindingBlock { None, Trigger, All };
+inline constexpr EnumName<BindingBlock> kBindingBlockNames[] = { { BindingBlock::None, "none" },
+                                                                 { BindingBlock::Trigger, "trigger" },
+                                                                 { BindingBlock::All, "all" } };
+
+// Which way the text on a wrist panel reads.
+enum class TextUp { Fingers, Between, AlongArm, Custom };
+inline constexpr EnumName<TextUp> kTextUpNames[] = {
+    { TextUp::Fingers, "fingers" }, { TextUp::Between, "between" }, { TextUp::AlongArm, "along_arm" }, { TextUp::Custom, "custom" }
+};
+
+// How wrist panel buttons are pressed.
+enum class PressMethod { Poke, Point, Both };
+inline constexpr EnumName<PressMethod> kPressMethodNames[] = { { PressMethod::Poke, "poke" },
+                                                               { PressMethod::Point, "point" },
+                                                               { PressMethod::Both, "both" } };
+
+// When the controller's aim ray is corrected (Quest Touch controllers start it too high).
+enum class LaserCorrection { Auto, Always, Off };
+inline constexpr EnumName<LaserCorrection> kLaserCorrectionNames[] = { { LaserCorrection::Auto, "auto" },
+                                                                       { LaserCorrection::Always, "always" },
+                                                                       { LaserCorrection::Off, "off" } };
+
+// What a wheel is placed relative to. "Locked" = it stays where it opened instead of following.
+enum class WheelAnchor { Hand, HandLocked, Head, HeadLocked };
+inline constexpr EnumName<WheelAnchor> kWheelAnchorNames[] = { { WheelAnchor::Hand, "hand" },
+                                                               { WheelAnchor::HandLocked, "hand_locked" },
+                                                               { WheelAnchor::Head, "head" },
+                                                               { WheelAnchor::HeadLocked, "head_locked" } };
+inline bool IsHandAnchor(WheelAnchor a) {
+    return a == WheelAnchor::Hand || a == WheelAnchor::HandLocked;
+}
+inline bool IsLockedAnchor(WheelAnchor a) {
+    return a == WheelAnchor::HandLocked || a == WheelAnchor::HeadLocked;
+}
+
+// How wheel items are picked.
+enum class SelectMethod { Thumbstick, Point, Both };
+inline constexpr EnumName<SelectMethod> kSelectMethodNames[] = { { SelectMethod::Thumbstick, "thumbstick" },
+                                                                 { SelectMethod::Point, "point" },
+                                                                 { SelectMethod::Both, "both" } };
+
+// Which of the game's controls are held back while a wheel is open.
+enum class BlockWhileOpen { None, Minimal, Hand, All };
+inline constexpr EnumName<BlockWhileOpen> kBlockWhileOpenNames[] = { { BlockWhileOpen::None, "none" },
+                                                                     { BlockWhileOpen::Minimal, "minimal" },
+                                                                     { BlockWhileOpen::Hand, "hand" },
+                                                                     { BlockWhileOpen::All, "all" } };
+
+// Which side of the forearm a panel or the screen sits on.
+enum class ArmSide { Inner /* palm side */, Back /* watch side */ };
+inline constexpr EnumName<ArmSide> kArmSideNames[] = { { ArmSide::Inner, "inner" }, { ArmSide::Back, "back" } };
+
 // Where the mirrored screen is shown.
 enum class ScreenPlace { WristLeft, WristRight, Front /* stays where it appears */, Head /* follows the view */ };
 constexpr ScreenPlace kScreenPlaces[] = { ScreenPlace::WristLeft, ScreenPlace::WristRight, ScreenPlace::Front, ScreenPlace::Head };
@@ -65,12 +163,12 @@ struct Action {
     std::string keys;            // key: "Ctrl+S"
     ActMode mode = ActMode::Tap; // key/xr_input: tap|hold|toggle ; layer: hold|toggle|on|off
     int tapMs = 60;
-    std::string steps;            // sequence: "Ctrl+C; wait 100; down W; up W"
-    std::string wheel;            // wheel: name
-    std::string confirm = "auto"; // wheel: auto|release|stick_return|button
-    std::string layer;            // layer: name
-    std::string page;             // page: wrist panel page name
-    InputId target;               // xr_input: game input to fake
+    std::string steps;                       // sequence: "Ctrl+C; wait 100; down W; up W"
+    std::string wheel;                       // wheel: name
+    ConfirmMode confirm = ConfirmMode::Auto; // wheel
+    std::string layer;                       // layer: name
+    std::string page;                        // page: wrist panel page name
+    InputId target;                          // xr_input: game input to fake
     // screen: mode toggle|on|off|next_monitor|prev_monitor|next_fps|next_place
     std::optional<ScreenPlace> place; // screen: where to show it when turned on (none = the profile's place)
     std::string window;               // screen: show the first window whose title or program contains this
@@ -82,10 +180,10 @@ struct Binding {
     bool enabled = true;
     std::vector<InputId> chord; // last entry is the trigger, the rest must be held
     std::string chordText;
-    std::string gesture = "press"; // press|tap|hold|double_tap|while_held
+    Gesture gesture = Gesture::Press;
     int holdMs = 400, tapMs = 300, doubleTapMs = 350;
     std::vector<std::string> layers, notLayers;
-    std::string block = "trigger"; // none|trigger|all
+    BindingBlock block = BindingBlock::Trigger;
     bool tapPassthrough = false;
     Action action;
 };
@@ -109,7 +207,7 @@ struct FreePose {
 };
 
 struct Style {
-    std::string anchor = "head_locked"; // hand|hand_locked|head|head_locked
+    WheelAnchor anchor = WheelAnchor::HeadLocked;
     float radius = 0.127f, distance = 0.70f, headDown = 0.10f;
     float handUp = 0.10f, handToward = 0.06f;
     float innerRatio = 0.34f, gapDeg = 1.5f;
@@ -118,12 +216,12 @@ struct Style {
     int texSize = 768;
     uint32_t bg = 0xB0101418, segment = 0xD0283040, hover = 0xF03C8CFF, text = 0xFFFFFFFF, accent = 0xFF7FC4FF, border = 0x60FFFFFF;
     uint32_t toggled = 0xE02E9E5B;         // buttons whose toggle (key, game input or layer) is currently on
-    std::map<std::string, FreePose> poses; // per anchor, placed by hand in adjust mode
+    std::map<std::string, FreePose> poses; // per anchor (its file text), placed by hand in adjust mode
 };
 
 struct Selection {
-    std::string method = "both"; // thumbstick|point|both
-    std::string hand = "opener"; // opener|left|right
+    SelectMethod method = SelectMethod::Both;
+    SelectHand hand = SelectHand::Opener;
     float deadzone = 0.5f;
     int confirmComp = C_TRIGGER; // used when confirm = button
     int cancelComp = C_BTN2;
@@ -157,34 +255,34 @@ struct WristStyle {
     bool mirror = false;                // show the other forearm's pages instead of its own
     std::map<std::string, Wheel> pages; // the panel's own pages (title + items)
     std::string start = "main";         // first page shown
-    std::string face = "inner";         // inner = palm side / underside of the forearm, back = watch side
-    float size = 0.11f;                 // panel width and height in metres
-    float towardElbow = 0.13f;          // from the controller grip back along the forearm
-    std::string textUp = "fingers";     // fingers = top of the text toward the fingers (hand held up, palm to face)
-                                        // custom = rotate_deg from along_arm (set by turning it in adjust mode)
-                                        // between = halfway (45 degrees) between fingers and along_arm (arm half raised)
-                                        // along_arm = text runs along the forearm (arm held across the body)
-    float lift = 0.025f;                // off the skin
-    float side = 0.f;                   // sideways across the forearm (set by adjust mode)
-    float rotateDeg = 0.f;              // text_up = custom: turn of the text from along_arm, degrees
+    ArmSide face = ArmSide::Inner;
+    float size = 0.11f;              // panel width and height in metres
+    float towardElbow = 0.13f;       // from the controller grip back along the forearm
+    TextUp textUp = TextUp::Fingers; // fingers = top of the text toward the fingers (hand held up, palm to face)
+                                     // custom = rotate_deg from along_arm (set by turning it in adjust mode)
+                                     // between = halfway (45 degrees) between fingers and along_arm (arm half raised)
+                                     // along_arm = text runs along the forearm (arm held across the body)
+    float lift = 0.025f;             // off the skin
+    float side = 0.f;                // sideways across the forearm (set by adjust mode)
+    float rotateDeg = 0.f;           // text_up = custom: turn of the text from along_arm, degrees
     int columns = 3;
     float facingDeg = 35.f; // how squarely the panel must face the eyes
     float gazeDeg = 20.f;   // how close to the centre of view it must be
     int showMs = 250, hideMs = 350;
-    std::string press = "both"; // poke|point|both
-    FreePose pose;              // placed by hand in adjust mode (relative to the controller)
+    PressMethod press = PressMethod::Both;
+    FreePose pose; // placed by hand in adjust mode (relative to the controller)
 };
 
 // Pointer correction and helpers. Quest (Touch) controllers report an aim ray that starts above
 // the index finger and points about 15 degrees up from where a pointing finger goes.
 struct PointerStyle {
-    std::string correction = "auto"; // auto = Touch controllers only | always | off
-    float pitchDeg = 15.f;           // turn the ray down by this much
-    float downM = 0.02f;             // move the ray start down (toward the finger) by this much
-    float forwardM = 0.f;            // and forward along the ray
-    bool finger = true;              // show a fingertip silhouette near a wrist panel
-    bool guide = true;               // keep a short laser showing while a wrist panel is up
-    float smoothing = 0.f;           // steady the laser against shaky hands (0 = off .. 1 = strongest)
+    LaserCorrection correction = LaserCorrection::Auto; // Auto = Touch controllers only
+    float pitchDeg = 15.f;                              // turn the ray down by this much
+    float downM = 0.02f;                                // move the ray start down (toward the finger) by this much
+    float forwardM = 0.f;                               // and forward along the ray
+    bool finger = true;                                 // show a fingertip silhouette near a wrist panel
+    bool guide = true;                                  // keep a short laser showing while a wrist panel is up
+    float smoothing = 0.f;                              // steady the laser against shaky hands (0 = off .. 1 = strongest)
 };
 
 // A desktop monitor shown in VR (mirrored with Desktop Duplication).
@@ -198,7 +296,7 @@ struct ScreenStyle {
     ScreenPlace place = ScreenPlace::WristLeft;
     // on a forearm
     float wristWidth = 0.16f, towardElbow = 0.14f, lift = 0.03f, side = 0.f, rotateDeg = 0.f;
-    std::string face = "back"; // back = watch side, inner = palm side
+    ArmSide face = ArmSide::Back;
     // front (placed in front of you when shown) / head (follows your view)
     float width = 0.8f, distance = 0.9f, below = 0.05f;
     int maxPx = 0; // widest captured image in pixels (0 = 1920, or 1280 in 32-bit games)
@@ -238,7 +336,7 @@ struct Profile {
     PointerStyle pointer;
     OffsetStyle offsets;
     bool enabled = true;
-    std::string blockWhileOpen = "hand"; // none|minimal|hand|all
+    BlockWhileOpen blockWhileOpen = BlockWhileOpen::Hand;
     float pressOn = 0.6f, pressOff = 0.4f, stickOn = 0.7f, stickOff = 0.5f;
     bool haptics = true;
     float hapticAmp = 0.35f;
