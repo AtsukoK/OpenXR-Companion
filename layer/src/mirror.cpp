@@ -238,6 +238,7 @@ bool HeadsetMirror::InitGpu(ID3D11Device* d) {
     sd.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
     sd.AddressU = sd.AddressV = sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
     sd.MaxLOD = D3D11_FLOAT32_MAX;
+    sd.MipLODBias = -0.5f; // sharper: plain trilinear already blends in the half-size picture at a 1.2x shrink, which looked soft
     dev->CreateSamplerState(&sd, &samp);
     D3D11_BLEND_DESC bl{};
     bl.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
