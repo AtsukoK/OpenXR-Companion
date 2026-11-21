@@ -54,6 +54,11 @@ private:
     void StartWindow();
     void StopWindow();
     static LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
+    // Borderless full screen over the whole monitor (taskbar too). Window thread only.
+    void SetFullScreen(HWND window, bool on);
+    bool isFullScreen = false;
+    LONG styleBeforeFullScreen = 0;
+    WINDOWPLACEMENT placeBeforeFullScreen{ sizeof(WINDOWPLACEMENT) };
     HANDLE thread = nullptr;
     volatile HWND hwnd = nullptr;
     volatile LONG clientW = 1280, clientH = 720, sized = 0, userClosed = 0;
