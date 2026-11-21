@@ -4,13 +4,7 @@
 #include <d3dcompiler.h>
 #include <algorithm>
 
-#define SAFE_RELEASE(p)                                                                                                                    \
-    do {                                                                                                                                   \
-        if (p) {                                                                                                                           \
-            (p)->Release();                                                                                                                \
-            (p) = nullptr;                                                                                                                 \
-        }                                                                                                                                  \
-    } while (0)
+using Microsoft::WRL::ComPtr;
 
 static HeadsetMirror* gSelf = nullptr;
 static const wchar_t* kClass = L"OpenXRCompanionMirror";
@@ -55,11 +49,7 @@ void HeadsetMirror::OnDestroy(XrSwapchain sc) {
     auto it = sws.find((uint64_t)sc);
     if (it == sws.end()) return;
     for (auto* t : it->second.imgs) {
-        auto s = srvs.find(t);
-        if (s != srvs.end()) {
-            SAFE_RELEASE(s->second);
-            srvs.erase(s);
-        }
+        srvs.erase(t);
     }
     sws.erase(it);
 }
@@ -182,8 +172,8 @@ void HeadsetMirror::SetOn(bool v) {
         StartWindow();
         Log("mirror: on");
     } else {
-        SAFE_RELEASE(rtv);
-        SAFE_RELEASE(chain); // the swapchain belongs to the window
+        rtv.Reset();
+        chain.Reset(); // the swapchain belongs to the window
         StopWindow();
         Log("mirror: off");
     }
@@ -231,24 +221,17 @@ float4 ps(V i) : SV_Target {
 )";
 
 bool HeadsetMirror::InitGpu(ID3D11Device* d) {
-    if (dev == d && vs) return true;
+    if (dev.Get() == d && vs) return true;
     ReleaseGpu();
-    dev = d;
-    dev->AddRef();
-    ID3DBlob *bv = nullptr, *bp = nullptr, *err = nullptr;
+    dev = d; // ComPtr takes its own reference
+    ComPtr<ID3DBlob> bv, bp, err;
     if (FAILED(D3DCompile(kShader, strlen(kShader), "mirror", nullptr, nullptr, "vs", "vs_4_0", 0, 0, &bv, &err)) ||
         FAILED(D3DCompile(kShader, strlen(kShader), "mirror", nullptr, nullptr, "ps", "ps_4_0", 0, 0, &bp, &err))) {
         Log("mirror: shader compile failed %s", err ? (const char*)err->GetBufferPointer() : "");
-        SAFE_RELEASE(bv);
-        SAFE_RELEASE(bp);
-        SAFE_RELEASE(err);
         return false;
     }
     dev->CreateVertexShader(bv->GetBufferPointer(), bv->GetBufferSize(), nullptr, &vs);
     dev->CreatePixelShader(bp->GetBufferPointer(), bp->GetBufferSize(), nullptr, &ps);
-    SAFE_RELEASE(bv);
-    SAFE_RELEASE(bp);
-    SAFE_RELEASE(err);
     D3D11_BUFFER_DESC bd{ 96, D3D11_USAGE_DEFAULT, D3D11_BIND_CONSTANT_BUFFER };
     dev->CreateBuffer(&bd, nullptr, &cb);
     D3D11_SAMPLER_DESC sd{};
@@ -274,11 +257,10 @@ bool HeadsetMirror::InitGpu(ID3D11Device* d) {
     rd.DepthClipEnable = TRUE;
     dev->CreateRasterizerState(&rd, &rast);
     // our own pipeline state, so the game's is left exactly as it was
-    ID3D11Device1* d1 = nullptr;
-    if (SUCCEEDED(dev->QueryInterface(IID_PPV_ARGS(&d1)))) {
+    ComPtr<ID3D11Device1> d1;
+    if (SUCCEEDED(dev.As(&d1))) {
         D3D_FEATURE_LEVEL fl = dev->GetFeatureLevel();
         d1->CreateDeviceContextState(0, &fl, 1, D3D11_SDK_VERSION, __uuidof(ID3D11Device1), nullptr, &state);
-        d1->Release();
     }
     if (!vs || !ps || !cb || !state) {
         Log("mirror: GPU setup failed");
@@ -288,23 +270,21 @@ bool HeadsetMirror::InitGpu(ID3D11Device* d) {
 }
 
 void HeadsetMirror::ReleaseGpu() {
-    for (auto& [t, s] : srvs)
-        SAFE_RELEASE(s);
     srvs.clear();
-    SAFE_RELEASE(eyeSrv);
-    SAFE_RELEASE(eyeCopy);
+    eyeSrv.Reset();
+    eyeCopy.Reset();
     eyeDesc = {};
-    SAFE_RELEASE(rtv);
-    SAFE_RELEASE(chain);
-    SAFE_RELEASE(vs);
-    SAFE_RELEASE(ps);
-    SAFE_RELEASE(cb);
-    SAFE_RELEASE(samp);
-    SAFE_RELEASE(blendOpaque);
-    SAFE_RELEASE(blendPremul);
-    SAFE_RELEASE(rast);
-    SAFE_RELEASE(state);
-    SAFE_RELEASE(dev);
+    rtv.Reset();
+    chain.Reset();
+    vs.Reset();
+    ps.Reset();
+    cb.Reset();
+    samp.Reset();
+    blendOpaque.Reset();
+    blendPremul.Reset();
+    rast.Reset();
+    state.Reset();
+    dev.Reset();
 }
 
 static DXGI_FORMAT ViewFormat(DXGI_FORMAT tex, int64_t asked) {
@@ -325,10 +305,10 @@ static DXGI_FORMAT ViewFormat(DXGI_FORMAT tex, int64_t asked) {
 
 ID3D11ShaderResourceView* HeadsetMirror::Srv(ID3D11Texture2D* t, int64_t fmt) {
     auto it = srvs.find(t);
-    if (it != srvs.end()) return it->second;
+    if (it != srvs.end()) return it->second.Get();
     D3D11_TEXTURE2D_DESC d;
     t->GetDesc(&d);
-    ID3D11ShaderResourceView* v = nullptr;
+    ComPtr<ID3D11ShaderResourceView> v;
     if ((d.BindFlags & D3D11_BIND_SHADER_RESOURCE) && d.SampleDesc.Count == 1) {
         D3D11_SHADER_RESOURCE_VIEW_DESC sd{};
         sd.Format = ViewFormat(d.Format, fmt);
@@ -340,10 +320,10 @@ ID3D11ShaderResourceView* HeadsetMirror::Srv(ID3D11Texture2D* t, int64_t fmt) {
             sd.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
             sd.Texture2D.MipLevels = 1;
         }
-        if (FAILED(dev->CreateShaderResourceView(t, &sd, &v))) v = nullptr;
+        if (FAILED(dev->CreateShaderResourceView(t, &sd, &v))) v.Reset();
     }
     srvs[t] = v; // null too: don't try again every frame
-    return v;
+    return v.Get();
 }
 
 // ------------------------------------------------------------ one frame
@@ -392,10 +372,10 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
 
     // window swapchain
     if (!chain) {
-        IDXGIDevice* dx = nullptr;
-        IDXGIAdapter* ad = nullptr;
-        IDXGIFactory2* fac = nullptr;
-        if (SUCCEEDED(dev->QueryInterface(IID_PPV_ARGS(&dx))) && SUCCEEDED(dx->GetAdapter(&ad)) &&
+        ComPtr<IDXGIDevice> dx;
+        ComPtr<IDXGIAdapter> ad;
+        ComPtr<IDXGIFactory2> fac;
+        if (SUCCEEDED(dev.As(&dx)) && SUCCEEDED(dx->GetAdapter(&ad)) &&
             SUCCEEDED(ad->GetParent(IID_PPV_ARGS(&fac)))) {
             DXGI_SWAP_CHAIN_DESC1 sd{};
             sd.Width = clientW;
@@ -407,15 +387,12 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
             sd.Scaling = DXGI_SCALING_STRETCH;
             sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
             sd.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
-            HRESULT hr = fac->CreateSwapChainForHwnd(dev, h, &sd, nullptr, nullptr, &chain);
+            HRESULT hr = fac->CreateSwapChainForHwnd(dev.Get(), h, &sd, nullptr, nullptr, &chain);
             if (FAILED(hr))
                 Log("mirror: swapchain failed 0x%08lx", hr);
             else
                 fac->MakeWindowAssociation(h, DXGI_MWA_NO_ALT_ENTER);
         }
-        SAFE_RELEASE(fac);
-        SAFE_RELEASE(ad);
-        SAFE_RELEASE(dx);
         if (!chain) {
             failed = true;
             return;
@@ -423,17 +400,16 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
         InterlockedExchange(&sized, 0);
     }
     if (InterlockedExchange(&sized, 0)) {
-        SAFE_RELEASE(rtv);
+        rtv.Reset();
         chain->ResizeBuffers(0, clientW, clientH, DXGI_FORMAT_UNKNOWN, 0);
     }
     if (!rtv) {
-        ID3D11Texture2D* bb = nullptr;
+        ComPtr<ID3D11Texture2D> bb;
         if (SUCCEEDED(chain->GetBuffer(0, IID_PPV_ARGS(&bb)))) {
             D3D11_RENDER_TARGET_VIEW_DESC rd{};
             rd.Format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
             rd.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-            dev->CreateRenderTargetView(bb, &rd, &rtv);
-            bb->Release();
+            dev->CreateRenderTargetView(bb.Get(), &rd, &rtv);
         }
         if (!rtv) return;
     }
@@ -444,8 +420,8 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
     // copy the eye's part of the image (the game may reuse its image right after this frame)
     if (!eyeCopy || eyeDesc.Width != (UINT)rc.extent.width || eyeDesc.Height != (UINT)rc.extent.height || eyeDesc.Format != td.Format ||
         eyeFmt != esw.format) {
-        SAFE_RELEASE(eyeSrv);
-        SAFE_RELEASE(eyeCopy);
+        eyeSrv.Reset();
+        eyeCopy.Reset();
         D3D11_TEXTURE2D_DESC cdsc{};
         cdsc.Width = rc.extent.width;
         cdsc.Height = rc.extent.height;
@@ -461,10 +437,10 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
         sd.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
         sd.Texture2D.MipLevels = (UINT)-1;
         eyeMips =
-            SUCCEEDED(dev->CreateTexture2D(&cdsc, nullptr, &eyeCopy)) && SUCCEEDED(dev->CreateShaderResourceView(eyeCopy, &sd, &eyeSrv));
+            SUCCEEDED(dev->CreateTexture2D(&cdsc, nullptr, &eyeCopy)) && SUCCEEDED(dev->CreateShaderResourceView(eyeCopy.Get(), &sd, &eyeSrv));
         if (!eyeMips) { // format can't make mipmaps: one level, as before
-            SAFE_RELEASE(eyeSrv);
-            SAFE_RELEASE(eyeCopy);
+            eyeSrv.Reset();
+            eyeCopy.Reset();
             cdsc.MipLevels = 1;
             cdsc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
             cdsc.MiscFlags = 0;
@@ -475,7 +451,7 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
                 return;
             }
         }
-        if (!eyeSrv && FAILED(dev->CreateShaderResourceView(eyeCopy, &sd, &eyeSrv))) {
+        if (!eyeSrv && FAILED(dev->CreateShaderResourceView(eyeCopy.Get(), &sd, &eyeSrv))) {
             Log("mirror: eye view failed (format %d / %lld)", td.Format, (long long)esw.format);
             failed = true;
             return;
@@ -488,8 +464,8 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
     D3D11_BOX box{
         (UINT)rc.offset.x, (UINT)rc.offset.y, 0, (UINT)(rc.offset.x + rc.extent.width), (UINT)(rc.offset.y + rc.extent.height), 1
     };
-    ctx->CopySubresourceRegion(eyeCopy, 0, 0, 0, 0, etex, D3D11CalcSubresource(0, view.subImage.imageArrayIndex, td.MipLevels), &box);
-    if (eyeMips) ctx->GenerateMips(eyeSrv);
+    ctx->CopySubresourceRegion(eyeCopy.Get(), 0, 0, 0, 0, etex, D3D11CalcSubresource(0, view.subImage.imageArrayIndex, td.MipLevels), &box);
+    if (eyeMips) ctx->GenerateMips(eyeSrv.Get());
 
     // Crop: centred on where the eye looks straight ahead, zoomed, then cut to the window's shape.
     const XrFovf& fov = view.fov;
@@ -531,28 +507,28 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
         float UV[4];
         float Mode[4];
     } c{};
-    ID3D11DeviceContext1* c1 = nullptr;
+    ComPtr<ID3D11DeviceContext1> c1;
     if (FAILED(ctx->QueryInterface(IID_PPV_ARGS(&c1)))) {
         failed = true;
         return;
     }
-    ID3DDeviceContextState* prev = nullptr;
-    c1->SwapDeviceContextState(state, &prev);
+    ComPtr<ID3DDeviceContextState> prev; // the game's own state, put back after drawing
+    c1->SwapDeviceContextState(state.Get(), &prev);
     D3D11_VIEWPORT vp{ 0, 0, W, H, 0, 1 };
     ctx->RSSetViewports(1, &vp);
-    ctx->RSSetState(rast);
-    ctx->OMSetRenderTargets(1, &rtv, nullptr);
+    ctx->RSSetState(rast.Get());
+    ctx->OMSetRenderTargets(1, rtv.GetAddressOf(), nullptr);
     ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
     ctx->IASetInputLayout(nullptr);
-    ctx->VSSetShader(vs, nullptr, 0);
-    ctx->PSSetShader(ps, nullptr, 0);
-    ctx->VSSetConstantBuffers(0, 1, &cb);
-    ctx->PSSetConstantBuffers(0, 1, &cb);
-    ctx->PSSetSamplers(0, 1, &samp);
+    ctx->VSSetShader(vs.Get(), nullptr, 0);
+    ctx->PSSetShader(ps.Get(), nullptr, 0);
+    ctx->VSSetConstantBuffers(0, 1, cb.GetAddressOf());
+    ctx->PSSetConstantBuffers(0, 1, cb.GetAddressOf());
+    ctx->PSSetSamplers(0, 1, samp.GetAddressOf());
     auto draw = [&](ID3D11ShaderResourceView* srv, float mode, ID3D11BlendState* bs) {
         c.Mode[0] = mode;
-        c.Mode[1] = srv == eyeSrv && magnify ? 1.f : 0.f;
-        ctx->UpdateSubresource(cb, 0, nullptr, &c, 0, 0);
+        c.Mode[1] = srv == eyeSrv.Get() && magnify ? 1.f : 0.f;
+        ctx->UpdateSubresource(cb.Get(), 0, nullptr, &c, 0, 0);
         ctx->OMSetBlendState(bs, nullptr, 0xffffffff);
         ctx->PSSetShaderResources(0, 1, &srv);
         ctx->Draw(4, 0);
@@ -634,17 +610,17 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
         c.UV[1] = ct;
         c.UV[2] = cl + cw;
         c.UV[3] = ct + ch;
-        draw(eyeSrv, 0, blendOpaque);
+        draw(eyeSrv.Get(), 0, blendOpaque.Get());
     } else { // as a flat picture 1 m in front of the real eye, filling its field of view, seen from the steadied camera
         const float clear[4] = { 0, 0, 0, 1 };
-        ctx->ClearRenderTargetView(rtv, clear);
+        ctx->ClearRenderTargetView(rtv.Get(), clear);
         XrPosef local{ { 0, 0, 0, 1 }, { (tL + tR) / 2, (tU + tD) / 2, -1.f } };
         if (project(PMul(view.pose, local), (tR - tL) / 2, (tU - tD) / 2)) {
             c.UV[0] = 0;
             c.UV[1] = 0;
             c.UV[2] = 1;
             c.UV[3] = 1;
-            draw(eyeSrv, 0, blendOpaque);
+            draw(eyeSrv.Get(), 0, blendOpaque.Get());
         }
     }
 
@@ -681,16 +657,14 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
         float mode = !(q->layerFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT) ? 0.f
                      : (q->layerFlags & XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT)     ? 2.f
                                                                                             : 1.f;
-        draw(srv, mode, mode == 0.f ? blendOpaque : blendPremul);
+        draw(srv, mode, mode == 0.f ? blendOpaque.Get() : blendPremul.Get());
     }
     ID3D11ShaderResourceView* none = nullptr;
     ctx->PSSetShaderResources(0, 1, &none);
-    c1->SwapDeviceContextState(prev, nullptr);
-    SAFE_RELEASE(prev);
-    c1->Release();
+    c1->SwapDeviceContextState(prev.Get(), nullptr);
     if (grab) { // tests: read the picture back
         grab = false;
-        ID3D11Texture2D* bb = nullptr;
+        ComPtr<ID3D11Texture2D> bb;
         if (SUCCEEDED(chain->GetBuffer(0, IID_PPV_ARGS(&bb)))) {
             D3D11_TEXTURE2D_DESC bd;
             bb->GetDesc(&bd);
@@ -698,21 +672,19 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
             bd.BindFlags = 0;
             bd.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
             bd.MiscFlags = 0;
-            ID3D11Texture2D* st = nullptr;
+            ComPtr<ID3D11Texture2D> st;
             if (SUCCEEDED(dev->CreateTexture2D(&bd, nullptr, &st))) {
-                ctx->CopyResource(st, bb);
+                ctx->CopyResource(st.Get(), bb.Get());
                 D3D11_MAPPED_SUBRESOURCE m;
-                if (SUCCEEDED(ctx->Map(st, 0, D3D11_MAP_READ, 0, &m))) {
+                if (SUCCEEDED(ctx->Map(st.Get(), 0, D3D11_MAP_READ, 0, &m))) {
                     grabW = bd.Width;
                     grabH = bd.Height;
                     grabbed.resize((size_t)grabW * grabH);
                     for (int y = 0; y < grabH; y++)
                         memcpy(&grabbed[(size_t)y * grabW], (uint8_t*)m.pData + (size_t)y * m.RowPitch, grabW * 4);
-                    ctx->Unmap(st, 0);
+                    ctx->Unmap(st.Get(), 0);
                 }
-                st->Release();
             }
-            bb->Release();
         }
     }
     chain->Present(0, DXGI_PRESENT_DO_NOT_WAIT); // never hold the game up

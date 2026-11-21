@@ -4,6 +4,7 @@
 #include <map>
 #include <d3d11_1.h>
 #include <dxgi1_2.h>
+#include <wrl/client.h>
 
 // Headset mirror: a desktop window showing one eye of what the headset shows, the game's picture
 // WITH our own panels (wheel, wrist panels, screen, lasers...) drawn in where they really are.
@@ -63,22 +64,24 @@ private:
     volatile HWND hwnd = nullptr;
     volatile LONG clientW = 1280, clientH = 720, sized = 0, userClosed = 0;
     // GPU
-    ID3D11Device* dev = nullptr;
-    IDXGISwapChain1* chain = nullptr;
-    ID3D11RenderTargetView* rtv = nullptr;
-    ID3D11VertexShader* vs = nullptr;
-    ID3D11PixelShader* ps = nullptr;
-    ID3D11Buffer* cb = nullptr;
-    ID3D11SamplerState* samp = nullptr;
-    ID3D11BlendState *blendOpaque = nullptr, *blendPremul = nullptr;
-    ID3D11RasterizerState* rast = nullptr;
-    ID3DDeviceContextState* state = nullptr;
-    ID3D11Texture2D* eyeCopy = nullptr;
+    // GPU objects free themselves (ComPtr); ReleaseGpu() resets them all.
+    template <class T> using Com = Microsoft::WRL::ComPtr<T>;
+    Com<ID3D11Device> dev;
+    Com<IDXGISwapChain1> chain;
+    Com<ID3D11RenderTargetView> rtv;
+    Com<ID3D11VertexShader> vs;
+    Com<ID3D11PixelShader> ps;
+    Com<ID3D11Buffer> cb;
+    Com<ID3D11SamplerState> samp;
+    Com<ID3D11BlendState> blendOpaque, blendPremul;
+    Com<ID3D11RasterizerState> rast;
+    Com<ID3DDeviceContextState> state;
+    Com<ID3D11Texture2D> eyeCopy;
     bool eyeMips = false; // eyeCopy has a mip chain (made each frame)
-    ID3D11ShaderResourceView* eyeSrv = nullptr;
+    Com<ID3D11ShaderResourceView> eyeSrv;
     D3D11_TEXTURE2D_DESC eyeDesc{};
     int64_t eyeFmt = 0;
-    std::map<ID3D11Texture2D*, ID3D11ShaderResourceView*> srvs;
+    std::map<ID3D11Texture2D*, Com<ID3D11ShaderResourceView>> srvs; // keyed by the swapchain image (not owned)
     bool failed = false;
     PoseSmoother camSmooth;
     XrTime lastT = 0;
