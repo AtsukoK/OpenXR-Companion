@@ -212,8 +212,14 @@ float4 Bicubic(float2 uv) {
     c += T.SampleLevel(S, float2(t0.x, t3.y), 0) * w0.x * w3.y;   c += T.SampleLevel(S, float2(t12.x, t3.y), 0) * w12.x * w3.y;  c += T.SampleLevel(S, float2(t3.x, t3.y), 0) * w3.x * w3.y;
     return saturate(c);
 }
+// Shrinking with no mipmaps: four taps across one window pixel's footprint (fine up to a 3x shrink)
+float4 Footprint(float2 uv) {
+    float2 dx = ddx(uv) * 0.25, dy = ddy(uv) * 0.25;
+    return 0.25 * (T.SampleLevel(S, uv + dx + dy, 0) + T.SampleLevel(S, uv + dx - dy, 0) + T.SampleLevel(S, uv - dx + dy, 0) +
+                   T.SampleLevel(S, uv - dx - dy, 0));
+}
 float4 ps(V i) : SV_Target {
-    float4 c = Mode.y > 0.5 ? Bicubic(i.uv) : T.Sample(S, i.uv); // shrinking uses the mipmaps (trilinear)
+    float4 c = Mode.y > 0.5 ? Bicubic(i.uv) : Mode.z > 0.5 ? Footprint(i.uv) : T.Sample(S, i.uv); // else the mipmaps (trilinear)
     if (Mode.x < 0.5) return float4(c.rgb, 1);          // opaque
     if (Mode.x > 1.5) return float4(c.rgb * c.a, c.a);  // straight alpha -> premultiplied
     return c;                                           // premultiplied
@@ -534,56 +540,6 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
     float W, H;
     if (!PrepareWindow(h, W, H)) return;
 
-    // copy the eye's part of the image (the game may reuse its image right after this frame)
-    if (!eyeCopy || eyeDesc.Width != (UINT)rc.extent.width || eyeDesc.Height != (UINT)rc.extent.height || eyeDesc.Format != td.Format ||
-        eyeFmt != esw.format) {
-        eyeSrv.Reset();
-        eyeCopy.Reset();
-        D3D11_TEXTURE2D_DESC cdsc{};
-        cdsc.Width = rc.extent.width;
-        cdsc.Height = rc.extent.height;
-        cdsc.MipLevels = 0;
-        cdsc.ArraySize = 1;
-        cdsc.Format = td.Format; // full mip chain, for smooth shrinking
-        cdsc.SampleDesc.Count = 1;
-        cdsc.Usage = D3D11_USAGE_DEFAULT;
-        cdsc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
-        cdsc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
-        D3D11_SHADER_RESOURCE_VIEW_DESC sd{};
-        sd.Format = ViewFormat(td.Format, esw.format);
-        sd.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-        sd.Texture2D.MipLevels = (UINT)-1;
-        eyeMips =
-            SUCCEEDED(dev->CreateTexture2D(&cdsc, nullptr, &eyeCopy)) && SUCCEEDED(dev->CreateShaderResourceView(eyeCopy.Get(), &sd, &eyeSrv));
-        if (!eyeMips) { // format can't make mipmaps: one level, as before
-            eyeSrv.Reset();
-            eyeCopy.Reset();
-            cdsc.MipLevels = 1;
-            cdsc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-            cdsc.MiscFlags = 0;
-            sd.Texture2D.MipLevels = 1;
-            if (FAILED(dev->CreateTexture2D(&cdsc, nullptr, &eyeCopy))) {
-                Log("mirror: copy texture failed (format %d)", td.Format);
-                failed = true;
-                return;
-            }
-        }
-        if (!eyeSrv && FAILED(dev->CreateShaderResourceView(eyeCopy.Get(), &sd, &eyeSrv))) {
-            Log("mirror: eye view failed (format %d / %lld)", td.Format, (long long)esw.format);
-            failed = true;
-            return;
-        }
-        eyeDesc = cdsc;
-        eyeFmt = esw.format;
-        Log("mirror: eye %dx%d format %d (asked %lld) mips %d", rc.extent.width, rc.extent.height, td.Format, (long long)esw.format,
-            (int)eyeMips);
-    }
-    D3D11_BOX box{
-        (UINT)rc.offset.x, (UINT)rc.offset.y, 0, (UINT)(rc.offset.x + rc.extent.width), (UINT)(rc.offset.y + rc.extent.height), 1
-    };
-    ctx->CopySubresourceRegion(eyeCopy.Get(), 0, 0, 0, 0, etex, D3D11CalcSubresource(0, view.subImage.imageArrayIndex, td.MipLevels), &box);
-    if (eyeMips) ctx->GenerateMips(eyeSrv.Get());
-
     // Crop: centred on where the eye looks straight ahead, zoomed, then cut to the window's shape.
     const XrFovf& fov = view.fov;
     float tL = std::tan(fov.angleLeft), tR = std::tan(fov.angleRight), tU = std::tan(fov.angleUp), tD = std::tan(fov.angleDown);
@@ -619,6 +575,71 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
 
     // window pixels per eye pixel: above 1 the picture is stretched -> sharper bicubic stretch
     bool magnify = W / (cw * ex) > 1.02f;
+
+    // The eye picture: straight from the game's image (light), or a copied part with mipmaps for smooth shrinking.
+    // Drawing from the game's image is safe here: it is drawn now, before the game gets the image back.
+    float shrink = (cw * ex) / W;
+    ID3D11ShaderResourceView* direct = light && esw.arraySize == 1 && shrink <= 3.f ? Srv(etex, esw.format) : nullptr;
+    lastDirect = direct != nullptr;
+    ID3D11ShaderResourceView* eyeView = direct;
+    // eye-picture UV (0..1 over the eye's part) -> the texture drawn from
+    float uo = 0, vo = 0, uScale = 1, vScale = 1;
+    if (direct) {
+        uo = rc.offset.x / (float)td.Width;
+        vo = rc.offset.y / (float)td.Height;
+        uScale = ex / td.Width;
+        vScale = ey / td.Height;
+    } else {
+        if (!eyeCopy || eyeDesc.Width != (UINT)rc.extent.width || eyeDesc.Height != (UINT)rc.extent.height || eyeDesc.Format != td.Format ||
+            eyeFmt != esw.format) {
+            eyeSrv.Reset();
+            eyeCopy.Reset();
+            D3D11_TEXTURE2D_DESC cdsc{};
+            cdsc.Width = rc.extent.width;
+            cdsc.Height = rc.extent.height;
+            cdsc.MipLevels = 0;
+            cdsc.ArraySize = 1;
+            cdsc.Format = td.Format; // full mip chain, for smooth shrinking
+            cdsc.SampleDesc.Count = 1;
+            cdsc.Usage = D3D11_USAGE_DEFAULT;
+            cdsc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+            cdsc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
+            D3D11_SHADER_RESOURCE_VIEW_DESC sd{};
+            sd.Format = ViewFormat(td.Format, esw.format);
+            sd.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+            sd.Texture2D.MipLevels = (UINT)-1;
+            eyeMips =
+                SUCCEEDED(dev->CreateTexture2D(&cdsc, nullptr, &eyeCopy)) && SUCCEEDED(dev->CreateShaderResourceView(eyeCopy.Get(), &sd, &eyeSrv));
+            if (!eyeMips) { // format can't make mipmaps: one level, as before
+                eyeSrv.Reset();
+                eyeCopy.Reset();
+                cdsc.MipLevels = 1;
+                cdsc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+                cdsc.MiscFlags = 0;
+                sd.Texture2D.MipLevels = 1;
+                if (FAILED(dev->CreateTexture2D(&cdsc, nullptr, &eyeCopy))) {
+                    Log("mirror: copy texture failed (format %d)", td.Format);
+                    failed = true;
+                    return;
+                }
+            }
+            if (!eyeSrv && FAILED(dev->CreateShaderResourceView(eyeCopy.Get(), &sd, &eyeSrv))) {
+                Log("mirror: eye view failed (format %d / %lld)", td.Format, (long long)esw.format);
+                failed = true;
+                return;
+            }
+            eyeDesc = cdsc;
+            eyeFmt = esw.format;
+            Log("mirror: eye %dx%d format %d (asked %lld) mips %d", rc.extent.width, rc.extent.height, td.Format, (long long)esw.format,
+                (int)eyeMips);
+        }
+        D3D11_BOX box{
+            (UINT)rc.offset.x, (UINT)rc.offset.y, 0, (UINT)(rc.offset.x + rc.extent.width), (UINT)(rc.offset.y + rc.extent.height), 1
+        };
+        ctx->CopySubresourceRegion(eyeCopy.Get(), 0, 0, 0, 0, etex, D3D11CalcSubresource(0, view.subImage.imageArrayIndex, td.MipLevels), &box);
+        if (eyeMips) ctx->GenerateMips(eyeSrv.Get());
+        eyeView = eyeSrv.Get();
+    }
     struct CB {
         float P[4][4];
         float UV[4];
@@ -644,7 +665,9 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
     ctx->PSSetSamplers(0, 1, samp.GetAddressOf());
     auto draw = [&](ID3D11ShaderResourceView* srv, float mode, ID3D11BlendState* bs) {
         c.Mode[0] = mode;
-        c.Mode[1] = srv == eyeSrv.Get() && magnify ? 1.f : 0.f;
+        bool isEye = srv == eyeView;
+        c.Mode[1] = isEye && magnify ? 1.f : 0.f;
+        c.Mode[2] = isEye && direct && !magnify ? 1.f : 0.f;
         ctx->UpdateSubresource(cb.Get(), 0, nullptr, &c, 0, 0);
         ctx->OMSetBlendState(bs, nullptr, 0xffffffff);
         ctx->PSSetShaderResources(0, 1, &srv);
@@ -723,21 +746,21 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
             c.P[i][2] = 0.5f;
             c.P[i][3] = 1;
         }
-        c.UV[0] = cl;
-        c.UV[1] = ct;
-        c.UV[2] = cl + cw;
-        c.UV[3] = ct + ch;
-        draw(eyeSrv.Get(), 0, blendOpaque.Get());
+        c.UV[0] = uo + cl * uScale;
+        c.UV[1] = vo + ct * vScale;
+        c.UV[2] = uo + (cl + cw) * uScale;
+        c.UV[3] = vo + (ct + ch) * vScale;
+        draw(eyeView, 0, blendOpaque.Get());
     } else { // as a flat picture 1 m in front of the real eye, filling its field of view, seen from the steadied camera
         const float clear[4] = { 0, 0, 0, 1 };
         ctx->ClearRenderTargetView(rtv.Get(), clear);
         XrPosef local{ { 0, 0, 0, 1 }, { (tL + tR) / 2, (tU + tD) / 2, -1.f } };
         if (project(PMul(view.pose, local), (tR - tL) / 2, (tU - tD) / 2)) {
-            c.UV[0] = 0;
-            c.UV[1] = 0;
-            c.UV[2] = 1;
-            c.UV[3] = 1;
-            draw(eyeSrv.Get(), 0, blendOpaque.Get());
+            c.UV[0] = uo;
+            c.UV[1] = vo;
+            c.UV[2] = uo + uScale;
+            c.UV[3] = vo + vScale;
+            draw(eyeView, 0, blendOpaque.Get());
         }
     }
 

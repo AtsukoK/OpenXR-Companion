@@ -30,4 +30,5 @@ public static class HeadsetMirrorFile
     public static double Smoothing { get => Get("smoothing", 0.5); set => Set("smoothing", Math.Round(value, 2)); }
     public static bool OnTop { get => Get("on_top", false); set => Set("on_top", value); }
     public static int Fps { get => Get("fps", 60); set => Set("fps", value); }
+    public static string Quality { get => Get("quality", "light"); set => Set("quality", value); }
 }

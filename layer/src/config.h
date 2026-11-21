@@ -379,6 +379,7 @@ struct MirrorSettings {
     int fps = 60;
     float smoothing = 0.5f;
     bool onTop = false;
+    bool light = true; // "quality": "light" draws straight from the game's image (cheap), "full" copies it with mipmaps
 };
 // Head smoothing (experimental, motion sickness risk): steadies the head the GAME renders from.
 // mode 0 = for recording (the headset still shows a steady world), 1 = in the headset too.

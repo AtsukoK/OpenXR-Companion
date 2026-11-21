@@ -925,6 +925,9 @@ bool LoadMirrorSettings(MirrorSettings& m) {
         m.smoothing = std::clamp(m.smoothing, 0.f, 1.f);
         m.zoom = std::clamp(m.zoom, 1.f, 3.f);
         m.fps = std::clamp(m.fps, 0, 240);
+        std::string q = "light";
+        Get(j, "quality", q);
+        m.light = Lower(q) != "full";
         return true;
     } catch (...) {
         return false;
@@ -946,6 +949,7 @@ bool SaveMirrorSettings(const MirrorSettings& m) {
     j["fps"] = m.fps;
     j["smoothing"] = std::round(m.smoothing * 100.f) / 100.f;
     j["on_top"] = m.onTop;
+    j["quality"] = m.light ? "light" : "full";
     return WriteFileAtomic(MirrorSettingsPath(), j.dump(2));
 }
 

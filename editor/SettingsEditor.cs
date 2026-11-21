@@ -490,7 +490,10 @@ public class SettingsEditor : EditorBase
                 var st = new NumericUpDown { Minimum = 0, Maximum = 1, Increment = 0.05m, DecimalPlaces = 2, Width = 90, Value = (decimal)Math.Clamp(HeadsetMirrorFile.Smoothing, 0, 1) };
                 st.ValueChanged += (o, e) => HeadsetMirrorFile.Smoothing = (double)st.Value;
                 mir.AddRow("Steady the picture", st, "Smooths small head shakes out of the window (like a camera stabiliser); real head turns still follow. 0 = off (the exact headset view), 0.5 = the default, 1 = strongest. Needs some zoom (above 1) so the picture's edge stays out of view.");
-                mir.AddRow("Frame rate cap (fps)", fps, "0 = every headset frame. 60 is smooth for recording and costs little.");
+                mir.AddRow("Frame rate cap (fps)", fps, "0 = every headset frame. 60 is smooth for recording and costs little. 30 halves the cost.");
+                var quality = new ChoiceBox(new Choice[] { new("light", "Light (cheaper, default)"), new("full", "Full (copy with mipmaps)") }, 200) { Code = HeadsetMirrorFile.Quality };
+                quality.SelectedIndexChanged += (o, e) => HeadsetMirrorFile.Quality = quality.Code;
+                mir.AddRow("Picture", quality, "Light draws straight from the game's picture: much cheaper, looks the same at normal window sizes. Full copies the picture and makes mipmaps first: smoother only when the window is much smaller than the headset picture (light switches to it by itself then).");
                 mir.AddRow("", new Label { AutoSize = true, ForeColor = Color.DimGray, MaximumSize = new Size(460, 0), Text = "These apply straight away, in every game and profile (no need to save)." });
             }
 

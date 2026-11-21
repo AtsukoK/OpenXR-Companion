@@ -31,6 +31,10 @@ public:
     float smoothing = 0.5f; // steady the picture against head shake (0 = off .. 1 = strongest)
     bool onTop = false;     // keep the window above other windows (it never takes focus either way)
     bool topApplied = false;
+    // Light: draw straight from the game's eye image (no full-size copy, no mipmaps), much cheaper; the full
+    // copy is still used when the image can't be read directly or the window is under a third of the picture's size.
+    bool light = true;
+    bool lastDirect = false; // the last frame was drawn the light way (tests)
     float zoom = 1.3f; // 1 = the whole eye picture, more = cropped in like a normal camera
     int fps = 60;      // most frames a second the window updates (0 = every headset frame)
     void Shutdown();   // release GPU things (session ending)

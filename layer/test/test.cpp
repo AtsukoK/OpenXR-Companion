@@ -2360,6 +2360,17 @@ int main(int argc, char** argv) {
                       "mirror: the panel's edge is where the headset shows it");
                 CHECK(at(10, 10) == 0x0000FF, "mirror: the game's picture fills the rest");
                 SavePng(m.grabbed, W, Hh, L"mirror_test.png");
+                CHECK(m.lastDirect, "mirror: light (default) draws straight from the game's picture");
+                std::vector<uint32_t> lightPic = m.grabbed;
+                m.light = false;
+                m.grab = true;
+                m.Frame(dev, ctx, L, 3, locate);
+                int differ = 0;
+                for (size_t k = 0; k < lightPic.size() && k < m.grabbed.size(); k++)
+                    if ((lightPic[k] & 0xFFFFFF) != (m.grabbed[k] & 0xFFFFFF)) differ++;
+                CHECK(!m.lastDirect && differ * 100 < (int)lightPic.size(),
+                      ("mirror: full (copy) gives the same picture as light (" + std::to_string(differ) + " pixels differ)").c_str());
+                m.light = true;
             }
             // Steadying: a 1 degree head shake moves the panel in the window much less than without it.
             auto edgeShift = [&](float smooth) {
@@ -2427,8 +2438,11 @@ int main(int argc, char** argv) {
                 qd.Query = D3D11_QUERY_TIMESTAMP;
                 dev->CreateQuery(&qd, &t0);
                 dev->CreateQuery(&qd, &t1);
-                for (float sm : { 0.f, 0.5f }) {
+                m.zoom = 1.4f; // the usual setting
+                for (int mode = 0; mode < 4; mode++) {
+                    float sm = mode & 1 ? 0.5f : 0.f;
                     m.smoothing = sm;
+                    m.light = mode < 2;
                     XrTime tt = 9000000000LL;
                     for (int i = 0; i < 10; i++) m.Frame(dev, ctx, L, tt += 11000000, locate); // warm up
                     const int n = 100;
@@ -2444,8 +2458,9 @@ int main(int argc, char** argv) {
                     while (ctx->GetData(dj, &d, sizeof(d), 0) != S_OK) {}
                     while (ctx->GetData(t0, &a, sizeof(a), 0) != S_OK) {}
                     while (ctx->GetData(t1, &b, sizeof(b), 0) != S_OK) {}
-                    printf("info: mirror cost per mirrored frame, 4480x3360 eye, steadying %.1f: GPU %.3f ms, CPU %.3f ms\n", sm,
-                           d.Disjoint ? -1.0 : (double)(b - a) * 1000.0 / d.Frequency / n, cpu);
+                    printf("info: mirror cost per mirrored frame, 4480x3360 eye, %s, steadying %.1f: GPU %.3f ms, CPU %.3f ms (%s)\n",
+                           m.light ? "light" : "full", sm, d.Disjoint ? -1.0 : (double)(b - a) * 1000.0 / d.Frequency / n, cpu,
+                           m.lastDirect ? "drawn direct" : "copied");
                 }
                 dj->Release(); t0->Release(); t1->Release();
                 big->Release();
