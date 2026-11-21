@@ -101,6 +101,14 @@ LRESULT CALLBACK HeadsetMirror::WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             return 0;
         }
         break;
+    case WM_ACTIVATE: // it got focus anyway (title bar, maximize button): give it straight back to the game,
+                      // or the game's keys (quick load from a wrist button...) would land in this window
+        if (LOWORD(w) != WA_INACTIVE && l) {
+            DWORD pid = 0;
+            GetWindowThreadProcessId((HWND)l, &pid);
+            if (pid == GetCurrentProcessId()) SetForegroundWindow((HWND)l);
+        }
+        break;
     case WM_LBUTTONDBLCLK: // double-click the picture: in and out of full screen
         if (self) self->SetFullScreen(h, !self->isFullScreen);
         return 0;

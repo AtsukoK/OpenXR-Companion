@@ -153,7 +153,14 @@ static bool Parse(const std::string& combo, std::vector<K>& out, std::string& er
 static bool gFocusGameBeforeKeys = false;
 static std::set<std::string> gHeld; // combos currently held via Down/toggle
 
-// The game's main window (visible, not owned by another window), or null.
+// Our own windows live in the game's process too (the headset mirror): never take them for the game.
+static bool IsOurWindow(HWND h) {
+    wchar_t cls[64] = {};
+    GetClassNameW(h, cls, 64);
+    return wcsncmp(cls, L"OpenXRCompanion", 15) == 0;
+}
+
+// The game's main window (visible, not owned by another window, not ours), or null.
 static HWND FindGameWindow() {
     struct Search {
         DWORD pid;
@@ -164,7 +171,7 @@ static HWND FindGameWindow() {
             auto* search = (Search*)lp;
             DWORD pid = 0;
             GetWindowThreadProcessId(h, &pid);
-            if (pid != search->pid || !IsWindowVisible(h) || GetWindow(h, GW_OWNER)) return TRUE;
+            if (pid != search->pid || !IsWindowVisible(h) || GetWindow(h, GW_OWNER) || IsOurWindow(h)) return TRUE;
             search->found = h;
             return FALSE;
         },
@@ -173,9 +180,10 @@ static HWND FindGameWindow() {
 }
 
 static bool GameHasFocus() {
+    HWND fg = GetForegroundWindow();
     DWORD foregroundPid = 0;
-    GetWindowThreadProcessId(GetForegroundWindow(), &foregroundPid);
-    return foregroundPid == GetCurrentProcessId();
+    GetWindowThreadProcessId(fg, &foregroundPid);
+    return foregroundPid == GetCurrentProcessId() && !IsOurWindow(fg); // the mirror in front is not the game
 }
 
 static void FocusGameAlways() {
