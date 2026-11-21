@@ -252,7 +252,8 @@ struct Reader {
         cw = std::min<int>(cw, td.Width);
         ch = std::min<int>(ch, td.Height);
         int want = 0;
-        while ((cw >> want) > maxW && want < 6)
+        // Halve only while the picture is over 1.5x the limit: halving 1920 for a 1280 limit would leave a blurry 960.
+        while ((cw >> want) * 2 > maxW * 3 && want < 6)
             want++;
         if (!staging || want != level || cw != cw0 || ch != ch0) {
             Release();

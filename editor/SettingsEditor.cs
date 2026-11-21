@@ -347,7 +347,7 @@ public class SettingsEditor : EditorBase
             scr.AddRow("Placed by hand", ResetPose(() => sc.Poses is { Count: > 0 }, () => sc.Poses = null),
                 "Adjust positions shows the screen; grab it and put it anywhere, at any angle. Each place (left wrist, right wrist, in front, following view) keeps its own spot.");
             scr.AddRow("Sharpness limit (pixels wide)", Int(0, 7680, 160, sc.MaxWidthPx, v => sc.MaxWidthPx = v),
-                "0 = automatic: 1920 in 64-bit games, 1280 in 32-bit games (they have little memory to spare). The picture is halved until it fits.");
+                "0 = automatic (1920). A bigger picture is halved while it is more than 1.5 times this.");
             SyncPlace();
 
         }

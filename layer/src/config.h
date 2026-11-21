@@ -302,7 +302,7 @@ struct ScreenStyle {
     ArmSide face = ArmSide::Back;
     // front (placed in front of you when shown) / head (follows your view)
     float width = 0.8f, distance = 0.9f, below = 0.05f;
-    int maxPx = 0; // widest captured image in pixels (0 = 1920, or 1280 in 32-bit games)
+    int maxPx = 0; // widest captured image in pixels (0 = 1920); halved only while over 1.5x this
     float opacity = 1.f;
     bool cursor = true;                    // draw the mouse pointer
     bool startOn = false;                  // shown when the game starts

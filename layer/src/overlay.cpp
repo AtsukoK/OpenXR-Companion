@@ -228,7 +228,7 @@ void OverlayRenderer::RenderScreen(const OverlayContext& c, LayerList& layers) {
     }
 
     // capture: configured every frame, frames arrive from its own thread
-    int maxWidth = style.maxPx > 0 ? style.maxPx : (sizeof(void*) == 4 ? 1280 : 1920); // 32-bit games are short on memory
+    int maxWidth = style.maxPx > 0 ? style.maxPx : 1920; // a 1920x1080 picture is about 8 MB, fine in 32-bit games too
     capture_.Configure(sv.monitor, sv.hwnd, sv.fps, maxWidth, style.cursor, style.opacity);
     int monitors, primary, shown;
     std::string message;

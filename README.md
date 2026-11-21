@@ -164,7 +164,7 @@ Open the VR keyboard. The bar under it has **Dock screen above keys** (the scree
 | Button bar size | **0.7** | 1 = as wide as the screen. Raise it if the buttons are hard to hit. |
 | Use the desktop by pointing at it | **On** | Off = view only. |
 | Give the game its window back after clicking | **On** | Otherwise the game may stop reacting after you click on the desktop. |
-| Sharpness limit | **0 (automatic)** | 1920 pixels wide, or 1280 in 32-bit games (Fallout), which have little memory to spare. |
+| Sharpness limit | **0 (automatic)** | 1920 pixels wide. A bigger picture is halved only while it is more than 1.5 times this. |
 | Show it as soon as the game starts | Off | Turn on if you always want it. |
 | Steady the screen | **0** (off), or **0.5** for shaky hands | Keeps a wrist screen still through small shakes; real movements still follow. Pair it with **Settings > Pointing > Steady the laser** for a steadier mouse. |
 
