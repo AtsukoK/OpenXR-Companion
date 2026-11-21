@@ -12,7 +12,7 @@ public partial class MainForm
     {
         ("touch", "Meta Quest / Rift, Pico (Touch-style controllers)",
                   "Double-tap the thumbrest (just touch it, no press) to open that hand's wheel."),
-        ("index", "Valve Index, Pimax Crystal, Bigscreen (Index-style)",
+        ("index", "Valve Index, Steam Frame, Pimax Crystal, Bigscreen (Index-style)",
                   "Double-click the thumbstick (press it in twice quickly) to open that hand's wheel."),
         ("wmr",   "Windows Mixed Reality / HP Reverb",
                   "Hold the menu button to open that hand's wheel, point the stick, let go to pick. A quick tap still reaches the game."),
@@ -45,7 +45,9 @@ public partial class MainForm
             radios.Add(r);
             y += 36;
         }
-        radios[0].Checked = true;
+        // Preselect what this profile uses now, so "Use these buttons" never switches it by surprise.
+        string current = CurrentControllerKind(Profile);
+        (radios.FirstOrDefault(r => ((ValueTuple<string, string, string>)r.Tag).Item1 == current) ?? radios[0]).Checked = true;
         dlg.Controls.Add(how);
         var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 54, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(10) };
         Button B(string t, DialogResult r, bool main = false)
@@ -71,12 +73,15 @@ public partial class MainForm
         ThemeWalker.Apply(dlg);
         dlg.HandleCreated += (s, e) => ThemeWalker.TitleBar(dlg, Theme.IsDark);
         var res = dlg.ShowDialog(this);
+        var kind = ((ValueTuple<string, string, string>)radios.First(r => r.Checked).Tag).Item1;
         try
-        { Directory.CreateDirectory(DataDir); File.WriteAllText(ControllerFlag, DateTime.Now.ToString("s")); }
+        { // the flag file says "asked already" and remembers the choice for next time
+            Directory.CreateDirectory(DataDir);
+            File.WriteAllText(ControllerFlag, res == DialogResult.OK ? kind : current ?? "");
+        }
         catch { }
         if (res != DialogResult.OK)
             return;
-        var kind = ((ValueTuple<string, string, string>)radios.First(r => r.Checked).Tag).Item1;
         int n = ApplyControllerOpeners(Profile, kind);
         if (n == 0)
         { MessageBox.Show(this, "This profile has no bindings that open the 'right' or 'left' wheel, so nothing was changed."); return; }
@@ -84,6 +89,30 @@ public partial class MainForm
         BuildTree();
         if (Save())
             MessageBox.Show(this, "Done: " + ControllerKinds.First(k => k.id == kind).how, "Controllers");
+    }
+
+    // The controller kind to preselect: the one chosen last time, else what the profile's wheel openers look like.
+    static string CurrentControllerKind(ProfileModel p)
+    {
+        try
+        {
+            string saved = File.Exists(ControllerFlag) ? File.ReadAllText(ControllerFlag).Trim() : "";
+            if (ControllerKinds.Any(k => k.id == saved))
+                return saved;
+        }
+        catch { }
+        foreach (var b in p.Bindings)
+        {
+            if (b.Action?.Type != "wheel" || (b.Action.Wheel != "right" && b.Action.Wheel != "left") || b.Input == null)
+                continue;
+            if (b.Input.EndsWith(".thumbrest"))
+                return "touch";
+            if (b.Input.EndsWith(".thumbstick") && b.Gesture == "double_tap")
+                return "index";
+            if (b.Input.EndsWith(".menu"))
+                return "wmr";
+        }
+        return null;
     }
 
     // Rewrites the bindings that open the main 'right' / 'left' wheels for this controller kind.
