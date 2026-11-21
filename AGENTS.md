@@ -28,6 +28,34 @@ Read `docs/ARCHITECTURE.md` for how the code fits together; this file is about h
 - Comments and user-facing text in plain English, no jargon. Logs say what happened in words a user can send us.
 - Locate hooks never take `gMx` (see the locks table in `docs/ARCHITECTURE.md`).
 
+## Code guidelines
+- Keep feature state, the rules that make it valid, and the code that changes it in the owning class. Keep public
+  interfaces small. Prefer composition for sharing behavior. Use inheritance when a derived type can honor the base
+  type's contract.
+- Use guard clauses and early return or continue to keep the main path easy to follow. Use else if for mutually
+  exclusive cases and separate if statements when more than one action can apply.
+- Use switch when dispatching on several values of the same enum. A single enum check can use if. When an if/else if
+  chain grows beyond five branches, check whether the cases can be expressed clearly as a switch on one value. Keep
+  ordered or overlapping conditions in an if/else if chain so their priority stays visible.
+- Keep each condition focused on one decision. Combine adjacent checks when the result reads more clearly and
+  preserves evaluation order and short-circuit behavior. Give a complex condition a descriptive name when it
+  represents a meaningful rule.
+- Name things for what they represent or do. Make units and coordinate spaces explicit where confusion is possible,
+  such as timeoutMs, worldPosition, and localOffset. Name booleans so conditions read naturally, such as isVisible
+  or hasTracking.
+- Keep each function focused on one operation. Extract a helper when its name makes the caller easier to read or when
+  several callers need the same rule.
+- Validate external input where it enters the system. Convert it to project types there so feature code can work with
+  validated values.
+- Keep calculations separate from I/O and state changes when the calculation can stand on its own. Make a function's
+  side effects clear from its name and API.
+- Make resource ownership explicit. Use RAII in C++ and using in C# for resources owned by a scope. When an object
+  owns a resource for longer, give that object responsibility for releasing it.
+- Follow the project's error-handling conventions. Handle failures where recovery is possible. When passing an error
+  up, keep enough context to identify the operation that failed.
+- Use simple comments where you can and longer when needed to explain why the code works this way, especially for
+  invariants, threading assumptions, and platform or API workarounds.
+
 ## Behaviour rules
 - Defaults must suit a new user. Tests use the built-in default profile, never the maintainer's own bindings.
 - Anything that changes what the game sees (inputs, hand poses, head) is off by default or a clear user choice.
