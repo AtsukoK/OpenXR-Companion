@@ -270,6 +270,267 @@ static void ParseSel(const json& j, Selection& s) {
     Get(j, "auto_close_ms", s.autoCloseMs);
 }
 
+// ---------- profile sections: each reads one part of the profile and clamps it to sane values ----------
+static void ParsePointer(const json& k, PointerStyle& P) {
+    std::string correction;
+    Get(k, "correction", correction);
+    if (!correction.empty() && !ParseEnum(kLaserCorrectionNames, Lower(correction), P.correction)) P.correction = LaserCorrection::Auto;
+    Get(k, "pitch_down_deg", P.pitchDeg);
+    Get(k, "down_m", P.downM);
+    Get(k, "forward_m", P.forwardM);
+    Get(k, "finger", P.finger);
+    Get(k, "fingertip_forward_m", P.tipForwardM);
+    Get(k, "fingertip_up_m", P.tipUpM);
+    Get(k, "fingertip_inward_m", P.tipInwardM);
+    Get(k, "guide_laser", P.guide);
+    Get(k, "smoothing", P.smoothing);
+    P.smoothing = std::clamp(P.smoothing, 0.f, 1.f);
+    P.pitchDeg = std::clamp(P.pitchDeg, -45.f, 45.f);
+    P.downM = std::clamp(P.downM, -0.1f, 0.1f);
+    P.forwardM = std::clamp(P.forwardM, -0.1f, 0.1f);
+    P.tipForwardM = std::clamp(P.tipForwardM, -0.1f, 0.15f);
+    P.tipUpM = std::clamp(P.tipUpM, -0.1f, 0.1f);
+    P.tipInwardM = std::clamp(P.tipInwardM, -0.1f, 0.1f);
+}
+
+static void ParseControllerOffsets(const json& k, OffsetStyle& O) {
+    Get(k, "enabled", O.enabled);
+    Get(k, "link_hands", O.linkHands);
+    Get(k, "aim_same_as_grip", O.aimSame);
+    Get(k, "smoothing", O.smoothing);
+    O.smoothing = std::clamp(O.smoothing, 0.f, 1.f);
+    const char* hn[2] = { "left", "right" };
+    const char* kn[2] = { "grip", "aim" };
+    for (int h = 0; h < 2; h++) {
+        if (!k.contains(hn[h]) || !k[hn[h]].is_object()) continue;
+        for (int c = 0; c < 2; c++) {
+            if (!k[hn[h]].contains(kn[c])) continue;
+            auto& e = k[hn[h]][kn[c]];
+            HandOffset& o = O.o[h][c];
+            Get(e, "pitch_deg", o.pitch);
+            Get(e, "yaw_deg", o.yaw);
+            Get(e, "roll_deg", o.roll);
+            float cm[3] = { 0, 0, 0 };
+            Get(e, "x_cm", cm[0]);
+            Get(e, "y_cm", cm[1]);
+            Get(e, "z_cm", cm[2]);
+            o.pitch = std::clamp(o.pitch, -90.f, 90.f);
+            o.yaw = std::clamp(o.yaw, -90.f, 90.f);
+            o.roll = std::clamp(o.roll, -180.f, 180.f);
+            o.x = std::clamp(cm[0], -30.f, 30.f) / 100.f;
+            o.y = std::clamp(cm[1], -30.f, 30.f) / 100.f;
+            o.z = std::clamp(cm[2], -30.f, 30.f) / 100.f;
+        }
+    }
+}
+
+static void ParseKeyboard(const json& k, KbStyle& K) {
+    Get(k, "width_m", K.width);
+    Get(k, "distance_m", K.distance);
+    Get(k, "below_eyes_m", K.below);
+    Get(k, "close_on_enter", K.closeOnEnter);
+    K.width = std::clamp(K.width, 0.2f, 1.5f);
+    if (k.contains("pose")) ParsePose(k["pose"], K.pose);
+}
+
+static void ParseDock(const json& d, DockStyle& D) {
+    std::string m;
+    Get(d, "mode", m);
+    D.mode = m == "screen_to_keyboard"   ? DockMode::ScreenOnKeys
+                   : m == "keyboard_to_screen" ? DockMode::KeysUnderScreen
+                                               : DockMode::Apart;
+    if (d.contains("pose")) ParsePose(d["pose"], D.pose);
+    Get(d, "width_m", D.width);
+    D.width = std::clamp(D.width, 0.f, 3.f);
+}
+
+static void ParseScreen(const json& k, ScreenStyle& S) {
+    Get(k, "monitor", S.monitor);
+    Get(k, "fps", S.fps);
+    std::string source;
+    Get(k, "source", source);
+    S.source = Lower(source) == "window" ? ScreenSource::Window : ScreenSource::Monitor;
+    Get(k, "window", S.window);
+    Get(k, "window_title", S.windowTitle);
+    if (k.contains("fps_steps") && k["fps_steps"].is_array()) {
+        S.fpsSteps.clear();
+        for (auto& v : k["fps_steps"])
+            if (v.is_number()) S.fpsSteps.push_back(std::clamp(v.get<int>(), 0, 240));
+        if (S.fpsSteps.empty()) S.fpsSteps = { 10, 15, 30, 60, 0 };
+    }
+    std::string place;
+    Get(k, "place", place);
+    if (!ParseScreenPlace(Lower(place), S.place)) S.place = ScreenPlace::WristLeft;
+    Get(k, "wrist_width_m", S.wristWidth);
+    Get(k, "toward_elbow_m", S.towardElbow);
+    Get(k, "lift_m", S.lift);
+    Get(k, "side_m", S.side);
+    Get(k, "rotate_deg", S.rotateDeg);
+    std::string face;
+    Get(k, "face", face);
+    if (!face.empty() && !ParseEnum(kArmSideNames, Lower(face), S.face)) S.face = ArmSide::Back;
+    Get(k, "width_m", S.width);
+    Get(k, "distance_m", S.distance);
+    Get(k, "below_eyes_m", S.below);
+    Get(k, "max_width_px", S.maxPx);
+    Get(k, "opacity", S.opacity);
+    Get(k, "cursor", S.cursor);
+    Get(k, "start_on", S.startOn);
+    Get(k, "interact", S.interact);
+    Get(k, "refocus_game", S.refocus);
+    Get(k, "bar_scale", S.barScale);
+    S.barScale = std::clamp(S.barScale, 0.3f, 2.f);
+    Get(k, "smoothing", S.smoothing);
+    S.smoothing = std::clamp(S.smoothing, 0.f, 1.f);
+    if (k.contains("poses")) ParsePoses(k["poses"], S.poses);
+    S.monitor = std::clamp(S.monitor, 0, 16);
+    S.fps = std::clamp(S.fps, 0, 240);
+    S.wristWidth = std::clamp(S.wristWidth, 0.04f, 0.6f);
+    S.width = std::clamp(S.width, 0.1f, 4.f);
+    S.distance = std::clamp(S.distance, 0.2f, 5.f);
+    S.opacity = std::clamp(S.opacity, 0.1f, 1.f);
+    S.maxPx = std::clamp(S.maxPx, 0, 7680);
+}
+
+static void ParseBindings(const json& list, std::vector<Binding>& out) {
+    int idx = 0;
+    for (auto& b : list) {
+        Binding B;
+        Get(b, "name", B.name);
+        std::string ctx = "binding " + std::to_string(idx++) + " '" + B.name + "'";
+        Get(b, "enabled", B.enabled);
+        std::string in = b.value("input", "");
+        B.chordText = in;
+        for (auto& part : Split(in, '+')) {
+            InputId id;
+            if (!ParseInput(part, id)) throw std::runtime_error(ctx + ": bad input '" + part + "'");
+            B.chord.push_back(id);
+        }
+        if (B.chord.empty()) throw std::runtime_error(ctx + ": no input");
+        std::string gesture;
+        Get(b, "gesture", gesture);
+        if (!gesture.empty() && !ParseEnum(kGestureNames, Lower(gesture), B.gesture))
+            throw std::runtime_error(ctx + ": unknown gesture '" + gesture + "'");
+        Get(b, "hold_ms", B.holdMs);
+        Get(b, "tap_ms", B.tapMs);
+        Get(b, "double_tap_ms", B.doubleTapMs);
+        B.layers = StrList(b, "layers");
+        B.notLayers = StrList(b, "not_layers");
+        std::string block;
+        Get(b, "block", block);
+        if (!block.empty() && !ParseEnum(kBindingBlockNames, Lower(block), B.block)) B.block = BindingBlock::None;
+        Get(b, "tap_passthrough", B.tapPassthrough);
+        B.action = ParseAction(b.value("action", json::object()), ctx);
+        out.push_back(std::move(B));
+    }
+}
+
+// A wheel or a wrist panel page: its items (switched-off items skipped, at most 16).
+// where = how errors name it, e.g. "wheel 'main'" or "left wrist page 'tools'".
+static Wheel ParseItemList(const std::string& name, const json& w, const std::string& where) {
+    Wheel W;
+    W.name = name;
+    W.title = w.value("title", name);
+    int idx = 0;
+    for (auto& it : w.value("items", json::array())) {
+        if (!it.value("enabled", true)) { // switched off in the editor
+            idx++;
+            continue;
+        }
+        WheelItem I;
+        Get(it, "label", I.label);
+        Get(it, "description", I.description);
+        Get(it, "icon", I.icon);
+        if (it.contains("color")) {
+            I.color = ParseColor(it["color"], 0);
+            I.hasColor = I.color != 0;
+        }
+        I.action = ParseAction(it.value("action", json::object()), where + " item " + std::to_string(idx++));
+        W.items.push_back(std::move(I));
+    }
+    if (W.items.size() > 16) throw std::runtime_error(where + " has more than 16 items");
+    return W;
+}
+
+// wheels: for older profiles that pointed the panel at a wheel instead of having pages.
+static void ParseWrist(const json& w, WristStyle& W, const std::string& tag, const std::map<std::string, Wheel>& wheels) {
+    Get(w, "enabled", W.enabled);
+    Get(w, "mirror", W.mirror);
+    Get(w, "start_page", W.start);
+    if (w.contains("pose")) ParsePose(w["pose"], W.pose);
+    if (w.contains("pages"))
+        for (auto& [name, pg] : w["pages"].items())
+            W.pages[name] = ParseItemList(name, pg, tag + " page '" + name + "'");
+    // Older profiles pointed the panel at a wheel: use that wheel as the only page.
+    if (W.pages.empty() && w.contains("wheel")) {
+        std::string wn = w["wheel"].get<std::string>();
+        if (wheels.count(wn)) {
+            W.pages[wn] = wheels.at(wn);
+            W.start = wn;
+        }
+    }
+    if (!W.pages.count(W.start) && !W.pages.empty() && !w.contains("start_page")) W.start = W.pages.begin()->first;
+    if (W.enabled && !W.mirror && !W.pages.count(W.start)) {
+        if (W.pages.empty()) throw std::runtime_error(tag + ": no pages");
+        throw std::runtime_error(tag + ": first page '" + W.start + "' does not exist");
+    }
+    std::string face;
+    Get(w, "face", face);
+    bool faceOk = face.empty() || ParseEnum(kArmSideNames, Lower(face), W.face);
+    std::string textUp;
+    Get(w, "text_up", textUp);
+    if (!textUp.empty() && !ParseEnum(kTextUpNames, Lower(textUp), W.textUp))
+        throw std::runtime_error(tag + ": text_up must be fingers, between, along_arm or custom");
+    Get(w, "rotate_deg", W.rotateDeg);
+    Get(w, "size_m", W.size);
+    Get(w, "toward_elbow_m", W.towardElbow);
+    Get(w, "lift_m", W.lift);
+    Get(w, "side_m", W.side);
+    Get(w, "columns", W.columns);
+    Get(w, "facing_deg", W.facingDeg);
+    Get(w, "gaze_deg", W.gazeDeg);
+    Get(w, "show_ms", W.showMs);
+    Get(w, "hide_ms", W.hideMs);
+    std::string press;
+    Get(w, "press", press);
+    bool pressOk = press.empty() || ParseEnum(kPressMethodNames, Lower(press), W.press);
+    W.size = std::clamp(W.size, 0.05f, 0.4f);
+    W.columns = std::clamp(W.columns, 1, 4);
+    W.facingDeg = std::clamp(W.facingDeg, 5.f, 80.f);
+    W.gazeDeg = std::clamp(W.gazeDeg, 5.f, 60.f);
+    if (!faceOk) throw std::runtime_error(tag + ": face must be inner or back");
+    if (!pressOk) throw std::runtime_error(tag + ": press must be poke, point or both");
+}
+
+// Every wheel and page an action names must exist; 'page' actions only on wrist panel buttons.
+static void CheckReferences(const Profile& P) {
+    auto checkA = [&](const Action& a, const std::string& ctx) {
+        if (a.type == ActType::Wheel && !P.wheels.count(a.wheel))
+            throw std::runtime_error(ctx + ": wheel '" + a.wheel + "' does not exist");
+    };
+    for (auto& b : P.bindings)
+        checkA(b.action, "binding '" + b.name + "'");
+    for (auto& b : P.bindings)
+        if (b.action.type == ActType::Page) throw std::runtime_error("binding '" + b.name + "': 'page' only works on wrist panel buttons");
+    for (auto& [n, w] : P.wheels)
+        for (auto& i : w.items)
+            if (i.action.type == ActType::Page)
+                throw std::runtime_error("wheel '" + n + "' item '" + i.label + "': 'page' only works on wrist panel buttons");
+    for (int h = 0; h < 2; h++) {
+        const char* tag = h ? "right wrist" : "left wrist";
+        for (auto& [n, pg] : P.wrist[h].pages)
+            for (auto& i : pg.items) {
+                checkA(i.action, std::string(tag) + " page '" + n + "' item '" + i.label + "'");
+                if (i.action.type == ActType::Page && !P.wrist[h].pages.count(i.action.page))
+                    throw std::runtime_error(std::string(tag) + " page '" + n + "' item '" + i.label + "': page '" + i.action.page +
+                                             "' does not exist");
+            }
+    }
+    for (auto& [n, w] : P.wheels)
+        for (auto& i : w.items)
+            checkA(i.action, "wheel '" + n + "' item '" + i.label + "'");
+}
+
 static std::shared_ptr<Profile> ParseProfile(const json& j) {
     auto p = std::make_shared<Profile>();
     Get(j, "enabled", p->enabled);
@@ -289,273 +550,29 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
     Get(j, "focus_game_window", p->focusWindow);
     if (j.contains("style")) ParseStyle(j["style"], p->style);
     if (j.contains("selection")) ParseSel(j["selection"], p->sel);
-    if (j.contains("pointer")) {
-        auto& k = j["pointer"];
-        auto& P = p->pointer;
-        std::string correction;
-        Get(k, "correction", correction);
-        if (!correction.empty() && !ParseEnum(kLaserCorrectionNames, Lower(correction), P.correction)) P.correction = LaserCorrection::Auto;
-        Get(k, "pitch_down_deg", P.pitchDeg);
-        Get(k, "down_m", P.downM);
-        Get(k, "forward_m", P.forwardM);
-        Get(k, "finger", P.finger);
-        Get(k, "fingertip_forward_m", P.tipForwardM);
-        Get(k, "fingertip_up_m", P.tipUpM);
-        Get(k, "fingertip_inward_m", P.tipInwardM);
-        Get(k, "guide_laser", P.guide);
-        Get(k, "smoothing", P.smoothing);
-        P.smoothing = std::clamp(P.smoothing, 0.f, 1.f);
-        P.pitchDeg = std::clamp(P.pitchDeg, -45.f, 45.f);
-        P.downM = std::clamp(P.downM, -0.1f, 0.1f);
-        P.forwardM = std::clamp(P.forwardM, -0.1f, 0.1f);
-        P.tipForwardM = std::clamp(P.tipForwardM, -0.1f, 0.15f);
-        P.tipUpM = std::clamp(P.tipUpM, -0.1f, 0.1f);
-        P.tipInwardM = std::clamp(P.tipInwardM, -0.1f, 0.1f);
-    }
-    if (j.contains("controller_offsets")) {
-        auto& k = j["controller_offsets"];
-        auto& O = p->offsets;
-        Get(k, "enabled", O.enabled);
-        Get(k, "link_hands", O.linkHands);
-        Get(k, "aim_same_as_grip", O.aimSame);
-        Get(k, "smoothing", O.smoothing);
-        O.smoothing = std::clamp(O.smoothing, 0.f, 1.f);
-        const char* hn[2] = { "left", "right" };
-        const char* kn[2] = { "grip", "aim" };
-        for (int h = 0; h < 2; h++) {
-            if (!k.contains(hn[h]) || !k[hn[h]].is_object()) continue;
-            for (int c = 0; c < 2; c++) {
-                if (!k[hn[h]].contains(kn[c])) continue;
-                auto& e = k[hn[h]][kn[c]];
-                HandOffset& o = O.o[h][c];
-                Get(e, "pitch_deg", o.pitch);
-                Get(e, "yaw_deg", o.yaw);
-                Get(e, "roll_deg", o.roll);
-                float cm[3] = { 0, 0, 0 };
-                Get(e, "x_cm", cm[0]);
-                Get(e, "y_cm", cm[1]);
-                Get(e, "z_cm", cm[2]);
-                o.pitch = std::clamp(o.pitch, -90.f, 90.f);
-                o.yaw = std::clamp(o.yaw, -90.f, 90.f);
-                o.roll = std::clamp(o.roll, -180.f, 180.f);
-                o.x = std::clamp(cm[0], -30.f, 30.f) / 100.f;
-                o.y = std::clamp(cm[1], -30.f, 30.f) / 100.f;
-                o.z = std::clamp(cm[2], -30.f, 30.f) / 100.f;
-            }
-        }
-    }
-    if (j.contains("keyboard")) {
-        auto& k = j["keyboard"];
-        Get(k, "width_m", p->kb.width);
-        Get(k, "distance_m", p->kb.distance);
-        Get(k, "below_eyes_m", p->kb.below);
-        Get(k, "close_on_enter", p->kb.closeOnEnter);
-        p->kb.width = std::clamp(p->kb.width, 0.2f, 1.5f);
-        if (k.contains("pose")) ParsePose(k["pose"], p->kb.pose);
-    }
+    if (j.contains("pointer")) ParsePointer(j["pointer"], p->pointer);
+    if (j.contains("controller_offsets")) ParseControllerOffsets(j["controller_offsets"], p->offsets);
+    if (j.contains("keyboard")) ParseKeyboard(j["keyboard"], p->kb);
+    if (j.contains("dock")) ParseDock(j["dock"], p->dock);
+    if (j.contains("screen")) ParseScreen(j["screen"], p->screen);
+    if (j.contains("bindings")) ParseBindings(j["bindings"], p->bindings);
+    if (j.contains("wheels"))
+        for (auto& [name, w] : j["wheels"].items())
+            p->wheels[name] = ParseItemList(name, w, "wheel '" + name + "'");
 
-    if (j.contains("dock")) {
-        auto& d = j["dock"];
-        std::string m;
-        Get(d, "mode", m);
-        p->dock.mode = m == "screen_to_keyboard"   ? DockMode::ScreenOnKeys
-                       : m == "keyboard_to_screen" ? DockMode::KeysUnderScreen
-                                                   : DockMode::Apart;
-        if (d.contains("pose")) ParsePose(d["pose"], p->dock.pose);
-        Get(d, "width_m", p->dock.width);
-        p->dock.width = std::clamp(p->dock.width, 0.f, 3.f);
-    }
-
-    if (j.contains("screen")) {
-        auto& k = j["screen"];
-        auto& S = p->screen;
-        Get(k, "monitor", S.monitor);
-        Get(k, "fps", S.fps);
-        std::string source;
-        Get(k, "source", source);
-        S.source = Lower(source) == "window" ? ScreenSource::Window : ScreenSource::Monitor;
-        Get(k, "window", S.window);
-        Get(k, "window_title", S.windowTitle);
-        if (k.contains("fps_steps") && k["fps_steps"].is_array()) {
-            S.fpsSteps.clear();
-            for (auto& v : k["fps_steps"])
-                if (v.is_number()) S.fpsSteps.push_back(std::clamp(v.get<int>(), 0, 240));
-            if (S.fpsSteps.empty()) S.fpsSteps = { 10, 15, 30, 60, 0 };
-        }
-        std::string place;
-        Get(k, "place", place);
-        if (!ParseScreenPlace(Lower(place), S.place)) S.place = ScreenPlace::WristLeft;
-        Get(k, "wrist_width_m", S.wristWidth);
-        Get(k, "toward_elbow_m", S.towardElbow);
-        Get(k, "lift_m", S.lift);
-        Get(k, "side_m", S.side);
-        Get(k, "rotate_deg", S.rotateDeg);
-        std::string face;
-        Get(k, "face", face);
-        if (!face.empty() && !ParseEnum(kArmSideNames, Lower(face), S.face)) S.face = ArmSide::Back;
-        Get(k, "width_m", S.width);
-        Get(k, "distance_m", S.distance);
-        Get(k, "below_eyes_m", S.below);
-        Get(k, "max_width_px", S.maxPx);
-        Get(k, "opacity", S.opacity);
-        Get(k, "cursor", S.cursor);
-        Get(k, "start_on", S.startOn);
-        Get(k, "interact", S.interact);
-        Get(k, "refocus_game", S.refocus);
-        Get(k, "bar_scale", S.barScale);
-        S.barScale = std::clamp(S.barScale, 0.3f, 2.f);
-        Get(k, "smoothing", S.smoothing);
-        S.smoothing = std::clamp(S.smoothing, 0.f, 1.f);
-        if (k.contains("poses")) ParsePoses(k["poses"], S.poses);
-        S.monitor = std::clamp(S.monitor, 0, 16);
-        S.fps = std::clamp(S.fps, 0, 240);
-        S.wristWidth = std::clamp(S.wristWidth, 0.04f, 0.6f);
-        S.width = std::clamp(S.width, 0.1f, 4.f);
-        S.distance = std::clamp(S.distance, 0.2f, 5.f);
-        S.opacity = std::clamp(S.opacity, 0.1f, 1.f);
-        S.maxPx = std::clamp(S.maxPx, 0, 7680);
-    }
-
-    if (j.contains("bindings")) {
-        int idx = 0;
-        for (auto& b : j["bindings"]) {
-            Binding B;
-            Get(b, "name", B.name);
-            std::string ctx = "binding " + std::to_string(idx++) + " '" + B.name + "'";
-            Get(b, "enabled", B.enabled);
-            std::string in = b.value("input", "");
-            B.chordText = in;
-            for (auto& part : Split(in, '+')) {
-                InputId id;
-                if (!ParseInput(part, id)) throw std::runtime_error(ctx + ": bad input '" + part + "'");
-                B.chord.push_back(id);
-            }
-            if (B.chord.empty()) throw std::runtime_error(ctx + ": no input");
-            std::string gesture;
-            Get(b, "gesture", gesture);
-            if (!gesture.empty() && !ParseEnum(kGestureNames, Lower(gesture), B.gesture))
-                throw std::runtime_error(ctx + ": unknown gesture '" + gesture + "'");
-            Get(b, "hold_ms", B.holdMs);
-            Get(b, "tap_ms", B.tapMs);
-            Get(b, "double_tap_ms", B.doubleTapMs);
-            B.layers = StrList(b, "layers");
-            B.notLayers = StrList(b, "not_layers");
-            std::string block;
-            Get(b, "block", block);
-            if (!block.empty() && !ParseEnum(kBindingBlockNames, Lower(block), B.block)) B.block = BindingBlock::None;
-            Get(b, "tap_passthrough", B.tapPassthrough);
-            B.action = ParseAction(b.value("action", json::object()), ctx);
-            p->bindings.push_back(std::move(B));
-        }
-    }
-    if (j.contains("wheels")) {
-        for (auto& [name, w] : j["wheels"].items()) {
-            Wheel W;
-            W.name = name;
-            W.title = w.value("title", name);
-            int idx = 0;
-            for (auto& it : w.value("items", json::array())) {
-                if (!it.value("enabled", true)) {
-                    idx++;
-                    continue;
-                } // switched off in the editor
-                WheelItem I;
-                Get(it, "label", I.label);
-                Get(it, "description", I.description);
-                Get(it, "icon", I.icon);
-                if (it.contains("color")) {
-                    I.color = ParseColor(it["color"], 0);
-                    I.hasColor = I.color != 0;
-                }
-                I.action = ParseAction(it.value("action", json::object()), "wheel '" + name + "' item " + std::to_string(idx++));
-                W.items.push_back(std::move(I));
-            }
-            if (W.items.size() > 16) throw std::runtime_error("wheel '" + name + "' has more than 16 items");
-            p->wheels[name] = std::move(W);
-        }
-    }
-    auto parseWrist = [&](const json& w, WristStyle& W, const std::string& tag) {
-        Get(w, "enabled", W.enabled);
-        Get(w, "mirror", W.mirror);
-        Get(w, "start_page", W.start);
-        if (w.contains("pose")) ParsePose(w["pose"], W.pose);
-        if (w.contains("pages"))
-            for (auto& [name, pg] : w["pages"].items()) {
-                Wheel P;
-                P.name = name;
-                P.title = pg.value("title", name);
-                int idx = 0;
-                for (auto& it : pg.value("items", json::array())) {
-                    if (!it.value("enabled", true)) {
-                        idx++;
-                        continue;
-                    }
-                    WheelItem I;
-                    Get(it, "label", I.label);
-                    Get(it, "description", I.description);
-                    Get(it, "icon", I.icon);
-                    if (it.contains("color")) {
-                        I.color = ParseColor(it["color"], 0);
-                        I.hasColor = I.color != 0;
-                    }
-                    I.action = ParseAction(it.value("action", json::object()), tag + " page '" + name + "' item " + std::to_string(idx++));
-                    P.items.push_back(std::move(I));
-                }
-                if (P.items.size() > 16) throw std::runtime_error(tag + " page '" + name + "' has more than 16 items");
-                W.pages[name] = std::move(P);
-            }
-        // Older profiles pointed the panel at a wheel: use that wheel as the only page.
-        if (W.pages.empty() && w.contains("wheel")) {
-            std::string wn = w["wheel"].get<std::string>();
-            if (p->wheels.count(wn)) {
-                W.pages[wn] = p->wheels[wn];
-                W.start = wn;
-            }
-        }
-        if (!W.pages.count(W.start) && !W.pages.empty() && !w.contains("start_page")) W.start = W.pages.begin()->first;
-        if (W.enabled && !W.mirror && !W.pages.count(W.start)) {
-            if (W.pages.empty()) throw std::runtime_error(tag + ": no pages");
-            throw std::runtime_error(tag + ": first page '" + W.start + "' does not exist");
-        }
-        std::string face;
-        Get(w, "face", face);
-        bool faceOk = face.empty() || ParseEnum(kArmSideNames, Lower(face), W.face);
-        std::string textUp;
-        Get(w, "text_up", textUp);
-        if (!textUp.empty() && !ParseEnum(kTextUpNames, Lower(textUp), W.textUp))
-            throw std::runtime_error(tag + ": text_up must be fingers, between, along_arm or custom");
-        Get(w, "rotate_deg", W.rotateDeg);
-        Get(w, "size_m", W.size);
-        Get(w, "toward_elbow_m", W.towardElbow);
-        Get(w, "lift_m", W.lift);
-        Get(w, "side_m", W.side);
-        Get(w, "columns", W.columns);
-        Get(w, "facing_deg", W.facingDeg);
-        Get(w, "gaze_deg", W.gazeDeg);
-        Get(w, "show_ms", W.showMs);
-        Get(w, "hide_ms", W.hideMs);
-        std::string press;
-        Get(w, "press", press);
-        bool pressOk = press.empty() || ParseEnum(kPressMethodNames, Lower(press), W.press);
-        W.size = std::clamp(W.size, 0.05f, 0.4f);
-        W.columns = std::clamp(W.columns, 1, 4);
-        W.facingDeg = std::clamp(W.facingDeg, 5.f, 80.f);
-        W.gazeDeg = std::clamp(W.gazeDeg, 5.f, 60.f);
-        if (!faceOk) throw std::runtime_error(tag + ": face must be inner or back");
-        if (!pressOk) throw std::runtime_error(tag + ": press must be poke, point or both");
-    };
+    // Wrist panels come after the wheels: older profiles use a wheel as the panel's page.
     if (j.contains("wrist_panel")) { // older profiles: one panel with a "hand"
         auto& w = j["wrist_panel"];
         int h = Lower(w.value("hand", std::string("left"))) == "right" ? 1 : 0;
-        parseWrist(w, p->wrist[h], h ? "right wrist" : "left wrist");
+        ParseWrist(w, p->wrist[h], h ? "right wrist" : "left wrist", p->wheels);
     }
     if (j.contains("wrist_left")) {
         p->wrist[0] = WristStyle{};
-        parseWrist(j["wrist_left"], p->wrist[0], "left wrist");
+        ParseWrist(j["wrist_left"], p->wrist[0], "left wrist", p->wheels);
     }
     if (j.contains("wrist_right")) {
         p->wrist[1] = WristStyle{};
-        parseWrist(j["wrist_right"], p->wrist[1], "right wrist");
+        ParseWrist(j["wrist_right"], p->wrist[1], "right wrist", p->wheels);
     }
     if (p->wrist[0].mirror && p->wrist[1].mirror)
         throw std::runtime_error("the left and right wrist panels mirror each other; untick mirror on one of them");
@@ -564,33 +581,7 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
         if (p->wrist[h].enabled && p->wrist[h].mirror && !o.pages.count(o.start))
             throw std::runtime_error(std::string(h ? "right" : "left") + " wrist mirrors the other panel, but that one has no pages");
     }
-
-    // Check references.
-    auto checkA = [&](const Action& a, const std::string& ctx) {
-        if (a.type == ActType::Wheel && !p->wheels.count(a.wheel))
-            throw std::runtime_error(ctx + ": wheel '" + a.wheel + "' does not exist");
-    };
-    for (auto& b : p->bindings)
-        checkA(b.action, "binding '" + b.name + "'");
-    for (auto& b : p->bindings)
-        if (b.action.type == ActType::Page) throw std::runtime_error("binding '" + b.name + "': 'page' only works on wrist panel buttons");
-    for (auto& [n, w] : p->wheels)
-        for (auto& i : w.items)
-            if (i.action.type == ActType::Page)
-                throw std::runtime_error("wheel '" + n + "' item '" + i.label + "': 'page' only works on wrist panel buttons");
-    for (int h = 0; h < 2; h++) {
-        const char* tag = h ? "right wrist" : "left wrist";
-        for (auto& [n, pg] : p->wrist[h].pages)
-            for (auto& i : pg.items) {
-                checkA(i.action, std::string(tag) + " page '" + n + "' item '" + i.label + "'");
-                if (i.action.type == ActType::Page && !p->wrist[h].pages.count(i.action.page))
-                    throw std::runtime_error(std::string(tag) + " page '" + n + "' item '" + i.label + "': page '" + i.action.page +
-                                             "' does not exist");
-            }
-    }
-    for (auto& [n, w] : p->wheels)
-        for (auto& i : w.items)
-            checkA(i.action, "wheel '" + n + "' item '" + i.label + "'");
+    CheckReferences(*p);
     return p;
 }
 
