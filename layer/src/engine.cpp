@@ -280,7 +280,7 @@ bool Engine::RunAction(const Action& a, int hand, int bi, bool fromWheel) {
         adjust = !adjust;
         grab = GrabRun{};
         if (adjust)
-            Toast("Adjust: grip to move, stick to resize", 4.0);
+            Toast("Adjust: grip to move, stick to resize. Grab a fingertip to set where you poke", 4.0);
         else {
             saveRequested = true;
             Toast("Positions saved", 2.0);
@@ -468,9 +468,10 @@ void Engine::UpdatePointers() {
         bool pokeTookOver = wv.cursor && wv.touchDepth < WristView::kPokeTakeoverM;
         if (wristUp && prof->wrist[panel].press != PressMethod::Poke && !pokeTookOver) test(wv.pose, wv.sizeM / 2, wv.sizeM / 2);
         // Fingertip silhouette: where the poke tip is, so you can find your "finger" before it reaches the panel.
-        if (wristUp && prof->pointer.finger && dPanel < 0.5f) { // on every panel: it also shows where the laser starts
-            const float len = 0.028f;                           // just the tip of the finger
-            Vec3 tip = FingertipPos(h);                         // the same point the wrist panels poke with
+        // In Adjust mode both always show, so they can be grabbed and moved.
+        if ((prof->pointer.finger && wristUp && dPanel < 0.5f) || adjust) { // on every panel: it also shows where the laser starts
+            const float len = 0.028f;                                       // just the tip of the finger
+            Vec3 tip = FingertipPos(h);                                     // the same point the wrist panels poke with
             P.finger = true;
             P.fingerLen = len;
             P.fingerW = 0.012f;
@@ -606,6 +607,7 @@ void Engine::Update(const Frame& f) {
     ComputeDown();
     ProcessBindings();
     UpdateWheel();
+    UpdateAdjustFingertips(); // first: a grip on a fingertip wins over the panels around it
     UpdateAdjustWheel();
     UpdateAdjustFade();
     keyboard.UpdatePlacing();

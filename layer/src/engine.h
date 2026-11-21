@@ -288,6 +288,7 @@ private:
     GrabRun grab;
     double adjustClosedAt = -1;
     void UpdateAdjustWheel();
+    void UpdateAdjustFingertips();
     void UpdateAdjustFade();
 
 public:

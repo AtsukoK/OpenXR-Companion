@@ -727,6 +727,12 @@ bool SavePlacement(const Profile& p, std::string& err) {
         s["head_distance_m"] = r(p.style.distance);
         s["head_down_m"] = r(p.style.headDown);
         {
+            json& pt = j["pointer"]; // the fingertips, moved by hand in Adjust mode
+            pt["fingertip_forward_m"] = r(p.pointer.tipForwardM);
+            pt["fingertip_up_m"] = r(p.pointer.tipUpM);
+            pt["fingertip_inward_m"] = r(p.pointer.tipInwardM);
+        }
+        {
             json& sc = j["screen"];
             const ScreenStyle& S = p.screen;
             sc["wrist_width_m"] = r(S.wristWidth);

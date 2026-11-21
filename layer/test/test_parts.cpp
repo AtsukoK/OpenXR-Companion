@@ -201,3 +201,40 @@ void TestFingertip() { // the poking fingertip: 1.5 cm ahead of the laser start 
     CHECK(std::fabs(r.z - (-0.33f)) < 1e-4f && std::fabs(r.y - 1.01f) < 1e-4f, "fingertip: forward and up move it");
     CHECK(std::fabs(r.x - 0.18f) < 1e-4f && std::fabs(l.x - (-0.18f)) < 1e-4f, "fingertip: toward the middle is mirrored for each hand");
 }
+
+void TestFingertipAdjust() { // Adjust mode: grab the right fingertip with the left grip, move it, let go: it stays there
+    std::string err;
+    auto p = ParseProfileText(DefaultProfileJson(), err);
+    Engine e;
+    e.SetProfile(p);
+    Frame f;
+    f.headValid = true;
+    f.head.position = { 0, 1.6f, 0 };
+    f.h[1].aimValid = f.h[1].gripValid = true;
+    f.h[1].aimPose = f.h[1].gripPose = { { 0, 0, 0, 1 }, { 0.2f, 1.f, -0.3f } };
+    f.h[0].gripValid = f.h[0].aimValid = true;
+    double t = 1.0;
+    auto step = [&] {
+        t += 0.011;
+        f.t = t;
+        e.Update(f);
+    };
+    step();
+    Vec3 start = e.FingertipPos(1);
+    e.adjust = true;
+    f.h[0].gripPose = { { 0, 0, 0, 1 }, { start.x, start.y, start.z } };
+    f.h[0].aimPose = f.h[0].gripPose;
+    step();
+    CHECK(e.pointer[1].finger, "fingertip adjust: the fingertips show in Adjust mode");
+    f.h[0].grip = 1.f;
+    step();
+    f.h[0].gripPose.position = { start.x, start.y + 0.01f, start.z - 0.01f }; // 1 cm up, 1 cm further forward
+    step();
+    f.h[0].grip = 0.f;
+    step();
+    CHECK(std::fabs(p->pointer.tipForwardM - 0.025f) < 0.002f && std::fabs(p->pointer.tipUpM - 0.01f) < 0.002f,
+          ("fingertip adjust: dragged 1 cm up and forward, now " + std::to_string(p->pointer.tipForwardM) + " / " +
+           std::to_string(p->pointer.tipUpM))
+              .c_str());
+    e.adjust = false;
+}

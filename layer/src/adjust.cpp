@@ -54,6 +54,45 @@ void Engine::UpdateAdjustWheel() {
     wr.pose = obj;
 }
 
+// Adjust mode, fingertips: both poking fingertips show; grab one with the other hand's grip and put it where your
+// real fingertip is. It is stored relative to the laser start (forward, up, toward the middle) and saved on leaving.
+void Engine::UpdateAdjustFingertips() {
+    bool holding = grab.target == GrabTarget::LeftFingertip || grab.target == GrabTarget::RightFingertip;
+    if (!adjust) {
+        if (holding) grab = GrabRun{};
+        return;
+    }
+    const float kGrabRangeM = 0.05f;
+    if (!grab.Active()) {
+        for (int g = 0; g < 2; g++) {
+            int t = 1 - g; // the grabbing hand takes the other hand's fingertip
+            const HandRaw& gh = fr.h[g];
+            bool edge = cur[g][C_GRIP][F_PRESS] && !prev[g][C_GRIP][F_PRESS];
+            if (!edge || !gh.gripValid || !fr.h[t].aimValid) continue;
+            Vec3 tip = FingertipPos(t);
+            if (Len(V(gh.gripPose.position) - tip) > kGrabRangeM) continue;
+            StartGrab(FingertipGrab(t), g, { fr.h[t].aimPose.orientation, X(tip) });
+            if (prof->haptics) haptics.push_back({ g, prof->hapticAmp * 0.6f, 0.015f });
+            return;
+        }
+        return;
+    }
+    if (!holding) return;
+    int g = grab.hand, t = grab.target == GrabTarget::LeftFingertip ? 0 : 1;
+    if (!cur[g][C_GRIP][F_PRESS] || !fr.h[g].gripValid || !fr.h[t].aimValid) {
+        grab = GrabRun{};
+        if (prof->haptics) haptics.push_back({ g, prof->hapticAmp * 0.6f, 0.015f });
+        return;
+    }
+    // where the fingertip is held, in the pointing hand's laser frame
+    const XrPosef& aim = fr.h[t].aimPose;
+    Vec3 local = RotateInv(aim.orientation, V(GrabbedPose().position) - V(aim.position));
+    PointerStyle& P = prof->pointer;
+    P.tipForwardM = std::clamp(-local.z, -0.1f, 0.15f);
+    P.tipUpM = std::clamp(local.y, -0.1f, 0.1f);
+    P.tipInwardM = std::clamp(t == 1 ? -local.x : local.x, -0.1f, 0.1f);
+}
+
 void Engine::StartGrab(GrabTarget target, int hand, const XrPosef& obj) {
     grab = GrabRun{};
     grab.target = target;

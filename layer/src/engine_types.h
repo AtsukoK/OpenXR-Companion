@@ -10,7 +10,11 @@ enum class KbBarButton { DockScreen, DockKeys, AdjustDock, AdjustKeyboard, Close
 // What a wheel or wrist button asks of the headset mirror window (the layer does it).
 enum class MirrorRequest { None, Toggle, On, Off };
 
-enum class GrabTarget { None = -1, LeftWrist = 0, RightWrist = 1, Wheel, Screen, Keyboard, Dock };
+// Things that can be grabbed with a grip and placed by hand.
+enum class GrabTarget { None = -1, LeftWrist = 0, RightWrist = 1, Wheel, Screen, Keyboard, Dock, LeftFingertip, RightFingertip };
+inline GrabTarget FingertipGrab(int hand) {
+    return hand == 0 ? GrabTarget::LeftFingertip : GrabTarget::RightFingertip;
+}
 inline GrabTarget WristGrab(int hand) {
     return hand == 0 ? GrabTarget::LeftWrist : GrabTarget::RightWrist;
 }
