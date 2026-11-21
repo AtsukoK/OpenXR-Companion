@@ -23,8 +23,8 @@ public partial class MainForm
     {
         Image pic = n.Tag switch
         {
-            "bindings_left" => MiniPics.Wheel(200, 140, 0, Profile.Bindings.Where(b => HandOf(b) == 0 && b.Action?.Type == "wheel").Select(b => Profile.Wheels.GetValueOrDefault(b.Action.Wheel ?? "")).FirstOrDefault(w => w != null), true),
-            "bindings_right" => MiniPics.Wheel(200, 140, 1, Profile.Bindings.Where(b => HandOf(b) == 1 && b.Action?.Type == "wheel").Select(b => Profile.Wheels.GetValueOrDefault(b.Action.Wheel ?? "")).FirstOrDefault(w => w != null), true),
+            "bindings_left" => MiniPics.Wheel(200, 140, 0, Profile.Bindings.Where(b => HandOf(b) == 0 && b.Action?.Type == ActionType.Wheel).Select(b => Profile.Wheels.GetValueOrDefault(b.Action.Wheel ?? "")).FirstOrDefault(w => w != null), true),
+            "bindings_right" => MiniPics.Wheel(200, 140, 1, Profile.Bindings.Where(b => HandOf(b) == 1 && b.Action?.Type == ActionType.Wheel).Select(b => Profile.Wheels.GetValueOrDefault(b.Action.Wheel ?? "")).FirstOrDefault(w => w != null), true),
             "wheels" => MiniPics.Wheel(200, 140, 1, Profile.Wheels.Values.FirstOrDefault(), true),
             _ => null,
         };
@@ -83,7 +83,7 @@ public partial class MainForm
         {
             "bindings_left" => Profile.Bindings.Where(b => HandOf(b) == 0).ToList(),
             "bindings_right" => Profile.Bindings.Where(b => HandOf(b) == 1).ToList(),
-            _ => Profile.Bindings.Where(b => b.Action?.Type == "wheel").ToList(),
+            _ => Profile.Bindings.Where(b => b.Action?.Type == ActionType.Wheel).ToList(),
         };
         string what = tag == "wheels" ? "Bindings that open a wheel" : (tag == "bindings_left" ? "Left" : "Right") + " controller bindings";
         var strip = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 48, Padding = new Padding(12, 8, 0, 0), BackColor = Color.FromArgb(236, 240, 247), WrapContents = false };

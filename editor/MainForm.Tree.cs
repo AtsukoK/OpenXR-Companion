@@ -270,13 +270,13 @@ public partial class MainForm
                     {
                         var wm = Profile.WristFor(wh);
                         bool first = w.Name == wm.Start;
-                        var from = Profile.WristPages(wh).Pages.Values.SelectMany(pg => pg.Items.Where(i => i.Action?.Type == "page" && i.Action.Page == w.Name).Select(i => $"'{i.Label}' on {pg.Name}")).FirstOrDefault();
+                        var from = Profile.WristPages(wh).Pages.Values.SelectMany(pg => pg.Items.Where(i => i.Action?.Type == ActionType.Page && i.Action.Page == w.Name).Select(i => $"'{i.Label}' on {pg.Name}")).FirstOrDefault();
                         string note = wm.Mirror ? "not used while this panel mirrors" : first ? "main page, shown first"
                                     : from != null ? "sub-page, opened by " + from : "sub-page, no button opens it yet";
                         return ((first || wm.Mirror ? "" : "↳ ") + (w.Title is { Length: > 0 } t && t != w.Name ? $"{w.Name}  ·  \"{t}\"" : w.Name), $"{w.Items.Count(i => i.Enabled)} of {w.Items.Count} buttons on  ·  {note}", "", SecWrist, null, default);
                     }
-                    var openers = Profile.Bindings.Where(b => b.Action?.Type == "wheel" && b.Action.Wheel == w.Name).Select(b => InputText.Friendly(b.Input) + " " + Gesture(b)).ToList();
-                    var subFrom = Profile.Wheels.Values.SelectMany(o => o.Items.Where(i => i.Action?.Type == "wheel" && i.Action.Wheel == w.Name).Select(i => $"'{i.Label}' in {o.Name}")).FirstOrDefault();
+                    var openers = Profile.Bindings.Where(b => b.Action?.Type == ActionType.Wheel && b.Action.Wheel == w.Name).Select(b => InputText.Friendly(b.Input) + " " + Gesture(b)).ToList();
+                    var subFrom = Profile.Wheels.Values.SelectMany(o => o.Items.Where(i => i.Action?.Type == ActionType.Wheel && i.Action.Wheel == w.Name).Select(i => $"'{i.Label}' in {o.Name}")).FirstOrDefault();
                     string how = openers.Count > 0 ? "main wheel, opened by " + string.Join(", ", openers) : subFrom != null ? "sub-wheel, opened by " + subFrom : "not opened by anything yet";
                     return ((openers.Count == 0 && subFrom != null ? "↳ " : "") + (w.Title is { Length: > 0 } t2 && t2 != w.Name ? $"{w.Name}  ·  \"{t2}\"" : w.Name), $"{w.Items.Count(i => i.Enabled)} of {w.Items.Count} items on  ·  {how}", "", SecWheels, null, default);
                 }
@@ -289,7 +289,7 @@ public partial class MainForm
                     return (null, null, null, acc, null, default);
                 }
             case WheelItemModel i:
-                return (i.Label, Plain(i.Action), i.Action?.Type == "keyboard" ? "" : null, InWrist(n) ? SecWrist : SecWheels, null, default);
+                return (i.Label, Plain(i.Action), i.Action?.Type == ActionType.Keyboard ? "" : null, InWrist(n) ? SecWrist : SecWheels, null, default);
         }
         return (n.Text, null, null, SecNav, null, default);
     }

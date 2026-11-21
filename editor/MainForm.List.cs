@@ -90,7 +90,7 @@ public partial class MainForm
         bool wrist = root != wheelsRoot;
         WheelModel Find(string name) => all.FirstOrDefault(x => x.Name == name);
         IEnumerable<WheelModel> Children(WheelModel w) => w.Items
-            .Select(i => wrist ? (i.Action?.Type == "page" ? i.Action.Page : null) : (i.Action?.Type == "wheel" ? i.Action.Wheel : null))
+            .Select(i => wrist ? (i.Action?.Type == ActionType.Page ? i.Action.Page : null) : (i.Action?.Type == ActionType.Wheel ? i.Action.Wheel : null))
             .Where(nm => nm != null).Distinct().Select(Find).Where(x => x != null && x != w);
         var parentOf = new Dictionary<WheelModel, WheelModel>();
         foreach (var w in all)
@@ -98,7 +98,7 @@ public partial class MainForm
                 parentOf.TryAdd(c, w);
         int startH = root == wristRoots[0] ? 0 : 1;
         bool IsMain(WheelModel w) => wrist ? w.Name == Profile.WristFor(startH).Start || !parentOf.ContainsKey(w)
-                                           : Profile.Bindings.Any(b => b.Action?.Type == "wheel" && b.Action.Wheel == w.Name) || !parentOf.ContainsKey(w);
+                                           : Profile.Bindings.Any(b => b.Action?.Type == ActionType.Wheel && b.Action.Wheel == w.Name) || !parentOf.ContainsKey(w);
         var ordered = new List<WheelModel>();
         var seen = new HashSet<WheelModel>();
         void Visit(WheelModel w, int d)
@@ -180,7 +180,7 @@ public partial class MainForm
         if (n == bindingRoots[0] || n == bindingRoots[1] || n.Tag is BindingModel)
         {
             int hand = n == bindingRoots[0] ? 0 : n == bindingRoots[1] ? 1 : HandOf((BindingModel)n.Tag);
-            var b = new BindingModel { Name = "New binding", Input = hand == 0 ? "left.x" : "right.a", Gesture = "press", Action = new ActionModel { Type = "key", Keys = "F1" } };
+            var b = new BindingModel { Name = "New binding", Input = hand == 0 ? "left.x" : "right.a", Gesture = GestureKind.Press, Action = new ActionModel { Type = ActionType.Key, Keys = "F1" } };
             int at = n.Tag is BindingModel cur ? Profile.Bindings.IndexOf(cur) + 1 : Profile.Bindings.Count;
             Profile.Bindings.Insert(at, b);
             Rebuild(b);
@@ -218,7 +218,7 @@ public partial class MainForm
             bool wristPage = InWrist(n);
             if (w.Items.Count >= 16)
             { MessageBox.Show(this, wristPage ? "A page holds at most 16 buttons. Add another page." : "A wheel holds at most 16 items. Use a submenu wheel."); return; }
-            var it = new WheelItemModel { Label = wristPage ? "New button" : "New item", Action = new ActionModel { Type = "key", Keys = "F1" } };
+            var it = new WheelItemModel { Label = wristPage ? "New button" : "New item", Action = new ActionModel { Type = ActionType.Key, Keys = "F1" } };
             int at = n.Tag is WheelItemModel ci ? w.Items.IndexOf(ci) + 1 : w.Items.Count;
             w.Items.Insert(at, it);
             Rebuild(it);
@@ -238,11 +238,11 @@ public partial class MainForm
         for (int k = 2; dict.ContainsKey(name); k++)
             name = w.Name + (wrist ? " sub-page " : " sub-wheel ") + k;
         var sub = new WheelModel { Name = name, Title = "More" };
-        sub.Items.Add(new WheelItemModel { Label = "Back", Action = new ActionModel { Type = "back" } });
+        sub.Items.Add(new WheelItemModel { Label = "Back", Action = new ActionModel { Type = ActionType.Back } });
         dict[name] = sub;
         unfolded.Add(sub);
         unfolded.Add(w);
-        w.Items.Add(new WheelItemModel { Label = "More", Action = wrist ? new ActionModel { Type = "page", Page = name } : new ActionModel { Type = "wheel", Wheel = name } });
+        w.Items.Add(new WheelItemModel { Label = "More", Action = wrist ? new ActionModel { Type = ActionType.Page, Page = name } : new ActionModel { Type = ActionType.Wheel, Wheel = name } });
         Rebuild(sub);
     }
 

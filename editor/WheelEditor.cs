@@ -18,17 +18,17 @@ public class WheelEditor : EditorBase
         {
             var p = MainForm.Current.Profile;
             var how = new List<string>();
-            foreach (var b in p.Bindings.Where(b => b.Action?.Type == "wheel" && b.Action.Wheel == w.Name))
+            foreach (var b in p.Bindings.Where(b => b.Action?.Type == ActionType.Wheel && b.Action.Wheel == w.Name))
             {
                 string verb = b.Gesture switch { "double_tap" => "Double-tap", "hold" or "while_held" => "Hold", "tap" => "Tap", _ => "Press" };
                 how.Add(verb + " " + InputText.Friendly(b.Input) + (b.Enabled ? "" : "  (that binding is off)"));
             }
             foreach (var o in p.Wheels.Values)
-                foreach (var i in o.Items.Where(i => i.Action?.Type == "wheel" && i.Action.Wheel == w.Name))
+                foreach (var i in o.Items.Where(i => i.Action?.Type == ActionType.Wheel && i.Action.Wheel == w.Name))
                     how.Add($"The '{i.Label}' item on wheel '{o.Title ?? o.Name}'" + (i.Enabled ? "" : "  (that item is off)"));
             for (int h = 0; h < 2; h++)
                 foreach (var o in p.WristFor(h).Pages.Values)
-                    foreach (var i in o.Items.Where(i => i.Action?.Type == "wheel" && i.Action.Wheel == w.Name))
+                    foreach (var i in o.Items.Where(i => i.Action?.Type == ActionType.Wheel && i.Action.Wheel == w.Name))
                         how.Add($"The '{i.Label}' button on the {(h == 0 ? "left" : "right")} wrist panel" + (i.Enabled ? "" : "  (that button is off)"));
             var opens = new Label
             {

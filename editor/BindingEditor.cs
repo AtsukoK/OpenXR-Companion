@@ -78,9 +78,9 @@ public class BindingEditor : EditorBase
 
     void Sync()
     {
-        FormPanel.Show(lHold, b.Gesture == "hold");
-        FormPanel.Show(lPass, b.Gesture == "hold");
-        FormPanel.Show(lTap, b.Gesture == "tap");
-        FormPanel.Show(lDbl, b.Gesture == "double_tap");
+        FormPanel.Show(lHold, b.Gesture == GestureKind.Hold);
+        FormPanel.Show(lPass, b.Gesture == GestureKind.Hold);
+        FormPanel.Show(lTap, b.Gesture == GestureKind.Tap);
+        FormPanel.Show(lDbl, b.Gesture == GestureKind.DoubleTap);
     }
 }

@@ -103,11 +103,11 @@ public partial class MainForm
         catch { }
         foreach (var b in p.Bindings)
         {
-            if (b.Action?.Type != "wheel" || (b.Action.Wheel != "right" && b.Action.Wheel != "left") || b.Input == null)
+            if (b.Action?.Type != ActionType.Wheel || (b.Action.Wheel != "right" && b.Action.Wheel != "left") || b.Input == null)
                 continue;
             if (b.Input.EndsWith(".thumbrest"))
                 return "touch";
-            if (b.Input.EndsWith(".thumbstick") && b.Gesture == "double_tap")
+            if (b.Input.EndsWith(".thumbstick") && b.Gesture == GestureKind.DoubleTap)
                 return "index";
             if (b.Input.EndsWith(".menu"))
                 return "wmr";
@@ -122,7 +122,7 @@ public partial class MainForm
         int n = 0;
         foreach (var b in p.Bindings)
         {
-            if (b.Action?.Type != "wheel" || !string.IsNullOrEmpty(b.Layers))
+            if (b.Action?.Type != ActionType.Wheel || !string.IsNullOrEmpty(b.Layers))
                 continue;
             string hand = b.Action.Wheel == "right" ? "right" : b.Action.Wheel == "left" ? "left" : null;
             if (hand == null)
@@ -132,7 +132,7 @@ public partial class MainForm
             {
                 case "touch":
                     b.Input = hand + ".thumbrest";
-                    b.Gesture = "double_tap";
+                    b.Gesture = GestureKind.DoubleTap;
                     b.DoubleTapMs = 400;
                     b.Block = "none";
                     b.TapPassthrough = false;
@@ -141,7 +141,7 @@ public partial class MainForm
                     break;
                 case "index":
                     b.Input = hand + ".thumbstick";
-                    b.Gesture = "double_tap";
+                    b.Gesture = GestureKind.DoubleTap;
                     b.DoubleTapMs = 400;
                     b.Block = "none";
                     b.TapPassthrough = false;
@@ -150,7 +150,7 @@ public partial class MainForm
                     break;
                 default: // wmr, vive
                     b.Input = hand + ".menu";
-                    b.Gesture = "hold";
+                    b.Gesture = GestureKind.Hold;
                     b.HoldMs = 500;
                     b.Block = "trigger";
                     b.TapPassthrough = true;

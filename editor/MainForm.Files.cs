@@ -123,7 +123,7 @@ public partial class MainForm
             f.LoadFile(builtin);
             int n = ApplyControllerOpeners(f.Profile, id);
             var err = Native.Validate(f.Serialize());
-            var openers = string.Join(", ", f.Profile.Bindings.Where(b => b.Action?.Type == "wheel").Select(b => b.Input + " " + b.Gesture));
+            var openers = string.Join(", ", f.Profile.Bindings.Where(b => b.Action?.Type == ActionType.Wheel).Select(b => b.Input + " " + b.Gesture));
             sb.AppendLine($"controllers {id}: {(err == null && n == 2 ? "OK" : "ERROR " + err)} ({n} openers: {openers})");
             if (err != null || n != 2)
                 bad++;
@@ -147,12 +147,12 @@ public partial class MainForm
             Title = side + " hand",
             Items = new()
             {
-                Ex("Keyboard", new ActionModel { Type = "keyboard" }),
-                Ex("Esc", new ActionModel { Type = "key", Keys = "Esc" }),
-                Ex("Map", new ActionModel { Type = "key", Keys = "M" }),
-                Ex("Inventory", new ActionModel { Type = "key", Keys = "I" }),
-                Ex("Walk toggle", new ActionModel { Type = "key", Keys = "LCtrl", Mode = "toggle" }),
-                Ex("Quick save", new ActionModel { Type = "key", Keys = "F5" }),
+                Ex("Keyboard", new ActionModel { Type = ActionType.Keyboard }),
+                Ex("Esc", new ActionModel { Type = ActionType.Key, Keys = "Esc" }),
+                Ex("Map", new ActionModel { Type = ActionType.Key, Keys = "M" }),
+                Ex("Inventory", new ActionModel { Type = ActionType.Key, Keys = "I" }),
+                Ex("Walk toggle", new ActionModel { Type = ActionType.Key, Keys = "LCtrl", Mode = "toggle" }),
+                Ex("Quick save", new ActionModel { Type = ActionType.Key, Keys = "F5" }),
             },
         };
     }
@@ -184,8 +184,8 @@ public partial class MainForm
         if (old.Pages.Count == 0 && old.LegacyWheel != null && Profile.Wheels.TryGetValue(old.LegacyWheel, out var w))
         {
             string legacy = old.LegacyWheel;
-            bool usedElsewhere = Profile.Bindings.Any(b => b.Action?.Type == "wheel" && b.Action.Wheel == legacy)
-                || Profile.Wheels.Values.Any(o => o.Items.Any(i => i.Action?.Type == "wheel" && i.Action.Wheel == legacy));
+            bool usedElsewhere = Profile.Bindings.Any(b => b.Action?.Type == ActionType.Wheel && b.Action.Wheel == legacy)
+                || Profile.Wheels.Values.Any(o => o.Items.Any(i => i.Action?.Type == ActionType.Wheel && i.Action.Wheel == legacy));
             var page = usedElsewhere ? Clone(w) : w;
             page.Name = legacy;
             old.Pages[legacy] = page;

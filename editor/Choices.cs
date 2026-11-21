@@ -5,6 +5,36 @@ namespace OpenXRCompanionEditor;
 // ------------------------------------------------------------ plain-English choices
 public record Choice(string Code, string Text) { public override string ToString() => Text; }
 
+// Action types and gestures as they are saved in profiles. Use these names instead of typing the text,
+// so a typo is a build error. Profiles keep the same text, and unknown values still load.
+public static class ActionType
+{
+    public const string Key = "key";
+    public const string Sequence = "sequence";
+    public const string Wheel = "wheel";
+    public const string Keyboard = "keyboard";
+    public const string Layer = "layer";
+    public const string XrInput = "xr_input";
+    public const string Back = "back";
+    public const string Close = "close";
+    public const string Reload = "reload";
+    public const string Adjust = "adjust";
+    public const string Screen = "screen";
+    public const string ControllerOffsets = "controller_offsets";
+    public const string HeadsetMirror = "headset_mirror";
+    public const string None = "none";
+    public const string Page = "page";
+}
+
+public static class GestureKind
+{
+    public const string Press = "press";
+    public const string Tap = "tap";
+    public const string Hold = "hold";
+    public const string DoubleTap = "double_tap";
+    public const string WhileHeld = "while_held";
+}
+
 public static class Choices
 {
     public static readonly Choice[] Hands = { new("left", "Left hand"), new("right", "Right hand") };
@@ -21,9 +51,9 @@ public static class Choices
     };
     public static readonly Choice[] Gestures =
     {
-        new("press", "Pressed"), new("tap", "Tapped quickly (so a Hold on the same button can still work)"),
-        new("hold", "Held down for a moment"), new("double_tap", "Double-tapped"),
-        new("while_held", "Held  (starts on press, stops on release)"),
+        new(GestureKind.Press, "Pressed"), new(GestureKind.Tap, "Tapped quickly (so a Hold on the same button can still work)"),
+        new(GestureKind.Hold, "Held down for a moment"), new(GestureKind.DoubleTap, "Double-tapped"),
+        new(GestureKind.WhileHeld, "Held  (starts on press, stops on release)"),
     };
     public static readonly Choice[] Blocks =
     {
@@ -32,15 +62,15 @@ public static class Choices
     };
     public static readonly Choice[] ActionTypes =
     {
-        new("key", "Press a keyboard key or mouse button"), new("sequence", "Run a macro (several keys with waits)"),
-        new("wheel", "Open a wheel"), new("keyboard", "Open the VR keyboard"),
-        new("layer", "Switch a layer (changes what other buttons do)"),
-        new("xr_input", "Press a controller button inside the game"),
-        new("back", "Wheel: go back one level"), new("close", "Wheel: close"),
-        new("reload", "Reload this profile"), new("adjust", "Adjust positions: move wheels and wrist panels by hand"),
-        new("screen", "Mirror a monitor: show / hide it, switch monitor, frame rate or place"),
-        new("controller_offsets", "Controller offsets: fix how the game's hands and guns point"),
-        new("headset_mirror", "Headset mirror: a desktop window showing what the headset shows"), new("none", "Do nothing"),
+        new(ActionType.Key, "Press a keyboard key or mouse button"), new(ActionType.Sequence, "Run a macro (several keys with waits)"),
+        new(ActionType.Wheel, "Open a wheel"), new(ActionType.Keyboard, "Open the VR keyboard"),
+        new(ActionType.Layer, "Switch a layer (changes what other buttons do)"),
+        new(ActionType.XrInput, "Press a controller button inside the game"),
+        new(ActionType.Back, "Wheel: go back one level"), new(ActionType.Close, "Wheel: close"),
+        new(ActionType.Reload, "Reload this profile"), new(ActionType.Adjust, "Adjust positions: move wheels and wrist panels by hand"),
+        new(ActionType.Screen, "Mirror a monitor: show / hide it, switch monitor, frame rate or place"),
+        new(ActionType.ControllerOffsets, "Controller offsets: fix how the game's hands and guns point"),
+        new(ActionType.HeadsetMirror, "Headset mirror: a desktop window showing what the headset shows"), new(ActionType.None, "Do nothing"),
     };
     public static readonly Choice[] KeyModes = { new("tap", "Tap it once"), new("hold", "Keep it held while my button is held"), new("toggle", "Toggle: first time down, next time up") };
     public static readonly Choice[] ScreenModes =

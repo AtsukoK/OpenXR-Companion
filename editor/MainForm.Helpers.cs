@@ -26,7 +26,7 @@ public partial class MainForm
             owner.Start = newName;
         foreach (var pg in pages.Values)
             foreach (var i in pg.Items)
-                if (i.Action?.Type == "page" && i.Action.Page == oldName)
+                if (i.Action?.Type == ActionType.Page && i.Action.Page == oldName)
                     i.Action.Page = newName;
         RefreshNodeTexts();
     }
@@ -37,11 +37,11 @@ public partial class MainForm
         Profile.Wheels.Remove(oldName);
         Profile.Wheels[newName] = w;
         foreach (var b in Profile.Bindings)
-            if (b.Action?.Type == "wheel" && b.Action.Wheel == oldName)
+            if (b.Action?.Type == ActionType.Wheel && b.Action.Wheel == oldName)
                 b.Action.Wheel = newName;
         foreach (var ww in Profile.Wheels.Values.Concat(Profile.WristLeft.Pages.Values).Concat(Profile.WristRight.Pages.Values))
             foreach (var i in ww.Items)
-                if (i.Action?.Type == "wheel" && i.Action.Wheel == oldName)
+                if (i.Action?.Type == ActionType.Wheel && i.Action.Wheel == oldName)
                     i.Action.Wheel = newName;
         RefreshNodeTexts();
     }

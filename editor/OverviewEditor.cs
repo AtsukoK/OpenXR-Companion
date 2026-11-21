@@ -36,7 +36,7 @@ public class OverviewEditor : EditorBase
         // Wheels per hand
         foreach (var hand in new[] { "right", "left" })
         {
-            var openers = p.Bindings.Where(b => b.Action?.Type == "wheel" && Hand(b) == hand).ToList();
+            var openers = p.Bindings.Where(b => b.Action?.Type == ActionType.Wheel && Hand(b) == hand).ToList();
             bool any = openers.Any(b => b.Enabled);
             string title = hand == "right" ? "Right controller wheel" : "Left controller wheel";
             var c = Card(title, any ? "ON" : "OFF", any ? On : Off,
@@ -91,9 +91,9 @@ public class OverviewEditor : EditorBase
 
         // Keyboard
         {
-            var openers = p.Bindings.Where(b => b.Action?.Type == "keyboard").ToList();
+            var openers = p.Bindings.Where(b => b.Action?.Type == ActionType.Keyboard).ToList();
             int fromMenus = p.Wheels.Values.Concat(p.WristLeft.Pages.Values).Concat(p.WristRight.Pages.Values)
-                .SelectMany(w => w.Items).Count(i => i.Enabled && i.Action?.Type == "keyboard");
+                .SelectMany(w => w.Items).Count(i => i.Enabled && i.Action?.Type == ActionType.Keyboard);
             bool any = openers.Any(b => b.Enabled) || fromMenus > 0;
             var c = Card("VR keyboard", any ? "ON" : "OFF", any ? On : Off,
                 openers.Count + fromMenus > 0 ? "How to open it in the headset:" : "Nothing opens it yet. Add a Keyboard button to a wheel or wrist panel, or a binding.",
