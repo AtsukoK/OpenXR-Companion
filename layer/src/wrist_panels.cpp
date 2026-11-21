@@ -134,35 +134,31 @@ void WristPanels::Activate(int h, int cell, int presser) {
     }
 }
 
-void WristPanels::Update(int h) {
+void WristPanels::Hide(int h) {
+    WristView& wv = e.wrist[h];
+    if (e.grab.target == WristGrab(h)) e.grab = Engine::GrabRun{};
+    if (!wv.visible) return;
+    wv.visible = false;
+    wv.hover = -1;
+    wv.version++;
+    Log("%s wrist panel hidden", h ? "right" : "left");
+}
+
+void WristPanels::ToPanel(int h, const XrPosef& pose, Vec3 worldPoint, float& u, float& v, float& depthM) const {
+    const float size = e.prof->wrist[h].size;
+    Vec3 l = RotateInv(pose.orientation, worldPoint - V(pose.position));
+    u = l.x / size + 0.5f;
+    v = 0.5f - l.y / size;
+    depthM = l.z;
+}
+
+// Is the panel turned toward the eyes and being looked at? Looser once shown, so it does not flicker.
+// Shows it after show_ms, hides it hide_ms after the look is lost. False = not shown this frame.
+bool WristPanels::UpdateVisibility(int h, const XrPosef& pose, const Vec3& n) {
     const WristStyle& W = e.prof->wrist[h];
-    const WristStyle& src = e.prof->WristPages(h); // whose pages are shown
+    const WristStyle& src = e.prof->WristPages(h);
     WristView& wv = e.wrist[h];
     Run& R = run_[h];
-    auto hide = [&] {
-        if (e.grab.target == WristGrab(h)) e.grab = Engine::GrabRun{};
-        if (wv.visible) {
-            wv.visible = false;
-            wv.hover = -1;
-            wv.version++;
-            Log("%s wrist panel hidden", h ? "right" : "left");
-        }
-    };
-    auto root = src.pages.find(src.start);
-    if (!W.enabled || root == src.pages.end() || (e.wr.open && !e.adjust) || e.kb.visible || !e.fr.headValid) {
-        hide();
-        R.condSince = -1;
-        return;
-    }
-    XrPosef pose;
-    Vec3 n;
-    if (!PoseNow(h, pose, n)) {
-        hide();
-        R.condSince = -1;
-        return;
-    }
-
-    // Is the panel turned toward the eyes and being looked at? Looser once shown, so it does not flicker.
     Vec3 eye = V(e.fr.head.position), c = V(pose.position);
     Vec3 toEye = eye - c;
     float dist = Len(toEye);
@@ -171,46 +167,51 @@ void WristPanels::Update(int h) {
     float slack = wv.visible ? 15.f : 0.f;
     bool facing = Dot(n, toEye) >= std::cos((W.facingDeg + slack) * kDeg);
     bool looked = Dot(fwd, toEye * -1.f) >= std::cos((W.gazeDeg + slack) * kDeg);
-    bool cond = (facing && looked && dist < 0.8f) || e.adjust; // adjust mode: always shown
+    bool isWanted = (facing && looked && dist < 0.8f) || e.adjust; // adjust mode: always shown
 
-    if (!cond) {
+    if (!isWanted) { // Close/Back on the first page needs a fresh look
         R.condSince = -1;
         R.closedByItem = false;
-    } // Close/Back on the first page needs a fresh look
-    else if (R.condSince < 0)
+    } else if (R.condSince < 0) {
         R.condSince = e.now;
-
-    if (!wv.visible) {
-        if (cond && !R.closedByItem && ((e.now - R.condSince) * 1000 >= W.showMs || e.adjust)) {
-            R.stack.assign(1, &root->second);
-            wv = WristView{};
-            wv.visible = true;
-            wv.version++;
-            R.shownAt = e.now;
-            R.lostSince = -1;
-            R.pokeArmed = false;
-            R.prevDepth = 1.f;
-            if (e.prof->haptics) e.haptics.push_back({ h, e.prof->hapticAmp * 0.6f, 0.02f });
-            Log("%s wrist panel shown", h ? "right" : "left");
-        } else
-            return;
-    } else {
-        if (R.closedByItem) {
-            hide();
-            return;
-        }
-        if (!cond) {
-            if (R.lostSince < 0) R.lostSince = e.now;
-            if ((e.now - R.lostSince) * 1000 >= W.hideMs) {
-                hide();
-                return;
-            }
-        } else
-            R.lostSince = -1;
     }
 
+    if (!wv.visible) {
+        bool waitedLongEnough = (e.now - R.condSince) * 1000 >= W.showMs || e.adjust;
+        if (!isWanted || R.closedByItem || !waitedLongEnough) return false;
+        R.stack.assign(1, &src.pages.find(src.start)->second);
+        wv = WristView{};
+        wv.visible = true;
+        wv.version++;
+        R.shownAt = e.now;
+        R.lostSince = -1;
+        R.pokeArmed = false;
+        R.prevDepth = 1.f;
+        if (e.prof->haptics) e.haptics.push_back({ h, e.prof->hapticAmp * 0.6f, 0.02f });
+        Log("%s wrist panel shown", h ? "right" : "left");
+        return true;
+    }
+    if (R.closedByItem) {
+        Hide(h);
+        return false;
+    }
+    if (isWanted) {
+        R.lostSince = -1;
+        return true;
+    }
+    if (R.lostSince < 0) R.lostSince = e.now;
+    if ((e.now - R.lostSince) * 1000 >= W.hideMs) {
+        Hide(h);
+        return false;
+    }
+    return true;
+}
+
+void WristPanels::SyncView(int h, const XrPosef& pose) {
+    WristView& wv = e.wrist[h];
+    Run& R = run_[h];
     wv.pose = pose;
-    wv.sizeM = W.size;
+    wv.sizeM = e.prof->wrist[h].size;
     if (wv.adjust != e.adjust) {
         wv.adjust = e.adjust;
         wv.version++;
@@ -227,122 +228,152 @@ void WristPanels::Update(int h) {
         wv.pressed = -1;
         wv.version++;
     }
-    {
-        std::vector<bool> on;
-        if (wv.nested) on.push_back(false); // the Back cell
-        for (auto& it : wv.wheel->items)
-            on.push_back(e.IsOn(it.action));
-        if (on != wv.on) {
-            wv.on = std::move(on);
-            wv.version++;
-        }
+    std::vector<bool> on;
+    if (wv.nested) on.push_back(false); // the Back cell
+    for (auto& it : wv.wheel->items)
+        on.push_back(e.IsOn(it.action));
+    if (on != wv.on) {
+        wv.on = std::move(on);
+        wv.version++;
     }
+}
 
-    int o = 1 - h; // the pressing hand
+// Adjust mode: the other hand's grip grabs the panel; it follows that hand, and its stick resizes.
+bool WristPanels::UpdateGrab(int h, XrPosef& pose) {
+    WristView& wv = e.wrist[h];
+    const int o = 1 - h; // the grabbing hand
     const HandRaw& hr = e.fr.h[o];
-    int hover = -1;
-    bool canPoke = W.press != PressMethod::Point, canPoint = W.press != PressMethod::Poke;
-    auto toPanel = [&](Vec3 p, float& u, float& v, float& depth) {
-        Vec3 l = RotateInv(pose.orientation, p - c);
-        u = l.x / W.size + 0.5f;
-        v = 0.5f - l.y / W.size;
-        depth = l.z;
-    };
-    bool settled = e.now - R.shownAt > 0.2; // nothing fires in the first moment
-
-    // Adjust mode: the other hand's grip grabs the panel; it follows that hand, and its stick resizes.
-    if (e.grab.target == WristGrab(h) && (!e.adjust || !e.cur[o][C_GRIP][F_PRESS] || !hr.gripValid)) {
+    const float size = e.prof->wrist[h].size;
+    bool isGripHeld = e.cur[o][C_GRIP][F_PRESS] && hr.gripValid;
+    if (e.grab.target == WristGrab(h) && (!e.adjust || !isGripHeld)) {
         e.grab = Engine::GrabRun{};
         if (e.prof->haptics) e.haptics.push_back({ o, e.prof->hapticAmp * 0.6f, 0.015f });
     }
-    if (e.adjust && !e.grab.Active() && hr.gripValid && e.cur[o][C_GRIP][F_PRESS] && !e.prev[o][C_GRIP][F_PRESS] &&
-        Len(V(hr.gripPose.position) - c) < W.size * 0.7f + 0.08f)
-        e.StartGrab(WristGrab(h), o, pose);
-    if (e.grab.target == WristGrab(h)) {
-        WristStyle& Wm = e.prof->wrist[h];
-        // Keeps the grabbing hand's angle; saved relative to this arm's controller.
-        Wm.pose = { true, PMul(PInv(e.fr.h[h].gripPose), e.GrabbedPose()) };
-        float dt = (float)std::clamp(e.now - e.lastNow, 0.0, 0.1);
-        auto dz = [](float v) {
-            return std::fabs(v) < 0.25f ? 0.f : v;
-        };
-        Wm.size = std::clamp(Wm.size * (1.f + dz(hr.sy) * dt * 0.8f), 0.05f, 0.4f);
-        Vec3 nn;
-        if (PoseNow(h, pose, nn)) {
-            wv.pose = pose;
-            wv.sizeM = Wm.size;
-        }
-        wv.cursor = false;
-        wv.touchDepth = 1.f;
-        if (wv.hover != -1) {
-            wv.hover = -1;
-            wv.version++;
-        }
-        return;
-    }
-    // In adjust mode only page navigation and the Adjust button itself ("Done") can be pressed.
-    auto allowed = [&](int cell) {
-        if (!e.adjust) return true;
-        int idx = cell - (wv.nested ? 1 : 0);
-        if (idx < 0) return true; // the automatic Back cell
-        if (idx >= (int)wv.wheel->items.size()) return false;
-        ActType t = wv.wheel->items[idx].action.type;
-        return t == ActType::Adjust || t == ActType::Page || t == ActType::Back || t == ActType::Keyboard;
-    };
+    bool gripJustPressed = isGripHeld && !e.prev[o][C_GRIP][F_PRESS];
+    bool isHandNear = Len(V(hr.gripPose.position) - V(pose.position)) < size * 0.7f + 0.08f;
+    if (e.adjust && !e.grab.Active() && gripJustPressed && isHandNear) e.StartGrab(WristGrab(h), o, pose);
+    if (e.grab.target != WristGrab(h)) return false;
 
-    // Poke: the tip of the other controller pushes through the panel surface.
+    WristStyle& Wm = e.prof->wrist[h];
+    // Keeps the grabbing hand's angle; saved relative to this arm's controller.
+    Wm.pose = { true, PMul(PInv(e.fr.h[h].gripPose), e.GrabbedPose()) };
+    float dt = (float)std::clamp(e.now - e.lastNow, 0.0, 0.1);
+    auto deadZone = [](float v) {
+        return std::fabs(v) < 0.25f ? 0.f : v;
+    };
+    Wm.size = std::clamp(Wm.size * (1.f + deadZone(hr.sy) * dt * 0.8f), 0.05f, 0.4f);
+    Vec3 normal;
+    if (PoseNow(h, pose, normal)) {
+        wv.pose = pose;
+        wv.sizeM = Wm.size;
+    }
     wv.cursor = false;
     wv.touchDepth = 1.f;
-    if (canPoke && hr.aimValid) {
-        Vec3 tip = e.FingertipPos(o);
-        float u, v, d;
-        toPanel(tip, u, v, d);
-        bool inside = u >= 0 && u <= 1 && v >= 0 && v <= 1;
-        wv.touchDepth = inside ? d : 1.f;
-        if (inside && d > -0.04f && d < WristView::kPokeTakeoverM) hover = CellAt(h, u, v);
-        // Touch cursor: shows where the fingertip will land, shrinking and filling in as it gets close.
-        const float kCursorRange = 0.08f; // shown a little before the laser hands over, so the spot can be aimed
-        if (inside && d > -0.04f && d < kCursorRange) {
-            float k = d <= 0.f ? 0.f : d / kCursorRange; // 0 touching .. 1 far
-            Vec3 at = c + Rotate(pose.orientation, { (u - 0.5f) * W.size, (0.5f - v) * W.size, 0.002f });
-            wv.cursor = true;
-            wv.cursorPose = { pose.orientation, { at.x, at.y, at.z } };
-            wv.cursorSize = 0.010f + 0.018f * k;
-            wv.cursorLevel = d <= 0.f ? 8 : std::min(7, (int)((1.f - k) * 8.f));
-        } else
-            wv.cursor = false;
-        if (!inside || d > 0.02f) R.pokeArmed = true; // pulled back out: ready for the next poke
-        if (settled && inside && R.pokeArmed && R.prevDepth > 0.f && d <= 0.f && hover >= 0 && allowed(hover)) {
-            R.pokeArmed = false;
-            Activate(h, hover, o);
-            if (!wv.visible || R.closedByItem) {
-                hide();
-                return;
-            }
-        }
-        R.prevDepth = inside ? d : 1.f;
+    if (wv.hover != -1) {
+        wv.hover = -1;
+        wv.version++;
     }
-    // Point: laser from the other hand, trigger to press.
-    if (canPoint && hover < 0 && hr.aimValid) {
-        Vec3 ro = V(hr.aimPose.position), rd = Rotate(hr.aimPose.orientation, { 0, 0, -1 });
-        float den = Dot(rd, n);
-        if (std::fabs(den) > 1e-4f) {
-            float t = Dot(c - ro, n) / den;
-            if (t > 0 && t < 1.5f) {
-                float u, v, d;
-                toPanel(ro + rd * t, u, v, d);
-                hover = CellAt(h, u, v);
-            }
-        }
-        bool trigEdge = e.cur[o][C_TRIGGER][F_PRESS] && !e.prev[o][C_TRIGGER][F_PRESS];
-        if (settled && trigEdge && hover >= 0 && allowed(hover)) {
-            Activate(h, hover, o);
-            if (R.closedByItem) {
-                hide();
-                return;
-            }
+    return true;
+}
+
+// In adjust mode only page navigation and the Adjust button itself ("Done") can be pressed.
+bool WristPanels::IsCellAllowed(int h, int cell) const {
+    if (!e.adjust) return true;
+    const WristView& wv = e.wrist[h];
+    int idx = cell - (wv.nested ? 1 : 0);
+    if (idx < 0) return true; // the automatic Back cell
+    if (idx >= (int)wv.wheel->items.size()) return false;
+    ActType t = wv.wheel->items[idx].action.type;
+    return t == ActType::Adjust || t == ActType::Page || t == ActType::Back || t == ActType::Keyboard;
+}
+
+// Poke: the tip of the other controller pushes through the panel surface. False = the panel closed.
+bool WristPanels::UpdatePoke(int h, const XrPosef& pose, bool settled, int& hover) {
+    const float size = e.prof->wrist[h].size;
+    WristView& wv = e.wrist[h];
+    Run& R = run_[h];
+    const int o = 1 - h; // the pressing hand
+    Vec3 tip = e.FingertipPos(o);
+    float u, v, d;
+    ToPanel(h, pose, tip, u, v, d);
+    bool inside = u >= 0 && u <= 1 && v >= 0 && v <= 1;
+    wv.touchDepth = inside ? d : 1.f;
+    if (inside && d > -0.04f && d < WristView::kPokeTakeoverM) hover = CellAt(h, u, v);
+    // Touch cursor: shows where the fingertip will land, shrinking and filling in as it gets close.
+    const float kCursorRange = 0.08f; // shown a little before the laser hands over, so the spot can be aimed
+    wv.cursor = inside && d > -0.04f && d < kCursorRange;
+    if (wv.cursor) {
+        float k = d <= 0.f ? 0.f : d / kCursorRange; // 0 touching .. 1 far
+        Vec3 at = V(pose.position) + Rotate(pose.orientation, { (u - 0.5f) * size, (0.5f - v) * size, 0.002f });
+        wv.cursorPose = { pose.orientation, { at.x, at.y, at.z } };
+        wv.cursorSize = 0.010f + 0.018f * k;
+        wv.cursorLevel = d <= 0.f ? 8 : std::min(7, (int)((1.f - k) * 8.f));
+    }
+    if (!inside || d > 0.02f) R.pokeArmed = true; // pulled back out: ready for the next poke
+    bool pushedThrough = inside && R.prevDepth > 0.f && d <= 0.f;
+    if (settled && R.pokeArmed && pushedThrough && hover >= 0 && IsCellAllowed(h, hover)) {
+        R.pokeArmed = false;
+        Activate(h, hover, o);
+        if (!wv.visible || R.closedByItem) {
+            Hide(h);
+            return false;
         }
     }
+    R.prevDepth = inside ? d : 1.f;
+    return true;
+}
+
+// Point: laser from the other hand, trigger to press. False = the panel closed.
+bool WristPanels::UpdatePoint(int h, const XrPosef& pose, const Vec3& n, bool settled, int& hover) {
+    const int o = 1 - h; // the pressing hand
+    const HandRaw& hr = e.fr.h[o];
+    Vec3 ro = V(hr.aimPose.position), rd = Rotate(hr.aimPose.orientation, { 0, 0, -1 });
+    float den = Dot(rd, n);
+    if (std::fabs(den) > 1e-4f) {
+        float t = Dot(V(pose.position) - ro, n) / den;
+        if (t > 0 && t < 1.5f) {
+            float u, v, d;
+            ToPanel(h, pose, ro + rd * t, u, v, d);
+            hover = CellAt(h, u, v);
+        }
+    }
+    bool trigEdge = e.cur[o][C_TRIGGER][F_PRESS] && !e.prev[o][C_TRIGGER][F_PRESS];
+    if (settled && trigEdge && hover >= 0 && IsCellAllowed(h, hover)) {
+        Activate(h, hover, o);
+        if (run_[h].closedByItem) {
+            Hide(h);
+            return false;
+        }
+    }
+    return true;
+}
+
+void WristPanels::Update(int h) {
+    const WristStyle& W = e.prof->wrist[h];
+    const WristStyle& src = e.prof->WristPages(h); // whose pages are shown
+    WristView& wv = e.wrist[h];
+    Run& R = run_[h];
+    bool hasPages = src.pages.count(src.start) > 0;
+    bool isBlocked = (e.wr.open && !e.adjust) || e.kb.visible || !e.fr.headValid;
+    XrPosef pose;
+    Vec3 n;
+    if (!W.enabled || !hasPages || isBlocked || !PoseNow(h, pose, n)) {
+        Hide(h);
+        R.condSince = -1;
+        return;
+    }
+    if (!UpdateVisibility(h, pose, n)) return;
+    SyncView(h, pose);
+    if (UpdateGrab(h, pose)) return;
+
+    const int o = 1 - h; // the pressing hand
+    const HandRaw& hr = e.fr.h[o];
+    bool settled = e.now - R.shownAt > 0.2; // nothing fires in the first moment
+    int hover = -1;
+    wv.cursor = false;
+    wv.touchDepth = 1.f;
+    if (W.press != PressMethod::Point && hr.aimValid && !UpdatePoke(h, pose, settled, hover)) return;
+    if (W.press != PressMethod::Poke && hover < 0 && hr.aimValid && !UpdatePoint(h, pose, n, settled, hover)) return;
     if (hover != wv.hover) {
         wv.hover = hover;
         wv.version++;
