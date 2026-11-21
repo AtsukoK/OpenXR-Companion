@@ -227,6 +227,16 @@ To see them, tick **Settings > Advanced > Show experimental features**. An **Exp
 
 ![Settings > Experimental: a motion sickness warning above the head smoothing switch, where it applies, keep it on, and strength](docs/images/editor-experimental.png)
 
+## SteamVR and Steam Frame
+
+OpenXR Companion works with any OpenXR runtime, SteamVR included, as long as the game itself runs through OpenXR.
+Games that use SteamVR's own OpenVR API never load it; if a game offers both, pick its OpenXR mode (or use
+OpenComposite). A log appearing in `%LOCALAPPDATA%\OpenXRCompanion\logs` means it loaded.
+
+- **Steam Frame and other new controllers** are supported: the layer binds its menus to the inputs the game itself uses on that controller.
+- **Steam Frame:** choose the Index-style controllers in the editor's controller choice, and Index bindings in SteamVR. Restart the game after changing bindings: they are fixed when the game starts.
+- If the headset shows "OpenXR Companion gets no controller input", SteamVR is using saved bindings for the game that leave the menus out: reset the game's bindings in SteamVR's controller settings, then restart the game.
+
 ## Files, switching it off and problems
 
 Turn it off for one game with `enabled: false` in that game's profile. Remove it entirely with **Uninstall layer**. Setting the environment variable `DISABLE_XR_APILAYER_NOVENDOR_openxr_companion=1` also disables it.

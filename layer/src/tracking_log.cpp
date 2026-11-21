@@ -100,6 +100,7 @@ void TrackingLog::Summary(double now) {
 }
 
 void OurInputLog::Frame(int hand, bool gripValid, bool aimValid, bool triggerActive, bool anyButton) {
+    if (gripValid || aimValid) lastPoseSeen_ = NowSec();
     HandStats& s = hands_[hand];
     s.frames++;
     s.grip += gripValid;
@@ -131,4 +132,16 @@ void OurInputLog::Summary(double now) {
         s = HandStats{};
     }
     syncNotOk_ = 0;
+}
+
+bool OurInputLog::InputMissingFor(double now, bool headTracked, double sec) {
+    if (lastPoseSeen_ < 0) lastPoseSeen_ = now; // counted from the first frame
+    if (!headTracked) {
+        lastPoseSeen_ = now; // headset off: not a binding problem
+        return false;
+    }
+    if (warned_ || now - lastPoseSeen_ < sec) return false;
+    warned_ = true;
+    Log("our input: no controller pose for %.0f s while the headset is tracked: our actions are not bound", sec);
+    return true;
 }

@@ -437,6 +437,10 @@ static void ReadInputsAndUpdate() {
     }
     gInputLog.Summary(f.t);
     f.headValid = Locate(gSession.view, gSession.local, f.head);
+    if (gInputLog.InputMissingFor(f.t, f.headValid, 15.0))
+        gEng.Toast("OpenXR Companion gets no controller input. Check SteamVR's controller bindings for this game "
+                   "(Steam Frame: Index bindings), then restart the game.",
+                   12.0);
     gOverlay.SetHead(f.head, f.headValid);
     gEng.Update(f);
 
@@ -955,8 +959,9 @@ static XrResult XRAPI_CALL Hook_xrGetInstanceProcAddr(XrInstance inst, const cha
     HOOK(WaitFrame)
     HOOK(EndFrame)
     HOOK(CreateActionSpace)
-    HOOK(CreateReferenceSpace) HOOK(DestroySpace) HOOK(LocateSpace) HOOK(LocateViews) HOOK(CreateSwapchain) HOOK(DestroySwapchain)
-        HOOK(EnumerateSwapchainImages) HOOK(AcquireSwapchainImage) HOOK(ReleaseSwapchainImage) if (n == "xrLocateSpaces") {
+    HOOK(CreateReferenceSpace)
+    HOOK(DestroySpace) HOOK(LocateSpace) HOOK(LocateViews) HOOK(CreateSwapchain) HOOK(DestroySwapchain) HOOK(EnumerateSwapchainImages)
+        HOOK(AcquireSwapchainImage) HOOK(ReleaseSwapchainImage) if (n == "xrLocateSpaces") {
         N.LocateSpaces = (PFN_xrLocateSpaces)*fn;
         *fn = (PFN_xrVoidFunction)Hook_xrLocateSpaces;
         return r;

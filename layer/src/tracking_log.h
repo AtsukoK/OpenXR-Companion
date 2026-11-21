@@ -14,8 +14,13 @@ public:
     // xrSyncActions with our set did not return plain success (the frame's update is skipped then).
     void SyncResult(int result);
     void Summary(double now);
+    // True once, when neither hand's pose has reached us for `sec` while the headset was tracked: the runtime has
+    // not bound our actions (for example SteamVR using saved bindings for the game).
+    bool InputMissingFor(double now, bool headTracked, double sec);
 
 private:
+    double lastPoseSeen_ = -1;
+    bool warned_ = false;
     struct HandStats {
         int frames = 0, grip = 0, aim = 0, trigger = 0, buttons = 0;
     };

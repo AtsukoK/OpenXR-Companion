@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.2.11 (2026-11-21)
+
+### New
+- **SteamVR and Steam Frame support**: controllers without a built-in table (Steam Frame and other new controllers) get the menus' bindings from the inputs the game itself uses on them. Choose Index-style controllers for the Steam Frame.
+- **Calibrate the poking fingertip**: in Adjust / Calibrate Positions both fingertips show; grab one with the other hand and put it where your real fingertip is. Also as numbers in Settings > Pointing (forward, up, toward the middle).
+- A message in the headset when the menus get no controller input (for example SteamVR using saved bindings for the game), with what to do.
+
+### Changed
+- The laser near wrist panels stays until your fingertip is about 3.5 cm away, instead of disappearing early.
+- The fingertip shown near wrist panels is smaller: just the tip.
+- The controller choice in the editor preselects the controllers you use now (it always showed Meta Quest first).
+- The logs show the controller type of each hand and whether the menus receive input, to help with new headsets.
+
 ## v0.2.10 (2026-11-21)
 
 ### Changed
