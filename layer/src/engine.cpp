@@ -457,21 +457,22 @@ void Engine::UpdatePointers() {
         const WristView& wv = wrist[panel];
         bool wristUp = wv.visible && grab.target != WristGrab(panel);
         float dPanel = wristUp ? Len(V(wv.pose.position) - o) : 1e9f;
-        // The laser stays until the touch cursor actually takes over (no gap where neither shows).
-        if (wristUp && prof->wrist[panel].press != PressMethod::Poke && !wv.cursor) test(wv.pose, wv.sizeM / 2, wv.sizeM / 2);
+        // The laser stays until the fingertip is close enough to take over (no gap where neither shows).
+        bool pokeTookOver = wv.cursor && wv.touchDepth < WristView::kPokeTakeoverM;
+        if (wristUp && prof->wrist[panel].press != PressMethod::Poke && !pokeTookOver) test(wv.pose, wv.sizeM / 2, wv.sizeM / 2);
         // Fingertip silhouette: where the poke tip is, so you can find your "finger" before it reaches the panel.
         if (wristUp && prof->pointer.finger && dPanel < 0.5f) { // on every panel: it also shows where the laser starts
-            const float len = 0.09f;
+            const float len = 0.028f; // just the tip of the finger
             Vec3 tip = o + d * 0.015f; // same tip as the poke test in UpdateWrist
             P.finger = true;
             P.fingerLen = len;
-            P.fingerW = 0.024f;
+            P.fingerW = 0.012f;
             P.fingerPose = alongRay(tip - d * (len * 0.5f), Rotate(wv.pose.orientation, { 0, 0, 1 }));
         }
         if (best > 1e8f) {
             // Guide laser: a wrist panel is up but this hand isn't aimed at it yet. Show a short beam
             // so the ray can be found and steered onto the panel. Hidden while the touch cursor shows.
-            if (!(wristUp && prof->pointer.guide && prof->wrist[panel].press != PressMethod::Poke && !wv.cursor && dPanel < 0.8f)) continue;
+            if (!(wristUp && prof->pointer.guide && prof->wrist[panel].press != PressMethod::Poke && !pokeTookOver && dPanel < 0.8f)) continue;
             float len = std::clamp(dPanel * 1.3f, 0.12f, 0.6f);
             P.on = true;
             P.dot = false;

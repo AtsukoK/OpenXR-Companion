@@ -86,6 +86,9 @@ struct WristView {
     XrPosef cursorPose{ { 0, 0, 0, 1 }, { 0, 0, 0 } };
     float cursorSize = 0.02f;
     int cursorLevel = 0; // 0 far .. 7 almost touching, 8 touching/pushed in
+    float touchDepth = 1.f; // how far the other hand's fingertip is in front of the panel (m; <= 0 pushed in)
+    // Closer than this the fingertip takes over from the laser: the laser hides and poking picks the button.
+    static constexpr float kPokeTakeoverM = 0.035f;
     bool adjust = false; // adjust mode: the header says so
 };
 struct Cell {

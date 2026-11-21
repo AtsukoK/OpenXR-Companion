@@ -273,6 +273,7 @@ void WristPanels::Update(int h) {
             wv.sizeM = Wm.size;
         }
         wv.cursor = false;
+        wv.touchDepth = 1.f;
         if (wv.hover != -1) {
             wv.hover = -1;
             wv.version++;
@@ -291,14 +292,16 @@ void WristPanels::Update(int h) {
 
     // Poke: the tip of the other controller pushes through the panel surface.
     wv.cursor = false;
+    wv.touchDepth = 1.f;
     if (canPoke && hr.aimValid) {
         Vec3 tip = V(hr.aimPose.position) + Rotate(hr.aimPose.orientation, { 0, 0, -1 }) * 0.015f;
         float u, v, d;
         toPanel(tip, u, v, d);
         bool inside = u >= 0 && u <= 1 && v >= 0 && v <= 1;
-        if (inside && d > -0.04f && d < 0.05f) hover = CellAt(h, u, v);
+        wv.touchDepth = inside ? d : 1.f;
+        if (inside && d > -0.04f && d < WristView::kPokeTakeoverM) hover = CellAt(h, u, v);
         // Touch cursor: shows where the fingertip will land, shrinking and filling in as it gets close.
-        const float kCursorRange = 0.08f; // the laser hands over to this cursor, so start it a bit early
+        const float kCursorRange = 0.08f; // shown a little before the laser hands over, so the spot can be aimed
         if (inside && d > -0.04f && d < kCursorRange) {
             float k = d <= 0.f ? 0.f : d / kCursorRange; // 0 touching .. 1 far
             Vec3 at = c + Rotate(pose.orientation, { (u - 0.5f) * W.size, (0.5f - v) * W.size, 0.002f });

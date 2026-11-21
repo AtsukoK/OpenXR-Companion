@@ -439,7 +439,7 @@ void DrawFinger(std::vector<uint32_t>& out, int W, int H, const Style& st) {
     path.AddLine(m + w, top + w / 2, W - m * 0.4f, bot);
     path.AddLine(m * 0.4f, bot, m, top + w / 2);
     path.CloseFigure();
-    LinearGradientBrush fill(PointF(0, top), PointF(0, bot), Color(200, 255, 255, 255), Color(40, 255, 255, 255));
+    LinearGradientBrush fill(PointF(0, top), PointF(0, bot), Color(150, 255, 255, 255), Color(0, 255, 255, 255));
     g.FillPath(&fill, &path);
     LinearGradientBrush edgeB(PointF(0, top), PointF(0, bot), Color(230, (BYTE)(c >> 16), (BYTE)(c >> 8), (BYTE)c),
                               Color(80, (BYTE)(c >> 16), (BYTE)(c >> 8), (BYTE)c));
@@ -449,8 +449,6 @@ void DrawFinger(std::vector<uint32_t>& out, int W, int H, const Style& st) {
     g.DrawArc(&nail, m + w * 0.22f, top + w * 0.18f, w * 0.56f, w * 0.7f, 180.f, 180.f);
     g.DrawLine(&nail, m + w * 0.22f, top + w * 0.53f, m + w * 0.22f, top + w * 1.1f);
     g.DrawLine(&nail, m + w * 0.78f, top + w * 0.53f, m + w * 0.78f, top + w * 1.1f);
-    Pen crease(Color(70, 255, 255, 255), W * 0.035f); // first knuckle
-    g.DrawLine(&crease, m + w * 0.2f, H * 0.42f, m + w * 0.8f, H * 0.42f);
     Grab(bmp, out, W, H);
 }
 

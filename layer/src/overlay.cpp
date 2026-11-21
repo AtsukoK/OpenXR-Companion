@@ -11,7 +11,7 @@ constexpr int kWristPx = 512;
 constexpr int kCursorPx = 128;
 constexpr int kDotPx = 64;
 constexpr int kBeamW = 16, kBeamH = 256;
-constexpr int kFingerW = 64, kFingerH = 256;
+constexpr int kFingerW = 64, kFingerH = 150;
 constexpr int kToastW = 1024, kToastH = 128;
 
 constexpr float kBeamWidthM = 0.0035f;
