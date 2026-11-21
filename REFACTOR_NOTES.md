@@ -73,3 +73,20 @@ part of 5 (support header + part tests; the engine-flow tests in test.cpp share 
 Untested in a headset. dist2 refreshed 2026-11-20 with everything above (copy this dist again after new changes).
 Possible next: Engine feature classes (Keyboard, ScreenMirror, OffsetsPanel) taking an input view (big: they share input, grab, toasts);
 (string settings: done.)
+
+## 2026-11-21 evening: AGENTS.md cleanup round (branch refactor, from main 16ac877)
+Done while the user was away; untested in a headset. dist2 in the main folder = this build.
+Commits (oldest first): mirror full-screen state into HeadsetMirror; keys.cpp tidy (InputWorker class, one
+game-focus helper, sequences parsed once, DryRun struct, + key sequence test); ComPtr in mirror.cpp, panel.cpp/h,
+screen.cpp (no manual Release left); screen Run -> RunMonitor + WaitForConfigChange; ParseProfile -> one reader per
+section + shared ParseItemList + CheckReferences; WristPanels::Update -> visibility/sync/grab/poke/point;
+ReadInputsAndUpdate -> ReadHand/SendHaptics/PushHandOffsets/save helpers/UpdateHeadsetMirror; OffsetsPanel::Update
+-> grab-to-set/save/panel input; editor Settings pages one builder method each; editor ActionType/GestureKind
+constants; 3 old editor warnings fixed.
+Checks: layer tests pass except the 2 monitor-capture tests, which fail on unchanged main too while the screen is
+locked (rerun when the user is at the PC: they cover the ComPtr change in screen.cpp). Editor --selftest output
+byte-identical to main's; --shots of every page pixel-identical (apart from the install-status text).
+Not done: clang-format (not installed on this PC); MainForm constructor (154 lines) left as is.
+To test in the headset: wheel + wrist panels (poke, point, grab in adjust), offsets panel (grab to set, stick
+slider), screen mirror (monitor AND window), headset mirror (incl. full screen), key sequences, a D3D12 game.
+If OK: merge refactor into main (fast-forward), rebuild dist.
