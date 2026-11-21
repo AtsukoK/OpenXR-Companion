@@ -65,6 +65,33 @@ void HeadsetMirror::OnDestroy(XrSwapchain sc) {
 }
 
 // ------------------------------------------------------------ window
+namespace {
+struct FullState {
+    bool on = false;
+    LONG style = 0;
+    WINDOWPLACEMENT place{ sizeof(WINDOWPLACEMENT) };
+} gFull;
+
+void SetFullScreen(HWND h, bool on) {
+    if (on == gFull.on) return;
+    if (on) {
+        MONITORINFO mi{ sizeof mi };
+        if (!GetMonitorInfoW(MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST), &mi)) return;
+        gFull.style = GetWindowLongW(h, GWL_STYLE);
+        GetWindowPlacement(h, &gFull.place);
+        SetWindowLongW(h, GWL_STYLE, (gFull.style & ~WS_OVERLAPPEDWINDOW) | WS_POPUP);
+        const RECT& r = mi.rcMonitor; // the whole monitor, not rcWork (which stops at the taskbar)
+        SetWindowPos(h, nullptr, r.left, r.top, r.right - r.left, r.bottom - r.top,
+                     SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    } else {
+        SetWindowLongW(h, GWL_STYLE, gFull.style);
+        SetWindowPlacement(h, &gFull.place);
+        SetWindowPos(h, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    }
+    gFull.on = on;
+}
+} // namespace
+
 LRESULT CALLBACK HeadsetMirror::WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     HeadsetMirror* self = gSelf;
     switch (m) {
@@ -86,6 +113,15 @@ LRESULT CALLBACK HeadsetMirror::WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         return 0;
     case WM_ERASEBKGND:
         return 1;
+    case WM_SYSCOMMAND: // maximize (button or title double-click) = borderless full screen over the taskbar too
+        if ((w & 0xFFF0) == SC_MAXIMIZE) {
+            SetFullScreen(h, true);
+            return 0;
+        }
+        break;
+    case WM_LBUTTONDBLCLK: // double-click the picture: in and out of full screen
+        SetFullScreen(h, !gFull.on);
+        return 0;
     }
     return DefWindowProcW(h, m, w, l);
 }
@@ -100,6 +136,7 @@ void HeadsetMirror::StartWindow() {
             auto* self = (HeadsetMirror*)p;
             SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
             WNDCLASSEXW wc{ sizeof(wc) };
+            wc.style = CS_DBLCLKS;
             wc.lpfnWndProc = WndProc;
             wc.hInstance = GetModuleHandleW(nullptr);
             wc.lpszClassName = kClass;
@@ -128,6 +165,7 @@ void HeadsetMirror::StartWindow() {
                 DispatchMessageW(&m);
             }
             self->hwnd = nullptr;
+            gFull.on = false;
             return 0;
         },
         this, 0, nullptr);
