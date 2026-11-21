@@ -315,7 +315,6 @@ public partial class MainForm
             if (st.Done != null && !st.Done())
             {
                 // do what the user would click
-                TreeNode slot(TreeNode p) => p?.Nodes.Cast<TreeNode>().LastOrDefault(c => c.Tag is AddSlot);
                 if (st.Title.Contains("binding"))
                 { f.tree.SelectedNode = f.bindingRoots[1]; f.Add(); }
                 else if (st.Title.Contains("make a wheel"))

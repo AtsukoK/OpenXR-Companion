@@ -30,6 +30,11 @@ public class SettingsEditor : EditorBase
     // every word on the page (labels, tick boxes, help), for the search box
     public string SearchText { get; private set; } = "";
 
+    readonly int wristHand; // -1 = a Settings page, 0 / 1 = the left / right wrist panel page
+
+    // Only the shown page is built.
+    bool Want(string key) => key == "wrist" ? wristHand >= 0 : wristHand < 0 && SettingsPage.ByKey(Page).Key == key;
+
     public SettingsEditor(ProfileModel model, int wristHand = -1, string page = "general", string highlight = null)
     {
         Page = page ?? "general";
@@ -42,14 +47,124 @@ public class SettingsEditor : EditorBase
         p.WristLeft ??= new();
         p.WristRight ??= new();
         p.Style.Colors ??= new();
-        var s = p.Style;
-        var sel = p.Selection;
-        var kb = p.Keyboard;
-        var th = p.Thresholds;
-        var col = s.Colors;
-        bool Want(string key) => key == "wrist" ? wristHand >= 0 : wristHand < 0 && SettingsPage.ByKey(Page).Key == key;
+        this.wristHand = wristHand;
 
-        // ---------------- general
+        p.Screen ??= new();
+        p.Offsets ??= new();
+        p.Offsets.Left ??= new();
+        p.Offsets.Right ??= new();
+        p.Offsets.Left.Grip ??= new();
+        p.Offsets.Left.Aim ??= new();
+        p.Offsets.Right.Grip ??= new();
+        p.Offsets.Right.Aim ??= new();
+
+        var general = BuildGeneral();
+        var look = BuildWheelLook();
+        var pick = BuildPicking();
+        var aim = BuildPointing();
+        var scr = BuildScreen();
+        var offs = BuildOffsets();
+        var mir = BuildHeadsetMirror();
+        var exp = BuildExperimental();
+        var keys = BuildKeyboard();
+        var wrist = BuildWrist();
+        var adv = BuildAdvanced();
+        const string savedTip = "Saved with this profile: changes take effect in the game when you press Save (Ctrl+S).";
+        const string liveTip = "Applies straight away, in every game and profile. Nothing to save.";
+        Card C(string title, string glyph, bool live, params Control[] body) =>
+            new(title, glyph, live ? "Applies straight away" : "Saved with profile", live ? Theme.Live : Theme.Saved, live ? liveTip : savedTip, body);
+        BackColor = Theme.Page;
+        var pageControls = new List<Control>();
+        string pageTitle, pageHelp;
+        if (wristHand >= 0)
+        {
+            pageTitle = wristHand == 1 ? "Right wrist panel" : "Left wrist panel";
+            pageHelp = "Buttons on your forearm. They appear when you turn the forearm toward your eyes and look at it. Its pages are listed under this panel in the list on the left; select a page to add buttons.";
+            pageControls.Add(C("Panel", "\uE8A9", false, wrist));
+        }
+        else
+        {
+            var sp = SettingsPage.ByKey(Page);
+            pageTitle = sp.Title;
+            pageHelp = null;
+            switch (sp.Key)
+            {
+                case "wheel":
+                    pageHelp = "Where the radial wheel appears, how it looks, and how you pick an item on it.";
+                    pageControls.Add(C("Position and look", "\uE790", false, look));
+                    pageControls.Add(C("Picking items", "\uE7C9", false, pick));
+                    break;
+                case "pointing":
+                    pageHelp = "The laser you point at wheels, wrist panels and the mirrored screen with.";
+                    pageControls.Add(C("Laser and fingertip", "\uE7C9", false, aim));
+                    break;
+                case "keyboard":
+                    pageControls.Add(C("VR keyboard", "\uE765", false, keys));
+                    break;
+                case "screen":
+                    pageHelp = "A desktop monitor or one window, shown in VR on your wrist or in front of you.";
+                    pageControls.Add(C("Screen mirror", "\uE7F4", false, scr));
+                    break;
+                case "offsets":
+                    pageHelp = "Turns and moves the controllers the GAME sees, for when its hands or guns point too low or too high.";
+                    pageControls.Add(C("Controller offsets", "\uE7FC", false, offs));
+                    break;
+                case "mirror":
+                    pageHelp = "A desktop window showing what the headset shows, including the wheel, panels and lasers. Good for OBS.";
+                    pageControls.Add(C("Headset mirror", "\uE890", true, mir));
+                    break;
+                case "experimental":
+                    pageHelp = "Features that can cause motion sickness. All off by default.";
+                    pageControls.Add(C("Head smoothing", "\uE7BA", true, exp));
+                    break;
+                case "advanced":
+                    adv.Visible = true;
+                    pageControls.Add(C("Advanced", "\uE90F", false, adv));
+                    break;
+                default:
+                    pageHelp = "How the overlay behaves in this game.";
+                    pageControls.Add(C("General", "\uE713", false, general));
+                    break;
+            }
+        }
+        var all = new List<Control> { Title(pageTitle) };
+        if (pageHelp != null)
+            all.Add(FormPanel.Header(pageHelp));
+        foreach (var c in pageControls)
+        { all.Add(c); all.Add(new Panel { Height = 14, Dock = DockStyle.Top, BackColor = Theme.Page }); }
+        Stack(all.ToArray());
+
+        // search text and highlighted matches
+        var sb = new System.Text.StringBuilder(pageTitle + " " + pageHelp);
+        var hits = new List<Control>();
+        string q = string.IsNullOrWhiteSpace(highlight) ? null : highlight.Trim();
+        void Walk(Control c)
+        {
+            if (c is FormPanel fp)
+                foreach (var (l, ctl, hint) in fp.Rows)
+                {
+                    string words = l.Text + " " + (ctl is CheckBox cb ? cb.Text : "") + " " + hint;
+                    sb.Append(' ').Append(words);
+                    if (q != null && words.Contains(q, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var mark = string.IsNullOrEmpty(l.Text) && ctl is CheckBox ? ctl : (Control)l;
+                        mark.BackColor = Theme.Highlight;
+                        hits.Add(mark);
+                    }
+                }
+            foreach (Control k in c.Controls)
+                Walk(k);
+        }
+        foreach (var c in pageControls)
+            Walk(c);
+        SearchText = sb.ToString();
+        if (hits.Count > 0)
+            HandleCreated += (o, e) => BeginInvoke(new Action(() => ScrollControlIntoView(hits[0])));
+    }
+
+    // ---------------- general
+    FormPanel BuildGeneral()
+    {
         var general = new FormPanel();
         if (Want("general"))
         { // only the shown page is built
@@ -66,7 +181,14 @@ public class SettingsEditor : EditorBase
             general.AddRow("", Check("Show messages in the headset (layer on/off, profile reloaded, errors)", p.Notifications, v => p.Notifications = v));
 
         }
-        // ---------------- wheel position & look
+        return general;
+    }
+
+    // ---------------- wheel position & look
+    FormPanel BuildWheelLook()
+    {
+        var s = p.Style;
+        var col = p.Style.Colors;
         var look = new FormPanel();
         if (Want("wheel"))
         { // only the shown page is built
@@ -88,7 +210,7 @@ public class SettingsEditor : EditorBase
                 "Adjust positions in the headset: grab the wheel with a grip and put it anywhere, at any angle. That spot replaces the distance and height numbers here.");
             look.AddRow("Wheel size (radius, m)", Num(0.05m, 0.5m, 0.01m, 2, s.Radius, v => s.Radius = v), "0.12 m makes a wheel about 24 cm across.");
             look.AddRow("Text size", Num(0.5m, 2.5m, 0.1m, 1, s.FontScale, v => s.FontScale = v));
-            look.AddRow("Font", Text(s.Font, v => s.Font = v));
+            look.AddRow("Font", TextField(s.Font, v => s.Font = v));
             var colors = new FlowLayoutPanel { AutoSize = true, WrapContents = true, MaximumSize = new Size(480, 0), Margin = Padding.Empty };
             void AddColor(string label, Func<string> get, Action<string> set) => colors.Controls.Add(ColorPick(label, get, set));
             AddColor("Background", () => col.Background, v => col.Background = v);
@@ -102,7 +224,13 @@ public class SettingsEditor : EditorBase
             SyncAnchor();
 
         }
-        // ---------------- selecting
+        return look;
+    }
+
+    // ---------------- selecting
+    FormPanel BuildPicking()
+    {
+        var sel = p.Selection;
         var pick = new FormPanel();
         if (Want("wheel"))
         { // only the shown page is built
@@ -118,7 +246,12 @@ public class SettingsEditor : EditorBase
             pick.AddRow("Close by itself after (ms)", Int(0, 60000, 500, sel.AutoCloseMs, v => sel.AutoCloseMs = v), "0 = never.");
 
         }
-        // ---------------- pointing
+        return pick;
+    }
+
+    // ---------------- pointing
+    FormPanel BuildPointing()
+    {
         var ptr = p.Pointer;
         var aim = new FormPanel();
         if (Want("pointing"))
@@ -144,8 +277,12 @@ public class SettingsEditor : EditorBase
             SyncCorr();
 
         }
-        // ---------------- screen mirror
-        p.Screen ??= new();
+        return aim;
+    }
+
+    // ---------------- screen mirror
+    FormPanel BuildScreen()
+    {
         var sc = p.Screen;
         var scr = new FormPanel();
         if (Want("screen"))
@@ -214,15 +351,13 @@ public class SettingsEditor : EditorBase
             SyncPlace();
 
         }
-        // ---------------- controller offsets (for the game)
-        p.Offsets ??= new();
+        return scr;
+    }
+
+    // ---------------- controller offsets (for the game)
+    FormPanel BuildOffsets()
+    {
         var co = p.Offsets;
-        co.Left ??= new();
-        co.Right ??= new();
-        co.Left.Grip ??= new();
-        co.Left.Aim ??= new();
-        co.Right.Grip ??= new();
-        co.Right.Aim ??= new();
         var offs = new FormPanel();
         if (Want("offsets"))
         { // only the shown page is built
@@ -328,7 +463,12 @@ public class SettingsEditor : EditorBase
             RefreshOffsets();
 
         }
-        // ---------------- headset mirror (app-wide, its own file, saved straight away)
+        return offs;
+    }
+
+    // ---------------- headset mirror (app-wide, its own file, saved straight away)
+    FormPanel BuildHeadsetMirror()
+    {
         var mir = new FormPanel();
         if (Want("mirror"))
         { // only the shown page is built
@@ -355,7 +495,12 @@ public class SettingsEditor : EditorBase
             }
 
         }
-        // ---------------- experimental (app-wide, its own file, saved straight away)
+        return mir;
+    }
+
+    // ---------------- experimental (app-wide, its own file, saved straight away)
+    FormPanel BuildExperimental()
+    {
         var exp = new FormPanel();
         if (Want("experimental"))
         { // only the shown page is built
@@ -399,7 +544,13 @@ public class SettingsEditor : EditorBase
                 exp.AddRow("", new Label { AutoSize = true, ForeColor = Color.DimGray, MaximumSize = new Size(460, 0), Text = "These apply straight away, in every game and profile (no need to save)." });
             }
         }
-        // ---------------- keyboard
+        return exp;
+    }
+
+    // ---------------- keyboard
+    FormPanel BuildKeyboard()
+    {
+        var kb = p.Keyboard;
         var keys = new FormPanel();
         if (Want("keyboard"))
         { // only the shown page is built
@@ -415,7 +566,12 @@ public class SettingsEditor : EditorBase
             keys.AddRow("Dock placed by hand", ResetPose(() => p.Dock?.Pose != null, () => { if (p.Dock != null) { p.Dock.Pose = null; p.Dock.Width = 0; } }, "No, the default spot (screen just above the keys)", "Back to the default spot"));
 
         }
-        // ---------------- wrist panel
+        return keys;
+    }
+
+    // ---------------- wrist panel
+    FormPanel BuildWrist()
+    {
         var wp = p.WristFor(Math.Max(0, wristHand));
         var wrist = new FormPanel();
         if (Want("wrist"))
@@ -456,7 +612,14 @@ public class SettingsEditor : EditorBase
             wrist.AddRow("Hide after looking away (ms)", Int(0, 3000, 50, wp.HideMs, v => wp.HideMs = v));
 
         }
-        // ---------------- advanced
+        return wrist;
+    }
+
+    // ---------------- advanced
+    FormPanel BuildAdvanced()
+    {
+        var s = p.Style;
+        var th = p.Thresholds;
         var adv = new FormPanel();
         if (Want("advanced"))
         { // only the shown page is built
@@ -479,102 +642,9 @@ public class SettingsEditor : EditorBase
                 (FindForm() as MainForm)?.RebuildList();
             };
             adv.AddRow("", showExp, "Adds the ⚠ Experimental page to Settings. The page stays listed while one of its features is on, so you can always switch it off.");
-            var advToggle = new CheckBox { Text = "Show advanced settings", AutoSize = true, Dock = DockStyle.Top, Padding = new Padding(0, 10, 0, 4) };
-            adv.Visible = false;
-            advToggle.CheckedChanged += (o, e) => adv.Visible = advToggle.Checked;
 
         }
-        const string savedTip = "Saved with this profile: changes take effect in the game when you press Save (Ctrl+S).";
-        const string liveTip = "Applies straight away, in every game and profile. Nothing to save.";
-        Card C(string title, string glyph, bool live, params Control[] body) =>
-            new(title, glyph, live ? "Applies straight away" : "Saved with profile", live ? Theme.Live : Theme.Saved, live ? liveTip : savedTip, body);
-        BackColor = Theme.Page;
-        var pageControls = new List<Control>();
-        string pageTitle, pageHelp;
-        if (wristHand >= 0)
-        {
-            pageTitle = wristHand == 1 ? "Right wrist panel" : "Left wrist panel";
-            pageHelp = "Buttons on your forearm. They appear when you turn the forearm toward your eyes and look at it. Its pages are listed under this panel in the list on the left; select a page to add buttons.";
-            pageControls.Add(C("Panel", "\uE8A9", false, wrist));
-        }
-        else
-        {
-            var sp = SettingsPage.ByKey(Page);
-            pageTitle = sp.Title;
-            pageHelp = null;
-            switch (sp.Key)
-            {
-                case "wheel":
-                    pageHelp = "Where the radial wheel appears, how it looks, and how you pick an item on it.";
-                    pageControls.Add(C("Position and look", "\uE790", false, look));
-                    pageControls.Add(C("Picking items", "\uE7C9", false, pick));
-                    break;
-                case "pointing":
-                    pageHelp = "The laser you point at wheels, wrist panels and the mirrored screen with.";
-                    pageControls.Add(C("Laser and fingertip", "\uE7C9", false, aim));
-                    break;
-                case "keyboard":
-                    pageControls.Add(C("VR keyboard", "\uE765", false, keys));
-                    break;
-                case "screen":
-                    pageHelp = "A desktop monitor or one window, shown in VR on your wrist or in front of you.";
-                    pageControls.Add(C("Screen mirror", "\uE7F4", false, scr));
-                    break;
-                case "offsets":
-                    pageHelp = "Turns and moves the controllers the GAME sees, for when its hands or guns point too low or too high.";
-                    pageControls.Add(C("Controller offsets", "\uE7FC", false, offs));
-                    break;
-                case "mirror":
-                    pageHelp = "A desktop window showing what the headset shows, including the wheel, panels and lasers. Good for OBS.";
-                    pageControls.Add(C("Headset mirror", "\uE890", true, mir));
-                    break;
-                case "experimental":
-                    pageHelp = "Features that can cause motion sickness. All off by default.";
-                    pageControls.Add(C("Head smoothing", "\uE7BA", true, exp));
-                    break;
-                case "advanced":
-                    adv.Visible = true;
-                    pageControls.Add(C("Advanced", "\uE90F", false, adv));
-                    break;
-                default:
-                    pageHelp = "How the overlay behaves in this game.";
-                    pageControls.Add(C("General", "\uE713", false, general));
-                    break;
-            }
-        }
-        var all = new List<Control> { Title(pageTitle) };
-        if (pageHelp != null)
-            all.Add(FormPanel.Header(pageHelp));
-        foreach (var c in pageControls)
-        { all.Add(c); all.Add(new Panel { Height = 14, Dock = DockStyle.Top, BackColor = Theme.Page }); }
-        Stack(all.ToArray());
-
-        // search text and highlighted matches
-        var sb = new System.Text.StringBuilder(pageTitle + " " + pageHelp);
-        var hits = new List<Control>();
-        string q = string.IsNullOrWhiteSpace(highlight) ? null : highlight.Trim();
-        void Walk(Control c)
-        {
-            if (c is FormPanel fp)
-                foreach (var (l, ctl, hint) in fp.Rows)
-                {
-                    string words = l.Text + " " + (ctl is CheckBox cb ? cb.Text : "") + " " + hint;
-                    sb.Append(' ').Append(words);
-                    if (q != null && words.Contains(q, StringComparison.OrdinalIgnoreCase))
-                    {
-                        var mark = string.IsNullOrEmpty(l.Text) && ctl is CheckBox ? ctl : (Control)l;
-                        mark.BackColor = Theme.Highlight;
-                        hits.Add(mark);
-                    }
-                }
-            foreach (Control k in c.Controls)
-                Walk(k);
-        }
-        foreach (var c in pageControls)
-            Walk(c);
-        SearchText = sb.ToString();
-        if (hits.Count > 0)
-            HandleCreated += (o, e) => BeginInvoke(new Action(() => ScrollControlIntoView(hits[0])));
+        return adv;
     }
 
     // Content stays a comfortable width, centred, however wide the window is.
@@ -663,7 +733,7 @@ public class SettingsEditor : EditorBase
         n.ValueChanged += (o, e) => { set((int)n.Value); Fire(); };
         return n;
     }
-    TextBox Text(string value, Action<string> set)
+    TextBox TextField(string value, Action<string> set)
     {
         var t = new TextBox { Width = 200, Text = value ?? "" };
         t.TextChanged += (o, e) => { set(t.Text); Fire(); };

@@ -12,7 +12,6 @@ public partial class MainForm
 {
     const int TVM_SETINSERTMARK = 0x111A;
     [DllImport("user32.dll", EntryPoint = "SendMessageW")] static extern IntPtr SendMsg(IntPtr h, int msg, IntPtr w, IntPtr l);
-    TreeNode highlightedWheel;
 
     void SetupDragDrop()
     {
