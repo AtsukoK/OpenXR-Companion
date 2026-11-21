@@ -2412,6 +2412,44 @@ int main(int argc, char** argv) {
                     CHECK(W <= Hh || at(3, Hh / 2) == 0x000000, "mirror: no VR view: black either side of a square screen");
                 }
             }
+            // Cost at a Quest 3 eye size (4480x3360), timed on the GPU: printed, not checked (depends on the PC).
+            if (getenv("VRO_MIRROR_BENCH")) {
+                ID3D11Texture2D* big = makeTex(4480, 3360, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, 0xFF808080);
+                XrSwapchain sb = (XrSwapchain)(uintptr_t)103;
+                reg(sb, big, 4480, 3360, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
+                for (auto& v : views) {
+                    v.subImage.swapchain = sb;
+                    v.subImage.imageRect = { { 0, 0 }, { 4480, 3360 } };
+                }
+                D3D11_QUERY_DESC qd{ D3D11_QUERY_TIMESTAMP_DISJOINT };
+                ID3D11Query *dj = nullptr, *t0 = nullptr, *t1 = nullptr;
+                dev->CreateQuery(&qd, &dj);
+                qd.Query = D3D11_QUERY_TIMESTAMP;
+                dev->CreateQuery(&qd, &t0);
+                dev->CreateQuery(&qd, &t1);
+                for (float sm : { 0.f, 0.5f }) {
+                    m.smoothing = sm;
+                    XrTime tt = 9000000000LL;
+                    for (int i = 0; i < 10; i++) m.Frame(dev, ctx, L, tt += 11000000, locate); // warm up
+                    const int n = 100;
+                    auto c0 = std::chrono::steady_clock::now();
+                    ctx->Begin(dj);
+                    ctx->End(t0);
+                    for (int i = 0; i < n; i++) m.Frame(dev, ctx, L, tt += 11000000, locate);
+                    ctx->End(t1);
+                    ctx->End(dj);
+                    double cpu = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - c0).count() / n;
+                    D3D11_QUERY_DATA_TIMESTAMP_DISJOINT d{};
+                    UINT64 a = 0, b = 0;
+                    while (ctx->GetData(dj, &d, sizeof(d), 0) != S_OK) {}
+                    while (ctx->GetData(t0, &a, sizeof(a), 0) != S_OK) {}
+                    while (ctx->GetData(t1, &b, sizeof(b), 0) != S_OK) {}
+                    printf("info: mirror cost per mirrored frame, 4480x3360 eye, steadying %.1f: GPU %.3f ms, CPU %.3f ms\n", sm,
+                           d.Disjoint ? -1.0 : (double)(b - a) * 1000.0 / d.Frequency / n, cpu);
+                }
+                dj->Release(); t0->Release(); t1->Release();
+                big->Release();
+            }
             m.Shutdown();
             CHECK(m.Window() == nullptr && !m.On(), "mirror: turning it off closes the window");
             eyeTex->Release();
