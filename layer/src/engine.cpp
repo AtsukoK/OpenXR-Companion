@@ -413,6 +413,13 @@ void Engine::ProcessBindings() {
     }
 }
 
+Vec3 Engine::FingertipPos(int hand) const {
+    const HandRaw& hr = fr.h[hand];
+    const PointerStyle& P = prof->pointer;
+    float inward = hand == 1 ? -P.tipInwardM : P.tipInwardM; // toward the middle: +x for the left hand, -x for the right
+    return V(hr.aimPose.position) + Rotate(hr.aimPose.orientation, { inward, P.tipUpM, -P.tipForwardM });
+}
+
 // Laser pointers: for each controller, the nearest pointable surface it is aimed at.
 void Engine::UpdatePointers() {
     for (int h = 0; h < 2; h++) {
@@ -462,8 +469,8 @@ void Engine::UpdatePointers() {
         if (wristUp && prof->wrist[panel].press != PressMethod::Poke && !pokeTookOver) test(wv.pose, wv.sizeM / 2, wv.sizeM / 2);
         // Fingertip silhouette: where the poke tip is, so you can find your "finger" before it reaches the panel.
         if (wristUp && prof->pointer.finger && dPanel < 0.5f) { // on every panel: it also shows where the laser starts
-            const float len = 0.028f; // just the tip of the finger
-            Vec3 tip = o + d * 0.015f; // same tip as the poke test in UpdateWrist
+            const float len = 0.028f;                           // just the tip of the finger
+            Vec3 tip = FingertipPos(h);                         // the same point the wrist panels poke with
             P.finger = true;
             P.fingerLen = len;
             P.fingerW = 0.012f;
@@ -472,7 +479,8 @@ void Engine::UpdatePointers() {
         if (best > 1e8f) {
             // Guide laser: a wrist panel is up but this hand isn't aimed at it yet. Show a short beam
             // so the ray can be found and steered onto the panel. Hidden while the touch cursor shows.
-            if (!(wristUp && prof->pointer.guide && prof->wrist[panel].press != PressMethod::Poke && !pokeTookOver && dPanel < 0.8f)) continue;
+            if (!(wristUp && prof->pointer.guide && prof->wrist[panel].press != PressMethod::Poke && !pokeTookOver && dPanel < 0.8f))
+                continue;
             float len = std::clamp(dPanel * 1.3f, 0.12f, 0.6f);
             P.on = true;
             P.dot = false;

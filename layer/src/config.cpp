@@ -299,12 +299,18 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
         Get(k, "down_m", P.downM);
         Get(k, "forward_m", P.forwardM);
         Get(k, "finger", P.finger);
+        Get(k, "fingertip_forward_m", P.tipForwardM);
+        Get(k, "fingertip_up_m", P.tipUpM);
+        Get(k, "fingertip_inward_m", P.tipInwardM);
         Get(k, "guide_laser", P.guide);
         Get(k, "smoothing", P.smoothing);
         P.smoothing = std::clamp(P.smoothing, 0.f, 1.f);
         P.pitchDeg = std::clamp(P.pitchDeg, -45.f, 45.f);
         P.downM = std::clamp(P.downM, -0.1f, 0.1f);
         P.forwardM = std::clamp(P.forwardM, -0.1f, 0.1f);
+        P.tipForwardM = std::clamp(P.tipForwardM, -0.1f, 0.15f);
+        P.tipUpM = std::clamp(P.tipUpM, -0.1f, 0.1f);
+        P.tipInwardM = std::clamp(P.tipInwardM, -0.1f, 0.1f);
     }
     if (j.contains("controller_offsets")) {
         auto& k = j["controller_offsets"];

@@ -132,6 +132,11 @@ public class SettingsEditor : EditorBase
             lDown = aim.AddRow("Move the laser start down (m)", Num(-0.1m, 0.1m, 0.005m, 3, ptr.DownM, v => ptr.DownM = v), "Toward your index finger. Also moves the poking fingertip.");
             lFwd = aim.AddRow("Move the laser start forward (m)", Num(-0.1m, 0.1m, 0.005m, 3, ptr.ForwardM, v => ptr.ForwardM = v));
             aim.AddRow("", Check("Show a fingertip near wrist panels (where your poke lands and the laser starts)", ptr.Finger, v => ptr.Finger = v));
+            aim.AddRow("Fingertip forward (m)", Num(-0.1m, 0.15m, 0.005m, 3, ptr.FingertipForwardM, v => ptr.FingertipForwardM = v),
+                "Where your poke lands on wrist panels, measured from the laser start. Raise it if buttons press before your finger reaches them, lower it if you have to push through. Saved changes apply in the headset within a second.");
+            aim.AddRow("Fingertip up (m)", Num(-0.1m, 0.1m, 0.005m, 3, ptr.FingertipUpM, v => ptr.FingertipUpM = v));
+            aim.AddRow("Fingertip toward the middle (m)", Num(-0.1m, 0.1m, 0.005m, 3, ptr.FingertipInwardM, v => ptr.FingertipInwardM = v),
+                "Sideways, mirrored for each hand: positive moves both fingertips toward your body's middle.");
             aim.AddRow("Steady the laser", Num(0, 1, 0.05m, 2, ptr.Smoothing, v => ptr.Smoothing = v),
                 "For shaky hands: smooths the laser (and the mouse on the mirrored screen) while you hold still or move slowly; quick movements still follow straight away. 0 = off, 0.5 = a good start, 1 = strongest.");
             aim.AddRow("", Check("Keep a short laser showing while a wrist panel is up", ptr.GuideLaser, v => ptr.GuideLaser = v),

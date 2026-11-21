@@ -85,7 +85,7 @@ struct WristView {
     bool cursor = false;
     XrPosef cursorPose{ { 0, 0, 0, 1 }, { 0, 0, 0 } };
     float cursorSize = 0.02f;
-    int cursorLevel = 0; // 0 far .. 7 almost touching, 8 touching/pushed in
+    int cursorLevel = 0;    // 0 far .. 7 almost touching, 8 touching/pushed in
     float touchDepth = 1.f; // how far the other hand's fingertip is in front of the panel (m; <= 0 pushed in)
     // Closer than this the fingertip takes over from the laser: the laser hides and poking picks the button.
     static constexpr float kPokeTakeoverM = 0.035f;
@@ -196,7 +196,7 @@ public:
     std::shared_ptr<Profile> prof;
 
     // ---------------- what the game should see
-    bool Blocked(int hand, int comp) const { return blockOut[hand][comp]; } // held back for a menu
+    bool Blocked(int hand, int comp) const { return blockOut[hand][comp]; }    // held back for a menu
     const Override& Ov(int hand, int comp) const { return ovOut[hand][comp]; } // pushed into the game by a binding
     // The pose the game's grip (kind 0) or aim (kind 1) space of a hand is moved by; false = leave it.
     bool OffsetPose(int hand, int kind, XrPosef& out) const;
@@ -229,6 +229,8 @@ public:
     void ScreenAction(const Action& a);  // screen on/off, monitor, frame rate, place
     void OffsetsAction(const Action& a); // panel, enable, on, off, grab, reset
     void Toast(const std::string& s, double sec = 2.0);
+    // Where a hand's poking fingertip is (the corrected laser start, moved by the pointer's fingertip settings).
+    Vec3 FingertipPos(int hand) const;
     // Is this action a toggle that is currently on? (key toggle, game input toggle, layer)
     bool IsOn(const Action& a) const;
 

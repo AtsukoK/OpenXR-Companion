@@ -294,7 +294,7 @@ void WristPanels::Update(int h) {
     wv.cursor = false;
     wv.touchDepth = 1.f;
     if (canPoke && hr.aimValid) {
-        Vec3 tip = V(hr.aimPose.position) + Rotate(hr.aimPose.orientation, { 0, 0, -1 }) * 0.015f;
+        Vec3 tip = e.FingertipPos(o);
         float u, v, d;
         toPanel(tip, u, v, d);
         bool inside = u >= 0 && u <= 1 && v >= 0 && v <= 1;

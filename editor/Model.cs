@@ -253,6 +253,9 @@ public class PointerModel
     [JsonPropertyName("down_m")] public float DownM { get; set; } = 0.02f;
     [JsonPropertyName("forward_m")] public float ForwardM { get; set; } = 0f;
     [JsonPropertyName("finger")] public bool Finger { get; set; } = true;
+    [JsonPropertyName("fingertip_forward_m")] public float FingertipForwardM { get; set; } = 0.015f;
+    [JsonPropertyName("fingertip_up_m")] public float FingertipUpM { get; set; } = 0f;
+    [JsonPropertyName("fingertip_inward_m")] public float FingertipInwardM { get; set; } = 0f;
     [JsonPropertyName("guide_laser")] public bool GuideLaser { get; set; } = true;
     [JsonPropertyName("smoothing")] public float Smoothing { get; set; } = 0f;
 }

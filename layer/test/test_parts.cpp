@@ -178,3 +178,26 @@ void TestGameInputFilter() { // game input filter: path parsing, values pass thr
     gi.Filter(e, (XrAction)(uintptr_t)78, XR_NULL_PATH, 7, other, noRequery);
     CHECK(other.currentState == 0.7f, "game input: an action we don't know is left alone");
 }
+
+void TestFingertip() { // the poking fingertip: 1.5 cm ahead of the laser start by default, moved by the pointer settings
+    std::string err;
+    auto p = ParseProfileText(DefaultProfileJson(), err);
+    Engine e;
+    e.SetProfile(p);
+    Frame f;
+    f.headValid = true;
+    for (int h = 0; h < 2; h++) {
+        f.h[h].aimValid = true;
+        f.h[h].aimPose = { { 0, 0, 0, 1 }, { h ? 0.2f : -0.2f, 1.f, -0.3f } }; // pointing straight ahead (-z)
+    }
+    f.t = 1.0;
+    e.Update(f);
+    Vec3 tip = e.FingertipPos(1);
+    CHECK(std::fabs(tip.z - (-0.315f)) < 1e-4f && std::fabs(tip.x - 0.2f) < 1e-4f, "fingertip: 1.5 cm ahead of the laser start by default");
+    p->pointer.tipForwardM = 0.03f;
+    p->pointer.tipUpM = 0.01f;
+    p->pointer.tipInwardM = 0.02f;
+    Vec3 r = e.FingertipPos(1), l = e.FingertipPos(0);
+    CHECK(std::fabs(r.z - (-0.33f)) < 1e-4f && std::fabs(r.y - 1.01f) < 1e-4f, "fingertip: forward and up move it");
+    CHECK(std::fabs(r.x - 0.18f) < 1e-4f && std::fabs(l.x - (-0.18f)) < 1e-4f, "fingertip: toward the middle is mirrored for each hand");
+}

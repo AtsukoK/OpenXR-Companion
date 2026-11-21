@@ -281,8 +281,11 @@ struct PointerStyle {
     float downM = 0.02f;                                // move the ray start down (toward the finger) by this much
     float forwardM = 0.f;                               // and forward along the ray
     bool finger = true;                                 // show a fingertip silhouette near a wrist panel
-    bool guide = true;                                  // keep a short laser showing while a wrist panel is up
-    float smoothing = 0.f;                              // steady the laser against shaky hands (0 = off .. 1 = strongest)
+    // Where the poking fingertip sits, measured from the laser start: forward along the laser, up, and toward
+    // the middle (mirrored for each hand). Used for poking wrist panels and for drawing the fingertip.
+    float tipForwardM = 0.015f, tipUpM = 0.f, tipInwardM = 0.f;
+    bool guide = true;     // keep a short laser showing while a wrist panel is up
+    float smoothing = 0.f; // steady the laser against shaky hands (0 = off .. 1 = strongest)
 };
 
 // A desktop monitor shown in VR (mirrored with Desktop Duplication).
