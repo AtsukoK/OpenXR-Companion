@@ -1,5 +1,6 @@
 #pragma once
 #include "engine.h"
+#include <wrl/client.h>
 
 struct XrFns {
     PFN_xrEnumerateSwapchainFormats EnumerateSwapchainFormats = nullptr;
@@ -11,22 +12,25 @@ struct XrFns {
     PFN_xrReleaseSwapchainImage ReleaseSwapchainImage = nullptr;
 };
 
+// The game's graphics device and our upload helpers. GPU objects are held in ComPtr (they free themselves);
+// Release() waits for our GPU work first, then drops them.
 struct Gfx {
+    template <class T> using Com = Microsoft::WRL::ComPtr<T>;
     int api = 0; // 0 none, 11 = D3D11, 12 = D3D12
-    ID3D11Device* d11 = nullptr;
-    ID3D11DeviceContext* ctx = nullptr;
-    ID3D12Device* d12 = nullptr;
-    ID3D12CommandQueue* queue = nullptr;
+    Com<ID3D11Device> d11;
+    Com<ID3D11DeviceContext> ctx;
+    Com<ID3D12Device> d12;
+    Com<ID3D12CommandQueue> queue;
     // D3D12 uploads: a ring of command lists, so an upload never waits for the game's GPU work.
     // A slot is only waited for when it comes round again (three uploads later, normally long done).
     static const int kRing = 3;
-    ID3D12CommandAllocator* alloc[kRing]{};
-    ID3D12GraphicsCommandList* list[kRing]{};
+    Com<ID3D12CommandAllocator> alloc[kRing];
+    Com<ID3D12GraphicsCommandList> list[kRing];
     UINT64 slotFence[kRing]{};
     int slot = 0;
-    ID3D12Fence* fence = nullptr;
+    Com<ID3D12Fence> fence;
     UINT64 fenceVal = 0;
-    HANDLE ev = nullptr;
+    HANDLE ev = nullptr; // owned: closed in Release()
     void WaitFence(UINT64 v); // until the GPU has passed v (no-op when it has)
     void Init(const void* bindingChain);
     void Release();
@@ -44,11 +48,11 @@ public:
 private:
     bool swapRB = false;
     std::vector<void*> imgs;
-    ID3D12Resource* upload[Gfx::kRing]{}; // D3D12: one staging buffer per ring slot of this panel
+    Gfx::Com<ID3D12Resource> upload[Gfx::kRing]; // D3D12: one staging buffer per ring slot of this panel
     UINT64 uploadFence[Gfx::kRing]{};
     UINT64 uploadSize[Gfx::kRing]{};
     int uploadNext = 0;
-    ID3D12Fence* fence = nullptr; // the Gfx fence (outlives the panel), for Destroy
+    ID3D12Fence* fence = nullptr; // the Gfx fence (outlives the panel, not owned), for Destroy
 };
 
 // CPU drawing (GDI+), output is premultiplied BGRA.

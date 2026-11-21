@@ -399,7 +399,7 @@ static bool D3D12PanelRun(std::vector<uint32_t>& got, uint32_t& want, int& uploa
         l->Close();
         ID3D12CommandList* ls[] = { l };
         q->ExecuteCommandLists(1, ls);
-        q->Signal(g.fence, ++g.fenceVal);
+        q->Signal(g.fence.Get(), ++g.fenceVal);
         g.WaitFence(g.fenceVal);
         uint8_t* m = nullptr;
         D3D12_RANGE rr{ 0, (SIZE_T)total };

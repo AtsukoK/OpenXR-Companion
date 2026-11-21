@@ -19,8 +19,7 @@ void Gfx::Init(const void* chain) {
     for (; h; h = h->next) {
         if (h->type == XR_TYPE_GRAPHICS_BINDING_D3D11_KHR) {
             auto* b = (const XrGraphicsBindingD3D11KHR*)h;
-            d11 = b->device;
-            d11->AddRef();
+            d11 = b->device; // ComPtr takes its own reference
             d11->GetImmediateContext(&ctx);
             api = 11;
             return;
@@ -28,12 +27,10 @@ void Gfx::Init(const void* chain) {
         if (h->type == XR_TYPE_GRAPHICS_BINDING_D3D12_KHR) {
             auto* b = (const XrGraphicsBindingD3D12KHR*)h;
             d12 = b->device;
-            d12->AddRef();
             queue = b->queue;
-            queue->AddRef();
             for (int i = 0; i < kRing; i++) {
                 d12->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&alloc[i]));
-                if (alloc[i]) d12->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, alloc[i], nullptr, IID_PPV_ARGS(&list[i]));
+                if (alloc[i]) d12->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, alloc[i].Get(), nullptr, IID_PPV_ARGS(&list[i]));
                 if (list[i]) list[i]->Close();
             }
             d12->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
@@ -45,18 +42,9 @@ void Gfx::Init(const void* chain) {
     api = 0;
 }
 void Gfx::Release() {
-    if (ctx) ctx->Release();
-    if (d11) d11->Release();
-    if (fence) WaitFence(fenceVal); // nothing of ours still running on the GPU
-    for (int i = 0; i < kRing; i++) {
-        if (list[i]) list[i]->Release();
-        if (alloc[i]) alloc[i]->Release();
-    }
-    if (fence) fence->Release();
-    if (queue) queue->Release();
-    if (d12) d12->Release();
+    if (fence) WaitFence(fenceVal); // nothing of ours still running on the GPU before the lists go
     if (ev) CloseHandle(ev);
-    *this = Gfx{};
+    *this = Gfx{}; // drops every ComPtr
 }
 
 void Gfx::WaitFence(UINT64 v) {
@@ -147,14 +135,11 @@ bool Panel::Upload(Gfx& g, const XrFns& f, const std::vector<uint32_t>& px) {
         D3D12_PLACED_SUBRESOURCE_FOOTPRINT fp{};
         UINT64 total = 0;
         g.d12->GetCopyableFootprints(&desc, 0, 1, 0, &fp, nullptr, nullptr, &total);
-        fence = g.fence;
+        fence = g.fence.Get();
         int u = uploadNext;
         uploadNext = (uploadNext + 1) % Gfx::kRing;
         g.WaitFence(uploadFence[u]); // this staging buffer's last copy (three uploads ago) is done
-        if (upload[u] && uploadSize[u] < total) {
-            upload[u]->Release();
-            upload[u] = nullptr;
-        }
+        if (upload[u] && uploadSize[u] < total) upload[u].Reset(); // too small for this picture
         if (!upload[u]) {
             D3D12_HEAP_PROPERTIES hp{ D3D12_HEAP_TYPE_UPLOAD };
             D3D12_RESOURCE_DESC bd{};
@@ -179,7 +164,7 @@ bool Panel::Upload(Gfx& g, const XrFns& f, const std::vector<uint32_t>& px) {
                 memcpy(m + fp.Offset + (size_t)y * fp.Footprint.RowPitch, src + (size_t)y * w, (size_t)w * 4);
             upload[u]->Unmap(0, nullptr);
             g.alloc[k]->Reset();
-            g.list[k]->Reset(g.alloc[k], nullptr);
+            g.list[k]->Reset(g.alloc[k].Get(), nullptr);
             D3D12_RESOURCE_BARRIER b{};
             b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
             b.Transition.pResource = tex;
@@ -189,16 +174,16 @@ bool Panel::Upload(Gfx& g, const XrFns& f, const std::vector<uint32_t>& px) {
             g.list[k]->ResourceBarrier(1, &b);
             D3D12_TEXTURE_COPY_LOCATION dst{ tex, D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX };
             dst.SubresourceIndex = 0;
-            D3D12_TEXTURE_COPY_LOCATION sl{ upload[u], D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT };
+            D3D12_TEXTURE_COPY_LOCATION sl{ upload[u].Get(), D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT };
             sl.PlacedFootprint = fp;
             g.list[k]->CopyTextureRegion(&dst, 0, 0, 0, &sl, nullptr);
             std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
             g.list[k]->ResourceBarrier(1, &b);
             g.list[k]->Close();
-            ID3D12CommandList* lists[] = { g.list[k] };
+            ID3D12CommandList* lists[] = { g.list[k].Get() };
             g.queue->ExecuteCommandLists(1, lists);
             // No CPU wait: the copy is queued before the image is released, so the compositor sees it in order.
-            g.queue->Signal(g.fence, ++g.fenceVal);
+            g.queue->Signal(g.fence.Get(), ++g.fenceVal);
             g.slotFence[k] = g.fenceVal;
             uploadFence[u] = g.fenceVal;
         }
@@ -219,8 +204,7 @@ void Panel::Destroy(const XrFns& f) {
         if (fence->GetCompletedValue() < v) fence->SetEventOnCompletion(v, nullptr); // nullptr event: blocks until done
     }
     for (int i = 0; i < Gfx::kRing; i++) {
-        if (upload[i]) upload[i]->Release();
-        upload[i] = nullptr;
+        upload[i].Reset();
         uploadFence[i] = uploadSize[i] = 0;
     }
     uploadNext = 0;

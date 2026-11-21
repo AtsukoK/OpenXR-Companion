@@ -877,7 +877,7 @@ static XrResult XRAPI_CALL Hook_xrWaitFrame(XrSession s, const XrFrameWaitInfo* 
 }
 
 static void MirrorFrame(const std::vector<const XrCompositionLayerBaseHeader*>& layers, XrTime t) {
-    gMirror.Frame(gSession.gfx.d11, gSession.gfx.ctx, layers, t, [](XrSpace sp, XrSpace base, XrTime tt, XrPosef& out) {
+    gMirror.Frame(gSession.gfx.d11.Get(), gSession.gfx.ctx.Get(), layers, t, [](XrSpace sp, XrSpace base, XrTime tt, XrPosef& out) {
         XrSpaceLocation l{ XR_TYPE_SPACE_LOCATION };
         if (XR_FAILED(N.LocateSpace(sp, base, tt, &l))) return false; // raw: our own spaces, never the game's offsets
         const XrSpaceLocationFlags need = XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
