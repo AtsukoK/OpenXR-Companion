@@ -7,6 +7,7 @@ void TestOverlay();
 void TestGameInputFilter();
 void TestFingertip();
 void TestFingertipAdjust();
+void TestKeySequences();
 
 // ---------------------------------------------------------------- a pretend OpenXR runtime under the real layer DLL
 #include <openxr/openxr_loader_negotiation.h>
@@ -2471,6 +2472,7 @@ int main(int argc, char** argv) {
     TestGameInputFilter();
     TestFingertip();
     TestFingertipAdjust();
+    TestKeySequences();
     printf("\n%d failures\n", fails);
     Keys::Shutdown();
     DrawShutdown();

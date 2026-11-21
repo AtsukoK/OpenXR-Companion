@@ -238,3 +238,14 @@ void TestFingertipAdjust() { // Adjust mode: grab the right fingertip with the l
               .c_str());
     e.adjust = false;
 }
+
+void TestKeySequences() { // key sequences: good steps pass, bad waits and unknown keys are refused with the step named
+    std::string err;
+    CHECK(Keys::ValidateSequence("Ctrl+C; wait 100; down W; wait 500; up W; F5", err), "keys: full sequence is valid");
+    err.clear();
+    CHECK(!Keys::ValidateSequence("F5; wait 0", err) && err.find("wait 0") != std::string::npos, "keys: wait 0 refused, step named");
+    err.clear();
+    CHECK(!Keys::ValidateSequence("down Banana", err) && err.find("Banana") != std::string::npos, "keys: unknown key in down refused");
+    err.clear();
+    CHECK(Keys::ValidateSequence("", err), "keys: empty sequence is valid (does nothing)");
+}

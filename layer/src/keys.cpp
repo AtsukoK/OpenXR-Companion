@@ -150,58 +150,42 @@ static bool Parse(const std::string& combo, std::vector<K>& out, std::string& er
     return true;
 }
 
-static bool gFocus = false;
+static bool gFocusGameBeforeKeys = false;
 static std::set<std::string> gHeld; // combos currently held via Down/toggle
 
-static void FocusGameAlways() {
-    DWORD pid = GetCurrentProcessId();
-    HWND fg = GetForegroundWindow();
-    DWORD fpid = 0;
-    GetWindowThreadProcessId(fg, &fpid);
-    if (fpid == pid) return;
-    struct C {
+// The game's main window (visible, not owned by another window), or null.
+static HWND FindGameWindow() {
+    struct Search {
         DWORD pid;
-        HWND best;
-    } c{ pid, nullptr };
+        HWND found;
+    } search{ GetCurrentProcessId(), nullptr };
     EnumWindows(
         [](HWND h, LPARAM lp) -> BOOL {
-            auto* c = (C*)lp;
-            DWORD p = 0;
-            GetWindowThreadProcessId(h, &p);
-            if (p == c->pid && IsWindowVisible(h) && !GetWindow(h, GW_OWNER)) {
-                c->best = h;
-                return FALSE;
-            }
-            return TRUE;
+            auto* search = (Search*)lp;
+            DWORD pid = 0;
+            GetWindowThreadProcessId(h, &pid);
+            if (pid != search->pid || !IsWindowVisible(h) || GetWindow(h, GW_OWNER)) return TRUE;
+            search->found = h;
+            return FALSE;
         },
-        (LPARAM)&c);
-    if (c.best) SetForegroundWindow(c.best);
+        (LPARAM)&search);
+    return search.found;
 }
 
+static bool GameHasFocus() {
+    DWORD foregroundPid = 0;
+    GetWindowThreadProcessId(GetForegroundWindow(), &foregroundPid);
+    return foregroundPid == GetCurrentProcessId();
+}
+
+static void FocusGameAlways() {
+    if (GameHasFocus()) return;
+    if (HWND game = FindGameWindow()) SetForegroundWindow(game);
+}
+
+// Only when the profile asks for it (SetFocusWindow).
 static void FocusGame() {
-    if (!gFocus) return;
-    DWORD pid = GetCurrentProcessId();
-    HWND fg = GetForegroundWindow();
-    DWORD fpid = 0;
-    GetWindowThreadProcessId(fg, &fpid);
-    if (fpid == pid) return;
-    struct C {
-        DWORD pid;
-        HWND best;
-    } c{ pid, nullptr };
-    EnumWindows(
-        [](HWND h, LPARAM lp) -> BOOL {
-            auto* c = (C*)lp;
-            DWORD p = 0;
-            GetWindowThreadProcessId(h, &p);
-            if (p == c->pid && IsWindowVisible(h) && !GetWindow(h, GW_OWNER)) {
-                c->best = h;
-                return FALSE;
-            }
-            return TRUE;
-        },
-        (LPARAM)&c);
-    if (c.best) SetForegroundWindow(c.best);
+    if (gFocusGameBeforeKeys) FocusGameAlways();
 }
 
 static void Send(const K& k, bool down) {
@@ -240,35 +224,55 @@ static void ComboUp(const std::vector<K>& ks) {
     }
 }
 
-// Worker thread so waits never stall the game's frame.
-static std::mutex gMx;
-static std::condition_variable gCv;
-static std::deque<std::function<void()>> gQ;
-static std::thread gThread;
-static bool gStop = false;
-
-static void Post(std::function<void()> f) {
-    {
-        std::lock_guard l(gMx);
-        if (!gThread.joinable()) {
-            gStop = false;
-            gThread = std::thread([] {
-                for (;;) {
-                    std::function<void()> job;
-                    {
-                        std::unique_lock l(gMx);
-                        gCv.wait(l, [] { return gStop || !gQ.empty(); });
-                        if (gStop && gQ.empty()) return;
-                        job = std::move(gQ.front());
-                        gQ.pop_front();
-                    }
-                    job();
-                }
-            });
+// One background thread runs the queued input jobs in order, so waits never stall the game's frame.
+// Started on first use, stopped by Shutdown().
+class InputWorker {
+public:
+    void Post(std::function<void()> job) {
+        {
+            std::lock_guard l(mx);
+            if (!thread.joinable()) {
+                stopping = false;
+                thread = std::thread([this] { Run(); });
+            }
+            jobs.push_back(std::move(job));
         }
-        gQ.push_back(std::move(f));
+        cv.notify_one();
     }
-    gCv.notify_one();
+    // Runs the jobs still queued, then ends the thread.
+    void Stop() {
+        {
+            std::lock_guard l(mx);
+            stopping = true;
+        }
+        cv.notify_all();
+        if (thread.joinable()) thread.join();
+    }
+
+private:
+    void Run() {
+        for (;;) {
+            std::function<void()> job;
+            {
+                std::unique_lock l(mx);
+                cv.wait(l, [this] { return stopping || !jobs.empty(); });
+                if (stopping && jobs.empty()) return;
+                job = std::move(jobs.front());
+                jobs.pop_front();
+            }
+            job();
+        }
+    }
+    std::mutex mx;
+    std::condition_variable cv;
+    std::deque<std::function<void()>> jobs;
+    std::thread thread;
+    bool stopping = false;
+};
+static InputWorker gWorker;
+
+static void Post(std::function<void()> job) {
+    gWorker.Post(std::move(job));
 }
 
 bool Validate(const std::string& combo, std::string& err) {
@@ -316,7 +320,7 @@ void ReleaseAll() {
         Up(c);
 }
 void SetFocusWindow(bool on) {
-    gFocus = on;
+    gFocusGameBeforeKeys = on;
 }
 
 static std::vector<std::string> SplitSteps(const std::string& s) {
@@ -333,78 +337,101 @@ static std::vector<std::string> SplitSteps(const std::string& s) {
     return out;
 }
 
-bool ValidateSequence(const std::string& steps, std::string& err) {
-    for (auto& st : SplitSteps(steps)) {
-        std::string l = Lower(st);
-        std::vector<K> k;
-        if (l.rfind("wait ", 0) == 0) {
-            if (atoi(l.c_str() + 5) <= 0) {
-                err = "bad wait '" + st + "'";
+// One parsed step of a sequence: "wait 100", "down W", "up W" or a plain tap "F5".
+struct SequenceStep {
+    enum class Kind { Wait, Down, Up, Tap } kind = Kind::Tap;
+    int waitMs = 0;
+    std::vector<K> keys;
+};
+
+static bool ParseSequence(const std::string& steps, std::vector<SequenceStep>& out, std::string& err) {
+    out.clear();
+    for (auto& text : SplitSteps(steps)) {
+        std::string lower = Lower(text);
+        SequenceStep step;
+        if (lower.rfind("wait ", 0) == 0) {
+            step.kind = SequenceStep::Kind::Wait;
+            step.waitMs = atoi(lower.c_str() + 5);
+            if (step.waitMs <= 0) {
+                err = "bad wait '" + text + "'";
                 return false;
             }
-        } else if (l.rfind("down ", 0) == 0) {
-            if (!Parse(st.substr(5), k, err)) return false;
-        } else if (l.rfind("up ", 0) == 0) {
-            if (!Parse(st.substr(3), k, err)) return false;
-        } else if (!Parse(st, k, err))
+            step.waitMs = std::min(step.waitMs, 10000);
+        } else if (lower.rfind("down ", 0) == 0) {
+            step.kind = SequenceStep::Kind::Down;
+            if (!Parse(text.substr(5), step.keys, err)) return false;
+        } else if (lower.rfind("up ", 0) == 0) {
+            step.kind = SequenceStep::Kind::Up;
+            if (!Parse(text.substr(3), step.keys, err)) return false;
+        } else if (!Parse(text, step.keys, err)) {
             return false;
+        }
+        out.push_back(std::move(step));
     }
     return true;
 }
 
+bool ValidateSequence(const std::string& steps, std::string& err) {
+    std::vector<SequenceStep> parsed;
+    return ParseSequence(steps, parsed, err);
+}
+
 void Sequence(const std::string& steps) {
+    std::vector<SequenceStep> parsed;
     std::string err;
-    if (!ValidateSequence(steps, err)) {
+    if (!ParseSequence(steps, parsed, err)) {
         Log("sequence: %s", err.c_str());
         return;
     }
-    auto list = SplitSteps(steps);
-    Post([list] {
+    Post([parsed] {
         FocusGame();
-        for (auto& st : list) {
-            std::string l = Lower(st);
-            std::vector<K> k;
-            std::string e;
-            if (l.rfind("wait ", 0) == 0)
-                Sleep(std::min(atoi(l.c_str() + 5), 10000));
-            else if (l.rfind("down ", 0) == 0) {
-                Parse(st.substr(5), k, e);
-                ComboDown(k);
-            } else if (l.rfind("up ", 0) == 0) {
-                Parse(st.substr(3), k, e);
-                ComboUp(k);
-            } else {
-                Parse(st, k, e);
-                ComboDown(k);
+        for (auto& step : parsed) {
+            switch (step.kind) {
+            case SequenceStep::Kind::Wait:
+                Sleep(step.waitMs);
+                break;
+            case SequenceStep::Kind::Down:
+                ComboDown(step.keys);
+                break;
+            case SequenceStep::Kind::Up:
+                ComboUp(step.keys);
+                break;
+            case SequenceStep::Kind::Tap:
+                ComboDown(step.keys);
                 Sleep(50);
-                ComboUp(k);
+                ComboUp(step.keys);
+                break;
             }
         }
     });
 }
 
-static bool gDry = false;
-static int gDx = -1, gDy = -1, gDWheel = 0, gDFocus = 0;
-static bool gDL = false, gDR = false;
+// Tests: mouse calls are recorded here instead of moving the real mouse.
+struct DryRun {
+    bool isOn = false;
+    int x = -1, y = -1;
+    bool left = false, right = false;
+    int wheel = 0, focusCount = 0;
+};
+static DryRun gDry;
+
 void SetDryRun(bool on) {
-    gDry = on;
-    gDx = gDy = -1;
-    gDWheel = gDFocus = 0;
-    gDL = gDR = false;
+    gDry = DryRun{};
+    gDry.isOn = on;
 }
 void DryState(int& x, int& y, bool& l, bool& r, int& wheel, int& focus) {
-    x = gDx;
-    y = gDy;
-    l = gDL;
-    r = gDR;
-    wheel = gDWheel;
-    focus = gDFocus;
+    x = gDry.x;
+    y = gDry.y;
+    l = gDry.left;
+    r = gDry.right;
+    wheel = gDry.wheel;
+    focus = gDry.focusCount;
 }
 
 void MouseTo(int x, int y) {
-    if (gDry) {
-        gDx = x;
-        gDy = y;
+    if (gDry.isOn) {
+        gDry.x = x;
+        gDry.y = y;
         return;
     }
     Post([x, y] {
@@ -417,11 +444,11 @@ void MouseTo(int x, int y) {
     });
 }
 void MouseButton(int b, bool down) {
-    if (gDry) {
+    if (gDry.isOn) {
         if (b == 0)
-            gDL = down;
+            gDry.left = down;
         else if (b == 1)
-            gDR = down;
+            gDry.right = down;
         return;
     }
     Post([b, down] {
@@ -434,8 +461,8 @@ void MouseButton(int b, bool down) {
     });
 }
 void MouseWheel(int delta) {
-    if (gDry) {
-        gDWheel += delta;
+    if (gDry.isOn) {
+        gDry.wheel += delta;
         return;
     }
     Post([delta] {
@@ -447,7 +474,7 @@ void MouseWheel(int delta) {
     });
 }
 void BringToFront(uintptr_t hwnd) {
-    if (gDry) return;
+    if (gDry.isOn) return;
     Post([hwnd] {
         HWND h = (HWND)hwnd;
         if (!IsWindow(h) || GetForegroundWindow() == h) return;
@@ -456,8 +483,8 @@ void BringToFront(uintptr_t hwnd) {
     });
 }
 void FocusGameNow() {
-    if (gDry) {
-        gDFocus++;
+    if (gDry.isOn) {
+        gDry.focusCount++;
         return;
     }
     Post([] { FocusGameAlways(); });
@@ -465,11 +492,6 @@ void FocusGameNow() {
 
 void Shutdown() {
     ReleaseAll();
-    {
-        std::lock_guard l(gMx);
-        gStop = true;
-    }
-    gCv.notify_all();
-    if (gThread.joinable()) gThread.join();
+    gWorker.Stop();
 }
 } // namespace Keys
