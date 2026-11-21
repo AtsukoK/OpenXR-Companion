@@ -11,14 +11,9 @@
 #include <chrono>
 #include <mutex>
 #include <thread>
+#include <wrl/client.h>
 
-template <class T>
-static void SafeRelease(T*& p) {
-    if (p) {
-        p->Release();
-        p = nullptr;
-    }
-}
+using Microsoft::WRL::ComPtr; // GPU and DXGI objects free themselves
 
 struct Cfg {
     int monitor = 0;
@@ -56,32 +51,26 @@ struct ScreenCapture::Impl {
 };
 
 struct OutInfo {
-    IDXGIAdapter1* ad = nullptr;
-    IDXGIOutput* out = nullptr;
+    ComPtr<IDXGIAdapter1> ad;
+    ComPtr<IDXGIOutput> out;
     DXGI_OUTPUT_DESC desc{};
 };
 
 // Every monitor attached to the desktop, on every graphics card, sorted left to right.
 static std::vector<OutInfo> Enumerate() {
     std::vector<OutInfo> v;
-    IDXGIFactory1* f = nullptr;
-    if (FAILED(CreateDXGIFactory1(__uuidof(IDXGIFactory1), (void**)&f))) return v;
-    IDXGIAdapter1* ad = nullptr;
+    ComPtr<IDXGIFactory1> f;
+    if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&f)))) return v;
+    ComPtr<IDXGIAdapter1> ad;
     for (UINT a = 0; f->EnumAdapters1(a, &ad) != DXGI_ERROR_NOT_FOUND; a++) {
-        IDXGIOutput* o = nullptr;
+        ComPtr<IDXGIOutput> o;
         for (UINT i = 0; ad->EnumOutputs(i, &o) != DXGI_ERROR_NOT_FOUND; i++) {
             DXGI_OUTPUT_DESC d{};
             o->GetDesc(&d);
-            if (!d.AttachedToDesktop) {
-                o->Release();
-                continue;
-            }
-            ad->AddRef();
+            if (!d.AttachedToDesktop) continue;
             v.push_back({ ad, o, d });
         }
-        ad->Release();
     }
-    f->Release();
     std::sort(v.begin(), v.end(), [](const OutInfo& a, const OutInfo& b) {
         const RECT& x = a.desc.DesktopCoordinates;
         const RECT& y = b.desc.DesktopCoordinates;
@@ -89,14 +78,6 @@ static std::vector<OutInfo> Enumerate() {
     });
     return v;
 }
-static void Free(std::vector<OutInfo>& v) {
-    for (auto& o : v) {
-        SafeRelease(o.out);
-        SafeRelease(o.ad);
-    }
-    v.clear();
-}
-
 std::vector<MonitorInfo> ScreenCapture::Monitors() {
     auto v = Enumerate();
     std::vector<MonitorInfo> r;
@@ -105,7 +86,6 @@ std::vector<MonitorInfo> ScreenCapture::Monitors() {
         r.push_back(
             { o.desc.DeviceName, (int)c.left, (int)c.top, (int)(c.right - c.left), (int)(c.bottom - c.top), c.left == 0 && c.top == 0 });
     }
-    Free(v);
     return r;
 }
 
@@ -252,14 +232,14 @@ static void DrawPointer(std::vector<uint32_t>& px, int w, int h, int cx, int cy,
 
 // GPU: shrink a captured texture (mipmaps, halving until it fits maxW), read it back, turn it.
 struct Reader {
-    ID3D11Texture2D* mip = nullptr;
-    ID3D11ShaderResourceView* srv = nullptr;
-    ID3D11Texture2D* staging = nullptr;
+    ComPtr<ID3D11Texture2D> mip;
+    ComPtr<ID3D11ShaderResourceView> srv;
+    ComPtr<ID3D11Texture2D> staging;
     int level = 0, lw = 0, lh = 0, cw0 = 0, ch0 = 0;
     void Release() {
-        SafeRelease(srv);
-        SafeRelease(mip);
-        SafeRelease(staging);
+        srv.Reset();
+        mip.Reset();
+        staging.Reset();
         level = lw = lh = cw0 = ch0 = 0;
     }
     bool Read(ID3D11Device* dev, ID3D11DeviceContext* ctx, ID3D11Texture2D* tex, int cw, int ch, int maxW, DXGI_MODE_ROTATION rot,
@@ -290,7 +270,7 @@ struct Reader {
                 md.Usage = D3D11_USAGE_DEFAULT;
                 md.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
                 md.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
-                if (SUCCEEDED(dev->CreateTexture2D(&md, nullptr, &mip))) dev->CreateShaderResourceView(mip, nullptr, &srv);
+                if (SUCCEEDED(dev->CreateTexture2D(&md, nullptr, &mip))) dev->CreateShaderResourceView(mip.Get(), nullptr, &srv);
             }
             D3D11_TEXTURE2D_DESC sd{};
             sd.Width = lw;
@@ -306,14 +286,14 @@ struct Reader {
         if (!staging || (level > 0 && !srv)) return false;
         D3D11_BOX box{ 0, 0, 0, (UINT)cw, (UINT)ch, 1 };
         if (level == 0)
-            ctx->CopySubresourceRegion(staging, 0, 0, 0, 0, tex, 0, &box);
+            ctx->CopySubresourceRegion(staging.Get(), 0, 0, 0, 0, tex, 0, &box);
         else {
-            ctx->CopySubresourceRegion(mip, 0, 0, 0, 0, tex, 0, &box);
-            ctx->GenerateMips(srv);
-            ctx->CopySubresourceRegion(staging, 0, 0, 0, 0, mip, level, nullptr);
+            ctx->CopySubresourceRegion(mip.Get(), 0, 0, 0, 0, tex, 0, &box);
+            ctx->GenerateMips(srv.Get());
+            ctx->CopySubresourceRegion(staging.Get(), 0, 0, 0, 0, mip.Get(), level, nullptr);
         }
         D3D11_MAPPED_SUBRESOURCE m{};
-        if (FAILED(ctx->Map(staging, 0, D3D11_MAP_READ, 0, &m))) return false;
+        if (FAILED(ctx->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &m))) return false;
         bool swap = rot == DXGI_MODE_ROTATION_ROTATE90 || rot == DXGI_MODE_ROTATION_ROTATE270;
         bw = swap ? lh : lw;
         bh = swap ? lw : lh;
@@ -338,7 +318,7 @@ struct Reader {
                 row[x] = src(sx, sy) | 0xFF000000;
             }
         }
-        ctx->Unmap(staging, 0);
+        ctx->Unmap(staging.Get(), 0);
         return true;
     }
 };
@@ -372,8 +352,8 @@ void ScreenCapture::Impl::RunWindow(const Cfg& c, uint64_t ver) {
         windowGone = true;
         return;
     }
-    ID3D11Device* dev = nullptr;
-    ID3D11DeviceContext* ctx = nullptr;
+    ComPtr<ID3D11Device> dev;
+    ComPtr<ID3D11DeviceContext> ctx;
     D3D_FEATURE_LEVEL fls[] = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0 };
     if (FAILED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, fls, 3, D3D11_SDK_VERSION,
                                  &dev, nullptr, &ctx))) {
@@ -382,11 +362,9 @@ void ScreenCapture::Impl::RunWindow(const Cfg& c, uint64_t ver) {
         return;
     }
     std::string err;
-    WindowCapture* wc = WinCapOpen(hwnd, dev, err);
+    WindowCapture* wc = WinCapOpen(hwnd, dev.Get(), err);
     if (!wc) {
         SetMsg("window '" + title + "' can't be mirrored: " + err);
-        SafeRelease(ctx);
-        SafeRelease(dev);
         SleepUntil(std::chrono::steady_clock::now() + std::chrono::seconds(1), quit);
         return;
     }
@@ -417,7 +395,8 @@ void ScreenCapture::Impl::RunWindow(const Cfg& c, uint64_t ver) {
         }
         int cw = 0, ch = 0;
         bool closed = false;
-        ID3D11Texture2D* tex = WinCapNext(wc, cw, ch, closed);
+        ComPtr<ID3D11Texture2D> tex;
+        tex.Attach(WinCapNext(wc, cw, ch, closed)); // we own the reference it hands back
         if (closed) {
             std::lock_guard l(mx);
             windowGone = true;
@@ -426,10 +405,7 @@ void ScreenCapture::Impl::RunWindow(const Cfg& c, uint64_t ver) {
         POINT pt{};
         GetCursorPos(&pt);
         bool moved = pt.x != lastPt.x || pt.y != lastPt.y;
-        if (tex) {
-            rd.Read(dev, ctx, tex, cw, ch, c.maxW, DXGI_MODE_ROTATION_IDENTITY, base, bw, bh);
-            tex->Release();
-        }
+        if (tex) rd.Read(dev.Get(), ctx.Get(), tex.Get(), cw, ch, c.maxW, DXGI_MODE_ROTATION_IDENTITY, base, bw, bh);
         if (base.empty() || (!tex && !(c.cursor && moved))) {
             std::this_thread::sleep_for(std::chrono::milliseconds(4));
             continue;
@@ -450,9 +426,6 @@ void ScreenCapture::Impl::RunWindow(const Cfg& c, uint64_t ver) {
         }
     }
     WinCapClose(wc);
-    rd.Release();
-    SafeRelease(ctx);
-    SafeRelease(dev);
 }
 
 void ScreenCapture::Impl::Run() {
@@ -494,7 +467,6 @@ void ScreenCapture::Impl::Run() {
         auto outs = Enumerate();
         if (outs.empty()) {
             SetMsg("no monitor found");
-            Free(outs);
             SleepUntil(std::chrono::steady_clock::now() + std::chrono::seconds(2), quit);
             continue;
         }
@@ -520,17 +492,17 @@ void ScreenCapture::Impl::Run() {
         const int deskW = dr.right - dr.left, deskH = dr.bottom - dr.top;
         const DXGI_MODE_ROTATION rot = o.desc.Rotation;
 
-        ID3D11Device* dev = nullptr;
-        ID3D11DeviceContext* ctx = nullptr;
-        IDXGIOutput1* o1 = nullptr;
-        IDXGIOutputDuplication* dup = nullptr;
+        ComPtr<ID3D11Device> dev;
+        ComPtr<ID3D11DeviceContext> ctx;
+        ComPtr<IDXGIOutput1> o1;
+        ComPtr<IDXGIOutputDuplication> dup;
         Reader rd;
         bool ok = false;
         D3D_FEATURE_LEVEL fls[] = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0 };
-        HRESULT hr = D3D11CreateDevice(o.ad, D3D_DRIVER_TYPE_UNKNOWN, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, fls, 3, D3D11_SDK_VERSION,
+        HRESULT hr = D3D11CreateDevice(o.ad.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, fls, 3, D3D11_SDK_VERSION,
                                        &dev, nullptr, &ctx);
-        if (SUCCEEDED(hr)) hr = o.out->QueryInterface(__uuidof(IDXGIOutput1), (void**)&o1);
-        if (SUCCEEDED(hr)) hr = o1->DuplicateOutput(dev, &dup);
+        if (SUCCEEDED(hr)) hr = o.out.As(&o1);
+        if (SUCCEEDED(hr)) hr = o1->DuplicateOutput(dev.Get(), &dup);
         if (FAILED(hr)) {
             char b[160];
             snprintf(b, sizeof b, "monitor %d of %d can't be mirrored (0x%08lX)%s", idx, (int)outs.size(), (unsigned long)hr,
@@ -546,7 +518,7 @@ void ScreenCapture::Impl::Run() {
             SetMsg(b);
             ok = true;
         }
-        Free(outs);
+        outs.clear();
 
         auto nextAt = std::chrono::steady_clock::now();
         bool ptrVisible = false;
@@ -557,7 +529,7 @@ void ScreenCapture::Impl::Run() {
                 if (cfgVersion != ver) break;
             } // any change: start over with a fresh full frame
             DXGI_OUTDUPL_FRAME_INFO fi{};
-            IDXGIResource* res = nullptr;
+            ComPtr<IDXGIResource> res;
             hr = dup->AcquireNextFrame(100, &fi, &res);
             if (hr == DXGI_ERROR_WAIT_TIMEOUT) continue;
             if (FAILED(hr)) { // ACCESS_LOST: mode change, full-screen app, UAC... make a new duplication
@@ -578,16 +550,14 @@ void ScreenCapture::Impl::Run() {
             }
             bool newImage = fi.LastPresentTime.QuadPart != 0; // 0 = only the mouse moved (the image may be empty)
             if (newImage && res) {
-                ID3D11Texture2D* tex = nullptr;
-                res->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&tex);
-                if (tex) {
+                ComPtr<ID3D11Texture2D> tex;
+                if (SUCCEEDED(res.As(&tex))) {
                     D3D11_TEXTURE2D_DESC td{};
                     tex->GetDesc(&td);
-                    rd.Read(dev, ctx, tex, (int)td.Width, (int)td.Height, c.maxW, rot, base, bw, bh);
-                    tex->Release();
+                    rd.Read(dev.Get(), ctx.Get(), tex.Get(), (int)td.Width, (int)td.Height, c.maxW, rot, base, bw, bh);
                 }
             }
-            SafeRelease(res);
+            res.Reset(); // before ReleaseFrame: the frame's texture must not outlive it
             dup->ReleaseFrame();
             if (base.empty() || (!newImage && !(c.cursor && ptrChanged))) continue;
 
@@ -600,11 +570,6 @@ void ScreenCapture::Impl::Run() {
                 SleepUntil(nextAt, quit);
             }
         }
-        rd.Release();
-        SafeRelease(dup);
-        SafeRelease(o1);
-        SafeRelease(ctx);
-        SafeRelease(dev);
         base.clear();
         if (!ok && !quit) SleepUntil(std::chrono::steady_clock::now() + std::chrono::seconds(1), quit);
     }
