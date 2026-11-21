@@ -39,6 +39,8 @@ struct ScreenCapture::Impl {
     bool windowGone = false;
     void Run();
     void RunWindow(const Cfg& c, uint64_t ver);
+    void RunMonitor(const Cfg& c, uint64_t ver);
+    void WaitForConfigChange(uint64_t ver); // until the settings change or the thread quits
     void Publish(const std::vector<uint32_t>& base, int bw, int bh, int px, int py, const Cfg& c);
     void SetMsg(const std::string& m) {
         std::lock_guard l(mx);
@@ -428,6 +430,129 @@ void ScreenCapture::Impl::RunWindow(const Cfg& c, uint64_t ver) {
     WinCapClose(wc);
 }
 
+// One monitor, with Desktop Duplication, until the settings change or capture is lost.
+void ScreenCapture::Impl::RunMonitor(const Cfg& c, uint64_t ver) {
+    std::vector<uint32_t> base;
+    int bw = 0, bh = 0; // last captured image, without the pointer
+    auto outs = Enumerate();
+    if (outs.empty()) {
+        SetMsg("no monitor found");
+        SleepUntil(std::chrono::steady_clock::now() + std::chrono::seconds(2), quit);
+        return;
+    }
+    int prim = 1;
+    for (size_t i = 0; i < outs.size(); i++) {
+        const RECT& r = outs[i].desc.DesktopCoordinates;
+        if (r.left == 0 && r.top == 0) prim = (int)i + 1;
+    }
+    int idx = c.monitor <= 0 ? prim : std::min<int>(c.monitor, (int)outs.size());
+    OutInfo& o = outs[idx - 1];
+    {
+        std::lock_guard l(mx);
+        count = (int)outs.size();
+        primary = prim;
+        shown = idx;
+        const RECT& r = o.desc.DesktopCoordinates;
+        rx = r.left;
+        ry = r.top;
+        rw = r.right - r.left;
+        rh = r.bottom - r.top;
+    }
+    const RECT dr = o.desc.DesktopCoordinates;
+    const int deskW = dr.right - dr.left, deskH = dr.bottom - dr.top;
+    const DXGI_MODE_ROTATION rot = o.desc.Rotation;
+
+    ComPtr<ID3D11Device> dev;
+    ComPtr<ID3D11DeviceContext> ctx;
+    ComPtr<IDXGIOutput1> o1;
+    ComPtr<IDXGIOutputDuplication> dup;
+    Reader rd;
+    bool ok = false;
+    D3D_FEATURE_LEVEL fls[] = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0 };
+    HRESULT hr = D3D11CreateDevice(o.ad.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, fls, 3, D3D11_SDK_VERSION,
+                                   &dev, nullptr, &ctx);
+    if (SUCCEEDED(hr)) hr = o.out.As(&o1);
+    if (SUCCEEDED(hr)) hr = o1->DuplicateOutput(dev.Get(), &dup);
+    if (FAILED(hr)) {
+        char b[160];
+        snprintf(b, sizeof b, "monitor %d of %d can't be mirrored (0x%08lX)%s", idx, (int)outs.size(), (unsigned long)hr,
+                 hr == E_ACCESSDENIED                       ? ": Windows is showing a secure screen (UAC / lock)"
+                 : hr == DXGI_ERROR_UNSUPPORTED             ? ": not supported on this graphics card"
+                 : hr == DXGI_ERROR_NOT_CURRENTLY_AVAILABLE ? ": too many programs are mirroring it"
+                                                            : "");
+        SetMsg(b);
+    } else {
+        char b[160];
+        snprintf(b, sizeof b, "monitor %d of %d (%dx%d), %s", idx, (int)outs.size(), deskW, deskH,
+                 c.fps ? (std::to_string(c.fps) + " fps").c_str() : "every frame");
+        SetMsg(b);
+        ok = true;
+    }
+    outs.clear();
+
+    auto nextAt = std::chrono::steady_clock::now();
+    bool ptrVisible = false;
+    int ptrX = 0, ptrY = 0;
+    while (ok && !quit) {
+        {
+            std::lock_guard l(mx);
+            if (cfgVersion != ver) break;
+        } // any change: start over with a fresh full frame
+        DXGI_OUTDUPL_FRAME_INFO fi{};
+        ComPtr<IDXGIResource> res;
+        hr = dup->AcquireNextFrame(100, &fi, &res);
+        if (hr == DXGI_ERROR_WAIT_TIMEOUT) continue;
+        if (FAILED(hr)) { // ACCESS_LOST: mode change, full-screen app, UAC... make a new duplication
+            if (hr != DXGI_ERROR_ACCESS_LOST) {
+                char b[80];
+                snprintf(b, sizeof b, "capture stopped (0x%08lX), retrying", (unsigned long)hr);
+                SetMsg(b);
+            }
+            break;
+        }
+        bool ptrChanged = false;
+        if (fi.LastMouseUpdateTime.QuadPart) {
+            ptrChanged = ptrVisible != (bool)fi.PointerPosition.Visible || ptrX != fi.PointerPosition.Position.x ||
+                         ptrY != fi.PointerPosition.Position.y;
+            ptrVisible = fi.PointerPosition.Visible;
+            ptrX = fi.PointerPosition.Position.x;
+            ptrY = fi.PointerPosition.Position.y;
+        }
+        bool newImage = fi.LastPresentTime.QuadPart != 0; // 0 = only the mouse moved (the image may be empty)
+        if (newImage && res) {
+            ComPtr<ID3D11Texture2D> tex;
+            if (SUCCEEDED(res.As(&tex))) {
+                D3D11_TEXTURE2D_DESC td{};
+                tex->GetDesc(&td);
+                rd.Read(dev.Get(), ctx.Get(), tex.Get(), (int)td.Width, (int)td.Height, c.maxW, rot, base, bw, bh);
+            }
+        }
+        res.Reset(); // before ReleaseFrame: the frame's texture must not outlive it
+        dup->ReleaseFrame();
+        if (base.empty() || (!newImage && !(c.cursor && ptrChanged))) continue;
+
+        Publish(base, bw, bh, ptrVisible && deskW > 0 && deskH > 0 ? ptrX * bw / deskW : -1,
+                ptrVisible && deskW > 0 && deskH > 0 ? ptrY * bh / deskH : -1, c);
+        if (c.fps > 0) {
+            nextAt += std::chrono::microseconds(1000000 / c.fps);
+            auto n = std::chrono::steady_clock::now();
+            if (nextAt < n) nextAt = n;
+            SleepUntil(nextAt, quit);
+        }
+    }
+    if (!ok && !quit) SleepUntil(std::chrono::steady_clock::now() + std::chrono::seconds(1), quit);
+}
+
+void ScreenCapture::Impl::WaitForConfigChange(uint64_t ver) {
+    while (!quit) {
+        {
+            std::lock_guard l(mx);
+            if (cfgVersion != ver) return;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+}
+
 void ScreenCapture::Impl::Run() {
     // Per-monitor DPI awareness for this thread only (the game's own setting is left alone):
     // Desktop Duplication can refuse callers that aren't DPI aware.
@@ -435,8 +560,6 @@ void ScreenCapture::Impl::Run() {
     if (auto f = (SetCtx)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetThreadDpiAwarenessContext"))
         f(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
-    std::vector<uint32_t> base;
-    int bw = 0, bh = 0; // last captured image, without the pointer
     while (!quit) {
         Cfg c;
         uint64_t ver;
@@ -454,123 +577,10 @@ void ScreenCapture::Impl::Run() {
             }
             if (gone) {
                 SetMsg("the window was closed");
-                while (!quit) {
-                    {
-                        std::lock_guard l(mx);
-                        if (cfgVersion != ver) break;
-                    }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(20));
-                }
+                WaitForConfigChange(ver);
             }
             continue;
         }
-        auto outs = Enumerate();
-        if (outs.empty()) {
-            SetMsg("no monitor found");
-            SleepUntil(std::chrono::steady_clock::now() + std::chrono::seconds(2), quit);
-            continue;
-        }
-        int prim = 1;
-        for (size_t i = 0; i < outs.size(); i++) {
-            const RECT& r = outs[i].desc.DesktopCoordinates;
-            if (r.left == 0 && r.top == 0) prim = (int)i + 1;
-        }
-        int idx = c.monitor <= 0 ? prim : std::min<int>(c.monitor, (int)outs.size());
-        OutInfo& o = outs[idx - 1];
-        {
-            std::lock_guard l(mx);
-            count = (int)outs.size();
-            primary = prim;
-            shown = idx;
-            const RECT& r = o.desc.DesktopCoordinates;
-            rx = r.left;
-            ry = r.top;
-            rw = r.right - r.left;
-            rh = r.bottom - r.top;
-        }
-        const RECT dr = o.desc.DesktopCoordinates;
-        const int deskW = dr.right - dr.left, deskH = dr.bottom - dr.top;
-        const DXGI_MODE_ROTATION rot = o.desc.Rotation;
-
-        ComPtr<ID3D11Device> dev;
-        ComPtr<ID3D11DeviceContext> ctx;
-        ComPtr<IDXGIOutput1> o1;
-        ComPtr<IDXGIOutputDuplication> dup;
-        Reader rd;
-        bool ok = false;
-        D3D_FEATURE_LEVEL fls[] = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0 };
-        HRESULT hr = D3D11CreateDevice(o.ad.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, fls, 3, D3D11_SDK_VERSION,
-                                       &dev, nullptr, &ctx);
-        if (SUCCEEDED(hr)) hr = o.out.As(&o1);
-        if (SUCCEEDED(hr)) hr = o1->DuplicateOutput(dev.Get(), &dup);
-        if (FAILED(hr)) {
-            char b[160];
-            snprintf(b, sizeof b, "monitor %d of %d can't be mirrored (0x%08lX)%s", idx, (int)outs.size(), (unsigned long)hr,
-                     hr == E_ACCESSDENIED                       ? ": Windows is showing a secure screen (UAC / lock)"
-                     : hr == DXGI_ERROR_UNSUPPORTED             ? ": not supported on this graphics card"
-                     : hr == DXGI_ERROR_NOT_CURRENTLY_AVAILABLE ? ": too many programs are mirroring it"
-                                                                : "");
-            SetMsg(b);
-        } else {
-            char b[160];
-            snprintf(b, sizeof b, "monitor %d of %d (%dx%d), %s", idx, (int)outs.size(), deskW, deskH,
-                     c.fps ? (std::to_string(c.fps) + " fps").c_str() : "every frame");
-            SetMsg(b);
-            ok = true;
-        }
-        outs.clear();
-
-        auto nextAt = std::chrono::steady_clock::now();
-        bool ptrVisible = false;
-        int ptrX = 0, ptrY = 0;
-        while (ok && !quit) {
-            {
-                std::lock_guard l(mx);
-                if (cfgVersion != ver) break;
-            } // any change: start over with a fresh full frame
-            DXGI_OUTDUPL_FRAME_INFO fi{};
-            ComPtr<IDXGIResource> res;
-            hr = dup->AcquireNextFrame(100, &fi, &res);
-            if (hr == DXGI_ERROR_WAIT_TIMEOUT) continue;
-            if (FAILED(hr)) { // ACCESS_LOST: mode change, full-screen app, UAC... make a new duplication
-                if (hr != DXGI_ERROR_ACCESS_LOST) {
-                    char b[80];
-                    snprintf(b, sizeof b, "capture stopped (0x%08lX), retrying", (unsigned long)hr);
-                    SetMsg(b);
-                }
-                break;
-            }
-            bool ptrChanged = false;
-            if (fi.LastMouseUpdateTime.QuadPart) {
-                ptrChanged = ptrVisible != (bool)fi.PointerPosition.Visible || ptrX != fi.PointerPosition.Position.x ||
-                             ptrY != fi.PointerPosition.Position.y;
-                ptrVisible = fi.PointerPosition.Visible;
-                ptrX = fi.PointerPosition.Position.x;
-                ptrY = fi.PointerPosition.Position.y;
-            }
-            bool newImage = fi.LastPresentTime.QuadPart != 0; // 0 = only the mouse moved (the image may be empty)
-            if (newImage && res) {
-                ComPtr<ID3D11Texture2D> tex;
-                if (SUCCEEDED(res.As(&tex))) {
-                    D3D11_TEXTURE2D_DESC td{};
-                    tex->GetDesc(&td);
-                    rd.Read(dev.Get(), ctx.Get(), tex.Get(), (int)td.Width, (int)td.Height, c.maxW, rot, base, bw, bh);
-                }
-            }
-            res.Reset(); // before ReleaseFrame: the frame's texture must not outlive it
-            dup->ReleaseFrame();
-            if (base.empty() || (!newImage && !(c.cursor && ptrChanged))) continue;
-
-            Publish(base, bw, bh, ptrVisible && deskW > 0 && deskH > 0 ? ptrX * bw / deskW : -1,
-                    ptrVisible && deskW > 0 && deskH > 0 ? ptrY * bh / deskH : -1, c);
-            if (c.fps > 0) {
-                nextAt += std::chrono::microseconds(1000000 / c.fps);
-                auto n = std::chrono::steady_clock::now();
-                if (nextAt < n) nextAt = n;
-                SleepUntil(nextAt, quit);
-            }
-        }
-        base.clear();
-        if (!ok && !quit) SleepUntil(std::chrono::steady_clock::now() + std::chrono::seconds(1), quit);
+        RunMonitor(c, ver);
     }
 }
