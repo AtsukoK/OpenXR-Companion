@@ -326,6 +326,162 @@ ID3D11ShaderResourceView* HeadsetMirror::Srv(ID3D11Texture2D* t, int64_t fmt) {
     return v.Get();
 }
 
+// The window's swapchain and render target, made on first use and resized with the window.
+bool HeadsetMirror::PrepareWindow(HWND h, float& W, float& H) {
+    if (!chain) {
+        ComPtr<IDXGIDevice> dx;
+        ComPtr<IDXGIAdapter> ad;
+        ComPtr<IDXGIFactory2> fac;
+        if (SUCCEEDED(dev.As(&dx)) && SUCCEEDED(dx->GetAdapter(&ad)) &&
+            SUCCEEDED(ad->GetParent(IID_PPV_ARGS(&fac)))) {
+            DXGI_SWAP_CHAIN_DESC1 sd{};
+            sd.Width = clientW;
+            sd.Height = clientH;
+            sd.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+            sd.SampleDesc.Count = 1;
+            sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+            sd.BufferCount = 2;
+            sd.Scaling = DXGI_SCALING_STRETCH;
+            sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+            sd.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
+            HRESULT hr = fac->CreateSwapChainForHwnd(dev.Get(), h, &sd, nullptr, nullptr, &chain);
+            if (FAILED(hr))
+                Log("mirror: swapchain failed 0x%08lx", hr);
+            else
+                fac->MakeWindowAssociation(h, DXGI_MWA_NO_ALT_ENTER);
+        }
+        if (!chain) {
+            failed = true;
+            return false;
+        }
+        InterlockedExchange(&sized, 0);
+    }
+    if (InterlockedExchange(&sized, 0)) {
+        rtv.Reset();
+        chain->ResizeBuffers(0, clientW, clientH, DXGI_FORMAT_UNKNOWN, 0);
+    }
+    if (!rtv) {
+        ComPtr<ID3D11Texture2D> bb;
+        if (SUCCEEDED(chain->GetBuffer(0, IID_PPV_ARGS(&bb)))) {
+            D3D11_RENDER_TARGET_VIEW_DESC rd{};
+            rd.Format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+            rd.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+            dev->CreateRenderTargetView(bb.Get(), &rd, &rtv);
+        }
+        if (!rtv) return false;
+    }
+    DXGI_SWAP_CHAIN_DESC1 cd;
+    chain->GetDesc1(&cd);
+    W = (float)cd.Width;
+    H = (float)cd.Height;
+    return true;
+}
+
+// No VR view this frame (TTWVR's theater menus, loading screens): show the game's flat screen, its biggest
+// quad layer, fitted to the window. Black when there is nothing to show, never the window's old garbage.
+void HeadsetMirror::FlatFrame(ID3D11DeviceContext* ctx, const std::vector<const XrCompositionLayerBaseHeader*>& layers, HWND h) {
+    const XrCompositionLayerQuad* best = nullptr;
+    Sw* bestSw = nullptr;
+    for (auto* L : layers) {
+        if (L->type != XR_TYPE_COMPOSITION_LAYER_QUAD) continue;
+        auto* q = (const XrCompositionLayerQuad*)L;
+        auto it = sws.find((uint64_t)q->subImage.swapchain);
+        if (it == sws.end() || it->second.last < 0 || it->second.last >= (int)it->second.imgs.size() || it->second.arraySize > 1) continue;
+        if (best && q->size.width * q->size.height <= best->size.width * best->size.height) continue;
+        best = q;
+        bestSw = &it->second;
+    }
+    if (best != flatShown) {
+        flatShown = best;
+        Log(best ? "mirror: no VR view, showing the game's flat screen" : "mirror: no VR view and no flat screen: black");
+    }
+    float W, H;
+    if (!PrepareWindow(h, W, H)) return;
+    const float black[4] = { 0, 0, 0, 1 };
+    ctx->ClearRenderTargetView(rtv.Get(), black);
+    ID3D11ShaderResourceView* srv = best ? Srv(bestSw->imgs[bestSw->last], bestSw->format) : nullptr;
+    const XrRect2Di& r = best ? best->subImage.imageRect : XrRect2Di{};
+    if (srv && r.extent.width > 0 && r.extent.height > 0) {
+        ComPtr<ID3D11DeviceContext1> c1;
+        if (FAILED(ctx->QueryInterface(IID_PPV_ARGS(&c1)))) return;
+        ComPtr<ID3DDeviceContextState> prev; // the game's own state, put back after drawing
+        c1->SwapDeviceContextState(state.Get(), &prev);
+        // fit, keeping the screen's shape (its size in metres, as the headset shows it)
+        float aspect = best->size.height > 0 ? best->size.width / best->size.height : (float)r.extent.width / r.extent.height;
+        float sx = 1.f, sy = 1.f;
+        if (aspect > W / H)
+            sy = (W / aspect) / H;
+        else
+            sx = (H * aspect) / W;
+        struct CB {
+            float P[4][4];
+            float UV[4];
+            float Mode[4];
+        } c{};
+        const float corner[4][2] = { { -1, 1 }, { 1, 1 }, { -1, -1 }, { 1, -1 } };
+        for (int i = 0; i < 4; i++) {
+            c.P[i][0] = corner[i][0] * sx;
+            c.P[i][1] = corner[i][1] * sy;
+            c.P[i][2] = 0.5f;
+            c.P[i][3] = 1;
+        }
+        float iw = (float)bestSw->w, ih = (float)bestSw->h;
+        c.UV[0] = r.offset.x / iw;
+        c.UV[1] = r.offset.y / ih;
+        c.UV[2] = (r.offset.x + r.extent.width) / iw;
+        c.UV[3] = (r.offset.y + r.extent.height) / ih;
+        c.Mode[1] = W * sx > r.extent.width * 1.02f ? 1.f : 0.f; // stretched -> sharper bicubic
+        ctx->UpdateSubresource(cb.Get(), 0, nullptr, &c, 0, 0);
+        D3D11_VIEWPORT vp{ 0, 0, W, H, 0, 1 };
+        ctx->RSSetViewports(1, &vp);
+        ctx->RSSetState(rast.Get());
+        ctx->OMSetRenderTargets(1, rtv.GetAddressOf(), nullptr);
+        ctx->OMSetBlendState(blendOpaque.Get(), nullptr, 0xffffffff);
+        ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+        ctx->IASetInputLayout(nullptr);
+        ctx->VSSetShader(vs.Get(), nullptr, 0);
+        ctx->PSSetShader(ps.Get(), nullptr, 0);
+        ctx->VSSetConstantBuffers(0, 1, cb.GetAddressOf());
+        ctx->PSSetConstantBuffers(0, 1, cb.GetAddressOf());
+        ctx->PSSetSamplers(0, 1, samp.GetAddressOf());
+        ctx->PSSetShaderResources(0, 1, &srv);
+        ctx->Draw(4, 0);
+        ID3D11ShaderResourceView* none = nullptr;
+        ctx->PSSetShaderResources(0, 1, &none);
+        c1->SwapDeviceContextState(prev.Get(), nullptr);
+    }
+    GrabIfAsked(ctx);
+    chain->Present(0, DXGI_PRESENT_DO_NOT_WAIT);
+}
+
+// Tests: read the window's picture back.
+void HeadsetMirror::GrabIfAsked(ID3D11DeviceContext* ctx) {
+    if (!grab) return;
+    grab = false;
+    ComPtr<ID3D11Texture2D> bb;
+    if (SUCCEEDED(chain->GetBuffer(0, IID_PPV_ARGS(&bb)))) {
+        D3D11_TEXTURE2D_DESC bd;
+        bb->GetDesc(&bd);
+        bd.Usage = D3D11_USAGE_STAGING;
+        bd.BindFlags = 0;
+        bd.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+        bd.MiscFlags = 0;
+        ComPtr<ID3D11Texture2D> st;
+        if (SUCCEEDED(dev->CreateTexture2D(&bd, nullptr, &st))) {
+            ctx->CopyResource(st.Get(), bb.Get());
+            D3D11_MAPPED_SUBRESOURCE m;
+            if (SUCCEEDED(ctx->Map(st.Get(), 0, D3D11_MAP_READ, 0, &m))) {
+                grabW = bd.Width;
+                grabH = bd.Height;
+                grabbed.resize((size_t)grabW * grabH);
+                for (int y = 0; y < grabH; y++)
+                    memcpy(&grabbed[(size_t)y * grabW], (uint8_t*)m.pData + (size_t)y * m.RowPitch, grabW * 4);
+                ctx->Unmap(st.Get(), 0);
+            }
+        }
+    }
+}
+
 // ------------------------------------------------------------ one frame
 void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::vector<const XrCompositionLayerBaseHeader*>& layers,
                           XrTime t, const LocateFn& locate) {
@@ -354,7 +510,11 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
             proj = (const XrCompositionLayerProjection*)L;
             break;
         }
-    if (!proj || proj->viewCount < 1) return;
+    if (!proj || proj->viewCount < 1) {
+        FlatFrame(ctx, layers, h);
+        return;
+    }
+    flatShown = nullptr;
     const XrCompositionLayerProjectionView& view = proj->views[std::min<uint32_t>(eye, proj->viewCount - 1)];
     auto sit = sws.find((uint64_t)view.subImage.swapchain);
     if (sit == sws.end() || sit->second.last < 0 || sit->second.last >= (int)sit->second.imgs.size()) return;
@@ -370,52 +530,8 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
     XrRect2Di rc = view.subImage.imageRect;
     if (rc.extent.width <= 0 || rc.extent.height <= 0) return;
 
-    // window swapchain
-    if (!chain) {
-        ComPtr<IDXGIDevice> dx;
-        ComPtr<IDXGIAdapter> ad;
-        ComPtr<IDXGIFactory2> fac;
-        if (SUCCEEDED(dev.As(&dx)) && SUCCEEDED(dx->GetAdapter(&ad)) &&
-            SUCCEEDED(ad->GetParent(IID_PPV_ARGS(&fac)))) {
-            DXGI_SWAP_CHAIN_DESC1 sd{};
-            sd.Width = clientW;
-            sd.Height = clientH;
-            sd.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-            sd.SampleDesc.Count = 1;
-            sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-            sd.BufferCount = 2;
-            sd.Scaling = DXGI_SCALING_STRETCH;
-            sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-            sd.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
-            HRESULT hr = fac->CreateSwapChainForHwnd(dev.Get(), h, &sd, nullptr, nullptr, &chain);
-            if (FAILED(hr))
-                Log("mirror: swapchain failed 0x%08lx", hr);
-            else
-                fac->MakeWindowAssociation(h, DXGI_MWA_NO_ALT_ENTER);
-        }
-        if (!chain) {
-            failed = true;
-            return;
-        }
-        InterlockedExchange(&sized, 0);
-    }
-    if (InterlockedExchange(&sized, 0)) {
-        rtv.Reset();
-        chain->ResizeBuffers(0, clientW, clientH, DXGI_FORMAT_UNKNOWN, 0);
-    }
-    if (!rtv) {
-        ComPtr<ID3D11Texture2D> bb;
-        if (SUCCEEDED(chain->GetBuffer(0, IID_PPV_ARGS(&bb)))) {
-            D3D11_RENDER_TARGET_VIEW_DESC rd{};
-            rd.Format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
-            rd.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-            dev->CreateRenderTargetView(bb.Get(), &rd, &rtv);
-        }
-        if (!rtv) return;
-    }
-    DXGI_SWAP_CHAIN_DESC1 cd;
-    chain->GetDesc1(&cd);
-    float W = (float)cd.Width, H = (float)cd.Height;
+    float W, H;
+    if (!PrepareWindow(h, W, H)) return;
 
     // copy the eye's part of the image (the game may reuse its image right after this frame)
     if (!eyeCopy || eyeDesc.Width != (UINT)rc.extent.width || eyeDesc.Height != (UINT)rc.extent.height || eyeDesc.Format != td.Format ||
@@ -662,30 +778,6 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
     ID3D11ShaderResourceView* none = nullptr;
     ctx->PSSetShaderResources(0, 1, &none);
     c1->SwapDeviceContextState(prev.Get(), nullptr);
-    if (grab) { // tests: read the picture back
-        grab = false;
-        ComPtr<ID3D11Texture2D> bb;
-        if (SUCCEEDED(chain->GetBuffer(0, IID_PPV_ARGS(&bb)))) {
-            D3D11_TEXTURE2D_DESC bd;
-            bb->GetDesc(&bd);
-            bd.Usage = D3D11_USAGE_STAGING;
-            bd.BindFlags = 0;
-            bd.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-            bd.MiscFlags = 0;
-            ComPtr<ID3D11Texture2D> st;
-            if (SUCCEEDED(dev->CreateTexture2D(&bd, nullptr, &st))) {
-                ctx->CopyResource(st.Get(), bb.Get());
-                D3D11_MAPPED_SUBRESOURCE m;
-                if (SUCCEEDED(ctx->Map(st.Get(), 0, D3D11_MAP_READ, 0, &m))) {
-                    grabW = bd.Width;
-                    grabH = bd.Height;
-                    grabbed.resize((size_t)grabW * grabH);
-                    for (int y = 0; y < grabH; y++)
-                        memcpy(&grabbed[(size_t)y * grabW], (uint8_t*)m.pData + (size_t)y * m.RowPitch, grabW * 4);
-                    ctx->Unmap(st.Get(), 0);
-                }
-            }
-        }
-    }
+    GrabIfAsked(ctx);
     chain->Present(0, DXGI_PRESENT_DO_NOT_WAIT); // never hold the game up
 }

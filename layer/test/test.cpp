@@ -2396,6 +2396,22 @@ int main(int argc, char** argv) {
             CHECK(raw > 8 && steadied * 3 < raw, ("mirror: steadying keeps a small head shake out of the picture (" + std::to_string(raw) +
                                                   " px -> " + std::to_string(steadied) + " px)")
                                                      .c_str());
+            // Menus with no VR view (TTWVR's theater): the game's flat screen alone fills the window, keeping its shape.
+            {
+                std::vector<const XrCompositionLayerBaseHeader*> flat{ (const XrCompositionLayerBaseHeader*)&q };
+                m.grab = true;
+                m.Frame(dev, ctx, flat, 5000000000LL, locate);
+                bool shown = !m.grabbed.empty();
+                CHECK(shown, "mirror: a flat screen with no VR view still gives a picture");
+                if (shown) {
+                    int W = m.grabW, Hh = m.grabH;
+                    auto at = [&](int x, int y) {
+                        return m.grabbed[(size_t)y * W + x] & 0xFFFFFF;
+                    };
+                    CHECK(at(W / 2, Hh / 2) == 0xFF0000 && at(W / 2, 3) == 0xFF0000, "mirror: no VR view: the flat screen fills the window's height");
+                    CHECK(W <= Hh || at(3, Hh / 2) == 0x000000, "mirror: no VR view: black either side of a square screen");
+                }
+            }
             m.Shutdown();
             CHECK(m.Window() == nullptr && !m.On(), "mirror: turning it off closes the window");
             eyeTex->Release();

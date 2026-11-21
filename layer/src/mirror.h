@@ -88,4 +88,8 @@ private:
     bool InitGpu(ID3D11Device* d);
     void ReleaseGpu();
     ID3D11ShaderResourceView* Srv(ID3D11Texture2D* t, int64_t fmt);
+    bool PrepareWindow(HWND h, float& W, float& H);
+    void GrabIfAsked(ID3D11DeviceContext* ctx); // tests
+    void FlatFrame(ID3D11DeviceContext* ctx, const std::vector<const XrCompositionLayerBaseHeader*>& layers, HWND h);
+    const void* flatShown = nullptr; // the flat screen last shown (for the log)
 };
