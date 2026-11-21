@@ -19,6 +19,10 @@ public:
     void Update();
 
 private:
+    // Steps of Update, in order.
+    void UpdateGrabToSet();             // Grab to set: arm, start on a grip, follow the turn, keep on release
+    void SaveWhenDue();                 // a short while after the last change, unless a grab is going on
+    void UpdatePanelInput(float dt);    // pointing, presses and the stick slider
     friend class Engine;
     Engine& e;
 

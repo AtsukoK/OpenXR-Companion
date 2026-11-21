@@ -267,8 +267,13 @@ void OffsetsPanel::PressCell(int cell, bool repeat) {
 }
 
 // ------------------------------------------------------------ per frame
-void OffsetsPanel::Update() {
-    float dt = (float)std::clamp(e.now - e.lastNow, 0.0, 0.1);
+// The six number rows (pitch, yaw, roll, x, y, z) are cells 3..20, three per row: - / value / +.
+static const int kFirstFieldCell = 3, kFieldCellEnd = 21;
+static bool IsFieldRowCell(int cell) {
+    return cell >= kFirstFieldCell && cell < kFieldCellEnd;
+}
+
+void OffsetsPanel::UpdateGrabToSet() {
     // Grab to set: while the grip is held, the game's hand keeps the angle it had when you grabbed;
     // you turn the real controller to where it feels right, and on letting go that difference is kept.
     // Armed by mistake (the button sits next to Steady hands): give up after 5 s without a grip,
@@ -327,11 +332,18 @@ void OffsetsPanel::Update() {
             if (e.offView.open) Build();
         }
     }
+}
+
+void OffsetsPanel::SaveWhenDue() {
     if (run_.saveAt > 0 && e.now >= run_.saveAt && e.offGrabHand < 0) {
         run_.saveAt = -1;
         e.offsSaveRequested = true;
     }
 
+}
+
+// Pointing at the panel: hover, trigger presses (held = repeat), and the stick as a slider.
+void OffsetsPanel::UpdatePanelInput(float dt) {
     run_.uiHand = -1;
     if (!e.offView.open) return;
     if (e.wr.open || e.kb.visible) return;
@@ -362,7 +374,7 @@ void OffsetsPanel::Update() {
     }
     int g = run_.uiHand;
     bool down = e.cur[g][C_TRIGGER][F_PRESS], press = down && !e.prev[g][C_TRIGGER][F_PRESS];
-    bool isStep = hover >= 3 && hover < 21 && (hover - 3) % 3 != 1;
+    bool isStep = IsFieldRowCell(hover) && (hover - kFirstFieldCell) % 3 != 1; // the - / + buttons, not the value
     if (press) {
         if (e.prof->haptics) e.haptics.push_back({ g, e.prof->hapticAmp, 0.025f });
         run_.flashUntil = e.now + 0.15;
@@ -377,10 +389,10 @@ void OffsetsPanel::Update() {
     } else if (!down)
         run_.repeatCell = -1;
     // The stick works as a slider on the row you point at: push right to raise, left to lower.
-    if (hover >= 3 && hover < 21) {
+    if (IsFieldRowCell(hover)) {
         float sx = e.fr.h[g].sx;
         if (std::fabs(sx) > 0.25f) {
-            int f = (hover - 3) / 3;
+            int f = (hover - kFirstFieldCell) / 3;
             int hand = e.offs.linkHands ? 1 : run_.sel, kind = e.offs.aimSame ? 0 : (run_.kind == 1 ? 1 : 0);
             HandOffset& o = Edit(hand, kind);
             float rate = (f < 3 ? kStepDeg[run_.step] : kStepCm[run_.step]) * 8.f; // 8 steps a second at full push
@@ -389,4 +401,11 @@ void OffsetsPanel::Update() {
             Changed();
         }
     }
+}
+
+void OffsetsPanel::Update() {
+    float dt = (float)std::clamp(e.now - e.lastNow, 0.0, 0.1);
+    UpdateGrabToSet();
+    SaveWhenDue();
+    UpdatePanelInput(dt);
 }
