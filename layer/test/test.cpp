@@ -38,8 +38,32 @@ static XrResult XRAPI_CALL CreateHandle(void*, const void*, uint64_t* out) {
     *out = nextHandle++;
     return XR_SUCCESS;
 }
-static XrResult XRAPI_CALL StringToPath(XrInstance, const char*, XrPath* p) {
+static std::map<std::string, XrPath> pathIds;
+static std::map<XrPath, std::string> pathNames;
+static XrResult XRAPI_CALL StringToPath(XrInstance, const char* s, XrPath* p) {
+    auto it = pathIds.find(s);
+    if (it != pathIds.end()) {
+        *p = it->second;
+        return XR_SUCCESS;
+    }
     *p = nextHandle++;
+    pathIds[s] = *p;
+    pathNames[*p] = s;
+    return XR_SUCCESS;
+}
+static XrResult XRAPI_CALL PathToString(XrInstance, XrPath p, uint32_t cap, uint32_t* n, char* buf) {
+    const std::string& s = pathNames[p];
+    *n = (uint32_t)s.size() + 1;
+    if (cap >= *n && buf) memcpy(buf, s.c_str(), *n);
+    return XR_SUCCESS;
+}
+// The last suggested bindings per interaction profile, as path names.
+static std::map<std::string, std::vector<std::string>> suggested;
+static XrResult XRAPI_CALL Suggest(XrInstance, const XrInteractionProfileSuggestedBinding* sb) {
+    auto& v = suggested[pathNames[sb->interactionProfile]];
+    v.clear();
+    for (uint32_t i = 0; i < sb->countSuggestedBindings; i++)
+        v.push_back(pathNames[sb->suggestedBindings[i].binding]);
     return XR_SUCCESS;
 }
 static XrResult XRAPI_CALL LocateSpace(XrSpace sp, XrSpace, XrTime t, XrSpaceLocation* loc) {
@@ -90,6 +114,10 @@ static XrResult XRAPI_CALL Gipa(XrInstance, const char* n, PFN_xrVoidFunction* f
         *fn = (PFN_xrVoidFunction)EndFrame;
     else if (s == "xrStringToPath")
         *fn = (PFN_xrVoidFunction)StringToPath;
+    else if (s == "xrPathToString")
+        *fn = (PFN_xrVoidFunction)PathToString;
+    else if (s == "xrSuggestInteractionProfileBindings")
+        *fn = (PFN_xrVoidFunction)Suggest;
     else if (s == "xrCreateActionSet" || s == "xrCreateAction" || s == "xrCreateActionSpace")
         *fn = (PFN_xrVoidFunction)CreateHandle;
     else
@@ -103,8 +131,17 @@ static float YawDeg(const XrQuaternionf& q) {
 
 // Runs the real layer DLL over the pretend runtime, the way an Unreal game (head on its own) or a Unity game (eye views in
 // the world) asks for the head; turns 90 degrees at once; returns the yaw the game got and the yaw the headset was given.
-static bool RunHeadSmoothingThroughLayer(bool unrealStyle, XrTime startT, std::vector<float>& gameYaw, std::vector<float>& shownYaw,
-                                         std::string& why, bool twoThreads = false) {
+// The real layer DLL loaded over the pretend runtime, with a game instance made through it.
+struct LayerUnderTest {
+    XrInstance inst = XR_NULL_HANDLE;
+    PFN_xrGetInstanceProcAddr gipa = nullptr;
+    PFN_xrVoidFunction Get(const char* name) const {
+        PFN_xrVoidFunction f = nullptr;
+        gipa(inst, name, &f);
+        return f;
+    }
+};
+static bool LoadLayerOverPretendRuntime(LayerUnderTest& out, std::string& why) {
     wchar_t exe[MAX_PATH];
     GetModuleFileNameW(nullptr, exe, MAX_PATH);
     std::wstring dir = exe;
@@ -144,10 +181,18 @@ static bool RunHeadSmoothingThroughLayer(bool unrealStyle, XrTime startT, std::v
         why = "instance failed";
         return false;
     }
+    out.inst = inst;
+    out.gipa = rq.getInstanceProcAddr;
+    return true;
+}
+
+static bool RunHeadSmoothingThroughLayer(bool unrealStyle, XrTime startT, std::vector<float>& gameYaw, std::vector<float>& shownYaw,
+                                         std::string& why, bool twoThreads = false) {
+    LayerUnderTest layer;
+    if (!LoadLayerOverPretendRuntime(layer, why)) return false;
+    XrInstance inst = layer.inst;
     auto get = [&](const char* n) {
-        PFN_xrVoidFunction f = nullptr;
-        rq.getInstanceProcAddr(inst, n, &f);
-        return f;
+        return layer.Get(n);
     };
     auto createSession = (PFN_xrCreateSession)get("xrCreateSession");
     auto createRef = (PFN_xrCreateReferenceSpace)get("xrCreateReferenceSpace");
@@ -377,6 +422,40 @@ static bool D3D12PanelRun(std::vector<uint32_t>& got, uint32_t& want, int& uploa
     fac->Release();
     if (!ok) why = "(panel create/upload failed)";
     return ok;
+}
+
+// A controller the layer has no table for (here a made-up Steam Frame profile): it adds the standard bindings the game
+// itself uses there, and nothing else.
+static bool RunUnknownControllerThroughLayer(std::vector<std::string>& sent, std::string& why) {
+    LayerUnderTest layer;
+    if (!LoadLayerOverPretendRuntime(layer, why)) return false;
+    auto toPath = (PFN_xrStringToPath)layer.Get("xrStringToPath");
+    auto createSet = (PFN_xrCreateActionSet)layer.Get("xrCreateActionSet");
+    auto suggest = (PFN_xrSuggestInteractionProfileBindings)layer.Get("xrSuggestInteractionProfileBindings");
+    XrActionSetCreateInfo si{ XR_TYPE_ACTION_SET_CREATE_INFO };
+    strcpy_s(si.actionSetName, "game");
+    strcpy_s(si.localizedActionSetName, "game");
+    XrActionSet set;
+    createSet(layer.inst, &si, &set);
+    const char* gamePaths[] = { "/user/hand/left/input/grip/pose",      "/user/hand/right/input/grip/pose",
+                                "/user/hand/left/input/aim/pose",       "/user/hand/right/input/aim/pose",
+                                "/user/hand/right/input/a/click",       "/user/hand/left/input/trigger/value",
+                                "/user/hand/right/input/trigger/value", "/user/hand/left/input/thumbstick" };
+    std::vector<XrActionSuggestedBinding> b;
+    for (const char* gp : gamePaths) {
+        XrPath path;
+        toPath(layer.inst, gp, &path);
+        b.push_back({ (XrAction)(uintptr_t)(900 + b.size()), path });
+    }
+    XrPath prof;
+    toPath(layer.inst, "/interaction_profiles/valve/frame_controller", &prof);
+    XrInteractionProfileSuggestedBinding sb{ XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING };
+    sb.interactionProfile = prof;
+    sb.countSuggestedBindings = (uint32_t)b.size();
+    sb.suggestedBindings = b.data();
+    suggest(layer.inst, &sb);
+    sent = fakert::suggested["/interaction_profiles/valve/frame_controller"];
+    return true;
 }
 
 int main(int argc, char** argv) {
@@ -2371,6 +2450,22 @@ int main(int argc, char** argv) {
         }
     }
 
+    {
+        std::vector<std::string> sent;
+        std::string why;
+        bool ran = RunUnknownControllerThroughLayer(sent, why);
+        CHECK(ran, ("unknown controller: the layer runs " + why).c_str());
+        auto count = [&](const std::string& p) {
+            return std::count(sent.begin(), sent.end(), p);
+        };
+        CHECK(sent.size() > 8, ("unknown controller: our bindings are added to the game's 8, now " + std::to_string(sent.size())).c_str());
+        CHECK(count("/user/hand/right/input/a/click") == 2 && count("/user/hand/left/input/trigger/value") == 2,
+              "unknown controller: the game's own buttons get our actions too");
+        bool onlyKnown = true;
+        for (auto& p : sent)
+            if (count(p) < 1 || (p.find("/b/click") != std::string::npos) || p.find("thumbrest") != std::string::npos) onlyKnown = false;
+        CHECK(onlyKnown, "unknown controller: nothing the game doesn't bind (no b button, no thumbrest)");
+    }
     TestGameHandOffsets();
     TestOverlay();
     TestGameInputFilter();

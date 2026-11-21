@@ -134,6 +134,38 @@ static const PB kVive[] = {
 };
 static const PB kSimple[] = { { A_TRIG, "input/select/click", 3 }, { A_MENU, "input/menu/click", 3 } };
 
+// A controller type with no table above (a new headset, such as the Steam Frame): our bindings are taken from
+// all the tables, keeping only the input paths the game itself binds on that controller, so every path we
+// suggest is one the runtime knows. Empty when the game binds no hand pose there (nothing to attach to).
+static std::vector<PB> LearnedTable(const std::set<std::string>& appPaths) {
+    std::vector<PB> v;
+    bool hasPose = false;
+    auto consider = [&](const PB* table, size_t n) {
+        for (size_t i = 0; i < n; i++) {
+            int hands = 0;
+            for (int h = 0; h < 2; h++) {
+                std::string path = std::string(h ? "/user/hand/right/" : "/user/hand/left/") + table[i].sub;
+                if ((table[i].hands & (1 << h)) && appPaths.count(path)) hands |= 1 << h;
+            }
+            if (!hands) continue;
+            bool dup = false;
+            for (auto& e : v)
+                dup = dup || (e.act == table[i].act && std::string(e.sub) == table[i].sub);
+            if (dup) continue;
+            v.push_back({ table[i].act, table[i].sub, hands });
+            hasPose = hasPose || table[i].act == A_GRIPPOSE || table[i].act == A_AIMPOSE;
+        }
+    };
+    consider(kCommonPoses, std::size(kCommonPoses));
+    consider(kTouch, std::size(kTouch));
+    consider(kIndex, std::size(kIndex));
+    consider(kWmr, std::size(kWmr));
+    consider(kVive, std::size(kVive));
+    consider(kSimple, std::size(kSimple));
+    if (!hasPose) v.clear();
+    return v;
+}
+
 static std::vector<PB> ProfileTable(const std::string& p) {
     std::vector<PB> v;
     auto add = [&](const PB* b, size_t n) {
@@ -524,8 +556,10 @@ static XrResult XRAPI_CALL Hook_xrCreateAction(XrActionSet set, const XrActionCr
 static XrResult XRAPI_CALL Hook_xrSuggestInteractionProfileBindings(XrInstance inst, const XrInteractionProfileSuggestedBinding* sb) {
     std::lock_guard l(gMx);
     std::string prof = S(sb->interactionProfile);
+    std::set<std::string> appPaths; // what the game binds on this controller
     for (uint32_t i = 0; i < sb->countSuggestedBindings; i++) {
         std::string bp = S(sb->suggestedBindings[i].binding);
+        appPaths.insert(bp);
         PoseBind pb;
         if (ParseHandPosePath(bp, pb.hand, pb.kind)) {
             auto& v = gPoseBinds[H(sb->suggestedBindings[i].action)];
@@ -541,6 +575,19 @@ static XrResult XRAPI_CALL Hook_xrSuggestInteractionProfileBindings(XrInstance i
     }
     EnsureActions();
     auto table = ProfileTable(prof);
+    bool learned = false;
+    if (table.empty() && gOurs.set != XR_NULL_HANDLE) {
+        table = LearnedTable(appPaths);
+        learned = !table.empty();
+        static std::map<std::string, size_t> logged; // the game may send a growing list many times: log the longest
+        if (appPaths.size() > logged[prof]) {
+            logged[prof] = appPaths.size();
+            std::string list;
+            for (auto& path : appPaths)
+                list += (list.empty() ? "" : ", ") + path;
+            Log("unknown controller %s, the game binds: %s", prof.c_str(), list.c_str());
+        }
+    }
     if (gOurs.set == XR_NULL_HANDLE || table.empty()) {
         Log("suggest %s: %u app bindings (not augmented)", prof.c_str(), sb->countSuggestedBindings);
         return N.SuggestInteractionProfileBindings(inst, sb);
@@ -559,7 +606,8 @@ static XrResult XRAPI_CALL Hook_xrSuggestInteractionProfileBindings(XrInstance i
         return N.SuggestInteractionProfileBindings(inst, sb);
     }
     gOurs.profiles.insert(prof);
-    Log("suggest %s: %u app + %zu ours", prof.c_str(), sb->countSuggestedBindings, all.size() - sb->countSuggestedBindings);
+    Log("suggest %s: %u app + %zu ours%s", prof.c_str(), sb->countSuggestedBindings, all.size() - sb->countSuggestedBindings,
+        learned ? " (learned from the game's bindings)" : "");
     return r;
 }
 
@@ -893,8 +941,9 @@ static XrResult XRAPI_CALL Hook_xrGetInstanceProcAddr(XrInstance inst, const cha
     HOOK(GetActionStateFloat)
     HOOK(GetActionStateVector2f)
     HOOK(WaitFrame)
-    HOOK(EndFrame) HOOK(CreateActionSpace) HOOK(CreateReferenceSpace) HOOK(DestroySpace) HOOK(LocateSpace) HOOK(LocateViews)
-        HOOK(CreateSwapchain) HOOK(DestroySwapchain) HOOK(EnumerateSwapchainImages) HOOK(AcquireSwapchainImage)
+    HOOK(EndFrame)
+    HOOK(CreateActionSpace) HOOK(CreateReferenceSpace) HOOK(DestroySpace) HOOK(LocateSpace) HOOK(LocateViews) HOOK(CreateSwapchain)
+        HOOK(DestroySwapchain) HOOK(EnumerateSwapchainImages) HOOK(AcquireSwapchainImage)
             HOOK(ReleaseSwapchainImage) if (n == "xrLocateSpaces") {
         N.LocateSpaces = (PFN_xrLocateSpaces)*fn;
         *fn = (PFN_xrVoidFunction)Hook_xrLocateSpaces;
