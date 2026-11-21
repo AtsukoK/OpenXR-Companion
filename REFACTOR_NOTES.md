@@ -83,6 +83,7 @@ section + shared ParseItemList + CheckReferences; WristPanels::Update -> visibil
 ReadInputsAndUpdate -> ReadHand/SendHaptics/PushHandOffsets/save helpers/UpdateHeadsetMirror; OffsetsPanel::Update
 -> grab-to-set/save/panel input; editor Settings pages one builder method each; editor ActionType/GestureKind
 constants; 3 old editor warnings fixed.
+Rerun 2026-11-21 night with monitors on: ALL layer tests pass (0 failures), including both monitor-capture tests.
 Checks: layer tests pass except the 2 monitor-capture tests, which fail on unchanged main too while the screen is
 locked (rerun when the user is at the PC: they cover the ComPtr change in screen.cpp). Editor --selftest output
 byte-identical to main's; --shots of every page pixel-identical (apart from the install-status text).
