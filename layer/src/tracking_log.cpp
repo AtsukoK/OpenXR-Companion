@@ -98,3 +98,37 @@ void TrackingLog::Summary(double now) {
         }
     }
 }
+
+void OurInputLog::Frame(int hand, bool gripValid, bool aimValid, bool triggerActive, bool anyButton) {
+    HandStats& s = hands_[hand];
+    s.frames++;
+    s.grip += gripValid;
+    s.aim += aimValid;
+    s.trigger += triggerActive;
+    s.buttons += anyButton;
+}
+
+void OurInputLog::SyncResult(int result) {
+    if (result != 0) syncNotOk_++;
+    if (result != lastSync_) {
+        Log("our input: xrSyncActions returned %d%s", result, result == 0 ? " (fine again)" : " (menus are not updated while it does)");
+        lastSync_ = result;
+    }
+}
+
+void OurInputLog::Summary(double now) {
+    if (periodStart_ == 0) {
+        periodStart_ = now;
+        return;
+    }
+    if (now - periodStart_ < 10.0) return;
+    periodStart_ = now;
+    for (int h = 0; h < 2; h++) {
+        HandStats& s = hands_[h];
+        Log("our input 10 s: %s hand %d frames, grip pose valid %d, aim pose valid %d, trigger active %d, a button held %d%s",
+            h ? "right" : "left", s.frames, s.grip, s.aim, s.trigger, s.buttons,
+            syncNotOk_ ? (", sync not ok " + std::to_string(syncNotOk_)).c_str() : "");
+        s = HandStats{};
+    }
+    syncNotOk_ = 0;
+}

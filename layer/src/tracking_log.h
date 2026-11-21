@@ -5,6 +5,25 @@
 // the layer moved it. Not thread safe: the caller holds the lock that guards the game's spaces.
 #include "common.h"
 
+// What our own action set receives (the menus' input), summed up every 10 s, so a log shows whether the runtime
+// gives us poses and buttons on a controller (new headsets, unusual runtimes). Not thread safe: input thread only.
+class OurInputLog {
+public:
+    // One frame of our input for a hand: poses valid, the trigger action active, any of our buttons down.
+    void Frame(int hand, bool gripValid, bool aimValid, bool triggerActive, bool anyButton);
+    // xrSyncActions with our set did not return plain success (the frame's update is skipped then).
+    void SyncResult(int result);
+    void Summary(double now);
+
+private:
+    struct HandStats {
+        int frames = 0, grip = 0, aim = 0, trigger = 0, buttons = 0;
+    };
+    HandStats hands_[2];
+    int lastSync_ = 0, syncNotOk_ = 0;
+    double periodStart_ = 0;
+};
+
 class TrackingLog {
 public:
     // A pose the runtime returned for a hand's grip (kind 0) or aim (kind 1), before we touch it.

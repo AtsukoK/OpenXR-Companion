@@ -210,9 +210,10 @@ struct SessionState {
     XrSpace local = XR_NULL_HANDLE; // world-locked overlay space
     XrSpace view = XR_NULL_HANDLE;  // the head
     XrSpace gripSpace[2]{}, aimSpace[2]{};
-    XrTime predictedTime = 0;      // the last xrWaitFrame's display time
-    bool touchController[2]{};     // Meta Touch controllers (aim ray needs correcting)
-    double lastProfileCheck = -10; // when the interaction profiles were last asked
+    XrTime predictedTime = 0;                  // the last xrWaitFrame's display time
+    bool touchController[2]{};                 // Meta Touch controllers (aim ray needs correcting)
+    std::string profileName[2] = { "?", "?" }; // the interaction profile the runtime uses for each hand
+    double lastProfileCheck = -10;             // when the interaction profiles were last asked
 };
 static SessionState gSession;
 
@@ -226,6 +227,7 @@ struct WatchedFiles {
 };
 static WatchedFiles gFiles;
 
+static OurInputLog gInputLog;  // what our own action set receives, logged every 10 s (under gMx)
 static GameInputFilter gInput; // what the game's button / trigger / stick actions read (under gMx)
 
 static Engine gEng;
@@ -353,8 +355,10 @@ static void CheckInteractionProfiles(double now) {
         bool touch =
             p.find("touch") != std::string::npos &&
             (p.find("oculus") != std::string::npos || p.find("meta") != std::string::npos || p.find("facebook") != std::string::npos);
-        if (touch != gSession.touchController[h])
-            Log("%s controller: %s%s", h ? "right" : "left", p.c_str(), touch ? " (Touch: aim correction available)" : "");
+        if (p != gSession.profileName[h])
+            Log("%s controller: %s%s", h ? "right" : "left", p.empty() ? "(none: our inputs are inactive on this hand)" : p.c_str(),
+                touch ? " (Touch: aim correction available)" : "");
+        gSession.profileName[h] = p;
         gSession.touchController[h] = touch;
     }
 }
@@ -424,7 +428,14 @@ static void ReadInputsAndUpdate() {
         r.gripValid = Locate(gSession.gripSpace[h], gSession.local, r.gripPose);
         r.aimValid = Locate(gSession.aimSpace[h], gSession.local, r.aimPose);
         r.touchCtl = gSession.touchController[h];
+        XrActionStateGetInfo ti{ XR_TYPE_ACTION_STATE_GET_INFO };
+        ti.action = gOurs.action[A_TRIG];
+        ti.subactionPath = gOurs.handPath[h];
+        XrActionStateFloat ts{ XR_TYPE_ACTION_STATE_FLOAT };
+        bool trigActive = XR_SUCCEEDED(N.GetActionStateFloat(gSession.handle, &ti, &ts)) && ts.isActive;
+        gInputLog.Frame(h, r.gripValid, r.aimValid, trigActive, r.b1 || r.b2 || r.trig > 0.5f || r.grip > 0.5f || r.sc || r.rest || r.menu);
     }
+    gInputLog.Summary(f.t);
     f.headValid = Locate(gSession.view, gSession.local, f.head);
     gOverlay.SetHead(f.head, f.headValid);
     gEng.Update(f);
@@ -705,6 +716,7 @@ static XrResult XRAPI_CALL Hook_xrSyncActions(XrSession s, const XrActionsSyncIn
     copy.countActiveActionSets = (uint32_t)sets.size();
     copy.activeActionSets = sets.data();
     XrResult r = N.SyncActions(s, &copy);
+    gInputLog.SyncResult(r);
     gInput.NewSync();
     if (r == XR_SUCCESS) ReadInputsAndUpdate();
     CheckConfigChanged();
@@ -942,9 +954,9 @@ static XrResult XRAPI_CALL Hook_xrGetInstanceProcAddr(XrInstance inst, const cha
     HOOK(GetActionStateVector2f)
     HOOK(WaitFrame)
     HOOK(EndFrame)
-    HOOK(CreateActionSpace) HOOK(CreateReferenceSpace) HOOK(DestroySpace) HOOK(LocateSpace) HOOK(LocateViews) HOOK(CreateSwapchain)
-        HOOK(DestroySwapchain) HOOK(EnumerateSwapchainImages) HOOK(AcquireSwapchainImage)
-            HOOK(ReleaseSwapchainImage) if (n == "xrLocateSpaces") {
+    HOOK(CreateActionSpace)
+    HOOK(CreateReferenceSpace) HOOK(DestroySpace) HOOK(LocateSpace) HOOK(LocateViews) HOOK(CreateSwapchain) HOOK(DestroySwapchain)
+        HOOK(EnumerateSwapchainImages) HOOK(AcquireSwapchainImage) HOOK(ReleaseSwapchainImage) if (n == "xrLocateSpaces") {
         N.LocateSpaces = (PFN_xrLocateSpaces)*fn;
         *fn = (PFN_xrVoidFunction)Hook_xrLocateSpaces;
         return r;
