@@ -384,66 +384,61 @@ static void CheckHeadSmoothingFile() {
     if (hs.on != was) gEng.Toast(hs.on ? "Head smoothing ON (experimental: stop if you feel unwell)" : "Head smoothing off", 3.0);
 }
 
-static void ReadInputsAndUpdate() {
-    Frame f;
-    f.t = NowSec();
-    CheckInteractionProfiles(f.t);
-    for (int h = 0; h < 2; h++) {
-        auto gb = [&](int a) {
-            XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO };
-            gi.action = gOurs.action[a];
-            gi.subactionPath = gOurs.handPath[h];
-            XrActionStateBoolean s{ XR_TYPE_ACTION_STATE_BOOLEAN };
-            return XR_SUCCEEDED(N.GetActionStateBoolean(gSession.handle, &gi, &s)) && s.isActive && s.currentState;
-        };
-        auto gf = [&](int a) {
-            XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO };
-            gi.action = gOurs.action[a];
-            gi.subactionPath = gOurs.handPath[h];
-            XrActionStateFloat s{ XR_TYPE_ACTION_STATE_FLOAT };
-            return XR_SUCCEEDED(N.GetActionStateFloat(gSession.handle, &gi, &s)) && s.isActive ? s.currentState : 0.f;
-        };
-        HandRaw& r = f.h[h];
-        r.b1 = gb(A_BTN1);
-        r.b1t = gb(A_BTN1T);
-        r.b2 = gb(A_BTN2);
-        r.b2t = gb(A_BTN2T);
-        r.trig = gf(A_TRIG);
-        r.trigT = gb(A_TRIGT);
-        r.grip = gf(A_GRIP);
-        {
-            XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO };
-            gi.action = gOurs.action[A_STICK];
-            gi.subactionPath = gOurs.handPath[h];
-            XrActionStateVector2f s{ XR_TYPE_ACTION_STATE_VECTOR2F };
-            if (XR_SUCCEEDED(N.GetActionStateVector2f(gSession.handle, &gi, &s)) && s.isActive) {
-                r.sx = s.currentState.x;
-                r.sy = s.currentState.y;
-            }
-        }
-        r.sc = gb(A_STICKC);
-        r.st = gb(A_STICKT);
-        r.rest = gb(A_REST);
-        r.menu = gb(A_MENU);
-        r.gripValid = Locate(gSession.gripSpace[h], gSession.local, r.gripPose);
-        r.aimValid = Locate(gSession.aimSpace[h], gSession.local, r.aimPose);
-        r.touchCtl = gSession.touchController[h];
-        XrActionStateGetInfo ti{ XR_TYPE_ACTION_STATE_GET_INFO };
-        ti.action = gOurs.action[A_TRIG];
-        ti.subactionPath = gOurs.handPath[h];
-        XrActionStateFloat ts{ XR_TYPE_ACTION_STATE_FLOAT };
-        bool trigActive = XR_SUCCEEDED(N.GetActionStateFloat(gSession.handle, &ti, &ts)) && ts.isActive;
-        gInputLog.Frame(h, r.gripValid, r.aimValid, trigActive, r.b1 || r.b2 || r.trig > 0.5f || r.grip > 0.5f || r.sc || r.rest || r.menu);
+// ---- one frame of our own input, then the engine, then what it asked for ----
+struct OurActionReader {
+    int hand;
+    bool Bool(int a) const {
+        XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO };
+        gi.action = gOurs.action[a];
+        gi.subactionPath = gOurs.handPath[hand];
+        XrActionStateBoolean s{ XR_TYPE_ACTION_STATE_BOOLEAN };
+        return XR_SUCCEEDED(N.GetActionStateBoolean(gSession.handle, &gi, &s)) && s.isActive && s.currentState;
     }
-    gInputLog.Summary(f.t);
-    f.headValid = Locate(gSession.view, gSession.local, f.head);
-    if (gInputLog.InputMissingFor(f.t, f.headValid, 15.0))
-        gEng.Toast("OpenXR Companion gets no controller input. Check SteamVR's controller bindings for this game "
-                   "(Steam Frame: Index bindings), then restart the game.",
-                   12.0);
-    gOverlay.SetHead(f.head, f.headValid);
-    gEng.Update(f);
+    // 0 when the action is not active (isActive tells which).
+    float Float(int a, bool* isActive = nullptr) const {
+        XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO };
+        gi.action = gOurs.action[a];
+        gi.subactionPath = gOurs.handPath[hand];
+        XrActionStateFloat s{ XR_TYPE_ACTION_STATE_FLOAT };
+        bool active = XR_SUCCEEDED(N.GetActionStateFloat(gSession.handle, &gi, &s)) && s.isActive;
+        if (isActive) *isActive = active;
+        return active ? s.currentState : 0.f;
+    }
+    void Stick(float& x, float& y) const {
+        XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO };
+        gi.action = gOurs.action[A_STICK];
+        gi.subactionPath = gOurs.handPath[hand];
+        XrActionStateVector2f s{ XR_TYPE_ACTION_STATE_VECTOR2F };
+        if (XR_SUCCEEDED(N.GetActionStateVector2f(gSession.handle, &gi, &s)) && s.isActive) {
+            x = s.currentState.x;
+            y = s.currentState.y;
+        }
+    }
+};
 
+static void ReadHand(int h, HandRaw& r) {
+    OurActionReader in{ h };
+    r.b1 = in.Bool(A_BTN1);
+    r.b1t = in.Bool(A_BTN1T);
+    r.b2 = in.Bool(A_BTN2);
+    r.b2t = in.Bool(A_BTN2T);
+    bool isTriggerActive = false;
+    r.trig = in.Float(A_TRIG, &isTriggerActive);
+    r.trigT = in.Bool(A_TRIGT);
+    r.grip = in.Float(A_GRIP);
+    in.Stick(r.sx, r.sy);
+    r.sc = in.Bool(A_STICKC);
+    r.st = in.Bool(A_STICKT);
+    r.rest = in.Bool(A_REST);
+    r.menu = in.Bool(A_MENU);
+    r.gripValid = Locate(gSession.gripSpace[h], gSession.local, r.gripPose);
+    r.aimValid = Locate(gSession.aimSpace[h], gSession.local, r.aimPose);
+    r.touchCtl = gSession.touchController[h];
+    bool anythingPressed = r.b1 || r.b2 || r.trig > 0.5f || r.grip > 0.5f || r.sc || r.rest || r.menu;
+    gInputLog.Frame(h, r.gripValid, r.aimValid, isTriggerActive, anythingPressed);
+}
+
+static void SendHaptics() {
     for (auto& hq : gEng.haptics) {
         XrHapticActionInfo hi{ XR_TYPE_HAPTIC_ACTION_INFO };
         hi.action = gOurs.action[A_HAPTIC];
@@ -455,27 +450,35 @@ static void ReadInputsAndUpdate() {
         N.ApplyHapticFeedback(gSession.handle, &hi, (XrHapticBaseHeader*)&v);
     }
     gEng.haptics.clear();
-    { // what the game's controller poses are moved by, for the LocateSpace hooks
-        GameHandOffsets::Settings hs;
-        hs.on = gEng.Active() && gEng.offs.enabled;
-        hs.steadying = hs.on ? gEng.offs.smoothing : 0.f;
-        for (int h = 0; h < 2; h++)
-            for (int k = 0; k < 2; k++)
-                hs.has[h][k] = hs.on && gEng.OffsetPose(h, k, hs.pose[h][k]);
-        gHandOffsets.SetSettings(hs);
+}
+
+// What the game's controller poses are moved by, for the LocateSpace hooks.
+static void PushHandOffsets() {
+    GameHandOffsets::Settings hs;
+    hs.on = gEng.Active() && gEng.offs.enabled;
+    hs.steadying = hs.on ? gEng.offs.smoothing : 0.f;
+    for (int h = 0; h < 2; h++)
+        for (int k = 0; k < 2; k++)
+            hs.has[h][k] = hs.on && gEng.OffsetPose(h, k, hs.pose[h][k]);
+    gHandOffsets.SetSettings(hs);
+}
+
+static void SaveOffsetsIfAsked() {
+    if (!gEng.offsSaveRequested || !gEng.prof) return;
+    gEng.offsSaveRequested = false;
+    gEng.prof->offsets = gEng.offs;
+    std::string err;
+    if (SaveOffsets(*gEng.prof, err)) {
+        MarkOwnSave();
+        Log("controller offsets saved to %s", gEng.prof->sourceName.c_str());
+    } else {
+        Log("offsets: save failed: %s", err.c_str());
+        gEng.Toast("Could not save offsets: " + err, 6.0);
     }
-    if (gEng.offsSaveRequested && gEng.prof) {
-        gEng.offsSaveRequested = false;
-        gEng.prof->offsets = gEng.offs;
-        std::string err;
-        if (SaveOffsets(*gEng.prof, err)) {
-            MarkOwnSave();
-            Log("controller offsets saved to %s", gEng.prof->sourceName.c_str());
-        } else {
-            Log("offsets: save failed: %s", err.c_str());
-            gEng.Toast("Could not save offsets: " + err, 6.0);
-        }
-    }
+}
+
+// Wheel / wrist buttons, the window's X and the editor's file all switch the headset mirror.
+static void UpdateHeadsetMirror() {
     if (gEng.mirrorAsk != MirrorRequest::None) { // a wheel / wrist button: switch the headset mirror, and remember it for the editor
         MirrorRequest a = gEng.mirrorAsk;
         gEng.mirrorAsk = MirrorRequest::None;
@@ -516,21 +519,45 @@ static void ReadInputsAndUpdate() {
         gMirror.SetOn(want);
         gEng.mirrorOn = gMirrorSet.on;
     }
+}
+
+static void SavePlacementIfAsked() {
+    if (!gEng.saveRequested || !gEng.prof) return; // set when leaving adjust mode: keep the new placement
+    gEng.saveRequested = false;
+    std::string err;
+    if (SavePlacement(*gEng.prof, err)) {
+        MarkOwnSave();
+        Log("adjust: placement saved to %s", gEng.prof->sourceName.c_str());
+    } else {
+        Log("adjust: save failed: %s", err.c_str());
+        gEng.Toast("Could not save positions: " + err, 6.0);
+    }
+}
+
+static void ReadInputsAndUpdate() {
+    Frame f;
+    f.t = NowSec();
+    CheckInteractionProfiles(f.t);
+    for (int h = 0; h < 2; h++)
+        ReadHand(h, f.h[h]);
+    gInputLog.Summary(f.t);
+    f.headValid = Locate(gSession.view, gSession.local, f.head);
+    if (gInputLog.InputMissingFor(f.t, f.headValid, 15.0))
+        gEng.Toast("OpenXR Companion gets no controller input. Check SteamVR's controller bindings for this game "
+                   "(Steam Frame: Index bindings), then restart the game.",
+                   12.0);
+    gOverlay.SetHead(f.head, f.headValid);
+    gEng.Update(f);
+
+    SendHaptics();
+    PushHandOffsets();
+    SaveOffsetsIfAsked();
+    UpdateHeadsetMirror();
     if (gEng.reloadRequested) {
         gEng.reloadRequested = false;
         ReloadProfile(true);
     }
-    if (gEng.saveRequested && gEng.prof) { // leaving adjust mode: keep the new placement
-        gEng.saveRequested = false;
-        std::string err;
-        if (SavePlacement(*gEng.prof, err)) {
-            MarkOwnSave();
-            Log("adjust: placement saved to %s", gEng.prof->sourceName.c_str());
-        } else {
-            Log("adjust: save failed: %s", err.c_str());
-            gEng.Toast("Could not save positions: " + err, 6.0);
-        }
-    }
+    SavePlacementIfAsked();
 }
 
 // ---------------------------------------------------------------- hooks
