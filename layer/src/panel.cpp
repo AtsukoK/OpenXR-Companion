@@ -1,5 +1,6 @@
 #include "panel.h"
 #include <algorithm>
+#include <cwctype>
 #include <cmath>
 #include <map>
 #include <memory>
@@ -725,9 +726,9 @@ static void DrawLiveBars(Graphics& g, const RectF& box, int hand, const LiveHand
 
 // One controller from above, what is pressed now lit, and its trigger / grip bars beside it.
 // A traced outline's loops as one path (alternate fill: inner loops are holes), placed like ArtPath.
-static void SilhouettePath(GraphicsPath& p, const SilLoop* loops, int count, const RectF& box) {
-    float s = std::min(box.Width / kArtWidth, box.Height / kArtHeight);
-    float ox = box.X + (box.Width - kArtWidth * s) / 2, oy = box.Y + (box.Height - kArtHeight * s) / 2;
+static void SilhouettePath(GraphicsPath& p, const SilLoop* loops, int count, const RectF& box, float designW = kArtWidth) {
+    float s = std::min(box.Width / designW, box.Height / kArtHeight);
+    float ox = box.X + (box.Width - designW * s) / 2, oy = box.Y + (box.Height - kArtHeight * s) / 2;
     for (int i = 0; i < count; i++) {
         std::vector<PointF> pts(loops[i].points);
         for (int k = 0; k < loops[i].points; k++)
@@ -736,58 +737,58 @@ static void SilhouettePath(GraphicsPath& p, const SilLoop* loops, int count, con
     }
 }
 
-static void DrawLiveController(Graphics& g, const RectF& box, int hand, const LiveHand& live, Font* font) {
+// The letter on a face button (A/B, X/Y on the left; the Index has A/B on both, the Steam Frame's right hand has
+// all four), the menu's three lines, or the D-pad's arrows.
+static const wchar_t* PartLetter(int comp, int hand, ControllerKind kind) {
+    bool xy = hand == 0 && kind != ControllerKind::Index;
+    switch (comp) {
+    case C_BTN1:
+        return xy ? L"X" : L"A";
+    case C_BTN2:
+        return xy ? L"Y" : L"B";
+    case C_BTN3:
+        return L"X";
+    case C_BTN4:
+        return L"Y";
+    case C_MENU:
+        return L"\u2261";
+    case C_DPAD_UP:
+        return L"\u25B4";
+    case C_DPAD_DOWN:
+        return L"\u25BE";
+    case C_DPAD_LEFT:
+        return L"\u25C2";
+    case C_DPAD_RIGHT:
+        return L"\u25B8";
+    default:
+        return nullptr;
+    }
+}
+
+// One controller picture: from above, or from the side (false when there is no side view for it). Pressed parts
+// light up, touched ones get a ring, the stick shows where it is pushed; `highlight` (a part) gets a ring too.
+static bool DrawControllerPicture(Graphics& g, const RectF& pic, int hand, const LiveHand& live, bool side, int highlight = -1) {
     using namespace MenuColors;
-    const ControllerArt& art = ArtFor(live.kind);
-    RectF pic(box.X, box.Y, box.Width * 0.46f, box.Height);
     SolidBrush body{ Color(0xFF3A414B) }, part{ Color(0xFF1C2027) }, lit{ Color(Accent) }, touched{ Color(0x661A9FFF) };
     SolidBrush plain{ Color(0xFF2E343C) }, white{ Color(0xFFFFFFFF) };
     Pen edge(Color(0xFF59616C), 1.5f), ring(Color(Accent), 3.f);
-    // The letter on a face button (A/B, X/Y on the left; the Index has A/B on both, the Steam Frame's right hand has
-    // all four), the menu's three lines, or the D-pad's arrows.
-    auto letterOf = [&](int comp) -> const wchar_t* {
-        bool xy = hand == 0 && live.kind != ControllerKind::Index;
-        switch (comp) {
-        case C_BTN1:
-            return xy ? L"X" : L"A";
-        case C_BTN2:
-            return xy ? L"Y" : L"B";
-        case C_BTN3:
-            return L"X";
-        case C_BTN4:
-            return L"Y";
-        case C_MENU:
-            return L"≡";
-        case C_DPAD_UP:
-            return L"▴";
-        case C_DPAD_DOWN:
-            return L"▾";
-        case C_DPAD_LEFT:
-            return L"◂";
-        case C_DPAD_RIGHT:
-            return L"▸";
-        default:
-            return nullptr;
-        }
-    };
     FontFamily letterFamily(L"Segoe UI");
     StringFormat centered;
     centered.SetAlignment(StringAlignmentCenter);
     centered.SetLineAlignment(StringAlignmentCenter);
-    // How one part looks: lit when pressed, a ring when only touched; the stick shows where it is pushed.
     auto drawPart = [&](GraphicsPath& p, int comp) {
         bool readable = comp >= 0;
         bool pressed = readable && live.press[comp], touchedOnly = readable && !pressed && live.touch[comp];
         g.FillPath(!readable ? &plain : pressed ? &lit : touchedOnly ? &touched : &part, &p);
-        g.DrawPath(touchedOnly ? &ring : &edge, &p);
-        if (comp == C_STICK) {
+        g.DrawPath(touchedOnly || (readable && comp == highlight) ? &ring : &edge, &p);
+        if (comp == C_STICK && !side) {
             RectF b;
             p.GetBounds(&b);
             float cx = b.X + b.Width / 2 + live.stickX * b.Width * 0.32f, cy = b.Y + b.Height / 2 - live.stickY * b.Height * 0.32f;
             float d = b.Width * 0.3f;
             g.FillEllipse(&white, cx - d / 2, cy - d / 2, d, d);
         }
-        if (const wchar_t* letter = readable ? letterOf(comp) : nullptr) {
+        if (const wchar_t* letter = readable && !side ? PartLetter(comp, hand, live.kind) : nullptr) {
             RectF b;
             p.GetBounds(&b);
             float size = (b.Width < b.Height ? b.Width : b.Height) * 0.6f;
@@ -798,19 +799,22 @@ static void DrawLiveController(Graphics& g, const RectF& box, int hand, const Li
         }
     };
     if (const Silhouette* sil = SilhouetteFor(live.kind, hand)) { // the real outline, when there is a model
+        if (side && !sil->sideBody) return false;
+        float designW = side ? kSilSideWidth : kArtWidth;
         GraphicsPath outline(FillModeAlternate);
-        SilhouettePath(outline, sil->body, sil->bodyCount, pic);
+        SilhouettePath(outline, side ? sil->sideBody : sil->body, side ? sil->sideCount : sil->bodyCount, pic, designW);
         g.FillPath(&body, &outline);
         g.DrawPath(&edge, &outline);
         for (int i = 0; i < sil->partCount; i++) {
-            if (sil->parts[i].side) continue; // this picture is the view from above
+            if (sil->parts[i].side != side) continue;
             GraphicsPath p(FillModeAlternate);
-            SilhouettePath(p, sil->parts[i].loops, sil->parts[i].loopCount, pic);
+            SilhouettePath(p, sil->parts[i].loops, sil->parts[i].loopCount, pic, designW);
             drawPart(p, SilhouetteComp(sil->parts[i].comp));
         }
-        DrawLiveBars(g, box, hand, live, font);
-        return;
+        return true;
     }
+    if (side) return false; // the simple drawings are from above only
+    const ControllerArt& art = ArtFor(live.kind);
     for (const ArtPiece& b : art.body) {
         GraphicsPath p(FillModeAlternate);
         ArtPath(p, b.shape, b.x, b.y, b.w, b.h, b.turnDeg, b.ringWidth, hand, pic);
@@ -823,7 +827,65 @@ static void DrawLiveController(Graphics& g, const RectF& box, int hand, const Li
         ArtPath(p, a.shape, a.x, a.y, a.w, a.h, 0, 0, hand, pic);
         drawPart(p, a.comp);
     }
+    return true;
+}
+
+static void DrawLiveController(Graphics& g, const RectF& box, int hand, const LiveHand& live, Font* font) {
+    DrawControllerPicture(g, RectF(box.X, box.Y, box.Width * 0.46f, box.Height), hand, live, false);
     DrawLiveBars(g, box, hand, live, font);
+}
+
+// The overview: both controllers from above and the side, and a tag on each part with what it does.
+static void DrawOverview(Graphics& g, int W, int H, const MenuView& v, const MenuViewRow& r, int rowIndex, float y, float h,
+                         Font* titleFont, Font* lineFont, Font* smallFont, const std::function<bool(const MenuHit&)>& isHover) {
+    using namespace MenuColors;
+    OverviewPlaces pl;
+    OverviewLayout(v, r, y, h, pl);
+    auto rect = [&](const MenuBox& b) { return RectF(b.x * W, b.y * H, b.w * W, b.h * H); };
+    SolidBrush captionB{ Color(Heading) }, textB{ Color(Text) }, subB{ Color(SubText) }, accentB{ Color(Accent) };
+    SolidBrush cardB{ Color(0xFF2A3038) }, hoverB{ Color(0xFF343C47) };
+    Pen lineP(Color(0xFF5D6673), 1.5f), cardEdge(Color(0xFF3A424D), 1.5f), hoverEdge(Color(Accent), 2.5f);
+    StringFormat left;
+    left.SetLineAlignment(StringAlignmentCenter);
+    left.SetTrimming(StringTrimmingEllipsisCharacter);
+    left.SetFormatFlags(StringFormatFlagsNoWrap);
+    for (int hand = 0; hand < 2; hand++) {
+        std::wstring cap = std::wstring(hand ? L"RIGHT  \u00B7  " : L"LEFT  \u00B7  ") + Utf8ToW(ControllerKindName(v.live[hand].kind));
+        for (wchar_t& c : cap)
+            c = (wchar_t)towupper(c);
+        g.DrawString(cap.c_str(), -1, lineFont, rect(pl.caption[hand]), &left, &captionB);
+        DrawControllerPicture(g, rect(pl.top[hand]), hand, v.live[hand], false);
+        DrawControllerPicture(g, rect(pl.side[hand]), hand, v.live[hand], true);
+    }
+    for (const OverviewTagPlace& t : pl.tags) {
+        const MenuTag& tag = r.tags[t.tag];
+        RectF b = rect(t.box);
+        bool hover = isHover({ MenuPart::Row, rowIndex, t.tag });
+        if (t.ax >= 0) { // a line from the tag's edge to its part, with a dot on the part
+            float px = t.ax * W, py = t.ay * H;
+            float ex = px < b.X ? b.X : b.X + b.Width, ey = std::clamp(py, b.Y + 8, b.Y + b.Height - 8);
+            g.DrawLine(hover ? &hoverEdge : &lineP, ex, ey, px, py);
+            g.FillEllipse(hover ? &accentB : &subB, px - 3.5f, py - 3.5f, 7.f, 7.f);
+        }
+        GraphicsPath card;
+        float rr = std::min(b.Height, 16.f);
+        card.AddArc(b.X, b.Y, rr, rr, 180, 90);
+        card.AddArc(b.X + b.Width - rr, b.Y, rr, rr, 270, 90);
+        card.AddArc(b.X + b.Width - rr, b.Y + b.Height - rr, rr, rr, 0, 90);
+        card.AddArc(b.X, b.Y + b.Height - rr, rr, rr, 90, 90);
+        card.CloseFigure();
+        g.FillPath(hover ? &hoverB : &cardB, &card);
+        g.DrawPath(hover ? &hoverEdge : &cardEdge, &card);
+        float lh = 0.03f * H, x = b.X + 10, w = b.Width - 16, ly = b.Y + 5;
+        g.DrawString(Utf8ToW(tag.title).c_str(), -1, titleFont, RectF(x, ly, w, lh * 1.25f), &left, &textB);
+        ly += lh * 1.25f;
+        for (size_t i = 0; i < tag.lines.size() && i < 5; i++) {
+            int kind = i < tag.lineKinds.size() ? tag.lineKinds[i] : 0;
+            g.DrawString(Utf8ToW(tag.lines[i]).c_str(), -1, kind == 3 ? smallFont : lineFont, RectF(x, ly, w, lh), &left,
+                         kind == 1 ? (Brush*)&accentB : kind >= 2 ? (Brush*)&subB : (Brush*)&textB);
+            ly += lh;
+        }
+    }
 }
 
 // Beside the picture: the controller's name, the trigger and grip as bars, the stick's numbers.
@@ -984,6 +1046,8 @@ void DrawMenu(std::vector<uint32_t>& out, int W, int H, const MenuView& v, const
     };
 
     for (const MenuBox& b : boxes) {
+        if (b.hit.sub >= 0 && b.hit.row >= 0 && v.rows[b.hit.row].kind == MenuRowKind::Overview)
+            continue; // the overview's tags: drawn with its pictures (these boxes are for pointing)
         switch (b.hit.part) {
         case MenuPart::Back:
             iconButton(b, L"\x2039", true);
@@ -1009,6 +1073,25 @@ void DrawMenu(std::vector<uint32_t>& out, int W, int H, const MenuView& v, const
         const MenuViewRow& r = v.rows[b.hit.row];
         float x = b.x * W, y = b.y * H, w = b.w * W, h = b.h * H;
         const float inset = W * 0.04f;
+        if (r.kind == MenuRowKind::Overview) {
+            DrawOverview(g, W, H, v, r, b.hit.row, b.y, b.h, valueFont.get(), detailFont.get(), headingFont.get(), isHover);
+            continue;
+        }
+        if (r.kind == MenuRowKind::Bar) { // a row of big buttons; the first one stands out
+            int k = b.hit.sub;
+            if (k < 0 || k >= (int)r.items.size()) continue;
+            GraphicsPath btn;
+            roundRect(btn, x, y, w, h, h * 0.35f);
+            bool hover = isHover(b.hit), pressed = isPressed(b.hit);
+            SolidBrush fill{ Color(pressed ? Pressed : k == 0 ? Accent : hover ? 0xFF3A4350 : 0xFF2C333C) };
+            g.FillPath(&fill, &btn);
+            if (hover && !pressed) {
+                Pen ring(Color(k == 0 ? 0xFFFFFFFF : Accent), 2.5f);
+                g.DrawPath(&ring, &btn);
+            }
+            g.DrawString(Utf8ToW(r.items[k]).c_str(), -1, valueFont.get(), RectF(x, y, w, h), &oneLine, &textB);
+            continue;
+        }
         if (r.kind == MenuRowKind::Live) { // a live picture across the row
             RectF area(inset, y + h * 0.04f, W - 2 * inset, h * 0.9f);
             if (r.live == LiveKind::Stick)

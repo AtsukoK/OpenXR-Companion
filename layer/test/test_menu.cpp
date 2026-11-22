@@ -4,7 +4,7 @@
 namespace {
 // The menu as it looks now, saved for checking by eye.
 void SaveMenuPicture(const Engine& e, const Profile& p, const wchar_t* file) {
-    int W = 1100, H = (int)(1100 * e.menuView.h / e.menuView.w);
+    int W = (int)(1100 * e.menuView.w / kMenuWidth), H = (int)(W * e.menuView.h / e.menuView.w); // as the overlay draws it
     std::vector<uint32_t> px;
     DrawMenu(px, W, H, e.menuView, p.style);
     SavePng(px, W, H, file);
@@ -43,11 +43,11 @@ struct MenuDriver {
         return -1;
     }
     // Point at a part (the row's own box, its - / +, or Back / Close) and press it. False when it isn't on the panel.
-    bool Press(MenuPart part, int row = -1) {
+    bool Press(MenuPart part, int row = -1, int sub = -1) {
         std::vector<MenuBox> boxes;
         MenuLayout(e.menuView, boxes);
         for (const MenuBox& b : boxes) {
-            if (b.hit.part != part || b.hit.row != row) continue;
+            if (b.hit.part != part || b.hit.row != row || b.hit.sub != sub) continue;
             AimAt(e.menuView.pose, e.menuView.w, e.menuView.h, b.x + b.w / 2, b.y + b.h / 2);
             Step();
             PullTrigger();
@@ -56,6 +56,20 @@ struct MenuDriver {
         return false;
     }
     bool PressRow(const std::string& label) { return Press(MenuPart::Row, Row(label)); }
+    // A button in a row of buttons (Bar), by its label.
+    bool PressItem(const std::string& label) {
+        for (int i = 0; i < (int)e.menuView.rows.size(); i++)
+            for (int k = 0; k < (int)e.menuView.rows[i].items.size(); k++)
+                if (e.menuView.rows[i].items[k] == label) return Press(MenuPart::Row, i, k);
+        return false;
+    }
+    // A part's tag on the overview.
+    bool PressTag(int hand, int comp) {
+        for (int i = 0; i < (int)e.menuView.rows.size(); i++)
+            for (int k = 0; k < (int)e.menuView.rows[i].tags.size(); k++)
+                if (e.menuView.rows[i].tags[k].hand == hand && e.menuView.rows[i].tags[k].comp == comp) return Press(MenuPart::Row, i, k);
+        return false;
+    }
 };
 } // namespace
 
@@ -82,11 +96,30 @@ void TestInGameMenu() {
     MenuDriver d{ e, f, t };
     d.Step();
 
+    e.gameUses = { { 1, C_BTN1, false, "Jump" }, { 1, C_TRIGGER, false, "Fire" }, { 0, C_STICK, false, "Move" },
+                   { 1, C_STICK, false, "Turn" }, { 0, C_TRIGGER, false, "Grab" } }; // what a game would bind
     f.h[0].menu = true;
     d.Step();
     f.h[0].menu = false;
-    d.Step();
-    CHECK(e.menuView.open && e.menuView.title.rfind("Settings", 0) == 0, "menu: a settings_menu binding opens it on the home page");
+    d.Step(0.15);
+    CHECK(e.menuView.open && e.menuView.title == "Controller configuration" && e.menuView.w > kMenuWidth,
+          "menu: a settings_menu binding opens it on the overview, a wider panel");
+    int overview = -1;
+    for (int i = 0; i < (int)e.menuView.rows.size(); i++)
+        if (e.menuView.rows[i].kind == MenuRowKind::Overview) overview = i;
+    bool jumpShown = false, unusedShown = false;
+    if (overview >= 0)
+        for (const MenuTag& tg : e.menuView.rows[overview].tags) {
+            jumpShown = jumpShown || (tg.hand == 1 && tg.comp == C_BTN1 && tg.title == "A" && tg.lines[0] == "Jump" && tg.lineKinds[0] == 0);
+            unusedShown = unusedShown || (tg.hand == 1 && tg.comp == C_GRIP && tg.lines[0] == "Not used");
+        }
+    CHECK(jumpShown && unusedShown, "menu: the overview tags each part with the game's own control, or 'Not used'");
+    SaveMenuPicture(e, *p, L"menu_overview.png");
+    CHECK(d.PressTag(1, C_BTN1) && e.menuView.title == "Right A" && d.Row("In the game: Jump") >= 0 && d.Row("Hold") >= 0,
+          "menu: pointing at a tag opens that part's page: the game's use and every way to bind it");
+    SaveMenuPicture(e, *p, L"menu_part.png");
+    CHECK(d.Press(MenuPart::Back) && e.menuView.title == "Controller configuration", "menu: Back returns to the overview");
+    CHECK(d.PressItem("Edit bindings") && e.menuView.title.rfind("Edit bindings", 0) == 0, "menu: Edit bindings under the overview");
     CHECK(d.Row("Right controller bindings") >= 0 && d.Row("Right stick") >= 0 && d.Row("Controller offsets") >= 0,
           "menu: home links to bindings, sticks and controller offsets");
     SaveMenuPicture(e, *p, L"menu_home.png");
@@ -138,7 +171,7 @@ void TestInGameMenu() {
     d.Step(1.2);
     CHECK(e.menuSaveRequested, "menu: saved a moment after the last change");
     e.menuSaveRequested = false;
-    CHECK(d.Press(MenuPart::Back) && e.menuView.title.rfind("Settings", 0) == 0, "menu: Back returns to the home page");
+    CHECK(d.Press(MenuPart::Back) && e.menuView.title.rfind("Edit bindings", 0) == 0, "menu: Back returns to the home page");
 
     // A new binding: press the button, then type the key on the VR keyboard.
     CHECK(d.PressRow("Right controller bindings") && e.menuView.title == "Right bindings", "menu: the right controller's bindings");
@@ -170,7 +203,7 @@ void TestInGameMenu() {
     d.Step();
     d.PullTrigger();
     CHECK(p->bindings.back().action.keys == "q" && !e.kb.visible, "menu: the key pressed on the VR keyboard becomes the binding's key, not typed");
-    CHECK(d.Row("Does: q (held)") >= 0 && p->bindings.back().name == "Right A: q", "menu: the page and the name show the new key");
+    CHECK(d.Row("Action: Key: q (hold)") >= 0 && p->bindings.back().name == "Right A: q", "menu: the page and the name show the new key");
 
     // What it does, again: a mouse button, then a controller button the game should see.
     auto pressKey = [&](const char* combo, int kind) {
@@ -185,10 +218,10 @@ void TestInGameMenu() {
         d.PullTrigger();
         return true;
     };
-    CHECK(d.PressRow("Does: q (held)") && e.kb.visible && e.kb.binding, "menu: Does opens the binding keyboard");
+    CHECK(d.PressRow("Action: Key: q (hold)") && e.kb.visible && e.kb.binding, "menu: Does opens the binding keyboard");
     CHECK(pressKey("rmb", KB_KEY) && p->bindings.back().action.keys == "rmb" && p->bindings.back().action.type == ActType::Key,
           "menu: a mouse button on the binding keyboard becomes what it does");
-    d.PressRow("Does: rmb (held)");
+    d.PressRow("Action: Key: rmb (hold)");
     CHECK(pressKey("", KB_CONTROLLER) && !e.kb.visible && !e.menuView.status.empty(), "menu: Controller button asks for a button");
     f.h[1].b2 = true; // right B: the button the game should see
     d.Step();
@@ -196,16 +229,16 @@ void TestInGameMenu() {
     d.Step();
     const Binding& asButton = p->bindings.back();
     CHECK(asButton.action.type == ActType::XrInput && InputName(asButton.action.target) == "right.b" && asButton.action.mode == ActMode::Hold &&
-              d.Row("Does: game sees Right B (held)") >= 0,
+              d.Row("Action: Controller: Right B (hold)") >= 0,
           "menu: the pressed controller button becomes what the game sees");
 
-    int way = d.Row("Way");
+    int way = d.Row("Activation");
     CHECK(way >= 0 && !e.menuView.rows[way].canLess && e.menuView.rows[way].canMore && e.menuView.rows[way].value == "Press",
           "menu: a choice on its first option: - greyed, + not");
-    int when = d.Row("When");
+    int when = d.Row("Gesture");
     d.Press(MenuPart::More, when);
     CHECK(p->bindings.back().gesture == Gesture::Tap, "menu: > on 'When' steps to the next way (quick tap)");
-    d.PressRow("On");
+    d.PressRow("Enabled");
     CHECK(!p->bindings.back().enabled, "menu: the On switch turns the binding off");
 
     // A picture of this page, for checking by eye.
@@ -218,7 +251,7 @@ void TestInGameMenu() {
         SavePng(px, W, H, L"menu_binding.png");
     }
 
-    CHECK(d.PressRow("Delete this binding") && p->bindings.size() == bindingsBefore && e.menuView.title == "Right bindings",
+    CHECK(d.PressRow("Delete binding") && p->bindings.size() == bindingsBefore && e.menuView.title == "Right bindings",
           "menu: Delete removes the binding and goes back to the list");
     {
         int W = 1100, H = (int)(1100 * e.menuView.h / e.menuView.w);

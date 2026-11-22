@@ -18,7 +18,7 @@ bool InGameMenu::IsOpen() const {
 void InGameMenu::Open() {
     if (!e.fr.headValid || !e.prof) return;
     stack_.clear();
-    stack_.push_back([this] { return MenuPages::Home(e, *this); });
+    stack_.push_back([this] { return MenuPages::Overview(e, *this); });
     e.menuView = MenuView{};
     e.menuView.open = true;
     Place();
@@ -80,6 +80,8 @@ void InGameMenu::BuildView() {
         vr.live = r.live;
         vr.liveHand = r.liveHand;
         vr.span = r.span;
+        vr.tags = r.tags;
+        vr.items = r.items;
         if (r.kind == MenuRowKind::Toggle) vr.isOn = r.isOn && r.isOn();
         if (r.kind == MenuRowKind::Number && r.value) {
             float x = r.value();
@@ -99,9 +101,13 @@ void InGameMenu::BuildView() {
     for (size_t i = 0; same && i < rows.size(); i++) {
         const MenuViewRow &a = rows[i], &b = v.rows[i];
         same = a.label == b.label && a.detail == b.detail && a.value == b.value && a.isOn == b.isOn && a.canLess == b.canLess &&
-               a.canMore == b.canMore && a.kind == b.kind && a.fraction == b.fraction;
+               a.canMore == b.canMore && a.kind == b.kind && a.fraction == b.fraction && a.tags == b.tags && a.items == b.items;
     }
+    float width = page_.width > 0 ? page_.width : kMenuWidth;
+    same = same && v.w == width;
     if (same) return;
+    v.w = width;
+    v.h = kMenuHeight;
     v.rows = std::move(rows);
     v.title = page_.title;
     v.status = status;
@@ -167,6 +173,13 @@ void InGameMenu::Activate(const MenuHit& hit, bool repeat) {
             Changed();
         } else if ((r.kind == MenuRowKind::Link || r.kind == MenuRowKind::Button) && r.press) {
             auto press = r.press; // the page may be rebuilt by it
+            press();
+        } else if (r.kind == MenuRowKind::Overview && r.openTag && hit.sub >= 0 && hit.sub < (int)r.tags.size()) {
+            auto open = r.openTag;
+            MenuTag tag = r.tags[hit.sub];
+            open(tag.hand, tag.comp);
+        } else if (r.kind == MenuRowKind::Bar && hit.sub >= 0 && hit.sub < (int)r.itemPress.size() && r.itemPress[hit.sub]) {
+            auto press = r.itemPress[hit.sub];
             press();
         }
         return;
@@ -305,7 +318,8 @@ void InGameMenu::UpdateInputCapture() {
 // (each change redraws the whole panel).
 void InGameMenu::UpdateLive() {
     MenuView& v = e.menuView;
-    bool hasLive = std::any_of(v.rows.begin(), v.rows.end(), [](const MenuViewRow& r) { return r.kind == MenuRowKind::Live; });
+    bool hasLive = std::any_of(v.rows.begin(), v.rows.end(),
+                               [](const MenuViewRow& r) { return r.kind == MenuRowKind::Live || r.kind == MenuRowKind::Overview; });
     if (!hasLive || e.now < run_.liveAt) return;
     run_.liveAt = e.now + 0.05;
     bool changed = v.stickOn != e.prof->stickOn;

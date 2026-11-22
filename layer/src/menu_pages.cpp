@@ -1,6 +1,7 @@
 // The in-game menu's pages: see menu_pages.h.
 #include "menu_pages.h"
 #include "engine.h"
+#include "controller_silhouettes.h"
 #include "in_game_menu.h"
 #include <algorithm>
 
@@ -38,26 +39,55 @@ static int GestureIndex(Gesture g) {
     return 0;
 }
 
-// What a binding does, short: "Space", "Space (held)", "Opens wheel 'right'".
+std::string PartName(int hand, int comp, ControllerKind kind) {
+    static const char* names[C_COUNT] = { "A",  "B",      "Trigger",  "Grip",       "Thumbstick", "Thumbrest",  "Menu",
+                                          "X",  "Y",      "Bumper",   "D-pad up",   "D-pad down", "D-pad left", "D-pad right" };
+    if (comp < 0 || comp >= C_COUNT) return "?";
+    bool xy = hand == 0 && kind != ControllerKind::Index && kind != ControllerKind::SteamFrame;
+    if (comp == C_BTN1 && xy) return "X";
+    if (comp == C_BTN2 && xy) return "Y";
+    if (comp == C_MENU && hand == 0 && kind == ControllerKind::SteamFrame) return "View";
+    return names[comp];
+}
+
+// What a binding does, short: "Key: Space (hold)", "Controller: Right B", "Opens wheel 'right'".
 static std::string ActionWords(const Action& a) {
-    std::string mode = a.mode == ActMode::Hold ? " (held)" : a.mode == ActMode::Toggle ? " (on / off)" : "";
+    std::string mode = a.mode == ActMode::Hold ? " (hold)" : a.mode == ActMode::Toggle ? " (toggle)" : "";
     switch (a.type) {
     case ActType::Key:
-        return (a.keys.empty() ? "no key yet" : a.keys) + mode;
+        return a.keys.empty() ? "No key set" : "Key: " + a.keys + mode;
     case ActType::Sequence:
-        return "a macro";
+        return "Macro";
     case ActType::Wheel:
-        return "opens wheel '" + a.wheel + "'";
+        return "Opens wheel '" + a.wheel + "'";
     case ActType::Keyboard:
-        return "opens the VR keyboard";
+        return "Opens the VR keyboard";
     case ActType::Layer:
-        return "layer '" + a.layer + "'" + mode;
+        return "Layer '" + a.layer + "'" + mode;
     case ActType::XrInput:
-        return "game sees " + InputWords(a.target) + mode;
+        return "Controller: " + InputWords(a.target) + mode;
     case ActType::None:
-        return "off in the game";
+        return "Disabled in the game";
+    case ActType::Menu:
+        return "Opens this menu";
+    case ActType::Back:
+        return "Wheel: back";
+    case ActType::Close:
+        return "Wheel: close";
+    case ActType::Reload:
+        return "Reloads the profile";
+    case ActType::Page:
+        return "Wrist panel page";
+    case ActType::Adjust:
+        return "Adjust mode";
+    case ActType::Screen:
+        return "Desktop screen";
+    case ActType::Offsets:
+        return "Controller offsets";
+    case ActType::Mirror:
+        return "Headset mirror";
     default:
-        return "an action set in the editor";
+        return "Set in the editor";
     }
 }
 
@@ -98,9 +128,165 @@ static bool HasTouch(int comp) {
     return comp == C_BTN1 || comp == C_BTN2 || comp == C_TRIGGER || comp == C_STICK;
 }
 
+// What a part does, for its tag: the player's bindings first (blue), then the game's own controls; "Not used".
+static MenuTag TagFor(Engine& e, int hand, int comp, ControllerKind kind) {
+    MenuTag t;
+    t.hand = hand;
+    t.comp = comp;
+    t.title = PartName(hand, comp, kind);
+    for (const Binding& b : e.prof->bindings) {
+        if (!b.enabled || b.chord.empty() || b.chord.back().hand != hand || b.chord.back().comp != comp) continue;
+        std::string how = b.chord.size() > 1 ? "Combo" : kGestureWords[GestureIndex(b.gesture)];
+        if (b.chord.back().feat == F_TOUCH && comp != C_THUMBREST) how += " (touch)";
+        t.lines.push_back(how); // small and grey, then what it does
+        t.lineKinds.push_back(3);
+        t.lines.push_back(ActionWords(b.action));
+        t.lineKinds.push_back(1);
+    }
+    for (const GameUse& u : e.gameUses) {
+        if (u.hand != hand || u.comp != comp) continue;
+        t.lines.push_back(u.name + (u.touch && comp != C_THUMBREST ? " (touch)" : ""));
+        t.lineKinds.push_back(0);
+    }
+    if (t.lines.empty()) {
+        t.lines.push_back("Not used");
+        t.lineKinds.push_back(2);
+    } else if (t.lines.size() > 5) {
+        t.lines.resize(4);
+        t.lineKinds.resize(4);
+        t.lines.push_back("More on its page");
+        t.lineKinds.push_back(2);
+    }
+    return t;
+}
+
+// The parts a controller has that can be bound, from its picture (and the trigger and grip, which all have).
+static std::vector<int> PartsOf(ControllerKind kind, int hand) {
+    std::vector<int> comps;
+    auto add = [&](int c) {
+        if (c >= 0 && std::find(comps.begin(), comps.end(), c) == comps.end()) comps.push_back(c);
+    };
+    if (const Silhouette* sil = SilhouetteFor(kind, hand))
+        for (int i = 0; i < sil->partCount; i++)
+            add(SilhouetteComp(sil->parts[i].comp));
+    else
+        for (const ArtPart& a : ArtFor(kind).parts)
+            if (a.hands & (hand == 0 ? 1 : 2)) add(a.comp);
+    add(C_TRIGGER);
+    add(C_GRIP);
+    return comps;
+}
+
+MenuPage Overview(Engine& e, InGameMenu& m) {
+    MenuPage p;
+    p.title = "Controller configuration";
+    p.width = 0.82f; // wider than the other pages: about 66 degrees across at its distance, inside the view
+    std::vector<MenuTag> tags;
+    for (int hand = 0; hand < 2; hand++) {
+        ControllerKind kind = e.KindOf(hand);
+        for (int comp : PartsOf(kind, hand))
+            tags.push_back(TagFor(e, hand, comp, kind));
+    }
+    p.rows.push_back(MenuRow::Overview(std::move(tags), [&e, &m](int hand, int comp) {
+        m.Push([&e, &m, hand, comp] { return PartPage(e, m, hand, comp); });
+    }, 7));
+    p.rows.push_back(MenuRow::Bar({ "Edit bindings", "Test controllers", "Right stick", "Left stick" },
+                                  { [&e, &m] { m.Push([&e, &m] { return Home(e, m); }); },
+                                    [&e, &m] { m.Push([&e, &m] { return TestControllers(e, m); }); },
+                                    [&e, &m] { m.Push([&e, &m] { return StickOptions(e, m, 1); }); },
+                                    [&e, &m] { m.Push([&e, &m] { return StickOptions(e, m, 0); }); } }));
+    return p;
+}
+
+// Each way a part can fire a binding: the feature and gesture, and its name on the part's page.
+struct PartWay {
+    int feat;
+    Gesture gesture;
+    const char* name;
+};
+static std::vector<PartWay> WaysOf(int comp) {
+    if (comp == C_STICK)
+        return { { F_PRESS, Gesture::Press, "Click" },   { F_UP, Gesture::Press, "Push up" },      { F_DOWN, Gesture::Press, "Push down" },
+                 { F_LEFT, Gesture::Press, "Push left" }, { F_RIGHT, Gesture::Press, "Push right" }, { F_TOUCH, Gesture::Press, "Touch" } };
+    if (comp == C_THUMBREST) return { { F_TOUCH, Gesture::Press, "Touch" }, { F_TOUCH, Gesture::DoubleTap, "Double-tap" } };
+    const char* press = comp == C_TRIGGER ? "Pull" : comp == C_GRIP ? "Squeeze" : "Press";
+    std::vector<PartWay> w = { { F_PRESS, Gesture::Press, press },
+                               { F_PRESS, Gesture::Tap, "Quick tap" },
+                               { F_PRESS, Gesture::Hold, "Hold" },
+                               { F_PRESS, Gesture::DoubleTap, "Double-tap" } };
+    if (comp == C_BTN1 || comp == C_BTN2 || comp == C_TRIGGER) w.push_back({ F_TOUCH, Gesture::Press, "Touch" });
+    return w;
+}
+
+MenuPage PartPage(Engine& e, InGameMenu& m, int hand, int comp) {
+    MenuPage p;
+    ControllerKind kind = e.KindOf(hand);
+    p.title = std::string(hand ? "Right " : "Left ") + PartName(hand, comp, kind);
+    p.rows.push_back(MenuRow::Live(LiveKind::Controller, hand, 3));
+    std::string game;
+    for (const GameUse& u : e.gameUses)
+        if (u.hand == hand && u.comp == comp) game += (game.empty() ? "" : ", ") + u.name + (u.touch && comp != C_THUMBREST ? " (touch)" : "");
+    p.rows.push_back(MenuRow::Note(game.empty() ? "In the game: not used" : "In the game: " + game,
+                                   game.empty() ? "The game doesn't use this button" : "What the game itself does with this button"));
+    p.rows.push_back(MenuRow::Heading("Bindings"));
+    std::vector<bool> shown(e.prof->bindings.size(), false);
+    for (const PartWay& w : WaysOf(comp)) {
+        int found = -1;
+        for (int i = 0; i < (int)e.prof->bindings.size() && found < 0; i++) {
+            const Binding& b = e.prof->bindings[i];
+            const InputId& id = b.chord.back();
+            if (b.chord.size() == 1 && id.hand == hand && id.comp == comp && id.feat == w.feat && b.gesture == w.gesture) found = i;
+        }
+        if (found >= 0) {
+            shown[found] = true;
+            const Binding& b = e.prof->bindings[found];
+            p.rows.push_back(MenuRow::Link(w.name, ActionWords(b.action) + (b.enabled ? "" : "  (disabled)"),
+                                           [&e, &m, found] { m.Push([&e, &m, found] { return BindingDetail(e, m, found); }); }));
+            continue;
+        }
+        PartWay way = w;
+        p.rows.push_back(MenuRow::Button(w.name, "Not assigned",
+                                         [&e, &m, hand, comp, way] {
+                                             Binding b;
+                                             InputId id;
+                                             id.hand = hand;
+                                             id.comp = comp;
+                                             id.feat = way.feat;
+                                             SetFiringInput(b, id);
+                                             b.name = InputWords(id);
+                                             b.gesture = way.gesture;
+                                             b.block = way.feat == F_TOUCH ? BindingBlock::None : BindingBlock::Trigger;
+                                             b.action.type = ActType::Key;
+                                             b.action.mode = ActMode::Hold;
+                                             int index = 0;
+                                             e.EditBindings([&](std::vector<Binding>& list) {
+                                                 list.push_back(b);
+                                                 index = (int)list.size() - 1;
+                                             });
+                                             m.Changed();
+                                             m.Push([&e, &m, index] { return BindingDetail(e, m, index); });
+                                             PickAction(e, m, index);
+                                         }));
+    }
+    bool heading = false;
+    for (int i = 0; i < (int)e.prof->bindings.size(); i++) {
+        const Binding& b = e.prof->bindings[i];
+        if (shown[i] || b.chord.empty()) continue;
+        bool uses = false;
+        for (const InputId& id : b.chord)
+            uses = uses || (id.hand == hand && id.comp == comp);
+        if (!uses) continue;
+        if (!heading) p.rows.push_back(MenuRow::Heading("Other bindings with this button"));
+        heading = true;
+        p.rows.push_back(MenuRow::Link(b.name + (b.enabled ? "" : "  (disabled)"), BindingSummary(b),
+                                       [&e, &m, i] { m.Push([&e, &m, i] { return BindingDetail(e, m, i); }); }));
+    }
+    return p;
+}
+
 MenuPage Home(Engine& e, InGameMenu& m) {
     MenuPage p;
-    p.title = "Settings" + (e.prof->sourceName.empty() ? std::string() : " - " + e.prof->sourceName);
+    p.title = "Edit bindings" + (e.prof->sourceName.empty() ? std::string() : " - " + e.prof->sourceName);
     auto countOn = [&](int hand) {
         int n = 0;
         for (const Binding& b : e.prof->bindings)
@@ -197,15 +383,15 @@ MenuPage BindingDetail(Engine& e, InGameMenu& m, int index) {
     auto get = [&e, index]() -> const Binding& { return e.prof->bindings[index]; };
     const Binding& b = get();
     p.title = b.name;
-    p.rows.push_back(MenuRow::Toggle("On", "", [get] { return get().enabled; }, [edit](bool on) { edit([on](Binding& x) { x.enabled = on; }); }));
+    p.rows.push_back(MenuRow::Toggle("Enabled", "", [get] { return get().enabled; }, [edit](bool on) { edit([on](Binding& x) { x.enabled = on; }); }));
 
     InputId firing = b.chord.back();
-    p.rows.push_back(MenuRow::Button("Button: " + InputWords(firing) + (b.chord.size() > 1 ? " (in a combo)" : ""),
-                                     "Press here, then press the button you want", [&m, edit] {
+    p.rows.push_back(MenuRow::Button("Input: " + InputWords(firing) + (b.chord.size() > 1 ? " (in a combo)" : ""),
+                                     "Select, then press the new button", [&m, edit] {
                                          m.CaptureInput([edit](const InputId& id) { edit([id](Binding& x) { SetFiringInput(x, id); }); });
                                      }));
     if (HasTouch(firing.comp) && (firing.feat == F_PRESS || firing.feat == F_TOUCH))
-        p.rows.push_back(MenuRow::Choice("Way", "Touch = resting a finger on it, without pressing", { "Press", "Touch" },
+        p.rows.push_back(MenuRow::Choice("Activation", "Touch: a finger resting on it, without pressing", { "Press", "Touch" },
                                          [get] { return get().chord.back().feat == F_TOUCH ? 1 : 0; },
                                          [edit](int i) {
                                              edit([i](Binding& x) {
@@ -215,32 +401,32 @@ MenuPage BindingDetail(Engine& e, InGameMenu& m, int index) {
                                                  if (i == 1) x.block = BindingBlock::None; // hiding a touch would hide its presses
                                              });
                                          }));
-    p.rows.push_back(MenuRow::Choice("When", "", kGestureWords, [get] { return GestureIndex(get().gesture); },
+    p.rows.push_back(MenuRow::Choice("Gesture", "", kGestureWords, [get] { return GestureIndex(get().gesture); },
                                      [edit](int i) { edit([i](Binding& x) { x.gesture = kGestures[i]; }); }));
     if (b.gesture == Gesture::Hold) {
-        MenuRow hold = MenuRow::Number("Hold for", "", [get] { return (float)get().holdMs; },
+        MenuRow hold = MenuRow::Number("Hold time", "", [get] { return (float)get().holdMs; },
                                        [edit](float v) { edit([v](Binding& x) { x.holdMs = (int)v; }); }, 100, 2000, 50);
         hold.unit = "ms";
         p.rows.push_back(hold);
     }
     bool isKey = b.action.type == ActType::Key, isButton = b.action.type == ActType::XrInput;
-    p.rows.push_back(MenuRow::Button("Does: " + ActionWords(b.action),
-                                     isKey || isButton ? "Press here, then pick a key, a mouse button or Controller button on the VR keyboard"
-                                                       : "Set in the editor. Press here to make it a key, mouse button or controller button instead",
+    p.rows.push_back(MenuRow::Button("Action: " + ActionWords(b.action),
+                                     isKey || isButton ? "Select to choose a key, mouse button or controller button"
+                                                       : "Set in the editor. Select to replace it with a key, mouse button or controller button",
                                      [&e, &m, index] { PickAction(e, m, index); }));
     if (isKey || isButton) {
         static const ActMode modes[] = { ActMode::Tap, ActMode::Hold, ActMode::Toggle };
-        p.rows.push_back(MenuRow::Choice(isKey ? "The key is" : "The game's button is", "", { "Tapped", "Held", "On / off" },
+        p.rows.push_back(MenuRow::Choice(isKey ? "Key behavior" : "Button behavior", "", { "Tap", "Hold", "Toggle" },
                                          [get] {
                                              ActMode md = get().action.mode;
                                              return md == ActMode::Hold ? 1 : md == ActMode::Toggle ? 2 : 0;
                                          },
                                          [edit](int i) { edit([i](Binding& x) { x.action.mode = modes[i]; }); }));
     }
-    p.rows.push_back(MenuRow::Choice("Game sees the button", "While this binding is in use", { "No", "Yes" },
+    p.rows.push_back(MenuRow::Choice("Pass input to game", "Whether the game also receives this button", { "No", "Yes" },
                                      [get] { return get().block == BindingBlock::None ? 1 : 0; },
                                      [edit](int i) { edit([i](Binding& x) { x.block = i ? BindingBlock::None : BindingBlock::Trigger; }); }));
-    MenuRow remove = MenuRow::Button("Delete this binding", "", [&e, &m, index] {
+    MenuRow remove = MenuRow::Button("Delete binding", "", [&e, &m, index] {
         e.EditBindings([index](std::vector<Binding>& list) {
             if (index < (int)list.size()) list.erase(list.begin() + index);
         });

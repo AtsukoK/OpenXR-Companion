@@ -228,6 +228,7 @@ public:
     OffsetView offView;
     MenuView menuView; // the in-game settings menu
     std::vector<GameUse> gameUses; // the game's own controls on the controllers in use (set by the layer)
+    ControllerKind KindOf(int hand) const { return fr.h[hand].kind; } // which controller a hand holds now
     std::string toast;
     uint64_t toastVersion = 0;
     double toastUntil = 0;

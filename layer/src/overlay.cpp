@@ -358,9 +358,9 @@ void OverlayRenderer::RenderMenu(const OverlayContext& c, LayerList& layers) {
         if (menu_.Exists()) menu_.Destroy(c);
         return;
     }
-    const int h = (int)(kMenuPx * mv.h / mv.w);
-    if (menu_.Ensure(c, kMenuPx, h))
-        menu_.Redraw(c, mv.version, scratch_, [&](std::vector<uint32_t>& px) { DrawMenu(px, kMenuPx, h, mv, eng_.prof->style); });
+    const int w = (int)(kMenuPx * mv.w / kMenuWidth), h = (int)(w * mv.h / mv.w); // a wider page: more pixels, same sharpness
+    if (menu_.Ensure(c, w, h))
+        menu_.Redraw(c, mv.version, scratch_, [&](std::vector<uint32_t>& px) { DrawMenu(px, w, h, mv, eng_.prof->style); });
     menu_.Submit(layers, c.local, mv.pose, { mv.w, mv.h });
 }
 
