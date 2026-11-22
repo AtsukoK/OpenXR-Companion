@@ -566,10 +566,10 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
         vh = ey;
     }
     float cw = vw / ex, ch = vh / ey;
-    // Sideways: the middle of the picture, not the optical centre. On Quest the optical centre sits toward
-    // the nose side, where each eye's picture has a black unrendered strip, so centring there showed a bar.
-    // Also keep a small margin from every edge (the corners of the eye picture are masked too).
-    (void)cu;
+    // Sideways: centred on where the eye looks straight ahead (on Quest that sits toward the nose, so the
+    // middle of the picture put the view too far to one side), but never closer than kSideMargin to the
+    // picture's side edges: the nose side has a black unrendered strip. Small margin top and bottom.
+    const float kSideMargin = 0.08f;
     const float m = 0.04f;
     bool steady = smoothing > 0.001f;
     if (steady) { // leave headroom round the crop so the steadied camera can lag without showing the picture's edges
@@ -578,7 +578,8 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
         cw *= s;
         ch *= s;
     }
-    float cl = std::clamp(0.5f - cw / 2, std::min(m, (1.f - cw) / 2), std::max(1.f - m - cw, (1.f - cw) / 2));
+    float sideM = std::max(m, kSideMargin);
+    float cl = std::clamp(cu - cw / 2, std::min(sideM, (1.f - cw) / 2), std::max(1.f - sideM - cw, (1.f - cw) / 2));
     float ct = std::clamp(cv - ch / 2, std::min(m, (1.f - ch) / 2), std::max(1.f - m - ch, (1.f - ch) / 2));
 
     // window pixels per eye pixel: above 1 the picture is stretched -> sharper bicubic stretch
@@ -693,7 +694,7 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
         Vec3 f = RotateInv(real, Rotate(cam.orientation, { 0, 0, -1 }));
         if (f.z < -0.01f) {
             float dx = f.x / -f.z, dy = f.y / -f.z;
-            float lx = (dx > 0 ? 1 - m - cl - cw : cl - m) * (tR - tL);
+            float lx = (dx > 0 ? 1 - sideM - cl - cw : cl - sideM) * (tR - tL);
             float ly = (dy > 0 ? ct - m : 1 - m - ct - ch) * (tU - tD);
             lx = std::max(lx * 0.85f, 0.f);
             ly = std::max(ly * 0.85f, 0.f); // spare a little for roll
