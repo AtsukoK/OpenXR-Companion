@@ -5,22 +5,30 @@ namespace OpenXRCompanionEditor;
 // How many bindings a part has: switched on, and switched off.
 public readonly record struct PartUse(int On, int Off);
 
-// Draws one controller (a ControllerLayout, for one hand) with a name tag for each part, and says which part
-// was clicked. Parts that already do something get a count badge; the selected part is outlined.
+// One line in a part's tag: how it's used ("Press", "Hold", "Up") and what it does ("Space"); Layer when it only
+// works in a layer.
+public readonly record struct TagLine(string When, string Does, string Layer = null);
+
+// Draws one controller (a ControllerLayout, for one hand) with a tag for each part that lists what the part does,
+// like SteamVR's binding screen, and says which part was clicked. The selected part is outlined.
 public class ControllerPicture : Control
 {
     // Design canvas: [labels][top view][labels][side view][labels], see ControllerLayouts for the view sizes.
     // Top-view parts are named on whichever side of the top view they sit, so leader lines don't cross the body.
-    const float LabelWidth = 128, Gap = 10, CanvasMargin = 14, TagHeight = 34, TagGap = 5;
+    // Tags grow with their lines, and the canvas grows taller when a column of tags needs it.
+    const float LabelWidth = 158, Gap = 10, CanvasMargin = 14, TagGap = 5;
+    const float NameHeight = 19, LineHeight = 14.5f, MinTagHeight = 38;
+    const int MaxLines = 4;
     const float TopX = LabelWidth, MiddleX = TopX + ControllerLayouts.TopWidth + Gap;
     const float SideX = MiddleX + LabelWidth + Gap;
     const float CanvasWidth = SideX + ControllerLayouts.SideWidth + LabelWidth;
-    const float CanvasHeight = ControllerLayouts.Height + 2 * CanvasMargin;
+    const float ViewsHeight = ControllerLayouts.Height + 2 * CanvasMargin;
 
     ControllerLayout layout = ControllerLayouts.All[0];
     int hand = 1;
     string selected, hovered;
     Func<ControllerPart, PartUse> useOf = _ => default;
+    Func<ControllerPart, IReadOnlyList<TagLine>> linesOf = _ => Array.Empty<TagLine>();
     readonly List<(ControllerPart part, GraphicsPath shape, RectangleF tag)> hits = new();
 
     public event Action<ControllerPart> PartClicked;
@@ -31,14 +39,20 @@ public class ControllerPicture : Control
         Cursor = Cursors.Hand;
     }
 
-    public void ShowController(ControllerLayout newLayout, int newHand, string selectedComp, Func<ControllerPart, PartUse> use)
+    // lines: what each part does, listed in its tag (none: just "1 binding" and so on).
+    public void ShowController(ControllerLayout newLayout, int newHand, string selectedComp, Func<ControllerPart, PartUse> use,
+                               Func<ControllerPart, IReadOnlyList<TagLine>> lines = null)
     {
         layout = newLayout;
         hand = newHand;
         selected = selectedComp;
         useOf = use;
+        linesOf = lines ?? (_ => Array.Empty<TagLine>());
         Invalidate();
     }
+
+    // The height that shows the whole picture at this width.
+    public int HeightFor(int width) => (int)Math.Ceiling(width * CanvasHeight() / CanvasWidth);
 
     public string Selected
     {
@@ -47,21 +61,30 @@ public class ControllerPicture : Control
     }
 
     // A picture of one controller as a bitmap (previews and screenshots).
-    public static Bitmap Render(ControllerLayout layout, int hand, string selectedComp, Func<ControllerPart, PartUse> use, int width)
+    public static Bitmap Render(ControllerLayout layout, int hand, string selectedComp, Func<ControllerPart, PartUse> use, int width,
+                                Func<ControllerPart, IReadOnlyList<TagLine>> lines = null)
     {
-        using var pic = new ControllerPicture { Size = new Size(width, (int)(width * CanvasHeight / CanvasWidth)), BackColor = Theme.Card };
-        pic.ShowController(layout, hand, selectedComp, use);
+        using var pic = new ControllerPicture { Width = width, BackColor = Theme.Card };
+        pic.ShowController(layout, hand, selectedComp, use, lines);
+        pic.Height = pic.HeightFor(width);
         var bmp = new Bitmap(pic.Width, pic.Height);
         pic.DrawToBitmap(bmp, new Rectangle(Point.Empty, pic.Size));
         return bmp;
     }
 
     // ------------------------------------------------------------ geometry
+    float CanvasHeight()
+    {
+        var tags = TagBoxes(layout.PartsFor(hand).ToList());
+        return Math.Max(ViewsHeight, tags.Count == 0 ? 0 : tags.Values.Max(t => t.Bottom) + CanvasMargin);
+    }
+
     Matrix CanvasToScreen()
     {
-        float s = Math.Min(Width / CanvasWidth, Height / CanvasHeight);
+        float canvasHeight = CanvasHeight();
+        float s = Math.Min(Width / CanvasWidth, Height / canvasHeight);
         var m = new Matrix();
-        m.Translate((Width - CanvasWidth * s) / 2, (Height - CanvasHeight * s) / 2);
+        m.Translate((Width - CanvasWidth * s) / 2, 0);
         m.Scale(s, s);
         return m;
     }
@@ -178,7 +201,16 @@ public class ControllerPicture : Control
         _ => CanvasWidth - LabelWidth + 6,
     };
 
-    // Name tags at the height of their part, pushed apart so they never overlap.
+    // Lines shown in a tag: up to MaxLines, the last saying how many more when there are more.
+    int ShownLines(ControllerPart part)
+    {
+        int n = part.IsUsable ? linesOf(part).Count : 0;
+        return n <= MaxLines ? n : MaxLines;
+    }
+
+    float TagHeightOf(ControllerPart part) => Math.Max(MinTagHeight, NameHeight + 4 + Math.Max(1, ShownLines(part)) * LineHeight);
+
+    // Tags centred on their part's height, pushed down so they never overlap (the canvas grows to fit them).
     Dictionary<ControllerPart, RectangleF> TagBoxes(IReadOnlyList<ControllerPart> parts)
     {
         var tags = new Dictionary<ControllerPart, RectangleF>();
@@ -186,15 +218,15 @@ public class ControllerPicture : Control
         {
             float x = ColumnX(col);
             var column = parts.Where(p => ColumnOf(p) == col)
-                              .Select(p => (part: p, y: Place(p.View, p.Box).Y + p.Box.Height / 2 - TagHeight / 2))
+                              .Select(p => (part: p, h: TagHeightOf(p), y: Place(p.View, p.Box).Y + p.Box.Height / 2 - TagHeightOf(p) / 2))
                               .OrderBy(t => t.y).ToList();
-            var ys = column.Select(t => t.y).ToArray();
-            for (int i = 0; i < ys.Length; i++) // down: no overlap with the tag above
-                ys[i] = Math.Max(ys[i], i == 0 ? CanvasMargin : ys[i - 1] + TagHeight + TagGap);
-            for (int i = ys.Length - 1; i >= 0; i--) // up: stay on the canvas
-                ys[i] = Math.Min(ys[i], i == ys.Length - 1 ? CanvasHeight - CanvasMargin - TagHeight : ys[i + 1] - TagHeight - TagGap);
-            for (int i = 0; i < column.Count; i++)
-                tags[column[i].part] = new RectangleF(x, ys[i], LabelWidth - 6, TagHeight);
+            float next = CanvasMargin;
+            foreach (var (part, h, y) in column)
+            {
+                float top = Math.Max(y, next);
+                tags[part] = new RectangleF(x, top, LabelWidth - 6, h);
+                next = top + h + TagGap;
+            }
         }
         return tags;
     }
@@ -237,8 +269,8 @@ public class ControllerPicture : Control
         using var f = new Font("Segoe UI", 7.5f);
         using var b = new SolidBrush(Theme.SubText);
         var center = new StringFormat { Alignment = StringAlignment.Center };
-        g.DrawString("Buttons (from above)", f, b, new RectangleF(TopX, CanvasHeight - CanvasMargin + 1, ControllerLayouts.TopWidth, 14), center);
-        g.DrawString("Trigger and grip (side)", f, b, new RectangleF(SideX - 10, CanvasHeight - CanvasMargin + 1, ControllerLayouts.SideWidth + 20, 14), center);
+        g.DrawString("Buttons (from above)", f, b, new RectangleF(TopX, ViewsHeight - CanvasMargin + 1, ControllerLayouts.TopWidth, 14), center);
+        g.DrawString("Trigger and grip (side)", f, b, new RectangleF(SideX - 10, ViewsHeight - CanvasMargin + 1, ControllerLayouts.SideWidth + 20, 14), center);
     }
 
     void DrawBody(Graphics g)
@@ -296,7 +328,7 @@ public class ControllerPicture : Control
     {
         var b = shape.GetBounds();
         var from = new PointF(b.X + b.Width / 2, b.Y + b.Height / 2);
-        var to = new PointF(ColumnOf(part) == TagColumn.Left ? tag.Right : tag.Left, tag.Y + tag.Height / 2);
+        var to = new PointF(ColumnOf(part) == TagColumn.Left ? tag.Right : tag.Left, tag.Y + Math.Min(tag.Height / 2, NameHeight));
         using var pen = new Pen(Color.FromArgb(part.Comp == selected ? 220 : 110, part.Comp == selected ? SelectedEdge : BodyEdge), part.Comp == selected ? 1.6f : 1f);
         g.DrawLine(pen, from, to);
     }
@@ -313,17 +345,43 @@ public class ControllerPicture : Control
             g.FillPath(fill, p);
             g.DrawPath(edge, p);
         }
-        using var nameFont = new Font("Segoe UI", 8.5f, FontStyle.Bold);
-        using var subFont = new Font("Segoe UI", 7.5f);
+        using var nameFont = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+        using var subFont = new Font("Segoe UI", 8.5f);
         using var text = new SolidBrush(part.IsUsable ? Theme.Text : Theme.OffText);
         using var sub = new SolidBrush(count > 0 ? Accent : Theme.SubText);
         var fmt = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
         g.DrawString(part.LabelFor(hand), nameFont, text, new RectangleF(tag.X + 6, tag.Y + 2, tag.Width - 10, 16), fmt);
-        string status = !part.IsUsable ? "not available"
-                        : count > 0 ? (count == 1 ? "1 binding" : count + " bindings") + (use.Off > 0 ? $", {use.Off} off" : "")
-                        : use.Off > 0 ? $"{use.Off} switched off"
-                                      : "nothing set";
-        g.DrawString(status, subFont, sub, new RectangleF(tag.X + 6, tag.Y + 17, tag.Width - 10, 14), fmt);
+        var lines = part.IsUsable ? linesOf(part) : Array.Empty<TagLine>();
+        if (lines.Count == 0)
+        {
+            string status = !part.IsUsable ? "not available"
+                            : count > 0 ? (count == 1 ? "1 binding" : count + " bindings") + (use.Off > 0 ? $", {use.Off} off" : "")
+                            : use.Off > 0 ? $"{use.Off} switched off"
+                                          : "nothing set";
+            g.DrawString(status, subFont, sub, new RectangleF(tag.X + 6, tag.Y + NameHeight, tag.Width - 10, 14), fmt);
+            return;
+        }
+        using var whenBrush = new SolidBrush(Theme.SubText);
+        using var doesBrush = new SolidBrush(Theme.IsDark ? Color.FromArgb(140, 190, 255) : Color.FromArgb(30, 95, 200));
+        using var doesFont = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+        using var exact = (StringFormat)StringFormat.GenericTypographic.Clone();
+        exact.FormatFlags |= StringFormatFlags.MeasureTrailingSpaces; // keep the space after "Press:"
+        int shown = ShownLines(part);
+        for (int i = 0; i < shown; i++)
+        {
+            float y = tag.Y + NameHeight + i * LineHeight;
+            bool isMoreLine = i == MaxLines - 1 && lines.Count > MaxLines;
+            if (isMoreLine)
+            {
+                g.DrawString($"+ {lines.Count - MaxLines + 1} more", subFont, whenBrush, new RectangleF(tag.X + 6, y, tag.Width - 10, 14), fmt);
+                break;
+            }
+            var line = lines[i];
+            string when = (line.Layer != null ? line.Layer + " · " : "") + line.When + ": ";
+            float whenWidth = g.MeasureString(when, subFont, PointF.Empty, exact).Width;
+            g.DrawString(when, subFont, whenBrush, new PointF(tag.X + 6, y), exact);
+            g.DrawString(line.Does, doesFont, doesBrush, new RectangleF(tag.X + 6 + whenWidth, y, tag.Width - 12 - whenWidth, 14), fmt);
+        }
     }
 
     // ------------------------------------------------------------ mouse

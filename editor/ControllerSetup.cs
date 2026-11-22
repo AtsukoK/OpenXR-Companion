@@ -209,8 +209,8 @@ public partial class MainForm
         var sheets = new List<Bitmap>();
         foreach (var layout in ControllerLayouts.All)
         {
-            using var right = ControllerPicture.Render(layout, 1, null, p => QuickBindings.UseOf(profile.Bindings, 1, p), width);
-            using var left = ControllerPicture.Render(layout, 0, null, p => QuickBindings.UseOf(profile.Bindings, 0, p), width);
+            using var right = ControllerPicture.Render(layout, 1, null, p => QuickBindings.UseOf(profile.Bindings, 1, p), width, p => ControllerButtonsPage.TagLinesOf(profile.Bindings, 1, p));
+            using var left = ControllerPicture.Render(layout, 0, null, p => QuickBindings.UseOf(profile.Bindings, 0, p), width, p => ControllerButtonsPage.TagLinesOf(profile.Bindings, 0, p));
             var sheet = new Bitmap(width, right.Height + left.Height + 64);
             using (var g = Graphics.FromImage(sheet))
             {
@@ -229,14 +229,14 @@ public partial class MainForm
             sheets.Add(sheet);
         }
         // All of them on one page, two across, at half size.
-        int cols = 2, cellW = width / 2, cellH = sheets[0].Height / 2;
+        int cols = 2, cellW = width / 2, cellH = sheets.Max(s => s.Height) / 2; // tags make some taller
         using var all = new Bitmap(cols * cellW, (sheets.Count + cols - 1) / cols * cellH);
         using (var g = Graphics.FromImage(all))
         {
             g.Clear(Theme.Page);
             g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
             for (int i = 0; i < sheets.Count; i++)
-                g.DrawImage(sheets[i], i % cols * cellW, i / cols * cellH, cellW, cellH);
+                g.DrawImage(sheets[i], i % cols * cellW, i / cols * cellH, cellW, sheets[i].Height / 2);
         }
         all.Save(Path.Combine(dir, "controllers_all.png"));
         foreach (var s in sheets)

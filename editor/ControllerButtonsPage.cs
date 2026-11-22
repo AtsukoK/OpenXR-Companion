@@ -48,6 +48,7 @@ public class ControllerButtonsPage : UserControl
         chooserRow.Controls.Add(models);
 
         picture.BackColor = Theme.Card;
+        picture.SizeChanged += (s, e) => FitPictureHeight();
         picture.PartClicked += part =>
         {
             lastSelected[hand] = part.Comp;
@@ -89,7 +90,8 @@ public class ControllerButtonsPage : UserControl
     void ShowAll()
     {
         models.Text = "For: " + layout.Models;
-        picture.ShowController(layout, hand, SelectedPart?.Comp, p => QuickBindings.UseOf(profile.Bindings, hand, p));
+        picture.ShowController(layout, hand, SelectedPart?.Comp, p => QuickBindings.UseOf(profile.Bindings, hand, p), p => TagLinesOf(profile.Bindings, hand, p));
+        FitPictureHeight();
         ShowDetails();
     }
 
@@ -157,6 +159,50 @@ public class ControllerButtonsPage : UserControl
         return card;
     }
 
+    // The picture grows with its tags (a tag lists what its part does).
+    void FitPictureHeight()
+    {
+        int h = picture.HeightFor(Math.Max(picture.Width, 1));
+        if (picture.Width > 0 && picture.Height != h)
+            picture.Height = h;
+    }
+
+    // What a part's tag lists, SteamVR style: one line per switched-on binding, normal ones first, layer ones after.
+    public static IReadOnlyList<TagLine> TagLinesOf(IEnumerable<BindingModel> bindings, int hand, ControllerPart part)
+    {
+        var lines = new List<TagLine>();
+        if (!part.IsUsable)
+            return lines;
+        foreach (bool layerOnes in new[] { false, true })
+            foreach (var way in part.Ways)
+            {
+                string input = ControllerLayouts.InputOf(hand, part, way);
+                foreach (var b in bindings.Where(b => b.Enabled && IsLayerOnly(b) == layerOnes && QuickBindings.FiredBy(b, input)))
+                    lines.Add(new TagLine(ShortWhen(part, way, b), DoesText(b.Action), layerOnes ? b.Layers : null));
+            }
+        return lines;
+    }
+
+    // "Press", "Hold", "Touch", "Up", "Up, hold", "Pull"...
+    static string ShortWhen(ControllerPart part, string way, BindingModel b)
+    {
+        string gesture = WhenText(b);
+        string wayWord = way switch
+        {
+            "touch" => "Touch",
+            "up" => "Up",
+            "down" => "Down",
+            "left" => "Left",
+            "right" => "Right",
+            _ => null,
+        };
+        if (wayWord == null && b.Gesture == GestureKind.Press)
+            return part.Comp switch { "trigger" => "Pull", "grip" => "Squeeze", "thumbrest" => "Touch", _ => gesture };
+        if (wayWord == null)
+            return gesture;
+        return b.Gesture == GestureKind.Press ? wayWord : wayWord + ", " + gesture.ToLowerInvariant();
+    }
+
     static bool IsTouchOnly(ControllerPart part, string way) => way == "touch" || part.Comp == "thumbrest";
 
     static bool IsLayerOnly(BindingModel b) => !string.IsNullOrWhiteSpace(b.Layers);
@@ -185,6 +231,10 @@ public class ControllerButtonsPage : UserControl
             ActionType.Key => (a.Keys ?? "?") + mode,
             ActionType.XrInput => "Game sees " + InputText.Friendly(a.Target),
             ActionType.None => "Nothing: off in the game",
+            ActionType.Wheel => $"Wheel '{a.Wheel}'",
+            ActionType.Keyboard => "VR keyboard",
+            ActionType.Layer => $"Layer '{a.Layer}'" + mode,
+            ActionType.Sequence => "Macro",
             _ => MainForm.Plain(a),
         };
     }
