@@ -147,7 +147,8 @@ public partial class MainForm
                         f.Profile.Bindings.Add(QuickBindings.GameButton(input, "test", hand == 0 ? "left.trigger" : "right.trigger", "test"));
                         f.Profile.Bindings.Add(QuickBindings.OffInGame(input, "test"));
                         f.Profile.Bindings.Add(QuickBindings.Blank(input, "test"));
-                        quick += 4;
+                        f.Profile.Bindings.Add(QuickBindings.OnlyWhenHeld(QuickBindings.Key(input, "test", "F13")));
+                        quick += 5;
                     }
         {
             var err = Native.Validate(f.Serialize());

@@ -141,7 +141,18 @@ public class ControllerButtonsPage : UserControl
             card.Controls.Add(Note("Nothing set: the game gets it as usual."));
         foreach (var b in bound)
             card.Controls.Add(BindingLink(b));
-        card.Controls.Add(QuickChoices(input, what, IsTouchOnly(part, way)));
+        bool isTouchOnly = IsTouchOnly(part, way);
+        var holdOnly = new CheckBox
+        {
+            Text = "Only when held for a moment (a quick tap still reaches the game as usual)",
+            AutoSize = true,
+            Margin = new Padding(0, 6, 0, 0),
+            Visible = !isTouchOnly, // a touch has no tap of its own to give back
+        };
+        FormPanel.Tips.SetToolTip(holdOnly, "For the next choice you make below. While you hold the button the game doesn't see it;\n" +
+                                            "after " + QuickBindings.DefaultHoldMs + " ms your choice starts. Let go sooner and the game gets a normal press.");
+        card.Controls.Add(holdOnly);
+        card.Controls.Add(QuickChoices(input, what, isTouchOnly, () => holdOnly.Checked));
         return card;
     }
 
@@ -166,7 +177,8 @@ public class ControllerButtonsPage : UserControl
         return link;
     }
 
-    Control QuickChoices(string input, string what, bool isTouchOnly)
+    // isHoldOnly: read when a choice is clicked; makes it a hold binding that gives quick taps back to the game.
+    Control QuickChoices(string input, string what, bool isTouchOnly, Func<bool> isHoldOnly)
     {
         var row = new FlowLayoutPanel { AutoSize = true, WrapContents = true, Margin = new Padding(0, 6, 0, 0), MaximumSize = new Size(700, 0) };
         void Choice(string text, Func<BindingModel> make)
@@ -178,6 +190,8 @@ public class ControllerButtonsPage : UserControl
                 var made = make();
                 if (made == null)
                     return;
+                if (isHoldOnly())
+                    QuickBindings.OnlyWhenHeld(made);
                 profile.Bindings.Add(made);
                 added(made, false);
                 ShowAll();
@@ -193,6 +207,8 @@ public class ControllerButtonsPage : UserControl
         Choice("+ Something else…", () =>
         {
             var b = QuickBindings.Blank(input, what);
+            if (isHoldOnly())
+                QuickBindings.OnlyWhenHeld(b);
             profile.Bindings.Add(b);
             added(b, true); // finished in the binding editor
             return null;

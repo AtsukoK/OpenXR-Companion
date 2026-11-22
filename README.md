@@ -100,6 +100,8 @@ Click a button to see each way of using it: pressing it, just touching it (resti
 - **Turn off in the game**: the game no longer sees that button.
 - **+ Something else**: any other action (a wheel, a macro, a layer...) in the binding editor.
 
+Tick **Only when held for a moment** first to keep the button's normal use in the game: the choice then starts only when you hold the button (0.4 s), the game doesn't see it while you hold, and a quick tap still reaches the game as a normal press. Like the Bannerlord VR radial menu on a held button.
+
 These make ordinary bindings, listed under the controller, so you can change or switch them off later. A touch binding never hides the button's presses from the game. Parts OpenXR Companion can't read (system buttons, the Index trackpad, the WMR touchpad) are shown greyed out.
 
 ![Controller page: a Quest 3 controller with its buttons named, A selected, and what pressing or touching A does](docs/images/editor-controller-buttons.png)

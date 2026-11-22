@@ -50,6 +50,20 @@ public static class QuickBindings
         Action = new ActionModel { Type = ActionType.Key, Keys = "F1" },
     };
 
+    public const int DefaultHoldMs = 400;
+
+    // Only when held for a moment, like the Bannerlord VR radial menu: the game never sees the button while you hold it,
+    // and a quick tap still reaches the game as a normal press of the button. The action starts once it has been held.
+    public static BindingModel OnlyWhenHeld(BindingModel b)
+    {
+        b.Gesture = GestureKind.Hold;
+        b.HoldMs = DefaultHoldMs;
+        b.TapPassthrough = true;
+        b.Block = "trigger";
+        b.Name += " (hold)";
+        return b;
+    }
+
     // The bindings on a part of one hand's controller, switched on and off (none on a part that can't be used).
     public static PartUse UseOf(IEnumerable<BindingModel> bindings, int hand, ControllerPart part)
     {

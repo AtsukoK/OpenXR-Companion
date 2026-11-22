@@ -308,3 +308,52 @@ void TestQuickBindings() {
     step();
     CHECK(!e.Blocked(1, C_TRIGGER), "quick bindings: and given back when let go");
 }
+
+// "Only when held for a moment" (like the Bannerlord VR radial menu): holding A runs the binding and the game never
+// sees A; a quick tap of A still reaches the game as a normal press.
+void TestHoldOnlyQuickBinding() {
+    const char* text = R"JSON({
+      "bindings": [
+        { "name": "Right A: held (hold)", "input": "right.a", "gesture": "hold", "hold_ms": 400, "tap_passthrough": true,
+          "block": "trigger", "action": { "type": "layer", "layer": "held", "mode": "hold" } }
+      ]
+    })JSON";
+    std::string err;
+    auto p = ParseProfileText(text, err);
+    CHECK(p != nullptr, ("hold only: the profile reads " + err).c_str());
+    if (!p) return;
+    Action heldLayer;
+    heldLayer.type = ActType::Layer;
+    heldLayer.layer = "held";
+    Engine e;
+    e.SetProfile(p);
+    Frame f;
+    double t = 0;
+    bool sawPress = false;
+    auto step = [&](double secs) {
+        for (double end = t + secs; t < end;) {
+            t += 0.011;
+            f.t = t;
+            e.Update(f);
+            sawPress = sawPress || (e.Ov(1, C_BTN1).on && e.Ov(1, C_BTN1).press);
+        }
+    };
+    step(0.05);
+
+    f.h[1].b1 = true; // a quick tap
+    step(0.15);
+    CHECK(e.Blocked(1, C_BTN1) && !e.IsOn(heldLayer), "hold only: while A is down the game doesn't see it, nothing runs yet");
+    f.h[1].b1 = false;
+    sawPress = false;
+    step(0.05);
+    CHECK(sawPress, "hold only: a quick tap still reaches the game as a press of A");
+    step(0.2);
+
+    f.h[1].b1 = true; // a hold
+    sawPress = false;
+    step(0.6);
+    CHECK(e.IsOn(heldLayer) && e.Blocked(1, C_BTN1), "hold only: held long enough, the binding runs and A stays hidden");
+    f.h[1].b1 = false;
+    step(0.15);
+    CHECK(!sawPress && !e.IsOn(heldLayer) && !e.Blocked(1, C_BTN1), "hold only: after a hold the game gets no press of A, all let go");
+}

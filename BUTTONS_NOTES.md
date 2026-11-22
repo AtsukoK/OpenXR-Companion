@@ -12,6 +12,9 @@ controller bindings, but the results are ordinary bindings in the profile.
   - key: `while_held`, key `mode: hold`, `block: trigger` (touch: `none`)
   - act as another button: `while_held`, `xr_input` `mode: hold`, `block: trigger`
   - off in the game: `while_held`, action `none`, `block: trigger`
+  - "Only when held for a moment" (checkbox per card, not on touch rows): `hold` 400 ms, `tap_passthrough`,
+    `block: trigger`: the game never sees the button while held, a quick tap is passed on as a press
+    (TestHoldOnlyQuickBinding).
 - Touch rows only offer "Press a key" and "Something else": the layer hides whole buttons (not just their touch),
   so a touch binding that hid the button would also hide its presses.
 - Pictures are our own simple drawings (data in ControllerLayouts.cs), not the makers' artwork. Two views per hand:
