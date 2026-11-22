@@ -136,7 +136,11 @@ public class ControllerButtonsPage : UserControl
             MinimumSize = new Size(720, 0),
         };
         card.Controls.Add(new Label { Text = wayName, AutoSize = true, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold), Margin = new Padding(0, 0, 0, 2) });
-        var bound = profile.Bindings.Where(b => QuickBindings.FiredBy(b, input)).ToList();
+        // What the button normally does first; bindings that only work in a layer (shift...) after, then switched-off ones.
+        var bound = profile.Bindings.Where(b => QuickBindings.FiredBy(b, input))
+                                    .OrderBy(b => IsLayerOnly(b))
+                                    .ThenBy(b => !b.Enabled)
+                                    .ToList();
         if (bound.Count == 0)
             card.Controls.Add(Note("Nothing set: the game gets it as usual."));
         foreach (var b in bound)
@@ -158,20 +162,22 @@ public class ControllerButtonsPage : UserControl
 
     static bool IsTouchOnly(ControllerPart part, string way) => way == "touch" || part.Comp == "thumbrest";
 
+    static bool IsLayerOnly(BindingModel b) => !string.IsNullOrWhiteSpace(b.Layers);
+
     LinkLabel BindingLink(BindingModel b)
     {
         string gesture = Choices.Gestures.FirstOrDefault(g => g.Code == b.Gesture)?.Text.Split("  (")[0].Split(" (")[0] ?? b.Gesture;
         var others = (b.Input ?? "").Split('+').Select(p => p.Trim()).Where(p => p.Length > 0).ToList();
         string combo = others.Count > 1 ? " (with " + InputText.Friendly(string.Join("+", others.Take(others.Count - 1))) + " held)" : "";
-        string layers = string.IsNullOrWhiteSpace(b.Layers) ? "" : $" (only while layer {b.Layers} is on)";
+        string layerNote = IsLayerOnly(b) ? $"In layer {b.Layers}: " : "";
         string hidden = b.Block == "none" ? "" : " Hidden from the game.";
         var link = new LinkLabel
         {
-            Text = $"{b.Name}: {gesture}{combo}{layers} → {MainForm.Plain(b.Action)}.{hidden}{(b.Enabled ? "" : " (switched off)")}",
+            Text = $"{layerNote}{b.Name}: {gesture}{combo} → {MainForm.Plain(b.Action)}.{hidden}{(b.Enabled ? "" : " (switched off)")}",
             AutoSize = true,
             MaximumSize = new Size(700, 0),
             LinkColor = b.Enabled ? Theme.Link : Theme.OffText,
-            Margin = new Padding(0, 2, 0, 2),
+            Margin = new Padding(IsLayerOnly(b) ? 18 : 0, 2, 0, 2), // layer ones indented under the normal ones
         };
         link.LinkClicked += (s, e) => open(b);
         return link;
