@@ -113,7 +113,7 @@ MenuPage Home(Engine& e, InGameMenu& m) {
 
 MenuPage ControllerBindings(Engine& e, InGameMenu& m, int hand) {
     MenuPage p;
-    p.title = hand ? "Right controller bindings" : "Left controller bindings";
+    p.title = hand ? "Right bindings" : "Left bindings";
     p.rows.push_back(MenuRow::Button("+ New binding", "Press the button you want, then a key on the VR keyboard", [&e, &m, hand] {
         m.CaptureInput([&e, &m](const InputId& id) {
             Binding b;
@@ -210,9 +210,9 @@ MenuPage BindingDetail(Engine& e, InGameMenu& m, int index) {
                                          [edit](int i) { edit([i](Binding& x) { x.action.mode = modes[i]; }); }));
     } else
         p.rows.push_back(MenuRow::Note("Does: " + ActionWords(b.action), "Change what it does in the editor"));
-    p.rows.push_back(MenuRow::Choice("The game", "Whether the game still sees the button while this is used",
-                                     { "still sees it", "doesn't see it" }, [get] { return get().block == BindingBlock::None ? 0 : 1; },
-                                     [edit](int i) { edit([i](Binding& x) { x.block = i ? BindingBlock::Trigger : BindingBlock::None; }); }));
+    p.rows.push_back(MenuRow::Choice("Game sees the button", "While this binding is in use", { "No", "Yes" },
+                                     [get] { return get().block == BindingBlock::None ? 1 : 0; },
+                                     [edit](int i) { edit([i](Binding& x) { x.block = i ? BindingBlock::None : BindingBlock::Trigger; }); }));
     p.rows.push_back(MenuRow::Button("Delete this binding", "", [&e, &m, index] {
         e.EditBindings([index](std::vector<Binding>& list) {
             if (index < (int)list.size()) list.erase(list.begin() + index);

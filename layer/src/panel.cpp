@@ -683,11 +683,11 @@ void DrawMenu(std::vector<uint32_t>& out, int W, int H, const MenuView& v, const
     g.DrawPath(&edge, &bgp);
 
     SolidBrush textB{ Color(st.text) }, accentB{ Color(st.accent) }, darkB{ Color(0xFF101418) };
-    SolidBrush subB{ Color((st.text & 0x00FFFFFFu) | 0xA0000000u) };
+    SolidBrush subB{ Color((st.text & 0x00FFFFFFu) | 0xA0000000u) }, disabledB{ Color((st.text & 0x00FFFFFFu) | 0x40000000u) };
     SolidBrush onB{ Color(st.toggled) }, offB{ Color(0xFF50565F) };
     Pen hovPen(Color(st.border | 0xFF000000u), 3.f);
     const float rowH = H * (1 - kMenuHeaderH - kMenuFooterH) / MenuView::kVisibleRows;
-    auto title = MakeFont(st, H * kMenuHeaderH * 0.36f * st.fontScale, FontStyleBold);
+    auto title = MakeFont(st, H * kMenuHeaderH * 0.3f * st.fontScale, FontStyleBold);
     auto font = MakeFont(st, rowH * 0.3f * st.fontScale, FontStyleBold);
     auto detailFont = MakeFont(st, rowH * 0.22f * st.fontScale, FontStyleRegular);
     auto heading = MakeFont(st, rowH * 0.26f * st.fontScale, FontStyleBold);
@@ -715,11 +715,11 @@ void DrawMenu(std::vector<uint32_t>& out, int W, int H, const MenuView& v, const
         GraphicsPath cp;
         roundRect(cp, x, y, w, h, h * 0.35f);
         uint32_t col = isPressed(b.hit) ? 0xFFFFFFFF : isHover(b.hit) ? st.hover : st.segment;
-        SolidBrush cb{ Color(enabled ? col : (st.segment & 0x00FFFFFFu) | 0x60000000u) };
+        SolidBrush cb{ Color(enabled ? col : (st.segment & 0x00FFFFFFu) | 0x50000000u) };
         g.FillPath(&cb, &cp);
         if (isHover(b.hit)) g.DrawPath(&hovPen, &cp);
         RectF rc(x, y, w, h);
-        Brush* tb = isPressed(b.hit) ? (Brush*)&darkB : enabled ? (Brush*)&textB : (Brush*)&subB;
+        Brush* tb = isPressed(b.hit) ? (Brush*)&darkB : enabled ? (Brush*)&textB : (Brush*)&disabledB;
         g.DrawString(text.c_str(), -1, font.get(), rc, &center, tb);
     };
 
@@ -776,9 +776,14 @@ void DrawMenu(std::vector<uint32_t>& out, int W, int H, const MenuView& v, const
             g.DrawString(Utf8ToW(r.label).c_str(), -1, font.get(), l1, &left, tb);
             g.DrawString(Utf8ToW(r.detail).c_str(), -1, detailFont.get(), l2, &left, sb);
         }
-        if (r.kind == MenuRowKind::Number || r.kind == MenuRowKind::Choice) { // its value sits between - and +
+        if (r.kind == MenuRowKind::Number || r.kind == MenuRowKind::Choice) { // its value sits between - and +, one line
             RectF vr(0.7f * W, y, 0.18f * W, h);
-            g.DrawString(Utf8ToW(r.value).c_str(), -1, font.get(), vr, &center, &accentB);
+            StringFormat one;
+            one.SetAlignment(StringAlignmentCenter);
+            one.SetLineAlignment(StringAlignmentCenter);
+            one.SetTrimming(StringTrimmingEllipsisCharacter);
+            one.SetFormatFlags(StringFormatFlagsNoWrap);
+            g.DrawString(Utf8ToW(r.value).c_str(), -1, font.get(), vr, &one, &accentB);
         } else if (r.kind == MenuRowKind::Toggle) { // an ON / OFF pill
             float pw = h * 1.6f, ph = h * 0.56f, px = x + w - pw - 10, py = y + (h - ph) / 2;
             GraphicsPath pill;
