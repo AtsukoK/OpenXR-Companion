@@ -24,6 +24,16 @@ controller bindings, but the results are ordinary bindings in the profile.
 - Layer fix found on the way: the HP Reverb G2 had no table of its own (read like the first WMR controllers, so its
   X / Y / A / B never reached the menus). Now `kHpReverb`.
 
+## Stick options and double flick (layer + editor)
+- `stick_shape.h`: `StickShape` per hand in the profile (`"sticks": {"left"/"right": {inner_deadzone, outer_deadzone,
+  direction_angle}}`), all 0 = off. Deadzones shape what the GAME sees (GameInputFilter, radial for 2D values, along
+  the axis for x / y actions; not when a binding overrides or a menu blocks; both hands queried together with different
+  settings = left alone). Direction zones only affect our stick-direction bindings (Engine::ComputeDown).
+- `double_tap_hold` gesture: like double_tap, but the second press stays armed and the action ends on release.
+  Quick choice "Double flick: press a key" writes key `mode: hold`, `block: none` (the game keeps the stick).
+- Editor: stick options card when the thumbstick is selected; written only while something is set.
+- Tests: TestStickOptions (14 checks).
+
 ## Checks
 - `quick_test.sh`: 0 failures, including `TestQuickBindings` (touch keeps presses, remap swaps, off hides) and
   `HP Reverb G2` (X / Y / A / B suggested).

@@ -5,6 +5,9 @@
 ### New
 - **Controller buttons pages**: Right / Left controller in the editor now show a drawing of your controller (Quest 3 / 3S, Quest 2 / Rift S, Quest Pro, Pico 4, Valve Index and Index-style, Vive wands, Windows Mixed Reality, HP Reverb G2). Click a button to see what pressing it, touching it or pushing the stick does, and change it: **press a key**, **act as another of the game's buttons** (like SteamVR's remapping), **turn it off in the game**, or anything else. These are ordinary bindings, listed under the controller. **Only when held for a moment** makes a choice start only when you hold the button, while a quick tap still reaches the game as a normal press.
 
+- **Stick options** per hand, on the thumbstick of the controller pages (all off unless you set them): **inner and outer deadzones** for what the game sees from the stick, and a **direction zone** so pushing forward and leaning a little sideways doesn't also fire your left / right bindings.
+- **Double flick**: a new way to use a button or stick direction, double-tap and hold (`double_tap_hold`). For example sprint: flick the stick forward twice and keep it pushed to hold Shift.
+
 ### Changed
 - The built-in profile no longer has the switched-off "Quick save (shift + A)" and "Quick load (shift + hold B)" examples. Quick save and quick load stay on the wrist panel and the wheel.
 

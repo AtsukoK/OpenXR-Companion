@@ -11,6 +11,7 @@ public class ControllerButtonsPage : UserControl
     readonly int hand;
     readonly Action<BindingModel> open;
     readonly Action<BindingModel, bool> added;
+    readonly Action changed; // a profile setting on this page changed (stick options)
     readonly Func<string> loadLayoutId;
     readonly Action<string> saveLayoutId;
     readonly ControllerPicture picture = new() { Dock = DockStyle.Top, Height = 360 };
@@ -21,8 +22,9 @@ public class ControllerButtonsPage : UserControl
     // open: show a binding in its editor. added: a new binding was put in the profile (true = show it in its editor).
     // The owner updates the list after this page's click is done, so the page may be rebuilt then.
     public ControllerButtonsPage(ProfileModel profile, int hand, Action<BindingModel> open, Action<BindingModel, bool> added,
-                                 Func<string> loadLayoutId, Action<string> saveLayoutId)
+                                 Action changed, Func<string> loadLayoutId, Action<string> saveLayoutId)
     {
+        this.changed = changed;
         this.profile = profile;
         this.hand = hand;
         this.open = open;
@@ -110,13 +112,69 @@ public class ControllerButtonsPage : UserControl
             if (!part.IsUsable)
                 details.Controls.Add(Note(part.NotUsable));
             else
+            {
+                if (part.Comp == "thumbstick")
+                    details.Controls.Add(StickOptionsCard());
                 foreach (var way in part.Ways)
                     details.Controls.Add(WayCard(part, way));
+            }
         }
         if (Theme.IsDark)
             ThemeWalker.Apply(details);
         details.ResumeLayout();
         ResumeLayout();
+    }
+
+    // This hand's stick options, saved with the profile. All off at 0: the stick works as before.
+    Control StickOptionsCard()
+    {
+        var card = new FlowLayoutPanel
+        {
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            AutoSize = true,
+            BackColor = Theme.Card,
+            Padding = new Padding(12, 8, 12, 8),
+            Margin = new Padding(0, 0, 0, 8),
+            MinimumSize = new Size(720, 0),
+        };
+        card.Controls.Add(new Label { Text = "Stick options (saved with the profile, 0 = off)", AutoSize = true, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold) });
+        var stick = StickOf(hand) ?? new StickModel();
+        var form = new FormPanel { Dock = DockStyle.None };
+        NumericUpDown Number(decimal max, decimal value, Action<float> set)
+        {
+            var n = new NumericUpDown { Minimum = 0, Maximum = max, Increment = 1, Width = 80, Value = Math.Clamp(value, 0, max) };
+            n.ValueChanged += (s, e) =>
+            {
+                set((float)n.Value);
+                SaveStick(stick);
+            };
+            return n;
+        }
+        form.AddRow("Inner deadzone (%)", Number(90, (decimal)Math.Round(stick.InnerDeadzone * 100), v => stick.InnerDeadzone = v / 100f),
+                    "What the game sees: pushes smaller than this count as none (stops drift). The rest is stretched, so the stick still reaches full at the edge. 10 to 15 is typical.");
+        form.AddRow("Outer deadzone (%)", Number(90, (decimal)Math.Round(stick.OuterDeadzone * 100), v => stick.OuterDeadzone = v / 100f),
+                    "What the game sees: the last part toward the edge already counts as fully pushed, for sticks that never quite reach the edge. 5 to 10 is typical.");
+        form.AddRow("Direction zone (°)", Number(45, (decimal)Math.Round(stick.DirectionAngle), v => stick.DirectionAngle = v),
+                    "For your bindings on Up / Down / Left / Right: a direction only counts while the stick points within this many degrees of it, so pushing forward and leaning a little sideways doesn't also fire Left or Right. 45 = always the nearest direction. 30 leaves a gap between them.");
+        card.Controls.Add(form);
+        return card;
+    }
+
+    StickModel StickOf(int h) => h == 0 ? profile.Sticks?.Left : profile.Sticks?.Right;
+
+    // Stored only while something is set, so untouched profiles stay as they were.
+    void SaveStick(StickModel stick)
+    {
+        var keep = stick.IsOff ? null : stick;
+        profile.Sticks ??= new SticksModel();
+        if (hand == 0)
+            profile.Sticks.Left = keep;
+        else
+            profile.Sticks.Right = keep;
+        if (profile.Sticks.Left == null && profile.Sticks.Right == null)
+            profile.Sticks = null;
+        changed();
     }
 
     static Label Note(string text) => new() { Text = text, AutoSize = true, MaximumSize = new Size(720, 0), ForeColor = Theme.SubText, Margin = new Padding(0, 2, 0, 8) };
@@ -155,7 +213,7 @@ public class ControllerButtonsPage : UserControl
             }
             card.Controls.Add(BindingRow(bd));
         }
-        card.Controls.Add(AddMenuButton(input, what, IsTouchOnly(part, way)));
+        card.Controls.Add(AddMenuButton(input, what, IsTouchOnly(part, way), way is "up" or "down" or "left" or "right"));
         return card;
     }
 
@@ -231,6 +289,7 @@ public class ControllerButtonsPage : UserControl
             GestureKind.Hold => "Hold",
             GestureKind.DoubleTap => "Double-tap",
             GestureKind.WhileHeld => "While held",
+            GestureKind.DoubleTapHold => "2× hold",
             _ => "Press",
         };
         var parts = (b.Input ?? "").Split('+').Select(p => p.Trim()).Where(p => p.Length > 0).ToList();
@@ -280,7 +339,7 @@ public class ControllerButtonsPage : UserControl
     }
 
     // One "+ Add" button per way of using a button; its menu holds the quick choices.
-    Control AddMenuButton(string input, string what, bool isTouchOnly)
+    Control AddMenuButton(string input, string what, bool isTouchOnly, bool isStickDirection)
     {
         var add = new Button { Text = "+ Add…", AutoSize = true, Height = 28, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(0, 6, 0, 0), BackColor = Theme.Button, ForeColor = Theme.Text };
         add.FlatAppearance.BorderColor = Theme.CardBorder;
@@ -307,6 +366,9 @@ public class ControllerButtonsPage : UserControl
             menu.Items.Add(new ToolStripSeparator());
             Item("Hold: press a key (a quick tap still reaches the game)…", Key, holdOnly: true);
             Item("Hold: act as another button (a quick tap still reaches the game)…", Remap, holdOnly: true);
+            menu.Items.Add(new ToolStripSeparator());
+            Item(isStickDirection ? "Double flick: press a key, held while you keep pushing (sprint)…" : "Double-tap and hold: press a key, held until you let go…",
+                 () => QuickBindingDialogs.AskKey(FindForm(), what) is string keys ? QuickBindings.DoubleFlickKey(input, what, keys) : null);
         }
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Something else (wheel, macro, layer…)", null, (s, e) =>

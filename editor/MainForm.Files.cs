@@ -148,11 +148,13 @@ public partial class MainForm
                         f.Profile.Bindings.Add(QuickBindings.OffInGame(input, "test"));
                         f.Profile.Bindings.Add(QuickBindings.Blank(input, "test"));
                         f.Profile.Bindings.Add(QuickBindings.OnlyWhenHeld(QuickBindings.Key(input, "test", "F13")));
-                        quick += 5;
+                        f.Profile.Bindings.Add(QuickBindings.DoubleFlickKey(input, "test", "F13"));
+                        quick += 6;
                     }
+        f.Profile.Sticks = new SticksModel { Left = new StickModel { InnerDeadzone = 0.12f, DirectionAngle = 30 }, Right = new StickModel { OuterDeadzone = 0.08f } };
         {
             var err = Native.Validate(f.Serialize());
-            sb.AppendLine($"controller pages: {(err == null ? "OK" : "ERROR " + err)} ({quick} quick bindings)");
+            sb.AppendLine($"controller pages: {(err == null ? "OK" : "ERROR " + err)} ({quick} quick bindings, stick options)");
             if (err != null)
                 bad++;
         }

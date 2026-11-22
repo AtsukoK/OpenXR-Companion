@@ -46,7 +46,7 @@ public class InputConv : ChoiceConverter
 public class GestureConv : ChoiceConverter
 {
     protected override bool Exclusive => true;
-    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "press", "tap", "hold", "double_tap", "while_held" };
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "press", "tap", "hold", "double_tap", "while_held", "double_tap_hold" };
 }
 public class BlockConv : ChoiceConverter
 {
@@ -145,6 +145,10 @@ public class ProfileModel
     [DisplayName("Button thresholds")]
     [JsonPropertyName("thresholds")] public Thresholds Thresholds { get; set; } = new();
 
+    // Stick options per hand; not written while nothing is set.
+    [Browsable(false)]
+    [JsonPropertyName("sticks"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public SticksModel Sticks { get; set; }
+
     [Category("3 Look"), TypeConverter(typeof(ExpandableObjectConverter)), Description("Where the wheel appears and how it looks.")]
     [DisplayName("Wheel look and position")]
     [JsonPropertyName("style")] public StyleModel Style { get; set; } = new();
@@ -172,6 +176,21 @@ public class ProfileModel
 
     [Browsable(false)][JsonPropertyName("bindings")] public List<BindingModel> Bindings { get; set; } = new();
     [Browsable(false)][JsonPropertyName("wheels")] public Dictionary<string, WheelModel> Wheels { get; set; } = new();
+}
+
+// Stick options, all off at 0 (see the layer's stick_shape.h).
+public class StickModel
+{
+    [JsonPropertyName("inner_deadzone")] public float InnerDeadzone { get; set; }
+    [JsonPropertyName("outer_deadzone")] public float OuterDeadzone { get; set; }
+    [JsonPropertyName("direction_angle")] public float DirectionAngle { get; set; }
+    [JsonIgnore] public bool IsOff => InnerDeadzone <= 0 && OuterDeadzone <= 0 && DirectionAngle <= 0;
+}
+
+public class SticksModel
+{
+    [JsonPropertyName("left"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public StickModel Left { get; set; }
+    [JsonPropertyName("right"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public StickModel Right { get; set; }
 }
 
 public class Thresholds

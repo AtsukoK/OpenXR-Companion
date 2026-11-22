@@ -33,6 +33,7 @@ public static class GestureKind
     public const string Hold = "hold";
     public const string DoubleTap = "double_tap";
     public const string WhileHeld = "while_held";
+    public const string DoubleTapHold = "double_tap_hold"; // the second press starts it, held while that press is
 }
 
 public static class Choices
@@ -54,6 +55,7 @@ public static class Choices
         new(GestureKind.Press, "Pressed"), new(GestureKind.Tap, "Tapped quickly (so a Hold on the same button can still work)"),
         new(GestureKind.Hold, "Held down for a moment"), new(GestureKind.DoubleTap, "Double-tapped"),
         new(GestureKind.WhileHeld, "Held  (starts on press, stops on release)"),
+        new(GestureKind.DoubleTapHold, "Double-tapped, then held  (a double flick of the stick; stops on release)"),
     };
     public static readonly Choice[] Blocks =
     {

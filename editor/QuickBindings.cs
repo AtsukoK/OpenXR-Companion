@@ -50,7 +50,19 @@ public static class QuickBindings
         Action = new ActionModel { Type = ActionType.Key, Keys = "F1" },
     };
 
-    public const int DefaultHoldMs = 400;
+    public const int DefaultHoldMs = 400, DoubleFlickMs = 350;
+
+    // A double flick of the stick (or double tap of a button), then held: the key is held until you let go.
+    // Like sprinting on a double flick forward. The game keeps getting the stick or button as usual.
+    public static BindingModel DoubleFlickKey(string input, string partName, string keys) => new()
+    {
+        Name = $"{partName}, double flick: {keys}",
+        Input = input,
+        Gesture = GestureKind.DoubleTapHold,
+        DoubleTapMs = DoubleFlickMs,
+        Block = "none",
+        Action = new ActionModel { Type = ActionType.Key, Keys = keys, Mode = "hold" },
+    };
 
     // Only when held for a moment, like the Bannerlord VR radial menu: the game never sees the button while you hold it,
     // and a quick tap still reaches the game as a normal press of the button. The action starts once it has been held.

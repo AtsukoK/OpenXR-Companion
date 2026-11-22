@@ -63,6 +63,7 @@ public partial class MainForm
                 ed = new ControllerButtonsPage(Profile, (string)n.Tag == "bindings_left" ? 0 : 1,
                                                b => tree.SelectedNode = Find(tree.Nodes, b),
                                                (b, openIt) => Later(() => { if (openIt) Rebuild(b); else { MarkDirty(); BuildTree(); } }),
+                                               Changed,
                                                () => ControllerPictureChoice.Load(Profile), ControllerPictureChoice.Save);
                 break;
             case "wheels":

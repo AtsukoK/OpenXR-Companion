@@ -145,7 +145,7 @@ public class OverviewEditor : EditorBase
     // "Double-tap Right Thumbrest" (+ the layer it needs)
     static string HowTo(BindingModel b)
     {
-        string verb = b.Gesture switch { "double_tap" => "Double-tap", "hold" => "Hold", "while_held" => "Hold", "tap" => "Tap", _ => "Press" };
+        string verb = b.Gesture switch { "double_tap" => "Double-tap", "double_tap_hold" => "Double-tap and hold", "hold" => "Hold", "while_held" => "Hold", "tap" => "Tap", _ => "Press" };
         string s = verb + " " + InputText.Friendly(b.Input);
         if (!string.IsNullOrWhiteSpace(b.Layers))
             s += " (while layer " + b.Layers + " is on)";

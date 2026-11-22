@@ -81,6 +81,6 @@ public class BindingEditor : EditorBase
         FormPanel.Show(lHold, b.Gesture == GestureKind.Hold);
         FormPanel.Show(lPass, b.Gesture == GestureKind.Hold);
         FormPanel.Show(lTap, b.Gesture == GestureKind.Tap);
-        FormPanel.Show(lDbl, b.Gesture == GestureKind.DoubleTap);
+        FormPanel.Show(lDbl, b.Gesture is GestureKind.DoubleTap or GestureKind.DoubleTapHold);
     }
 }

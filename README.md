@@ -99,6 +99,9 @@ Click a button to see each way of using it: pressing it, just touching it (resti
 - **+ Act as another button**: the game sees another of its buttons instead, for as long as you hold it (like remapping in SteamVR).
 - **Turn off in the game**: the game no longer sees that button.
 - **+ Something else**: any other action (a wheel, a macro, a layer...) in the binding editor.
+- **Double flick** (stick directions; double-tap and hold on buttons): press a key held for as long as you keep pushing after a quick second flick, like sprinting on a double flick forward. The game still gets the stick.
+
+Click the **thumbstick** for its **stick options** (saved with the profile, all off at 0): an **inner deadzone** and **outer deadzone** for what the game sees from the stick, and a **direction zone** so a forward push that leans a little sideways doesn't also count as left or right for your bindings.
 
 The **Hold:** choices keep the button's normal use in the game: your choice starts only when you hold the button (0.4 s), the game doesn't see it while you hold, and a quick tap still reaches the game as a normal press. Like the Bannerlord VR radial menu on a held button.
 
@@ -306,7 +309,9 @@ Everything here can be set in the editor; this is for people who prefer the file
 
 **Chords**: `left.grip+right.b` means hold left grip, then press B. The last input is the trigger and the others must already be held. When several bindings match the same press, the most specific one wins (more chord inputs or more layer conditions). This lets `right.b` stay the game's B while `left.grip+right.b` does something else.
 
-**Gestures**: `press`, `tap` (quick release; can share a button with a `hold`), `hold` (after `hold_ms`), `double_tap`, `while_held` (start on press, stop on release).
+**Gestures**: `press`, `tap` (quick release; can share a button with a `hold`), `hold` (after `hold_ms`), `double_tap`, `while_held` (start on press, stop on release), `double_tap_hold` (the second press within `double_tap_ms` starts it, and it lasts while that press is held: a double flick of the stick to sprint).
+
+**Sticks** (all off when left out): `"sticks": { "right": { "inner_deadzone": 0.12, "outer_deadzone": 0.05, "direction_angle": 30 } }`. The deadzones (0 to 0.9 of a full push) change what the game sees from that stick: pushes inside the inner one count as none, the rest is stretched to reach full, and the outer one counts the last part as full. `direction_angle` (degrees, 5 to 45) is for bindings on stick directions: a direction only counts while the stick points within that angle of it, so a forward push that leans sideways doesn't also fire left or right.
 
 **Layers** change what normal buttons do. A binding with `"action": {"type": "layer", "layer": "shift", "mode": "hold"}` turns `shift` on while held, or use `toggle`, `on` or `off`. Any binding with `"layers": "shift"` only works while that layer is on, and its button is hidden from the game. That gives you a whole second set of controls.
 

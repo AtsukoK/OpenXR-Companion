@@ -227,6 +227,7 @@ public partial class MainForm
         "hold" => "hold",
         "double_tap" => "double-tap",
         "while_held" => "hold down",
+        "double_tap_hold" => "double-tap and hold",
         _ => b.Gesture,
     };
     static int HandOf(BindingModel b) => (b.Input ?? "").Split('+').Last().Trim().StartsWith("left") ? 0 : 1;

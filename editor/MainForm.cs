@@ -543,7 +543,9 @@ public partial class MainForm : Form
         Snap("2a_controller_left", f.bindingRoots[0]);
         ControllerButtonsPage.StartWith(1, "primary");
         Snap("2a_controller_right_a", f.bindingRoots[1]);
+        f.tree.SelectedNode = f.tree.Nodes[0]; // away and back, so the page is built again with the stick selected
         ControllerButtonsPage.StartWith(1, "thumbstick");
+        Snap("2a_controller_right_stick", f.bindingRoots[1]);
         Snap("2_binding", f.bindingRoots[1].Nodes.Count > 0 ? f.bindingRoots[1].Nodes[0] : null);
         Snap("3_binding_chord", f.bindingRoots[1].Nodes.Count > 1 ? f.bindingRoots[1].Nodes[1] : null);
         Snap("4_wheel", f.wheelsRoot.Nodes.Count > 0 ? f.wheelsRoot.Nodes[0] : null);
