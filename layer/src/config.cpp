@@ -929,6 +929,12 @@ bool LoadMirrorSettings(MirrorSettings& m) {
         Get(j, "quality", q);
         m.light = Lower(q) != "full";
         Get(j, "both_eyes", m.bothEyes);
+        std::string ctr = "gaze";
+        Get(j, "center", ctr);
+        m.centerOnGaze = Lower(ctr) != "middle";
+        Get(j, "steady_room", m.steadyRoom);
+        Get(j, "side_margin", m.sideMargin);
+        m.sideMargin = std::clamp(m.sideMargin, 0.f, 0.3f);
         return true;
     } catch (...) {
         return false;
@@ -952,6 +958,9 @@ bool SaveMirrorSettings(const MirrorSettings& m) {
     j["on_top"] = m.onTop;
     j["quality"] = m.light ? "light" : "full";
     j["both_eyes"] = m.bothEyes;
+    j["center"] = m.centerOnGaze ? "gaze" : "middle";
+    j["steady_room"] = m.steadyRoom;
+    j["side_margin"] = std::round(m.sideMargin * 100.f) / 100.f;
     return WriteFileAtomic(MirrorSettingsPath(), j.dump(2));
 }
 

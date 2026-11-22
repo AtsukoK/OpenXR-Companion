@@ -493,6 +493,15 @@ public class SettingsEditor : EditorBase
                 var st = new NumericUpDown { Minimum = 0, Maximum = 1, Increment = 0.05m, DecimalPlaces = 2, Width = 90, Value = (decimal)Math.Clamp(HeadsetMirrorFile.Smoothing, 0, 1) };
                 st.ValueChanged += (o, e) => HeadsetMirrorFile.Smoothing = (double)st.Value;
                 mir.AddRow("Steady the picture", st, "Smooths small head shakes out of the window (like a camera stabiliser); real head turns still follow. 0 = off (the exact headset view), 0.5 = the default, 1 = strongest. It can only lag into the picture the zoom leaves out: at zoom 1 it barely works, from about 1.3 it works fully.");
+                var centre = new ChoiceBox(new Choice[] { new("gaze", "Where the eye looks"), new("middle", "Middle of the picture") }, 200) { Code = HeadsetMirrorFile.Center };
+                centre.SelectedIndexChanged += (o, e) => HeadsetMirrorFile.Center = centre.Code;
+                mir.AddRow("Centre the view on", centre, "Where the eye looks: what you aim at sits in the middle of the window. Middle of the picture: the older way, a little off to one side on Quest, but further from the black strip on the nose side.");
+                var margin = new NumericUpDown { Minimum = 0, Maximum = 0.3m, Increment = 0.01m, DecimalPlaces = 2, Width = 90, Value = (decimal)Math.Clamp(HeadsetMirrorFile.SideMargin, 0, 0.3) };
+                margin.ValueChanged += (o, e) => HeadsetMirrorFile.SideMargin = (double)margin.Value;
+                mir.AddRow("Edge margin", margin, "How far the view stays from the eye picture's sides (0.12 = 12% of its width), to keep the black strip on the nose side out. Lower it if you see no strip, raise it if you do.");
+                var room = new CheckBox { Text = "Steadying makes its own room", AutoSize = true, Checked = HeadsetMirrorFile.SteadyRoom };
+                room.CheckedChanged += (o, e) => HeadsetMirrorFile.SteadyRoom = room.Checked;
+                mir.AddRow("", room, "Off: zoom means the same with steadying on or off, and steadying only uses the room the zoom leaves. On: steadying crops in around the centre by itself so it always works fully, so low zoom looks closer.");
                 mir.AddRow("Frame rate cap (fps)", fps, "0 = every headset frame. 60 is smooth for recording and costs little. 30 halves the cost.");
                 var quality = new ChoiceBox(new Choice[] { new("light", "Light (cheaper, default)"), new("full", "Full (copy with mipmaps)") }, 200) { Code = HeadsetMirrorFile.Quality };
                 quality.SelectedIndexChanged += (o, e) => HeadsetMirrorFile.Quality = quality.Code;

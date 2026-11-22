@@ -30,6 +30,9 @@ public static class HeadsetMirrorFile
     public static double Smoothing { get => Get("smoothing", 0.5); set => Set("smoothing", Math.Round(value, 2)); }
     public static bool OnTop { get => Get("on_top", false); set => Set("on_top", value); }
     public static int Fps { get => Get("fps", 60); set => Set("fps", value); }
+    public static string Center { get => Get("center", "gaze"); set => Set("center", value); }
+    public static bool SteadyRoom { get => Get("steady_room", false); set => Set("steady_room", value); }
+    public static double SideMargin { get => Get("side_margin", 0.12); set => Set("side_margin", Math.Round(value, 2)); }
     public static bool BothEyes { get => Get("both_eyes", false); set => Set("both_eyes", value); }
     public static string Quality { get => Get("quality", "light"); set => Set("quality", value); }
 }

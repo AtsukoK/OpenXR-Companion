@@ -2423,6 +2423,25 @@ int main(int argc, char** argv) {
                     CHECK(W <= Hh || at(3, Hh / 2) == 0x000000, "mirror: no VR view: black either side of a square screen");
                 }
             }
+            // "Steadying makes its own room": at zoom 1 with steadying it crops in, so the panel looks wider; off, zoom 1 stays 1.
+            {
+                auto redWidth = [&](bool room) {
+                    m.zoom = 1.f;
+                    m.smoothing = 0.5f;
+                    m.steadyRoom = room;
+                    m.grab = true;
+                    m.Frame(dev, ctx, L, 8000000000LL, locate);
+                    int y = m.grabH / 2, n = 0;
+                    for (int x = 0; x < m.grabW; x++)
+                        if ((m.grabbed[(size_t)y * m.grabW + x] & 0xFFFFFF) == 0xFF0000) n++;
+                    return n;
+                };
+                int plain = redWidth(false), roomy = redWidth(true);
+                CHECK(roomy > plain * 5 / 4, ("mirror: steadying's own room crops in (panel " + std::to_string(plain) + " -> " +
+                                              std::to_string(roomy) + " px wide)")
+                                                 .c_str());
+                m.steadyRoom = false;
+            }
             // Both eyes: the left eye (green) fills the right eye's nose side, so even at zoom 1 the view can
             // centre on where the right eye looks and the window's left edge comes from the left eye.
             {

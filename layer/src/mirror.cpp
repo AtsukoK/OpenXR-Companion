@@ -569,13 +569,12 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
         vh = ey;
     }
     float cw = vw / ex, ch = vh / ey;
-    // Sideways: centred on where the eye looks straight ahead (on Quest that sits toward the nose, so the
-    // middle of the picture put the view too far to one side), but never closer than kSideMargin to the
-    // picture's side edges: the nose side has a black unrendered strip. Small margin top and bottom.
-    const float kSideMargin = 0.12f; // 0.08 still showed the strip on Quest 3 when steadying lagged
+    // Sideways: centred on where the eye looks straight ahead (on Quest that sits toward the nose), or on the
+    // picture's middle (centerOnGaze off), but never closer than sideMargin to the picture's side edges:
+    // the nose side has a black unrendered strip. Small margin top and bottom.
     const float m = 0.04f;
     bool steady = smoothing > 0.001f;
-    float sideM = std::max(m, kSideMargin);
+    float sideM = std::max(m, std::clamp(sideMargin, 0.f, 0.3f));
     // Both eyes: the other eye fills the nose side, so the view can centre on where this eye looks even at zoom 1.
     // Its picture is drawn as if far away (only its direction counts): distant things line up, close ones double a little.
     const bool noseLeft = eye == 1; // the right eye's nose side is on its left
@@ -600,10 +599,19 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
     const bool combine = ov != nullptr;
     float mL = sideM, mR = sideM; // how close the view may come to this eye picture's left / right edge
     if (combine) (noseLeft ? mL : mR) = -0.3f;
-    // Steadying never changes the crop: zoom means the same with it on or off (1 = the whole eye picture).
-    // It lags only into the room the zoom leaves (limited below), so at 1 it barely moves; from ~1.3 it has room.
+    // By default steadying never changes the crop: zoom means the same with it on or off (1 = the whole eye
+    // picture), and it lags only into the room the zoom leaves (limited below). With steadyRoom it crops in
+    // around the centre by itself so it always has room, at the cost of a closer view at low zoom.
+    float centre = centerOnGaze ? cu : 0.5f;
+    if (steady && steadyRoom) {
+        const float hr = 0.07f;
+        float maxcx = std::max(0.2f, 2 * (std::min(centre - mL, 1.f - mR - centre) - hr)), maxcy = 1.f - 2 * (m + hr);
+        float s = std::min({ 1.f, maxcx / cw, maxcy / ch });
+        cw *= s;
+        ch *= s;
+    }
     float lo = mL, hi = 1.f - mR - cw;
-    float cl = lo <= hi ? std::clamp(cu - cw / 2, lo, hi) : (lo + hi) / 2;
+    float cl = lo <= hi ? std::clamp(centre - cw / 2, lo, hi) : (lo + hi) / 2;
     float ct = std::clamp(cv - ch / 2, std::min(m, (1.f - ch) / 2), std::max(1.f - m - ch, (1.f - ch) / 2));
 
     // window pixels per eye pixel: above 1 the picture is stretched -> sharper bicubic stretch

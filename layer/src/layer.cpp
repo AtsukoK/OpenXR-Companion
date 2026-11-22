@@ -510,6 +510,9 @@ static void UpdateHeadsetMirror() {
         gMirror.onTop = gMirrorSet.onTop;
         gMirror.light = gMirrorSet.light;
         gMirror.bothEyes = gMirrorSet.bothEyes;
+        gMirror.centerOnGaze = gMirrorSet.centerOnGaze;
+        gMirror.steadyRoom = gMirrorSet.steadyRoom;
+        gMirror.sideMargin = gMirrorSet.sideMargin;
         bool want = gMirrorSet.on && gSession.gfx.api == 11;
         if (gMirrorSet.on && gSession.gfx.api == 12 && !gMirror.On()) {
             static bool told = false;

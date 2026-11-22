@@ -34,6 +34,9 @@ public:
     // Light: draw straight from the game's eye image (no full-size copy, no mipmaps), much cheaper; the full
     // copy is still used when the image can't be read directly or the window is under a third of the picture's size.
     bool light = true;
+    bool centerOnGaze = true; // centre sideways on where the eye looks; false = the middle of the picture
+    bool steadyRoom = false;  // steadying crops in by itself to always have room to lag
+    float sideMargin = 0.12f; // keep this much (share of the picture's width) from its side edges
     bool bothEyes = false; // fill the nose side from the other eye, so the view centres on where this eye looks
     bool lastDirect = false; // the last frame was drawn the light way (tests)
     float zoom = 1.3f; // 1 = the whole eye picture, more = cropped in like a normal camera

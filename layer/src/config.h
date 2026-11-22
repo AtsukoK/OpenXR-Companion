@@ -379,6 +379,9 @@ struct MirrorSettings {
     int fps = 60;
     float smoothing = 0.5f;
     bool onTop = false;
+    bool centerOnGaze = true; // "center": "gaze" | "middle"
+    bool steadyRoom = false;  // "steady_room"
+    float sideMargin = 0.12f; // "side_margin"
     bool bothEyes = false; // "both_eyes": the other eye fills the nose side
     bool light = true; // "quality": "light" draws straight from the game's image (cheap), "full" copies it with mipmaps
 };
