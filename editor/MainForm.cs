@@ -538,6 +538,8 @@ public partial class MainForm : Form
         Snap("1_search_zoom", f.tree.Nodes[1].Nodes.Count > 0 ? f.tree.Nodes[1].Nodes[0] : f.tree.Nodes[1]);
         f.search.Text = "";
         f.BuildTree();
+        Snap("2a_controller_right", f.bindingRoots[1]);
+        Snap("2a_controller_left", f.bindingRoots[0]);
         Snap("2_binding", f.bindingRoots[1].Nodes.Count > 0 ? f.bindingRoots[1].Nodes[0] : null);
         Snap("3_binding_chord", f.bindingRoots[1].Nodes.Count > 1 ? f.bindingRoots[1].Nodes[1] : null);
         Snap("4_wheel", f.wheelsRoot.Nodes.Count > 0 ? f.wheelsRoot.Nodes[0] : null);

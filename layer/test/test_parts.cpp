@@ -249,3 +249,62 @@ void TestKeySequences() { // key sequences: good steps pass, bad waits and unkno
     err.clear();
     CHECK(Keys::ValidateSequence("", err), "keys: empty sequence is valid (does nothing)");
 }
+
+// Controller buttons page: its quick choices are ordinary bindings, written as the editor writes them.
+// Key bindings aren't driven here (they would type real keys); a layer stands in for the key on the touch one.
+void TestQuickBindings() {
+    const char* text = R"JSON({
+      "bindings": [
+        { "name": "Right A: touch", "input": "right.a.touch", "gesture": "while_held", "block": "none",
+          "action": { "type": "layer", "layer": "touching", "mode": "hold" } },
+        { "name": "Right B acts as Right A", "input": "right.b", "gesture": "while_held", "block": "trigger",
+          "action": { "type": "xr_input", "target": "right.a", "mode": "hold" } },
+        { "name": "Right trigger: off in the game", "input": "right.trigger", "gesture": "while_held", "block": "trigger",
+          "action": { "type": "none" } }
+      ]
+    })JSON";
+    std::string err;
+    auto p = ParseProfileText(text, err);
+    Action touchingLayer;
+    touchingLayer.type = ActType::Layer;
+    touchingLayer.layer = "touching";
+    CHECK(p != nullptr && p->bindings.size() == 3, ("quick bindings: the profile reads " + err).c_str());
+    if (!p) return;
+    Engine e;
+    e.SetProfile(p);
+    Frame f;
+    double t = 0;
+    auto step = [&](int frames = 3) {
+        for (int i = 0; i < frames; i++) {
+            t += 0.011;
+            f.t = t;
+            e.Update(f);
+        }
+    };
+    step();
+
+    f.h[1].b1t = true; // resting a thumb on A
+    step();
+    CHECK(e.IsOn(touchingLayer), "quick bindings: touching A starts its binding");
+    f.h[1].b1 = true; // and pressing it
+    step();
+    CHECK(!e.Blocked(1, C_BTN1), "quick bindings: a touch binding never hides the press from the game");
+    f.h[1].b1 = f.h[1].b1t = false;
+    step();
+    CHECK(!e.IsOn(touchingLayer), "quick bindings: letting go of A ends it");
+
+    f.h[1].b2 = true; // B acts as A
+    step();
+    CHECK(e.Blocked(1, C_BTN2), "quick bindings: the remapped button is hidden from the game while held");
+    CHECK(e.Ov(1, C_BTN1).on && e.Ov(1, C_BTN1).press, "quick bindings: the game sees the other button pressed instead");
+    f.h[1].b2 = false;
+    step();
+    CHECK(!e.Blocked(1, C_BTN2) && !e.Ov(1, C_BTN1).on, "quick bindings: letting go gives both buttons back");
+
+    f.h[1].trig = 1.f; // trigger turned off in the game
+    step();
+    CHECK(e.Blocked(1, C_TRIGGER), "quick bindings: a button turned off is hidden from the game while used");
+    f.h[1].trig = 0.f;
+    step();
+    CHECK(!e.Blocked(1, C_TRIGGER), "quick bindings: and given back when let go");
+}

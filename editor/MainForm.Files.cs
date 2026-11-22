@@ -51,20 +51,26 @@ public partial class MainForm
         ActiveProfile = select; // what is selected is what games use
     }
 
+    // A profile's text as the editor's model (no wrist migration). Throws on text that isn't a profile.
+    static ProfileModel ProfileFromText(string text)
+    {
+        var root = JsonNode.Parse(text, documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+        // Accept a chord given as an array as well.
+        foreach (var b in root?["bindings"]?.AsArray() ?? new JsonArray())
+            if (b?["input"] is JsonArray arr)
+                b["input"] = string.Join("+", arr.Select(x => x.ToString()));
+        foreach (var b in root?["bindings"]?.AsArray() ?? new JsonArray())
+            foreach (var k in new[] { "layers", "not_layers" })
+                if (b?[k] is JsonArray la)
+                    b[k] = string.Join(",", la.Select(x => x.ToString()));
+        return root.Deserialize<ProfileModel>(JsonOpts) ?? new ProfileModel();
+    }
+
     void LoadFile(string path)
     {
         try
         {
-            var root = JsonNode.Parse(File.ReadAllText(path), documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
-            // Accept a chord given as an array as well.
-            foreach (var b in root?["bindings"]?.AsArray() ?? new JsonArray())
-                if (b?["input"] is JsonArray arr)
-                    b["input"] = string.Join("+", arr.Select(x => x.ToString()));
-            foreach (var b in root?["bindings"]?.AsArray() ?? new JsonArray())
-                foreach (var k in new[] { "layers", "not_layers" })
-                    if (b?[k] is JsonArray la)
-                        b[k] = string.Join(",", la.Select(x => x.ToString()));
-            Profile = root.Deserialize<ProfileModel>(JsonOpts) ?? new ProfileModel();
+            Profile = ProfileFromText(File.ReadAllText(path));
             foreach (var (k, w) in Profile.Wheels)
                 w.Name = k;
             Profile.WristLeft ??= new();
@@ -126,6 +132,27 @@ public partial class MainForm
             var openers = string.Join(", ", f.Profile.Bindings.Where(b => b.Action?.Type == ActionType.Wheel).Select(b => b.Input + " " + b.Gesture));
             sb.AppendLine($"controllers {id}: {(err == null && n == 2 ? "OK" : "ERROR " + err)} ({n} openers: {openers})");
             if (err != null || n != 2)
+                bad++;
+        }
+        // Every quick choice the controller pages can make, for every controller and button, must pass the layer's parser.
+        f.LoadFile(builtin);
+        int quick = 0;
+        foreach (var layout in ControllerLayouts.All)
+            for (int hand = 0; hand < 2; hand++)
+                foreach (var part in layout.PartsFor(hand).Where(p => p.IsUsable))
+                    foreach (var way in part.Ways)
+                    {
+                        string input = ControllerLayouts.InputOf(hand, part, way);
+                        f.Profile.Bindings.Add(QuickBindings.Key(input, "test", "F13"));
+                        f.Profile.Bindings.Add(QuickBindings.GameButton(input, "test", hand == 0 ? "left.trigger" : "right.trigger", "test"));
+                        f.Profile.Bindings.Add(QuickBindings.OffInGame(input, "test"));
+                        f.Profile.Bindings.Add(QuickBindings.Blank(input, "test"));
+                        quick += 4;
+                    }
+        {
+            var err = Native.Validate(f.Serialize());
+            sb.AppendLine($"controller pages: {(err == null ? "OK" : "ERROR " + err)} ({quick} quick bindings)");
+            if (err != null)
                 bad++;
         }
         sb.AppendLine("--- round-trip of default ---");

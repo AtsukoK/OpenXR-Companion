@@ -60,7 +60,10 @@ public partial class MainForm
                 }
             case "bindings_right":
             case "bindings_left":
-                ed = InfoWithPic(n, (string)n.Tag == "bindings_left" ? "Left controller" : "Right controller", "A binding makes a controller button (or a combo of buttons) do something: press a key, open a wheel, open the keyboard, switch a layer...\n\nClick '+ Add' on this controller's bar in the list to make one. Click the round dot on the right of a row to switch it on or off without deleting it.\n\nLayers: a binding that switches a layer on lets the same buttons do different things, as long as that layer is on.");
+                ed = new ControllerButtonsPage(Profile, (string)n.Tag == "bindings_left" ? 0 : 1,
+                                               b => tree.SelectedNode = Find(tree.Nodes, b),
+                                               (b, openIt) => Later(() => { if (openIt) Rebuild(b); else { MarkDirty(); BuildTree(); } }),
+                                               () => ControllerPictureChoice.Load(Profile), ControllerPictureChoice.Save);
                 break;
             case "wheels":
                 ed = InfoWithPic(n, "Wheels", "A wheel is a radial menu. A controller binding opens a main wheel; an item on a wheel can open a sub-wheel.\n\nTo make a wheel, click '+ Add' on the WHEELS bar in the list. To add items or a sub-wheel, unfold WHEELS (the arrow on its left) and use the '+ Add item' / '+ Add sub-wheel' row under a wheel.");

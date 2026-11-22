@@ -91,6 +91,9 @@ public partial class MainForm
             MessageBox.Show(this, "Done: " + ControllerKinds.First(k => k.id == kind).how, "Controllers");
     }
 
+    internal static string DataFolder => DataDir;
+    internal static string SetupKindOf(ProfileModel p) => CurrentControllerKind(p);
+
     // The controller kind to preselect: the one chosen last time, else what the profile's wheel openers look like.
     static string CurrentControllerKind(ProfileModel p)
     {
@@ -164,5 +167,81 @@ public partial class MainForm
         if (n > 0)
             p.Selection.CancelButton = kind == "wmr" || kind == "vive" ? "grip" : "secondary";
         return n;
+    }
+}
+
+// Which controller the Right / Left controller pages draw (editor only): the one last picked there, else the one
+// that fits the choice in "Your controllers".
+internal static class ControllerPictureChoice
+{
+    static string FilePath => Path.Combine(MainForm.DataFolder, "controller_picture.txt");
+
+    public static string Load(ProfileModel profile)
+    {
+        try
+        {
+            string saved = File.Exists(FilePath) ? File.ReadAllText(FilePath).Trim() : "";
+            if (ControllerLayouts.All.Any(l => l.Id == saved))
+                return saved;
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        return ControllerLayouts.ForSetupKind(MainForm.SetupKindOf(profile));
+    }
+
+    public static void Save(string layoutId)
+    {
+        try
+        { AtomicFile.WriteAllText(FilePath, layoutId); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+}
+
+public partial class MainForm
+{
+    // --controller-pics <dir>: every controller picture, both hands, as PNG (with the built-in default profile's bindings).
+    public static void ControllerPics(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var profile = ProfileFromText(Native.DefaultProfile() ?? "{}");
+        int CountOf(int hand, ControllerPart part)
+            => part.IsUsable ? profile.Bindings.Count(b => part.Ways.Any(w => QuickBindings.FiredBy(b, ControllerLayouts.InputOf(hand, part, w)))) : 0;
+        const int width = 860;
+        var sheets = new List<Bitmap>();
+        foreach (var layout in ControllerLayouts.All)
+        {
+            using var right = ControllerPicture.Render(layout, 1, null, p => CountOf(1, p), width);
+            using var left = ControllerPicture.Render(layout, 0, null, p => CountOf(0, p), width);
+            var sheet = new Bitmap(width, right.Height + left.Height + 64);
+            using (var g = Graphics.FromImage(sheet))
+            {
+                g.Clear(Theme.Card);
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                using var title = new Font("Segoe UI", 13f, FontStyle.Bold);
+                using var small = new Font("Segoe UI", 9f);
+                using var text = new SolidBrush(Theme.Text);
+                using var sub = new SolidBrush(Theme.SubText);
+                g.DrawString(layout.Name, title, text, 12, 8);
+                g.DrawString("Right hand (top) and left hand (bottom). For: " + layout.Models, small, sub, 14, 36);
+                g.DrawImage(right, 0, 60);
+                g.DrawImage(left, 0, 60 + right.Height);
+            }
+            sheet.Save(Path.Combine(dir, "controller_" + layout.Id + ".png"));
+            sheets.Add(sheet);
+        }
+        // All of them on one page, two across, at half size.
+        int cols = 2, cellW = width / 2, cellH = sheets[0].Height / 2;
+        using var all = new Bitmap(cols * cellW, (sheets.Count + cols - 1) / cols * cellH);
+        using (var g = Graphics.FromImage(all))
+        {
+            g.Clear(Theme.Page);
+            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            for (int i = 0; i < sheets.Count; i++)
+                g.DrawImage(sheets[i], i % cols * cellW, i / cols * cellH, cellW, cellH);
+        }
+        all.Save(Path.Combine(dir, "controllers_all.png"));
+        foreach (var s in sheets)
+            s.Dispose();
     }
 }

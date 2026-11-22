@@ -178,7 +178,7 @@ public partial class MainForm
     string Q => search.Text.Trim();
 
     // ---- plain-English descriptions
-    static string Plain(ActionModel a)
+    internal static string Plain(ActionModel a)
     {
         if (a == null)
             return "Does nothing";
