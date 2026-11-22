@@ -7,7 +7,8 @@
 #include <vector>
 
 // Which controller a hand holds, from the runtime's interaction profile.
-enum class ControllerKind { Unknown, Touch, Index, Vive, Wmr, HpReverb };
+// Touch = Quest 2 / Rift S style, TouchPlus = Quest 3 / 3S, TouchPro = Quest Pro.
+enum class ControllerKind { Unknown, Touch, TouchPlus, TouchPro, Index, Vive, Wmr, HpReverb };
 ControllerKind ControllerKindOf(const std::string& interactionProfile);
 const char* ControllerKindName(ControllerKind k); // "Touch", "Index"... for the menu
 

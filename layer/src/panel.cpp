@@ -721,7 +721,21 @@ static void LiveBar(Graphics& g, Font* font, const wchar_t* label, float value, 
     g.FillRectangle(&fill, x, by, w * std::clamp(value, 0.f, 1.f), bh);
 }
 
+static void DrawLiveBars(Graphics& g, const RectF& box, int hand, const LiveHand& live, Font* font);
+
 // One controller from above, what is pressed now lit, and its trigger / grip bars beside it.
+// A traced outline's loops as one path (alternate fill: inner loops are holes), placed like ArtPath.
+static void SilhouettePath(GraphicsPath& p, const SilLoop* loops, int count, const RectF& box) {
+    float s = std::min(box.Width / kArtWidth, box.Height / kArtHeight);
+    float ox = box.X + (box.Width - kArtWidth * s) / 2, oy = box.Y + (box.Height - kArtHeight * s) / 2;
+    for (int i = 0; i < count; i++) {
+        std::vector<PointF> pts(loops[i].points);
+        for (int k = 0; k < loops[i].points; k++)
+            pts[k] = PointF(ox + loops[i].xy[2 * k] * s, oy + loops[i].xy[2 * k + 1] * s);
+        if (pts.size() >= 3) p.AddPolygon(pts.data(), (INT)pts.size());
+    }
+}
+
 static void DrawLiveController(Graphics& g, const RectF& box, int hand, const LiveHand& live, Font* font) {
     using namespace MenuColors;
     const ControllerArt& art = ArtFor(live.kind);
@@ -729,6 +743,33 @@ static void DrawLiveController(Graphics& g, const RectF& box, int hand, const Li
     SolidBrush body{ Color(0xFF3A414B) }, part{ Color(0xFF1C2027) }, lit{ Color(Accent) }, touched{ Color(0x661A9FFF) };
     SolidBrush plain{ Color(0xFF2E343C) }, white{ Color(0xFFFFFFFF) };
     Pen edge(Color(0xFF59616C), 1.5f), ring(Color(Accent), 3.f);
+    // How one part looks: lit when pressed, a ring when only touched; the stick shows where it is pushed.
+    auto drawPart = [&](GraphicsPath& p, int comp) {
+        bool readable = comp >= 0;
+        bool pressed = readable && live.press[comp], touchedOnly = readable && !pressed && live.touch[comp];
+        g.FillPath(!readable ? &plain : pressed ? &lit : touchedOnly ? &touched : &part, &p);
+        g.DrawPath(touchedOnly ? &ring : &edge, &p);
+        if (comp == C_STICK) {
+            RectF b;
+            p.GetBounds(&b);
+            float cx = b.X + b.Width / 2 + live.stickX * b.Width * 0.32f, cy = b.Y + b.Height / 2 - live.stickY * b.Height * 0.32f;
+            float d = b.Width * 0.3f;
+            g.FillEllipse(&white, cx - d / 2, cy - d / 2, d, d);
+        }
+    };
+    if (const Silhouette* sil = SilhouetteFor(live.kind, hand)) { // the real outline, when there is a model
+        GraphicsPath outline(FillModeAlternate);
+        SilhouettePath(outline, sil->body, sil->bodyCount, pic);
+        g.FillPath(&body, &outline);
+        g.DrawPath(&edge, &outline);
+        for (int i = 0; i < sil->partCount; i++) {
+            GraphicsPath p(FillModeAlternate);
+            SilhouettePath(p, sil->parts[i].loops, sil->parts[i].loopCount, pic);
+            drawPart(p, SilhouetteComp(sil->parts[i].comp));
+        }
+        DrawLiveBars(g, box, hand, live, font);
+        return;
+    }
     for (const ArtPiece& b : art.body) {
         GraphicsPath p(FillModeAlternate);
         ArtPath(p, b.shape, b.x, b.y, b.w, b.h, b.turnDeg, b.ringWidth, hand, pic);
@@ -739,19 +780,14 @@ static void DrawLiveController(Graphics& g, const RectF& box, int hand, const Li
         if (!(a.hands & (hand == 0 ? 1 : 2))) continue;
         GraphicsPath p;
         ArtPath(p, a.shape, a.x, a.y, a.w, a.h, 0, 0, hand, pic);
-        bool readable = a.comp >= 0;
-        bool pressed = readable && live.press[a.comp], touchedOnly = readable && !pressed && live.touch[a.comp];
-        g.FillPath(!readable ? &plain : pressed ? &lit : touchedOnly ? &touched : &part, &p);
-        g.DrawPath(touchedOnly ? &ring : &edge, &p);
-        if (a.comp == C_STICK) { // where the stick is pushed
-            RectF b;
-            p.GetBounds(&b);
-            float cx = b.X + b.Width / 2 + live.stickX * b.Width * 0.32f, cy = b.Y + b.Height / 2 - live.stickY * b.Height * 0.32f;
-            float d = b.Width * 0.3f;
-            g.FillEllipse(&white, cx - d / 2, cy - d / 2, d, d);
-        }
+        drawPart(p, a.comp);
     }
-    // the analog parts as bars, and its name
+    DrawLiveBars(g, box, hand, live, font);
+}
+
+// Beside the picture: the controller's name, the trigger and grip as bars, the stick's numbers.
+static void DrawLiveBars(Graphics& g, const RectF& box, int hand, const LiveHand& live, Font* font) {
+    using namespace MenuColors;
     float bx = box.X + box.Width * 0.52f, bw = box.Width * 0.44f, rowH = box.Height / 4;
     SolidBrush name{ Color(Text) };
     StringFormat left;

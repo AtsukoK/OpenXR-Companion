@@ -1,0 +1,45 @@
+// Real controller outlines for the in-game menu: see controller_silhouettes.h.
+#include "controller_silhouettes.h"
+#include <cstring>
+
+#include "controller_silhouettes.inc"
+
+static const char* SilhouetteId(ControllerKind kind) {
+    switch (kind) {
+    case ControllerKind::Touch:
+        return "quest2";
+    case ControllerKind::TouchPlus:
+        return "quest3";
+    case ControllerKind::TouchPro:
+        return "questpro";
+    case ControllerKind::Index:
+        return "index";
+    case ControllerKind::Wmr:
+        return "wmr";
+    case ControllerKind::HpReverb:
+        return "reverbg2";
+    case ControllerKind::Unknown:
+        return "quest3"; // the most common now
+    default:
+        return nullptr; // Vive wands: no model
+    }
+}
+
+const Silhouette* SilhouetteFor(ControllerKind kind, int hand) {
+    const char* id = SilhouetteId(kind);
+    if (!id) return nullptr;
+    for (const Silhouette& s : kSilhouettes)
+        if (s.hand == hand && strcmp(s.id, id) == 0) return &s;
+    return nullptr;
+}
+
+int SilhouetteComp(const char* comp) {
+    static const struct {
+        const char* name;
+        int comp;
+    } kComps[] = { { "primary", C_BTN1 }, { "secondary", C_BTN2 },  { "thumbstick", C_STICK }, { "thumbrest", C_THUMBREST },
+                   { "menu", C_MENU },    { "trigger", C_TRIGGER }, { "grip", C_GRIP } };
+    for (const auto& c : kComps)
+        if (strcmp(c.name, comp) == 0) return c.comp;
+    return -1;
+}

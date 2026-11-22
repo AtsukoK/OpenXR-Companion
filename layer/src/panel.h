@@ -1,5 +1,6 @@
 #pragma once
 #include "engine.h"
+#include "controller_silhouettes.h"
 #include <wrl/client.h>
 
 struct XrFns {

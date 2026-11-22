@@ -2,6 +2,8 @@
 #include "controller_art.h"
 
 ControllerKind ControllerKindOf(const std::string& p) {
+    if (p.find("touch_plus") != std::string::npos || p.find("touch_controller_plus") != std::string::npos) return ControllerKind::TouchPlus;
+    if (p.find("touch_pro") != std::string::npos || p.find("touch_controller_pro") != std::string::npos) return ControllerKind::TouchPro;
     if (p.find("touch") != std::string::npos) return ControllerKind::Touch;
     if (p.find("index") != std::string::npos) return ControllerKind::Index;
     if (p.find("vive_controller") != std::string::npos) return ControllerKind::Vive;
@@ -14,6 +16,10 @@ const char* ControllerKindName(ControllerKind k) {
     switch (k) {
     case ControllerKind::Touch:
         return "Touch controller";
+    case ControllerKind::TouchPlus:
+        return "Touch Plus controller";
+    case ControllerKind::TouchPro:
+        return "Touch Pro controller";
     case ControllerKind::Index:
         return "Index controller";
     case ControllerKind::Vive:

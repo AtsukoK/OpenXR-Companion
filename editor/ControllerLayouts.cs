@@ -73,7 +73,25 @@ public static class ControllerLayouts
                 TriggerOf(PressTouch),
                 GripOf(),
             }),
-        new("quest2", "Meta Quest 2 / Rift S (Touch with a ring)", "Quest 2, Rift S, Rift", "touch",
+        new("quest2", "Meta Quest 2 (Touch with a ring)", "Quest 2", "touch",
+            new[]
+            {
+                new BodyPiece(ControllerView.Top, BodyShape.Ring, R(18, 6, 156, 112), Turn: -10, Thickness: 16),
+                new BodyPiece(ControllerView.Top, BodyShape.Ellipse, R(36, 78, 134, 88), Turn: -12),
+                new BodyPiece(ControllerView.Top, BodyShape.RoundRect, R(76, 142, 52, 112), Turn: 8),
+            }.Concat(SideOfTouch()).ToArray(),
+            new ControllerPart[]
+            {
+                new("thumbstick", "Thumbstick", null, ControllerView.Top, PartShape.Stick, R(50, 94, 36, 36), StickWays),
+                new("secondary", "B", "Y", ControllerView.Top, PartShape.Button, R(124, 90, 20, 20), PressTouch),
+                new("primary", "A", "X", ControllerView.Top, PartShape.Button, R(110, 116, 20, 20), PressTouch),
+                new("thumbrest", "Thumbrest", null, ControllerView.Top, PartShape.Pill, R(144, 110, 13, 30), Press),
+                new("menu", "Menu", null, ControllerView.Top, PartShape.Button, R(76, 138, 13, 13), Press, ControllerPart.LeftHand),
+                new("system", "Meta button", null, ControllerView.Top, PartShape.Button, R(76, 138, 13, 13), Press, ControllerPart.RightHand, SystemButton),
+                TriggerOf(PressTouch),
+                GripOf(),
+            }),
+        new("rifts", "Meta Rift S / Quest 1 (Touch)", "Rift S, Quest 1", "touch",
             new[]
             {
                 new BodyPiece(ControllerView.Top, BodyShape.Ring, R(18, 6, 156, 112), Turn: -10, Thickness: 16),

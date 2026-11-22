@@ -376,4 +376,4 @@ You can also buy me a coffee or a beer sometimes through my Ko-fi: https://ko-fi
 
 ## Licence
 
-GPLv3, see [LICENSE](LICENSE). Changes per version: [CHANGELOG.md](CHANGELOG.md). Third-party code: [nlohmann/json](third_party/nlohmann) (MIT) and the [OpenXR SDK](third_party/openxr-sdk) (Apache-2.0); their licences are kept in their folders. Code signing: see [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
+GPLv3, see [LICENSE](LICENSE). Changes per version: [CHANGELOG.md](CHANGELOG.md). Third-party code: [nlohmann/json](third_party/nlohmann) (MIT) and the [OpenXR SDK](third_party/openxr-sdk) (Apache-2.0); their licences are kept in their folders. The controller pictures are outlines traced from the [WebXR input profile models](https://github.com/immersive-web/webxr-input-profiles) (MIT, [licence](third_party/webxr-input-profiles/LICENSE.md)); see tools/ControllerSilhouettes. Release zips include THIRD_PARTY_NOTICES.txt. Code signing: see [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).

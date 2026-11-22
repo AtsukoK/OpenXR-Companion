@@ -25,6 +25,7 @@ public class ControllerPicture : Control
     const float ViewsHeight = ControllerLayouts.Height + 2 * CanvasMargin;
 
     ControllerLayout layout = ControllerLayouts.All[0];
+    Silhouette silhouette; // the real outline of this layout and hand, when there is a model (else the layout's own shapes)
     int hand = 1;
     string selected, hovered;
     Func<ControllerPart, PartUse> useOf = _ => default;
@@ -45,6 +46,7 @@ public class ControllerPicture : Control
     {
         layout = newLayout;
         hand = newHand;
+        silhouette = ControllerSilhouettes.For(layout.Id, hand);
         selected = selectedComp;
         useOf = use;
         linesOf = lines ?? (_ => Array.Empty<TagLine>());
@@ -75,7 +77,7 @@ public class ControllerPicture : Control
     // ------------------------------------------------------------ geometry
     float CanvasHeight()
     {
-        var tags = TagBoxes(layout.PartsFor(hand).ToList());
+        var tags = TagBoxes(ShownParts());
         return Math.Max(ViewsHeight, tags.Count == 0 ? 0 : tags.Values.Max(t => t.Bottom) + CanvasMargin);
     }
 
@@ -122,6 +124,33 @@ public class ControllerPicture : Control
         return p;
     }
 
+    // With a real outline: the parts it has (a part without one, like a button that is part of the body, isn't drawn).
+    List<ControllerPart> ShownParts()
+        => layout.PartsFor(hand).Where(p => silhouette == null || ControllerSilhouettes.PartFor(silhouette, p) != null).ToList();
+
+    // Traced loops placed in a view (already for this hand: no mirroring).
+    GraphicsPath LoopsPath(ControllerView view, float[][] loops)
+    {
+        float viewX = view == ControllerView.Top ? TopX : SideX;
+        var p = new GraphicsPath(FillMode.Alternate);
+        foreach (var loop in loops)
+        {
+            var pts = new PointF[loop.Length / 2];
+            for (int i = 0; i < pts.Length; i++)
+                pts[i] = new PointF(viewX + loop[2 * i], CanvasMargin + loop[2 * i + 1]);
+            if (pts.Length >= 3)
+                p.AddPolygon(pts);
+        }
+        return p;
+    }
+
+    // Where a part is drawn (its bounds), for tags and the stick's cap.
+    RectangleF PartBounds(ControllerPart part)
+    {
+        using var p = PartPath(part);
+        return p.GetBounds();
+    }
+
     GraphicsPath BodyPath(BodyPiece piece)
     {
         var box = Place(piece.View, piece.Box);
@@ -146,6 +175,8 @@ public class ControllerPicture : Control
 
     GraphicsPath PartPath(ControllerPart part)
     {
+        if (silhouette != null && ControllerSilhouettes.PartFor(silhouette, part) is SilhouettePart traced)
+            return LoopsPath(part.View, traced.Loops);
         var box = Place(part.View, part.Box);
         var p = new GraphicsPath();
         switch (part.Shape)
@@ -190,7 +221,7 @@ public class ControllerPicture : Control
     {
         if (part.View == ControllerView.Side)
             return TagColumn.Right;
-        var box = Place(part.View, part.Box);
+        var box = PartBounds(part);
         return box.X + box.Width / 2 < TopX + ControllerLayouts.TopWidth / 2 ? TagColumn.Left : TagColumn.Middle;
     }
 
@@ -218,7 +249,7 @@ public class ControllerPicture : Control
         {
             float x = ColumnX(col);
             var column = parts.Where(p => ColumnOf(p) == col)
-                              .Select(p => (part: p, h: TagHeightOf(p), y: Place(p.View, p.Box).Y + p.Box.Height / 2 - TagHeightOf(p) / 2))
+                              .Select(p => (part: p, h: TagHeightOf(p), y: PartBounds(p).Y + PartBounds(p).Height / 2 - TagHeightOf(p) / 2))
                               .OrderBy(t => t.y).ToList();
             float next = CanvasMargin;
             foreach (var (part, h, y) in column)
@@ -246,7 +277,7 @@ public class ControllerPicture : Control
 
         DrawViewCaptions(g);
         DrawBody(g);
-        var parts = layout.PartsFor(hand).ToList();
+        var parts = ShownParts();
         var tags = TagBoxes(parts);
         foreach (var part in parts)
         {
@@ -278,6 +309,16 @@ public class ControllerPicture : Control
         using var fill = new SolidBrush(BodyFill);
         using var edge = new Pen(BodyEdge, 1.4f);
         using var strap = new Pen(BodyEdge, 1.4f) { DashStyle = DashStyle.Dash };
+        if (silhouette != null) // the real outline
+        {
+            foreach (var (view, loops) in new[] { (ControllerView.Top, silhouette.Top), (ControllerView.Side, silhouette.Side) })
+            {
+                using var p = LoopsPath(view, loops);
+                g.FillPath(fill, p);
+                g.DrawPath(edge, p);
+            }
+            return;
+        }
         foreach (var piece in layout.Body)
         {
             using var p = BodyPath(piece);
@@ -304,7 +345,7 @@ public class ControllerPicture : Control
                 g.FillPath(hatch, shape);
         if (part.Shape == PartShape.Stick) // a cap ring, so it reads as a stick
         {
-            var box = Place(part.View, part.Box);
+            var box = PartBounds(part);
             box.Inflate(-box.Width * 0.22f, -box.Height * 0.22f);
             using var cap = new Pen(Color.FromArgb(120, BodyEdge), 1.2f);
             g.DrawEllipse(cap, box);
