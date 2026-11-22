@@ -111,9 +111,9 @@ void TestInGameMenu() {
     if (overview >= 0)
         for (const MenuTag& tg : e.menuView.rows[overview].tags) {
             jumpShown = jumpShown || (tg.hand == 1 && tg.comp == C_BTN1 && tg.title == "A" && tg.lines[0] == "Jump" && tg.lineKinds[0] == 0);
-            unusedShown = unusedShown || (tg.hand == 1 && tg.comp == C_GRIP && tg.lines[0] == "Not used");
+            unusedShown = unusedShown || (tg.hand == 1 && tg.comp == C_GRIP && tg.lines[0] == "Default");
         }
-    CHECK(jumpShown && unusedShown, "menu: the overview tags each part with the game's own control, or 'Not used'");
+    CHECK(jumpShown && unusedShown, "menu: the overview tags each part with the game's own control, or 'Default'");
     SaveMenuPicture(e, *p, L"menu_overview.png");
     CHECK(d.PressTag(1, C_BTN1) && e.menuView.title == "Right A" && d.Row("In the game: Jump") >= 0 && d.Row("Hold") >= 0,
           "menu: pointing at a tag opens that part's page: the game's use and every way to bind it");

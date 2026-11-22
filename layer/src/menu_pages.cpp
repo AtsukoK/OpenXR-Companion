@@ -149,7 +149,7 @@ static MenuTag TagFor(Engine& e, int hand, int comp, ControllerKind kind) {
         t.lineKinds.push_back(0);
     }
     if (t.lines.empty()) {
-        t.lines.push_back("Not used");
+        t.lines.push_back("Default"); // the game's own control (its name isn't known)
         t.lineKinds.push_back(2);
     } else if (t.lines.size() > 5) {
         t.lines.resize(4);
@@ -226,8 +226,8 @@ MenuPage PartPage(Engine& e, InGameMenu& m, int hand, int comp) {
     std::string game;
     for (const GameUse& u : e.gameUses)
         if (u.hand == hand && u.comp == comp) game += (game.empty() ? "" : ", ") + u.name + (u.touch && comp != C_THUMBREST ? " (touch)" : "");
-    p.rows.push_back(MenuRow::Note(game.empty() ? "In the game: not used" : "In the game: " + game,
-                                   game.empty() ? "The game doesn't use this button" : "What the game itself does with this button"));
+    p.rows.push_back(MenuRow::Note(game.empty() ? "In the game: default" : "In the game: " + game,
+                                   game.empty() ? "The game's own name for its control isn't known" : "What the game itself does with this button"));
     p.rows.push_back(MenuRow::Heading("Bindings"));
     std::vector<bool> shown(e.prof->bindings.size(), false);
     for (const PartWay& w : WaysOf(comp)) {
@@ -245,7 +245,7 @@ MenuPage PartPage(Engine& e, InGameMenu& m, int hand, int comp) {
             continue;
         }
         PartWay way = w;
-        p.rows.push_back(MenuRow::Button(w.name, "Not assigned",
+        p.rows.push_back(MenuRow::Button(w.name, "Default",
                                          [&e, &m, hand, comp, way] {
                                              Binding b;
                                              InputId id;

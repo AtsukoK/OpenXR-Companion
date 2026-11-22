@@ -10,7 +10,7 @@ G:/Claude/VR Radial Overlay/dist2. Nothing below tested in a headset yet.
 - Binding keyboard (KbLayout forBinding): mouse buttons, wheel, Home/End..., "Controller button" -> xr_input target
   (CaptureAction). Saved by SaveMenuEdits (xr_input with target).
 - Wording: Enabled / Input / Activation / Gesture / Action / Key-Button behavior (Tap Hold Toggle) / Pass input to game.
-  Editor still uses its old words (Way/When/Does) - user may want those aligned too.
+  Editor aligned the same day (Enabled, Input, Gesture, Action, Key behavior, Pass input to game); "unused" / "Not used" / "Not assigned" now say "Default".
 - Steam Frame: own ControllerKind, comps C_BTN3..C_DPAD_RIGHT, opt-in steam_frame.json native mode (see BUTTONS_NOTES),
   outlines from Valve CAD (CC BY-NC-SA, credited).
 - Controller pictures fixed 2026-11-22: face view no longer flipped (right Quest: stick RIGHT of A/B, user confirmed with

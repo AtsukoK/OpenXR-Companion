@@ -51,16 +51,16 @@ public class ActionEditor : FormPanel
             types.Insert(3, new Choice("page", "Wrist panel: open another page"));
         }
         type = new ChoiceBox(types.ToArray(), 360);
-        AddRow("What happens", type);
+        AddRow("Action", type);
         lKeys = AddRow("Key", keys, "Click Record key, then press the key or combo on your keyboard. Or pick a mouse button.");
-        lKeyMode = AddRow("How", keyMode);
+        lKeyMode = AddRow("Key behavior", keyMode);
         lSteps = AddRow("Macro steps", steps, "One step per line or split with ;  e.g.\nCtrl+C\nwait 100\nCtrl+V\ndown W / up W to hold a key");
         lWheel = AddRow("Wheel", wheel);
         lPage = AddRow("Page", page, "Its buttons replace these; a Back button is added automatically.");
         lConfirm = AddRow("Pick items by", confirm);
         lLayer = AddRow("Layer name", layer, "Type a new name or pick one you already use.");
         lLayerMode = AddRow("Layer", layerMode);
-        lTarget = AddRow("Game button", target, "The game will think this controller button is pressed.");
+        lTarget = AddRow("Controller button", target, "The game will think this controller button is pressed.");
         lTarget.Text = "Game button";
         lScreenMode = AddRow("Screen", screenMode, "Settings > Screen mirror sets the monitor, frame rates, size and position.");
         lScreenPlace = AddRow("Show it", screenPlace);

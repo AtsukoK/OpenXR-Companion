@@ -7,7 +7,7 @@ public class BindingEditor : EditorBase
 {
     readonly BindingModel b;
     readonly TextBox name = new() { Width = 360 };
-    readonly CheckBox enabled = new() { Text = "On", AutoSize = true };
+    readonly CheckBox enabled = new() { Text = "Enabled", AutoSize = true };
     readonly ChordEditor chord = new();
     readonly ChoiceBox gesture = new(Choices.Gestures, 420);
     readonly NumericUpDown hold = Ms(), tap = Ms(), dbl = Ms();
@@ -25,14 +25,14 @@ public class BindingEditor : EditorBase
         var when = new FormPanel();
         when.AddRow("Name", name);
         when.AddRow("", enabled);
-        when.AddRow("Button", chord, "For a combo, the button that fires goes last; the others must already be held.");
-        when.AddRow("When it is", gesture);
-        lHold = when.AddRow("Hold for (ms)", hold);
+        when.AddRow("Input", chord, "For a combo, the button that fires goes last; the others must already be held.");
+        when.AddRow("Gesture", gesture);
+        lHold = when.AddRow("Hold time (ms)", hold);
         lTap = when.AddRow("Tap shorter than (ms)", tap);
         lDbl = when.AddRow("Second tap within (ms)", dbl);
         when.AddRow("Only in layer", layers, "Leave empty to work always. With a layer name, this binding only works while that layer is on.");
         when.AddRow("Not in layer", notLayers);
-        when.AddRow("Hide from game", block);
+        when.AddRow("Pass input to game", block);
         lPass = when.AddRow("", passthrough);
         foreach (var (_, ctl, _) in when.Rows)
             if (ctl is ComboBox)
@@ -41,7 +41,7 @@ public class BindingEditor : EditorBase
         Stack(Title("Binding"),
               FormPanel.Header("Do something when a controller button (or combo) is used."),
               when,
-              FormPanel.Header("Then:"),
+              FormPanel.Header("Action:"),
               action);
 
         loading = true;

@@ -235,7 +235,7 @@ public class ControllerButtonsPage : UserControl
             picture.Height = h;
     }
 
-    // What a part's tag lists, SteamVR style: every way of using it, with what it does or "unused"; then the bindings
+    // What a part's tag lists, SteamVR style: every way of using it, with what it does or "Default" (the game's own control); then the bindings
     // that only work in a layer.
     public static IReadOnlyList<TagLine> TagLinesOf(IEnumerable<BindingModel> bindings, int hand, ControllerPart part)
     {
@@ -250,7 +250,7 @@ public class ControllerButtonsPage : UserControl
                 foreach (var b in bound)
                     lines.Add(new TagLine(ShortWhen(part, way, b), DoesText(b.Action), layerOnes ? b.Layers : null));
                 if (bound.Count == 0 && !layerOnes)
-                    lines.Add(new TagLine(WayWord(part, way), "unused", IsUnused: true));
+                    lines.Add(new TagLine(WayWord(part, way), "Default", IsUnused: true)); // what the game does with it
             }
         return lines;
     }
@@ -306,15 +306,15 @@ public class ControllerButtonsPage : UserControl
         return parts.Count > 1 ? "With " + InputText.Friendly(string.Join("+", parts.Take(parts.Count - 1))) + ": " + gesture : gesture;
     }
 
-    // What it does, short: "Space", "Ctrl (held)", "Game sees Right B", "Opens wheel 'right'".
+    // What it does, short: "Key: Space", "Key: Ctrl (hold)", "Controller: Right B", "Wheel 'right'".
     static string DoesText(ActionModel a)
     {
-        string mode = a?.Mode switch { "hold" => " (held)", "toggle" => " (on / off)", _ => "" };
+        string mode = a?.Mode switch { "hold" => " (hold)", "toggle" => " (toggle)", _ => "" };
         return a?.Type switch
         {
-            ActionType.Key => (a.Keys ?? "?") + mode,
-            ActionType.XrInput => "Game sees " + InputText.Friendly(a.Target),
-            ActionType.None => "Nothing: off in the game",
+            ActionType.Key => "Key: " + (a.Keys ?? "?") + mode,
+            ActionType.XrInput => "Controller: " + InputText.Friendly(a.Target) + mode,
+            ActionType.None => "Disabled in the game",
             ActionType.Wheel => $"Wheel '{a.Wheel}'",
             ActionType.Keyboard => "VR keyboard",
             ActionType.Layer => $"Layer '{a.Layer}'" + mode,

@@ -57,15 +57,15 @@ public static class Choices
     };
     public static readonly Choice[] Gestures =
     {
-        new(GestureKind.Press, "Pressed"), new(GestureKind.Tap, "Tapped quickly (so a Hold on the same button can still work)"),
-        new(GestureKind.Hold, "Held down for a moment"), new(GestureKind.DoubleTap, "Double-tapped"),
-        new(GestureKind.WhileHeld, "Held  (starts on press, stops on release)"),
-        new(GestureKind.DoubleTapHold, "Double-tapped, then held  (a double flick of the stick; stops on release)"),
+        new(GestureKind.Press, "Press"), new(GestureKind.Tap, "Quick tap  (a Hold on the same button can still work)"),
+        new(GestureKind.Hold, "Hold"), new(GestureKind.DoubleTap, "Double-tap"),
+        new(GestureKind.WhileHeld, "While held  (starts on press, stops on release)"),
+        new(GestureKind.DoubleTapHold, "Double-tap and hold  (a double flick of the stick; stops on release)"),
     };
     public static readonly Choice[] Blocks =
     {
-        new("none", "No, the game still gets the button"), new("trigger", "Yes, hide the last button from the game"),
-        new("all", "Yes, hide all buttons of the combo from the game"),
+        new("none", "Yes, the game also receives the button"), new("trigger", "No, block the button from the game"),
+        new("all", "No, block every button of the combo from the game"),
     };
     public static readonly Choice[] ActionTypes =
     {
@@ -80,7 +80,7 @@ public static class Choices
         new(ActionType.SettingsMenu, "In-game settings menu: change bindings and sticks in the headset"),
         new(ActionType.HeadsetMirror, "Headset mirror: a desktop window showing what the headset shows"), new(ActionType.None, "Do nothing"),
     };
-    public static readonly Choice[] KeyModes = { new("tap", "Tap it once"), new("hold", "Keep it held while my button is held"), new("toggle", "Toggle: first time down, next time up") };
+    public static readonly Choice[] KeyModes = { new("tap", "Tap  (pressed once)"), new("hold", "Hold  (held while the button is held)"), new("toggle", "Toggle  (first press down, next press up)") };
     public static readonly Choice[] ScreenModes =
     {
         new("toggle", "Show / hide it (pressing it again hides it)"), new("on", "Show it"), new("off", "Hide it"),
