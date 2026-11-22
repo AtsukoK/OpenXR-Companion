@@ -76,11 +76,13 @@ void InGameMenu::BuildView() {
         vr.label = r.label;
         vr.detail = r.detail;
         vr.value = r.ValueText();
+        vr.isDanger = r.isDanger;
         if (r.kind == MenuRowKind::Toggle) vr.isOn = r.isOn && r.isOn();
         if (r.kind == MenuRowKind::Number && r.value) {
             float x = r.value();
             vr.canLess = x > r.min + r.step * 0.01f;
             vr.canMore = x < r.max - r.step * 0.01f;
+            vr.fraction = r.max > r.min ? std::clamp((x - r.min) / (r.max - r.min), 0.f, 1.f) : 0.f;
         }
         if (r.kind == MenuRowKind::Choice && r.chosen) {
             int i = r.chosen();
@@ -94,7 +96,7 @@ void InGameMenu::BuildView() {
     for (size_t i = 0; same && i < rows.size(); i++) {
         const MenuViewRow &a = rows[i], &b = v.rows[i];
         same = a.label == b.label && a.detail == b.detail && a.value == b.value && a.isOn == b.isOn && a.canLess == b.canLess &&
-               a.canMore == b.canMore && a.kind == b.kind;
+               a.canMore == b.canMore && a.kind == b.kind && a.fraction == b.fraction;
     }
     if (same) return;
     v.rows = std::move(rows);

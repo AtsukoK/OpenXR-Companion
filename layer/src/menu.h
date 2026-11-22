@@ -24,6 +24,7 @@ struct MenuRow {
     MenuRowKind kind = MenuRowKind::Note;
     std::string label;
     std::string detail; // a second, smaller line: help or what it does now
+    bool isDanger = false; // Button: something that can't be undone (shown in red)
 
     std::function<void()> press;      // Link, Button
     std::function<bool()> isOn;       // Toggle
@@ -65,6 +66,8 @@ struct MenuViewRow {
     std::string label, detail, value;
     bool isOn = false;            // Toggle
     bool canLess = false, canMore = false; // Number / Choice: - and + can still change it
+    bool isDanger = false;
+    float fraction = -1;                   // Number: where the value sits between its min and max (0..1), for the slider
 };
 
 // The parts of the panel that can be pointed at.

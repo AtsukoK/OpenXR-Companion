@@ -656,9 +656,18 @@ void DrawWrist(std::vector<uint32_t>& out, int S, const Profile& p, const WristS
 }
 
 // ---------- in-game settings menu ----------
-// The panel: a header (back, title, close), the visible rows from MenuLayout (label and detail on the left; on the
-// right the value with - / +, an ON / OFF pill or a chevron), and a status line with the scroll arrows.
+// A flat dashboard look (dark panels, one blue accent, list rows with thin separators): a header bar with the title,
+// back and close; rows from MenuLayout (label and detail on the left; on the right a switch, a value with a slider
+// and round - / +, or a chevron); a footer with the status and scroll arrows.
+namespace MenuColors {
+constexpr uint32_t PanelTop = 0xF5222830, PanelBottom = 0xF5161A20, Header = 0xFF12151A, Footer = 0xFF12151A;
+constexpr uint32_t Separator = 0xFF2C323A, Hover = 0xFF2B323C, Pressed = 0xFF1A9FFF, Accent = 0xFF1A9FFF;
+constexpr uint32_t Text = 0xFFEDEFF2, SubText = 0xFF9BA3AD, Heading = 0xFF7D8590, Disabled = 0xFF4A515A;
+constexpr uint32_t Track = 0xFF3A414B, Knob = 0xFFFFFFFF, IconButton = 0xFF2A3038;
+} // namespace MenuColors
+
 void DrawMenu(std::vector<uint32_t>& out, int W, int H, const MenuView& v, const Style& st) {
+    using namespace MenuColors;
     EnsureGdi();
     Bitmap bmp(W, H, PixelFormat32bppPARGB);
     Graphics g(&bmp);
@@ -673,133 +682,166 @@ void DrawMenu(std::vector<uint32_t>& out, int W, int H, const MenuView& v, const
         gp.AddArc(x, y + h - r, r, r, 90, 90);
         gp.CloseFigure();
     };
-    // more solid than the wheel's background, so the text stays readable over a bright game
-    uint32_t panelBg = (st.bg & 0x00FFFFFFu) | 0xEE000000u;
-    GraphicsPath bgp;
-    roundRect(bgp, 1, 1, W - 2.f, H - 2.f, std::min(W, H) * 0.06f);
-    SolidBrush bg{ Color(panelBg) };
-    g.FillPath(&bg, &bgp);
-    Pen edge(Color(st.border), 2.f);
-    g.DrawPath(&edge, &bgp);
+    const float corner = std::min(W, H) * 0.035f;
+    const float headerH = H * kMenuHeaderH, footerY = H * (1 - kMenuFooterH);
 
-    SolidBrush textB{ Color(st.text) }, accentB{ Color(st.accent) }, darkB{ Color(0xFF101418) };
-    SolidBrush subB{ Color((st.text & 0x00FFFFFFu) | 0xA0000000u) }, disabledB{ Color((st.text & 0x00FFFFFFu) | 0x40000000u) };
-    SolidBrush onB{ Color(st.toggled) }, offB{ Color(0xFF50565F) };
-    Pen hovPen(Color(st.border | 0xFF000000u), 3.f);
+    // panel: a soft vertical gradient, clipped to rounded corners
+    GraphicsPath panel;
+    roundRect(panel, 0, 0, (float)W, (float)H, corner);
+    LinearGradientBrush grad(PointF(0, 0), PointF(0, (float)H), Color(PanelTop), Color(PanelBottom));
+    g.FillPath(&grad, &panel);
+    g.SetClip(&panel);
+    SolidBrush headerB{ Color(Header) }, footerB{ Color(Footer) };
+    g.FillRectangle(&headerB, 0.f, 0.f, (float)W, headerH);
+    g.FillRectangle(&footerB, 0.f, footerY, (float)W, H - footerY);
+    SolidBrush accentB{ Color(Accent) };
+    g.FillRectangle(&accentB, 0.f, headerH - 3, (float)W, 3.f); // the accent line under the header
+    g.ResetClip();
+    Pen outline(Color(0xFF2E343C), 2.f);
+    g.DrawPath(&outline, &panel);
+
+    SolidBrush textB{ Color(Text) }, subB{ Color(SubText) }, headingB{ Color(Heading) }, disabledB{ Color(Disabled) };
+    SolidBrush hoverB{ Color(Hover) }, pressedB{ Color(Pressed) }, trackB{ Color(Track) }, knobB{ Color(Knob) };
+    SolidBrush iconB{ Color(IconButton) };
+    Pen separator(Color(Separator), 1.5f);
     const float rowH = H * (1 - kMenuHeaderH - kMenuFooterH) / MenuView::kVisibleRows;
-    auto title = MakeFont(st, H * kMenuHeaderH * 0.3f * st.fontScale, FontStyleBold);
-    auto font = MakeFont(st, rowH * 0.3f * st.fontScale, FontStyleBold);
-    auto detailFont = MakeFont(st, rowH * 0.22f * st.fontScale, FontStyleRegular);
-    auto heading = MakeFont(st, rowH * 0.26f * st.fontScale, FontStyleBold);
-    StringFormat center, left;
+    auto titleFont = MakeFont(st, headerH * 0.34f * st.fontScale, FontStyleBold);
+    auto font = MakeFont(st, rowH * 0.27f * st.fontScale, FontStyleRegular);
+    auto valueFont = MakeFont(st, rowH * 0.25f * st.fontScale, FontStyleBold);
+    auto detailFont = MakeFont(st, rowH * 0.2f * st.fontScale, FontStyleRegular);
+    auto headingFont = MakeFont(st, rowH * 0.19f * st.fontScale, FontStyleBold);
+    auto iconFont = MakeFont(st, rowH * 0.34f * st.fontScale, FontStyleRegular);
+    StringFormat center, left, oneLine;
     center.SetAlignment(StringAlignmentCenter);
     center.SetLineAlignment(StringAlignmentCenter);
     left.SetLineAlignment(StringAlignmentCenter);
     left.SetTrimming(StringTrimmingEllipsisCharacter);
     left.SetFormatFlags(StringFormatFlagsNoWrap);
-
-    StringFormat titleFmt;
-    titleFmt.SetAlignment(StringAlignmentCenter);
-    titleFmt.SetLineAlignment(StringAlignmentCenter);
-    titleFmt.SetTrimming(StringTrimmingEllipsisCharacter);
-    titleFmt.SetFormatFlags(StringFormatFlagsNoWrap);
-    RectF titleRect(W * 0.2f, 0, W * 0.6f, H * kMenuHeaderH);
-    g.DrawString(Utf8ToW(v.title).c_str(), -1, title.get(), titleRect, &titleFmt, &accentB);
+    oneLine.SetAlignment(StringAlignmentCenter);
+    oneLine.SetLineAlignment(StringAlignmentCenter);
+    oneLine.SetTrimming(StringTrimmingEllipsisCharacter);
+    oneLine.SetFormatFlags(StringFormatFlagsNoWrap);
 
     std::vector<MenuBox> boxes;
     MenuLayout(v, boxes);
     auto isHover = [&](const MenuHit& h) { return h.part != MenuPart::None && v.hover == h; };
     auto isPressed = [&](const MenuHit& h) { return h.part != MenuPart::None && v.pressed == h; };
-    auto button = [&](const MenuBox& b, const std::wstring& text, bool enabled) {
+
+    // title: left, after the back button's place
+    float titleX = W * (v.canBack ? 0.14f : 0.04f);
+    RectF titleRect(titleX, 0, W * 0.8f - titleX, headerH);
+    g.DrawString(Utf8ToW(v.title).c_str(), -1, titleFont.get(), titleRect, &left, &textB);
+
+    // a small round icon button (header, - / +, scroll arrows)
+    auto iconButton = [&](const MenuBox& b, const wchar_t* glyph, bool enabled) {
         float x = b.x * W, y = b.y * H, w = b.w * W, h = b.h * H;
-        GraphicsPath cp;
-        roundRect(cp, x, y, w, h, h * 0.35f);
-        uint32_t col = isPressed(b.hit) ? 0xFFFFFFFF : isHover(b.hit) ? st.hover : st.segment;
-        SolidBrush cb{ Color(enabled ? col : (st.segment & 0x00FFFFFFu) | 0x50000000u) };
-        g.FillPath(&cb, &cp);
-        if (isHover(b.hit)) g.DrawPath(&hovPen, &cp);
-        RectF rc(x, y, w, h);
-        Brush* tb = isPressed(b.hit) ? (Brush*)&darkB : enabled ? (Brush*)&textB : (Brush*)&disabledB;
-        g.DrawString(text.c_str(), -1, font.get(), rc, &center, tb);
+        float d = std::min(w, h);
+        RectF circle(x + (w - d) / 2, y + (h - d) / 2, d, d);
+        bool hover = enabled && isHover(b.hit), pressed = enabled && isPressed(b.hit);
+        SolidBrush fill{ Color(pressed ? Pressed : hover ? 0xFF3A4350 : IconButton) };
+        g.FillEllipse(&fill, circle);
+        if (hover && !pressed) {
+            Pen ring(Color(Accent), 2.f);
+            g.DrawEllipse(&ring, circle);
+        }
+        g.DrawString(glyph, -1, iconFont.get(), circle, &center, enabled ? (Brush*)&textB : (Brush*)&disabledB);
     };
 
     for (const MenuBox& b : boxes) {
         switch (b.hit.part) {
         case MenuPart::Back:
-            button(b, L"\x2039 Back", true);
+            iconButton(b, L"\x2039", true);
             continue;
         case MenuPart::Close:
-            button(b, L"\x2715", true);
+            iconButton(b, L"\x2715", true);
             continue;
         case MenuPart::ScrollUp:
-            button(b, L"\x25B2", v.first > 0);
+            iconButton(b, L"\x25B4", v.first > 0);
             continue;
         case MenuPart::ScrollDown:
-            button(b, L"\x25BC", v.first + MenuView::kVisibleRows < (int)v.rows.size());
+            iconButton(b, L"\x25BE", v.first + MenuView::kVisibleRows < (int)v.rows.size());
             continue;
         case MenuPart::Less:
-            button(b, L"\x2212", v.rows[b.hit.row].canLess);
+            iconButton(b, v.rows[b.hit.row].kind == MenuRowKind::Choice ? L"\x2039" : L"\x2212", v.rows[b.hit.row].canLess);
             continue;
         case MenuPart::More:
-            button(b, L"+", v.rows[b.hit.row].canMore);
+            iconButton(b, v.rows[b.hit.row].kind == MenuRowKind::Choice ? L"\x203A" : L"+", v.rows[b.hit.row].canMore);
             continue;
         default:
             break;
         }
-        // a row: label (and detail) on the left, its value on the right
         const MenuViewRow& r = v.rows[b.hit.row];
         float x = b.x * W, y = b.y * H, w = b.w * W, h = b.h * H;
-        if (r.kind == MenuRowKind::Heading) {
-            RectF hr(x + 6, y, w - 12, h);
-            StringFormat bottom;
-            bottom.SetLineAlignment(StringAlignmentFar);
-            g.DrawString(Utf8ToW(r.label).c_str(), -1, heading.get(), hr, &bottom, &accentB);
+        const float inset = W * 0.04f;
+        if (r.kind == MenuRowKind::Heading) { // small grey capitals, sitting low
+            std::string caps = r.label;
+            for (char& c : caps)
+                c = (char)toupper((unsigned char)c);
+            RectF hr(inset, y + h * 0.35f, W - 2 * inset, h * 0.6f);
+            g.DrawString(Utf8ToW(caps).c_str(), -1, headingFont.get(), hr, &left, &headingB);
             continue;
         }
-        if (b.hit.part == MenuPart::Row) {
-            GraphicsPath cp;
-            roundRect(cp, x, y, w, h, h * 0.25f);
-            uint32_t col = isPressed(b.hit) ? 0xFFFFFFFF : isHover(b.hit) ? st.hover : st.segment;
-            SolidBrush cb{ Color(col) };
-            g.FillPath(&cb, &cp);
-            if (isHover(b.hit)) g.DrawPath(&hovPen, &cp);
+        // the whole row lights up when pointed at (for numbers / choices: the full width, - / + included)
+        bool rowHover = isHover(b.hit) || (r.kind == MenuRowKind::Number || r.kind == MenuRowKind::Choice) &&
+                                              v.hover.row == b.hit.row && v.hover.part != MenuPart::None;
+        float fullW = (r.kind == MenuRowKind::Number || r.kind == MenuRowKind::Choice) ? (float)W : w;
+        if (isPressed(b.hit))
+            g.FillRectangle(&pressedB, x, y, fullW, h);
+        else if (rowHover) {
+            g.FillRectangle(&hoverB, x, y, fullW, h);
+            g.FillRectangle(&accentB, x, y, 5.f, h); // the accent bar on the left
         }
-        float valueW = r.kind == MenuRowKind::Toggle ? h * 1.9f : r.kind == MenuRowKind::Link ? h * 0.6f : 0;
-        float textW = w - 20 - valueW;
-        Brush* tb = isPressed(b.hit) ? (Brush*)&darkB : (Brush*)&textB;
-        Brush* sb = isPressed(b.hit) ? (Brush*)&darkB : (Brush*)&subB;
+        g.DrawLine(&separator, inset, y + h - 1, W - inset, y + h - 1);
+
+        float valueW = r.kind == MenuRowKind::Toggle ? h * 1.4f : r.kind == MenuRowKind::Link ? h * 0.6f : 0;
+        float textW = (r.kind == MenuRowKind::Number || r.kind == MenuRowKind::Choice ? 0.58f * W : w) - inset - valueW - 10;
+        SolidBrush dangerB{ Color(0xFFFF5A5F) };
+        Brush* tb = isPressed(b.hit) ? (Brush*)&knobB : r.isDanger ? (Brush*)&dangerB : (Brush*)&textB;
+        Brush* sb = isPressed(b.hit) ? (Brush*)&knobB : (Brush*)&subB;
         if (r.detail.empty()) {
-            RectF lr(x + 12, y, textW, h);
+            RectF lr(inset, y, textW, h);
             g.DrawString(Utf8ToW(r.label).c_str(), -1, font.get(), lr, &left, tb);
         } else {
-            RectF l1(x + 12, y + h * 0.06f, textW, h * 0.5f), l2(x + 12, y + h * 0.52f, textW, h * 0.42f);
+            RectF l1(inset, y + h * 0.1f, textW, h * 0.46f), l2(inset, y + h * 0.52f, textW, h * 0.38f);
             g.DrawString(Utf8ToW(r.label).c_str(), -1, font.get(), l1, &left, tb);
             g.DrawString(Utf8ToW(r.detail).c_str(), -1, detailFont.get(), l2, &left, sb);
         }
-        if (r.kind == MenuRowKind::Number || r.kind == MenuRowKind::Choice) { // its value sits between - and +, one line
-            RectF vr(0.7f * W, y, 0.18f * W, h);
-            StringFormat one;
-            one.SetAlignment(StringAlignmentCenter);
-            one.SetLineAlignment(StringAlignmentCenter);
-            one.SetTrimming(StringTrimmingEllipsisCharacter);
-            one.SetFormatFlags(StringFormatFlagsNoWrap);
-            g.DrawString(Utf8ToW(r.value).c_str(), -1, font.get(), vr, &one, &accentB);
-        } else if (r.kind == MenuRowKind::Toggle) { // an ON / OFF pill
-            float pw = h * 1.6f, ph = h * 0.56f, px = x + w - pw - 10, py = y + (h - ph) / 2;
-            GraphicsPath pill;
-            roundRect(pill, px, py, pw, ph, ph);
-            g.FillPath(r.isOn ? (Brush*)&onB : (Brush*)&offB, &pill);
-            RectF pr(px, py, pw, ph);
-            g.DrawString(r.isOn ? L"ON" : L"OFF", -1, detailFont.get(), pr, &center, &textB);
-        } else if (r.kind == MenuRowKind::Link) { // a chevron
-            RectF cr(x + w - valueW - 8, y, valueW, h);
-            g.DrawString(Utf8ToW(r.value).c_str(), -1, title.get(), cr, &center, tb);
+
+        switch (r.kind) {
+        case MenuRowKind::Toggle: { // a switch: a track and a knob, blue when on
+            float tw = h * 0.9f, th = h * 0.44f, tx = W - inset - tw, ty = y + (h - th) / 2;
+            GraphicsPath track;
+            roundRect(track, tx, ty, tw, th, th);
+            g.FillPath(r.isOn ? (Brush*)&accentB : (Brush*)&trackB, &track);
+            float kd = th - 6, kx = r.isOn ? tx + tw - kd - 3 : tx + 3;
+            g.FillEllipse(&knobB, kx, ty + 3, kd, kd);
+            break;
+        }
+        case MenuRowKind::Number:
+        case MenuRowKind::Choice: { // the value between - and +, and for numbers a thin slider under it
+            float vx = 0.69f * W, vw = 0.2f * W;
+            RectF vr(vx, y + h * (r.fraction >= 0 ? 0.12f : 0.f), vw, h * (r.fraction >= 0 ? 0.6f : 1.f));
+            g.DrawString(Utf8ToW(r.value).c_str(), -1, valueFont.get(), vr, &oneLine, &textB);
+            if (r.fraction >= 0) {
+                float sx = vx + vw * 0.1f, sw = vw * 0.8f, sy = y + h * 0.74f;
+                g.FillRectangle(&trackB, sx, sy, sw, 4.f);
+                g.FillRectangle(&accentB, sx, sy, sw * r.fraction, 4.f);
+                g.FillEllipse(&knobB, sx + sw * r.fraction - 5, sy - 3, 10.f, 10.f);
+            }
+            break;
+        }
+        case MenuRowKind::Link: { // a chevron
+            RectF cr(W - inset - valueW, y, valueW, h);
+            g.DrawString(L"\x203A", -1, titleFont.get(), cr, &center, isPressed(b.hit) ? (Brush*)&knobB : (Brush*)&subB);
+            break;
+        }
+        default:
+            break;
         }
     }
-    // the status line (what to do now), between the scroll arrows
-    if (!v.status.empty()) {
-        RectF sr(W * 0.18f, H * (1 - kMenuFooterH), W * 0.64f, H * kMenuFooterH);
-        g.DrawString(Utf8ToW(v.status).c_str(), -1, detailFont.get(), sr, &center, &accentB);
-    }
+    // footer: what to do now, and a hint
+    std::string status = v.status.empty() ? "Point and pull the trigger  \xC2\xB7  stick: scroll / change a value" : v.status;
+    RectF sr(W * 0.04f, footerY, W * 0.7f, H - footerY);
+    g.DrawString(Utf8ToW(status).c_str(), -1, detailFont.get(), sr, &left, v.status.empty() ? (Brush*)&headingB : (Brush*)&accentB);
     Grab(bmp, out, W, H);
 }

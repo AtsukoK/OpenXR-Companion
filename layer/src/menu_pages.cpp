@@ -213,13 +213,15 @@ MenuPage BindingDetail(Engine& e, InGameMenu& m, int index) {
     p.rows.push_back(MenuRow::Choice("Game sees the button", "While this binding is in use", { "No", "Yes" },
                                      [get] { return get().block == BindingBlock::None ? 1 : 0; },
                                      [edit](int i) { edit([i](Binding& x) { x.block = i ? BindingBlock::None : BindingBlock::Trigger; }); }));
-    p.rows.push_back(MenuRow::Button("Delete this binding", "", [&e, &m, index] {
+    MenuRow remove = MenuRow::Button("Delete this binding", "", [&e, &m, index] {
         e.EditBindings([index](std::vector<Binding>& list) {
             if (index < (int)list.size()) list.erase(list.begin() + index);
         });
         m.Changed();
         m.Back();
-    }));
+    });
+    remove.isDanger = true;
+    p.rows.push_back(remove);
     return p;
 }
 
@@ -235,10 +237,10 @@ MenuPage StickOptions(Engine& e, InGameMenu& m, int hand) {
         return r;
     };
     p.rows.push_back(MenuRow::Heading("What the game sees"));
-    p.rows.push_back(share("Inner deadzone", "Smaller pushes count as none (stops drift). 10 to 15 % is typical", &s->innerDeadzone));
-    p.rows.push_back(share("Outer deadzone", "The last part toward the edge counts as full. 5 to 10 % is typical", &s->outerDeadzone));
+    p.rows.push_back(share("Inner deadzone", "Small pushes count as none (stops drift)", &s->innerDeadzone));
+    p.rows.push_back(share("Outer deadzone", "Near the edge already counts as full", &s->outerDeadzone));
     p.rows.push_back(MenuRow::Heading("Your stick bindings"));
-    MenuRow zone = MenuRow::Number("Direction zone", "Up / down / left / right only count within this angle. 45 = nearest",
+    MenuRow zone = MenuRow::Number("Direction zone", "Directions only count close to straight",
                                    [s] { return s->directionAngleDeg; }, [s](float v) { s->directionAngleDeg = v; }, 0, 45, 5);
     zone.unit = "\xC2\xB0";
     zone.atMin = "off";

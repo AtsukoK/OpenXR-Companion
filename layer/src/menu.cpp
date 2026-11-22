@@ -94,29 +94,29 @@ std::string MenuRow::ValueText() const {
 void MenuLayout(const MenuView& view, std::vector<MenuBox>& out) {
     out.clear();
     const float pad = 0.02f, headerH = kMenuHeaderH, footerH = kMenuFooterH;
-    // header: back (when there is a page to go back to) and close
-    if (view.canBack) out.push_back({ pad, pad, 0.16f, headerH - 2 * pad, { MenuPart::Back, -1 } });
-    out.push_back({ 1 - pad - 0.12f, pad, 0.12f, headerH - 2 * pad, { MenuPart::Close, -1 } });
+    // header: back (when there is a page to go back to) and close, square icon buttons
+    if (view.canBack) out.push_back({ pad, pad * 1.5f, 0.1f, headerH - 3 * pad, { MenuPart::Back, -1 } });
+    out.push_back({ 1 - pad - 0.1f, pad * 1.5f, 0.1f, headerH - 3 * pad, { MenuPart::Close, -1 } });
     // rows
     const float rowsTop = headerH, rowsH = 1 - headerH - footerH;
     const float rowH = rowsH / MenuView::kVisibleRows;
     int last = std::min((int)view.rows.size(), view.first + MenuView::kVisibleRows);
     for (int i = view.first; i < last; i++) {
         const MenuViewRow& r = view.rows[i];
-        float y = rowsTop + (i - view.first) * rowH + 0.004f, h = rowH - 0.008f;
+        float y = rowsTop + (i - view.first) * rowH, h = rowH;
         switch (r.kind) {
         case MenuRowKind::Number:
         case MenuRowKind::Choice:
-            out.push_back({ pad, y, 0.56f, h, { MenuPart::Row, i } });
-            out.push_back({ 0.6f, y, 0.1f, h, { MenuPart::Less, i } });
-            out.push_back({ 1 - pad - 0.1f, y, 0.1f, h, { MenuPart::More, i } });
+            out.push_back({ 0, y, 0.58f, h, { MenuPart::Row, i } });
+            out.push_back({ 0.6f, y + h * 0.2f, 0.08f, h * 0.6f, { MenuPart::Less, i } });
+            out.push_back({ 1 - pad - 0.08f, y + h * 0.2f, 0.08f, h * 0.6f, { MenuPart::More, i } });
             break;
         case MenuRowKind::Heading:
         case MenuRowKind::Note:
-            out.push_back({ pad, y, 1 - 2 * pad, h, { MenuPart::None, i } }); // drawn, not pressable
+            out.push_back({ 0, y, 1, h, { MenuPart::None, i } }); // drawn, not pressable
             break;
         default:
-            out.push_back({ pad, y, 1 - 2 * pad, h, { MenuPart::Row, i } });
+            out.push_back({ 0, y, 1, h, { MenuPart::Row, i } });
             break;
         }
     }
@@ -124,7 +124,7 @@ void MenuLayout(const MenuView& view, std::vector<MenuBox>& out) {
     bool more = (int)view.rows.size() > MenuView::kVisibleRows;
     if (more) {
         float y = 1 - footerH + pad * 0.5f, h = footerH - pad;
-        out.push_back({ pad, y, 0.14f, h, { MenuPart::ScrollUp, -1 } });
-        out.push_back({ 1 - pad - 0.14f, y, 0.14f, h, { MenuPart::ScrollDown, -1 } });
+        out.push_back({ 1 - pad - 0.18f, y, 0.08f, h, { MenuPart::ScrollUp, -1 } });
+        out.push_back({ 1 - pad - 0.08f, y, 0.08f, h, { MenuPart::ScrollDown, -1 } });
     }
 }
