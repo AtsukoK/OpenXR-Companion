@@ -500,6 +500,7 @@ int main(int argc, char** argv) {
         CHECK(ran, ("asking before the instance exists: " + why).c_str());
         CHECK(ran && XR_FAILED(r) && fn == nullptr, "asking for a function before our instance exists fails cleanly, no crash");
     }
+    CHECK(MirrorSettings{}.smoothing == 0.f, "headset mirror head camera smoothing is off by default");
     // Always the app's built-in default profile, never the user's own bindings.
     std::string err;
     auto p = ParseProfileText(DefaultProfileJson(), err);

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.2.13 (2026-11-22)
+
+### Fixed
+- **Games could crash at startup when another OpenXR layer sits in front of OpenXR Companion** (seen with Cheeky foveated DLSS in Bannerlord). That layer asked us for a function before our own setup had run, and we passed the call on to nothing. We now answer "not available" until we are set up.
+
+### Changed
+- **Headset mirror: head camera smoothing is off by default** (also in the default preset, "Centred where you look"). Turn it on under Headset mirror if you want it; the strength stays at 0.5. Your own saved choice is kept.
+
 ## v0.2.12 (2026-11-22)
 
 ### New

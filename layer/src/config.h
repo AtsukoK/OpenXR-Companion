@@ -377,7 +377,7 @@ struct MirrorSettings {
     int eye = 1;
     float zoom = 1.3f;
     int fps = 60;
-    float smoothing = 0.5f;
+    float smoothing = 0.f; // head camera smoothing off by default (0 = off .. 1 = strongest)
     bool onTop = false;
     bool centerOnGaze = true; // "center": "gaze" | "middle"
     bool steadyRoom = false;  // "steady_room"

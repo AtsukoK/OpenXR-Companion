@@ -28,7 +28,7 @@ public:
     bool On() const { return on; }
     bool ClosedByUser();    // the window's X was clicked since the last call
     int eye = 1;            // 0 left, 1 right
-    float smoothing = 0.5f; // steady the picture against head shake (0 = off .. 1 = strongest)
+    float smoothing = 0.f;  // steady the picture against head shake (0 = off .. 1 = strongest)
     bool onTop = false;     // keep the window above other windows (it never takes focus either way)
     bool topApplied = false;
     // Light: draw straight from the game's eye image (no full-size copy, no mipmaps), much cheaper; the full
