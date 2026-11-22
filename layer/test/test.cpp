@@ -425,9 +425,9 @@ static bool D3D12PanelRun(std::vector<uint32_t>& got, uint32_t& want, int& uploa
     return ok;
 }
 
-// A controller the layer has no table for (here a made-up Steam Frame profile): it adds the standard bindings the game
-// itself uses there, and nothing else.
-static bool RunUnknownControllerThroughLayer(std::vector<std::string>& sent, std::string& why) {
+// The game suggests bindings for one controller type; `sent` = what reaches the runtime for it (the game's and ours).
+static bool SuggestThroughLayer(const char* profilePath, const std::vector<const char*>& gamePaths, std::vector<std::string>& sent,
+                                std::string& why) {
     LayerUnderTest layer;
     if (!LoadLayerOverPretendRuntime(layer, why)) return false;
     auto toPath = (PFN_xrStringToPath)layer.Get("xrStringToPath");
@@ -438,10 +438,6 @@ static bool RunUnknownControllerThroughLayer(std::vector<std::string>& sent, std
     strcpy_s(si.localizedActionSetName, "game");
     XrActionSet set;
     createSet(layer.inst, &si, &set);
-    const char* gamePaths[] = { "/user/hand/left/input/grip/pose",      "/user/hand/right/input/grip/pose",
-                                "/user/hand/left/input/aim/pose",       "/user/hand/right/input/aim/pose",
-                                "/user/hand/right/input/a/click",       "/user/hand/left/input/trigger/value",
-                                "/user/hand/right/input/trigger/value", "/user/hand/left/input/thumbstick" };
     std::vector<XrActionSuggestedBinding> b;
     for (const char* gp : gamePaths) {
         XrPath path;
@@ -449,14 +445,24 @@ static bool RunUnknownControllerThroughLayer(std::vector<std::string>& sent, std
         b.push_back({ (XrAction)(uintptr_t)(900 + b.size()), path });
     }
     XrPath prof;
-    toPath(layer.inst, "/interaction_profiles/valve/frame_controller", &prof);
+    toPath(layer.inst, profilePath, &prof);
     XrInteractionProfileSuggestedBinding sb{ XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING };
     sb.interactionProfile = prof;
     sb.countSuggestedBindings = (uint32_t)b.size();
     sb.suggestedBindings = b.data();
     suggest(layer.inst, &sb);
-    sent = fakert::suggested["/interaction_profiles/valve/frame_controller"];
+    sent = fakert::suggested[profilePath];
     return true;
+}
+
+// A controller the layer has no table for (here a made-up Steam Frame profile): it adds the standard bindings the game
+// itself uses there, and nothing else.
+static bool RunUnknownControllerThroughLayer(std::vector<std::string>& sent, std::string& why) {
+    return SuggestThroughLayer("/interaction_profiles/valve/frame_controller",
+                               { "/user/hand/left/input/grip/pose", "/user/hand/right/input/grip/pose", "/user/hand/left/input/aim/pose",
+                                 "/user/hand/right/input/aim/pose", "/user/hand/right/input/a/click", "/user/hand/left/input/trigger/value",
+                                 "/user/hand/right/input/trigger/value", "/user/hand/left/input/thumbstick" },
+                               sent, why);
 }
 
 // A layer in front of ours may ask for a function before our instance is made (Cheeky DLSS did, and the game crashed).
@@ -2624,6 +2630,24 @@ int main(int argc, char** argv) {
         for (auto& p : sent)
             if (count(p) < 1 || (p.find("/b/click") != std::string::npos) || p.find("thumbrest") != std::string::npos) onlyKnown = false;
         CHECK(onlyKnown, "unknown controller: nothing the game doesn't bind (no b button, no thumbrest)");
+    }
+    {
+        // HP Reverb G2: its X / Y / A / B buttons are read too (the first WMR controllers have none).
+        std::vector<std::string> sent;
+        std::string why;
+        bool ran = SuggestThroughLayer("/interaction_profiles/hp/mixed_reality_controller",
+                                       { "/user/hand/left/input/grip/pose", "/user/hand/right/input/grip/pose",
+                                         "/user/hand/right/input/trigger/value" },
+                                       sent, why);
+        CHECK(ran, ("HP Reverb G2: the layer runs " + why).c_str());
+        auto has = [&](const char* p) {
+            return std::find(sent.begin(), sent.end(), std::string(p)) != sent.end();
+        };
+        CHECK(has("/user/hand/left/input/x/click") && has("/user/hand/left/input/y/click") && has("/user/hand/right/input/a/click") &&
+                  has("/user/hand/right/input/b/click"),
+              "HP Reverb G2: our menus read X / Y / A / B");
+        CHECK(!has("/user/hand/right/input/a/touch") && !has("/user/hand/left/input/thumbrest/touch"),
+              "HP Reverb G2: nothing it doesn't have (no touch, no thumbrest)");
     }
     TestGameHandOffsets();
     TestOverlay();

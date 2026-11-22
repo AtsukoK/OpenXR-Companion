@@ -128,6 +128,12 @@ static const PB kWmr[] = {
     { A_MENU, "input/menu/click", 3 },  { A_GRIP, "input/squeeze/click", 3 },      { A_TRIG, "input/trigger/value", 3 },
     { A_STICK, "input/thumbstick", 3 }, { A_STICKC, "input/thumbstick/click", 3 },
 };
+// HP Reverb G2: the WMR controller with X / Y (left) and A / B (right) added; no touch sensing.
+static const PB kHpReverb[] = {
+    { A_BTN1, "input/x/click", 1 },     { A_BTN2, "input/y/click", 1 },        { A_BTN1, "input/a/click", 2 },
+    { A_BTN2, "input/b/click", 2 },     { A_MENU, "input/menu/click", 3 },     { A_GRIP, "input/squeeze/value", 3 },
+    { A_TRIG, "input/trigger/value", 3 }, { A_STICK, "input/thumbstick", 3 }, { A_STICKC, "input/thumbstick/click", 3 },
+};
 static const PB kVive[] = {
     { A_MENU, "input/menu/click", 3 }, { A_GRIP, "input/squeeze/click", 3 },    { A_TRIG, "input/trigger/value", 3 },
     { A_STICK, "input/trackpad", 3 },  { A_STICKC, "input/trackpad/click", 3 }, { A_STICKT, "input/trackpad/touch", 3 },
@@ -160,6 +166,7 @@ static std::vector<PB> LearnedTable(const std::set<std::string>& appPaths) {
     consider(kTouch, std::size(kTouch));
     consider(kIndex, std::size(kIndex));
     consider(kWmr, std::size(kWmr));
+    consider(kHpReverb, std::size(kHpReverb));
     consider(kVive, std::size(kVive));
     consider(kSimple, std::size(kSimple));
     if (!hasPose) v.clear();
@@ -177,8 +184,10 @@ static std::vector<PB> ProfileTable(const std::string& p) {
         add(kTouch, std::size(kTouch));
     else if (p == "/interaction_profiles/valve/index_controller")
         add(kIndex, std::size(kIndex));
-    else if (p == "/interaction_profiles/microsoft/motion_controller" || p == "/interaction_profiles/hp/mixed_reality_controller")
+    else if (p == "/interaction_profiles/microsoft/motion_controller")
         add(kWmr, std::size(kWmr));
+    else if (p == "/interaction_profiles/hp/mixed_reality_controller")
+        add(kHpReverb, std::size(kHpReverb));
     else if (p == "/interaction_profiles/htc/vive_controller")
         add(kVive, std::size(kVive));
     else if (p == "/interaction_profiles/khr/simple_controller")
