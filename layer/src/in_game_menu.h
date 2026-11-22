@@ -51,6 +51,7 @@ private:
     Engine& e;
     XrPosef anchor_{ { 0, 0, 0, 1 }, { 0, 0, 0 } }; // where the menu opened: eye position, turned toward where it shows
     float placedAt_ = 0;
+    bool kbWasOnMenu_ = false, kbHeldTrigger_ = false; // the menu's keyboard: its closing pull doesn't reach the menu
     std::vector<MenuPageBuilder> stack_;
     MenuPage page_;
     struct Run {

@@ -314,7 +314,7 @@ void OverlayRenderer::RenderKeyboard(const OverlayContext& c, LayerList& layers)
             DrawList(px, kBarPx, barH, "", kb.barLabels, (int)kb.barLabels.size(), kb.barHover, kb.barPressed, st);
         });
     }
-    keyboardBar_.Submit(layers, c.local, kb.barPose, { kb.barW, kb.barH });
+    if (!kb.inMenu) keyboardBar_.Submit(layers, c.local, kb.barPose, { kb.barW, kb.barH });
 }
 
 void OverlayRenderer::RenderWrists(const OverlayContext& c, LayerList& layers) {

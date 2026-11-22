@@ -1177,5 +1177,9 @@ void DrawMenu(std::vector<uint32_t>& out, int W, int H, const MenuView& v, const
                                        : "Point and pull the trigger  \xC2\xB7  stick: scroll / change a value";
     RectF sr(W * 0.04f, footerY, W * 0.7f, H - footerY);
     g.DrawString(Utf8ToW(status).c_str(), -1, detailFont.get(), sr, &left, v.status.empty() ? (Brush*)&headingB : (Brush*)&accentB);
+    if (v.covered) { // the keyboard lies on the pane: dim what is behind it
+        SolidBrush dim(Color(150, 8, 10, 14));
+        g.FillRectangle(&dim, 0.f, 0.f, (REAL)W, (REAL)H);
+    }
     Grab(bmp, out, W, H);
 }

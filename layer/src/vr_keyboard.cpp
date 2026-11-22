@@ -131,6 +131,20 @@ void VrKeyboard::CaptureNextKey(std::function<void(const std::string&)> done, st
     float uw, uh;
     KbLayout(uw, uh, true);
     e.kb.heightM = e.kb.widthM * uh / uw;
+    if (e.menuView.open) { // inside the settings menu: on its pane, just in front of it, so the two don't cut through each other
+        MenuView& m = e.menuView;
+        float w = std::min(m.w * 0.94f, m.h * 0.8f * uw / uh);
+        e.kb.widthM = w;
+        e.kb.heightM = w * uh / uw;
+        Vec3 nrm = Rotate(m.pose.orientation, { 0, 0, 1 }), up = Rotate(m.pose.orientation, { 0, 1, 0 });
+        float shift = -m.h * 0.04f; // a little below the middle, under the title
+        e.kb.pose = { m.pose.orientation, X(V(m.pose.position) + nrm * (0.006f * m.scale) + up * shift) };
+        e.kb.inMenu = true;
+        e.kb.barLabels.clear();
+        e.kb.barVersion++;
+        m.covered = true;
+        m.version++;
+    }
     e.kb.hover[0] = e.kb.hover[1] = -1;
     e.kb.version++;
     e.Toast(run_.captureController ? "Pick a key, a mouse button, or Controller button" : "Press the key you want on the keyboard", 3.0);
@@ -140,6 +154,11 @@ void VrKeyboard::Close() {
     run_.capture = nullptr;
     run_.captureController = nullptr;
     e.kb.binding = false;
+    if (e.kb.inMenu) {
+        e.kb.inMenu = false;
+        e.menuView.covered = false;
+        e.menuView.version++;
+    }
     if (e.kb.moving) {
         e.kb.moving = false;
         if (e.grab.target == GrabTarget::Keyboard) e.grab = Engine::GrabRun{};
@@ -236,6 +255,7 @@ void VrKeyboard::Press(int i, int hand) {
 
 // Adjust mode: grab the keyboard with a grip and put it anywhere; the grabbing hand's stick changes its width.
 void VrKeyboard::UpdatePlacing() {
+    if (e.kb.inMenu) return; // the menu's keyboard stays on the menu
     bool placing = e.adjust || e.kb.moving;
     if (e.grab.target == GrabTarget::Keyboard && (!placing || !e.kb.visible)) e.grab = Engine::GrabRun{};
     if (!placing || !e.kb.visible || (e.grab.Active() && e.grab.target != GrabTarget::Keyboard)) return;
@@ -338,6 +358,7 @@ XrPosef VrKeyboard::DockRel() const {
 }
 
 void VrKeyboard::ApplyDock() {
+    if (e.kb.inMenu) return; // the menu's keyboard stays on the menu
     DockStyle& D = e.prof->dock;
     if (!e.kb.visible) {
         e.dockAdjust = false;
@@ -419,7 +440,7 @@ void VrKeyboard::ToggleMove() {
 
 // The bar under the keyboard: dock the screen above the keys, the keys under the screen, adjust the dock, close.
 void VrKeyboard::UpdateBar() {
-    if (!e.kb.visible) return;
+    if (!e.kb.visible || e.kb.inMenu) return; // no docking bar on the menu's keyboard
     const DockStyle& D = e.prof->dock;
     std::vector<std::string> labels{ D.mode == DockMode::ScreenOnKeys ? "Undock\nscreen" : "Dock screen\nabove keys",
                                      D.mode == DockMode::KeysUnderScreen ? "Undock\nkeys" : "Dock keys\nunder screen",

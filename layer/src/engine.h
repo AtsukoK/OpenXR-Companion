@@ -82,6 +82,7 @@ struct KeyboardView {
     bool shift = false, caps = false, ctrl = false, alt = false;
     bool moving = false; // Move key: grab it with a grip to place it, stick = size
     bool binding = false; // picking what a binding does: the binding layout (see KbLayout)
+    bool inMenu = false;  // laid flat inside the settings menu (asked for by it): no bar, not moved, not saved
     uint64_t version = 0;
     // button bar under the keyboard: docking with the screen
     XrPosef barPose{ { 0, 0, 0, 1 }, { 0, 0, 0 } };

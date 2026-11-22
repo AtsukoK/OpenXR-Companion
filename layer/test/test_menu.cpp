@@ -229,6 +229,14 @@ void TestInGameMenu() {
     CHECK(pressKey("rmb", KB_KEY) && p->bindings.back().action.keys == "rmb" && p->bindings.back().action.type == ActType::Key,
           "menu: a mouse button on the binding keyboard becomes what it does");
     d.PressRow("Action: Key: rmb (hold)");
+    {
+        // the keyboard lies on the menu's pane: same facing, just in front, inside its edges; the menu is dimmed under it
+        Vec3 off = RotateInv(e.menuView.pose.orientation, V(e.kb.pose.position) - V(e.menuView.pose.position));
+        float facing = Dot(Rotate(e.kb.pose.orientation, { 0, 0, 1 }), Rotate(e.menuView.pose.orientation, { 0, 0, 1 }));
+        CHECK(e.kb.inMenu && e.menuView.covered && facing > 0.999f && off.z > 0 && off.z < 0.02f &&
+                  std::fabs(off.x) + e.kb.widthM / 2 <= e.menuView.w / 2 + 1e-4f && std::fabs(off.y) + e.kb.heightM / 2 <= e.menuView.h / 2 + 1e-4f,
+              "menu: the binding keyboard lies inside the menu's pane");
+    }
     CHECK(pressKey("", KB_CONTROLLER) && !e.kb.visible && !e.menuView.status.empty(), "menu: Controller button asks for a button");
     f.h[1].b2 = true; // right B: the button the game should see
     d.Step();

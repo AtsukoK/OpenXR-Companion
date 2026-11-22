@@ -28,6 +28,7 @@ void InGameMenu::Open() {
 
 void InGameMenu::Close() {
     if (!IsOpen()) return;
+    if (e.kb.inMenu) e.keyboard.Close(); // its keyboard goes with it
     e.menuView.open = false;
     e.menuView.version++;
     run_.inputDone = nullptr;
@@ -212,6 +213,16 @@ void InGameMenu::UpdatePointing() {
     MenuLayout(v, boxes);
     MenuHit hover;
     run_.uiHand = -1;
+    // the pull that pressed a key on the menu's keyboard (and closed it) doesn't also press what lies under that key
+    if (kbHeldTrigger_ && (e.cur[0][C_TRIGGER][F_PRESS] || e.cur[1][C_TRIGGER][F_PRESS])) {
+        if (v.hover.part != MenuPart::None) {
+            v.hover = MenuHit{};
+            v.version++;
+        }
+        run_.repeatHit = MenuHit{};
+        return;
+    }
+    kbHeldTrigger_ = false;
     for (int g = 0; g < 2 && run_.uiHand < 0; g++) {
         float u, w;
         if (!e.screenMirror.PanelRay(g, v.pose, v.w, v.h, u, w)) continue;
@@ -376,7 +387,12 @@ void InGameMenu::Update() {
     }
     if (e.kb.visible) { // typing a key for a binding (or the keyboard is open for something else)
         run_.uiHand = -1;
+        kbWasOnMenu_ = e.kb.inMenu;
         return;
+    }
+    if (kbWasOnMenu_) { // it just closed: wait until the trigger that closed it is let go
+        kbWasOnMenu_ = false;
+        kbHeldTrigger_ = true;
     }
     float dt = (float)std::clamp(e.now - e.lastNow, 0.0, 0.1);
     UpdateLive();

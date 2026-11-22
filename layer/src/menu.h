@@ -138,6 +138,7 @@ struct MenuView {
     float w = 0.5f, h = 0.56f; // metres
     float scale = 1;           // the page drawn bigger: w / scale is its design width
     bool stickFree = false;    // the sticks are being tested: they don't scroll (the footer says so)
+    bool covered = false;      // the keyboard lies on it: drawn dimmed behind the keys
     std::string title;
     std::string status; // a line at the bottom: what to do now ("Press the button you want...")
     bool canBack = false;

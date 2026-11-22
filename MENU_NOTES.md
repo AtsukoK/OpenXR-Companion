@@ -43,6 +43,10 @@ only when the user says so.
 - Editor "+ Add..." (2026-11-23): the dropdown is now a popup of cards (editor/OptionPicker.cs: PickOption group/title/
   does/example, laid out by hand, card height measured + 20 px). Choices in ControllerButtonsPage.AddOptions (AddKind).
   Picture: editor --picker-shot <png> (editor_add_picker.png). Other dropdowns (gesture, block, action type) could use it too.
+- Menu keyboard (2026-11-23): when the menu asks for a key, the VR keyboard lies on the menu's pane (KeyboardView.inMenu:
+  same facing, 6 mm x scale in front, width min(0.94 w, fits 0.8 h)), menu dimmed (MenuView.covered), no dock bar, not
+  moved/saved/docked; closes with the menu. The trigger pull that presses a key doesn't reach the menu row under it
+  (InGameMenu kbWasOnMenu_ / kbHeldTrigger_). Test: "the binding keyboard lies inside the menu's pane".
 - Open ideas: overview pictures could be bigger (spare height); long tag text gets cut; highlight the part on PartPage.
 - Pictures: layer/menu_overview.png, menu_part.png, menu_binding.png, keyboard_binding.png, menu_test_frame.png (tests).
 
