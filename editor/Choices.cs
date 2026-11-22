@@ -21,6 +21,7 @@ public static class ActionType
     public const string Adjust = "adjust";
     public const string Screen = "screen";
     public const string ControllerOffsets = "controller_offsets";
+    public const string SettingsMenu = "settings_menu";
     public const string HeadsetMirror = "headset_mirror";
     public const string None = "none";
     public const string Page = "page";
@@ -72,6 +73,7 @@ public static class Choices
         new(ActionType.Reload, "Reload this profile"), new(ActionType.Adjust, "Adjust positions: move wheels and wrist panels by hand"),
         new(ActionType.Screen, "Mirror a monitor: show / hide it, switch monitor, frame rate or place"),
         new(ActionType.ControllerOffsets, "Controller offsets: fix how the game's hands and guns point"),
+        new(ActionType.SettingsMenu, "In-game settings menu: change bindings and sticks in the headset"),
         new(ActionType.HeadsetMirror, "Headset mirror: a desktop window showing what the headset shows"), new(ActionType.None, "Do nothing"),
     };
     public static readonly Choice[] KeyModes = { new("tap", "Tap it once"), new("hold", "Keep it held while my button is held"), new("toggle", "Toggle: first time down, next time up") };

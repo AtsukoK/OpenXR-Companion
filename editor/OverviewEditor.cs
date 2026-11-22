@@ -124,6 +124,7 @@ public class OverviewEditor : EditorBase
                 ("adjust", "Move things by hand (Adjust / Calibrate Positions)", a => true),
                 ("screen", "Screen mirror (a monitor or window in VR)", a => a.Mode is null or "toggle" or "on"),
                 ("controller_offsets", "Controller offsets", a => true),
+                ("settings_menu", "In-game settings menu (bindings, sticks)", a => true),
                 ("headset_mirror", "Headset mirror (desktop window)", a => true),
             };
             var c = Card("Tools on your menus", "", On, "Where to find them in the headset:", null, null);

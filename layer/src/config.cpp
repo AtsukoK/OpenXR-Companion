@@ -1114,6 +1114,7 @@ const char* DefaultProfileJson() {
         { "label": "Reload profile", "action": { "type": "reload" } },
         { "label": "Calibrate Positions", "action": { "type": "adjust" } },
         { "label": "Controller offsets", "action": { "type": "controller_offsets", "mode": "panel" } },
+        { "label": "Settings", "action": { "type": "settings_menu" } },
         { "label": "Headset mirror", "action": { "type": "headset_mirror", "mode": "toggle" } },
         { "label": "Screen options", "action": { "type": "page", "page": "Screen (sub-page)" } },
         { "label": "Screenshot", "enabled": false, "action": { "type": "key", "keys": "F12" } },

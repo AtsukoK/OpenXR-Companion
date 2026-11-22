@@ -61,7 +61,7 @@ public class BlockOpenConv : ChoiceConverter
 public class TypeConv : ChoiceConverter
 {
     protected override bool Exclusive => true;
-    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "key", "sequence", "xr_input", "wheel", "back", "close", "layer", "reload", "keyboard", "page", "adjust", "screen", "controller_offsets", "headset_mirror" };
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "key", "sequence", "xr_input", "wheel", "back", "close", "layer", "reload", "keyboard", "page", "adjust", "screen", "controller_offsets", "headset_mirror", "settings_menu" };
 }
 public class ModeConv : ChoiceConverter
 {
@@ -514,6 +514,7 @@ public class ActionModel
         "screen" => $"screen {Mode} {Place}".Trim(),
         "controller_offsets" => $"controller offsets {Mode}".Trim(),
         "headset_mirror" => $"headset mirror {Mode}".Trim(),
+        "settings_menu" => "in-game settings menu",
         _ => Type,
     };
 }

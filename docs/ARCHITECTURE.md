@@ -31,6 +31,7 @@ checks their timestamps about once a second and reloads what changed.
     `- screen_mirror.cpp             ScreenMirror: where the mirrored screen sits, pointing at it, its bar and picker
     `- wrist_panels.cpp              WristPanels: the buttons on each forearm
     `- offsets_panel.cpp             OffsetsPanel: the controller offsets panel
+    `- in_game_menu.cpp              InGameMenu: the in-game settings menu (pages from menu_pages.cpp, rows in menu.h)
     `- config.cpp                    profiles and settings files (JSON), atomic saves
     `- keys.cpp                      key presses and mouse input sent to Windows, on a worker thread
    mirror.cpp                        HeadsetMirror: the desktop window that shows one eye
@@ -86,6 +87,25 @@ holds `gMx`; taking it there could stall a frame. Data they need is copied over 
 All under `%LOCALAPPDATA%\OpenXRCompanion` (see `config.cpp`): `profiles\*.json`, `active_profile.txt`,
 `head_smoothing.json`, `headset_mirror.json`, `logs\<game>.log`. Saves go through a temp file and a rename
 (`WriteFileAtomic`), so a reader never sees half a file.
+
+### The in-game settings menu
+
+A panel in front of you with pages of settings, like SteamVR's dashboard, opened by any binding or menu button
+with the `settings_menu` action (the default left wrist panel has one on its More page).
+
+- `menu.h` / `menu.cpp`: the model. A `MenuPage` is a title and `MenuRow`s: Heading, Note, Link, Button, Toggle,
+  Number, Choice. Rows carry small functions that read and change their value, so a page is built straight from
+  the profile and edits go straight back into it. Also the view the overlay draws (`MenuView`) and `MenuLayout`,
+  the one place that says where each clickable part sits (used by drawing and pointing alike).
+- `in_game_menu.cpp`: `InGameMenu` runs it: the page stack (Back), pointing and the trigger, the stick (up / down
+  scrolls, left / right moves the number pointed at), asking for a button (`CaptureInput`) or a key from the VR
+  keyboard (`CaptureKey`), and saving a moment after the last change (`menuSaveRequested`, then `SaveMenuEdits`).
+- `menu_pages.cpp`: the pages. Bindings change through `Engine::EditBindings`, which ends whatever a binding is
+  doing first, so nothing sticks.
+
+**Adding a part of the app to the menu**: write a page builder in `menu_pages.cpp` (rows with get / set functions
+on the profile or the engine), add a `MenuRow::Link` to it on `Home`, and, if it changes something kept in the
+profile file, write that part in `SaveMenuEdits` (config.cpp). Add a test in `layer/test/test_menu.cpp`.
 
 ## The editor: controller pages
 

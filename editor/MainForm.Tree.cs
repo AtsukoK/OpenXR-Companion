@@ -192,6 +192,7 @@ public partial class MainForm
             "keyboard" => "Opens the VR keyboard",
             "adjust" => "Adjust mode on/off: grip to move, stick to resize",
             "headset_mirror" => a.Mode switch { "on" => "Turns the headset mirror window on", "off" => "Turns the headset mirror window off", _ => "Headset mirror window on / off" },
+            "settings_menu" => "Opens the in-game settings menu",
             "controller_offsets" => a.Mode switch
             {
                 "enable" => "Controller offsets on / off",

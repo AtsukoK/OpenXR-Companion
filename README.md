@@ -13,6 +13,7 @@ Hand tools for any OpenXR game: radial wheels, wrist panels, button combos, a VR
 | [Radial wheels](#quick-start) | Menus that open from a controller button; pick with the stick or by pointing. Sub-wheels, key presses, macros, toggles. |
 | [Wrist panels](#the-default-left-wrist-panel) | Buttons on your forearm that appear when you look at it. |
 | [Bindings and combos](#using-the-editor) | Any controller button, double tap, hold or combo can press keys, run macros, open wheels or switch layers. |
+| [In-game settings menu](#in-game-settings-menu) | A panel in the headset to change bindings and stick deadzones without taking it off. |
 | [Controller buttons](#controller-buttons) | A picture of your controller: click a button to make it (or just touching it) press a key, act as another of the game's buttons, or turn it off for the game. |
 | [VR keyboard](#quick-start) | Type into the game or a mirrored window. |
 | [Screen mirror](#screen-mirror-a-monitor-or-window-in-vr) | A monitor or one window on your wrist or in front of you, usable with the laser like a mouse. |
@@ -126,6 +127,18 @@ These make ordinary bindings, listed under the controller, so you can change or 
 ![Search: typing "zoom" lists only the Headset mirror page and highlights its matching settings](docs/images/editor-search.png)
 
 ![Wrist panel page: off / own pages / mirror, first page, side of the arm and text direction](docs/images/editor-wrist-panel.png)
+
+## In-game settings menu
+
+Change your bindings and sticks without taking the headset off. Open it with **Settings** on the left wrist panel's **More** page (or give any button or wheel item the **In-game settings menu** action). Point at it with the laser and pull the trigger; the stick scrolls (up / down) and changes the number you point at (left / right).
+
+- **Right / Left bindings**: every binding on that controller. Open one to switch it on or off, choose its **button** (press *Button*, then just press the button you want), **press or touch**, **when** (press, quick tap, hold, double-tap, while held, double-tap and hold), its **key** (press *Key*, then the key on the VR keyboard), whether the key is tapped, held or toggled, and whether the **game still sees the button**. **+ New binding**: press a button, then a key. Bindings that do something else (a wheel, a macro) can be switched on or off and moved to another button here; what they do is changed in the editor.
+- **Right / Left stick**: the inner and outer deadzone (what the game sees), the direction zone and how far a direction has to be pushed.
+- **Controller offsets** opens its own panel.
+
+Changes work at once and are saved to the profile a second later, so the editor shows them too.
+
+![In-game settings menu: home page with bindings, sticks and controller offsets](docs/images/menu-home.png)
 
 ## Screen mirror (a monitor or window in VR)
 
@@ -333,6 +346,7 @@ Everything here can be set in the editor; this is for people who prefer the file
 | `adjust` | | Adjust positions (move wheels, wrist panels and the screen by hand) |
 | `screen` | `mode` toggle/on/off/choose/next_monitor/next_fps/next_place, `place`, `monitor`, `window` | the screen mirror |
 | `controller_offsets` | `mode` panel | opens the controller offsets panel |
+| `settings_menu` | | opens or closes the in-game settings menu (bindings, sticks) |
 | `headset_mirror` | `mode` toggle/on/off | the headset mirror window |
 
 **Wheel confirm modes**
