@@ -96,7 +96,14 @@ void VrKeyboard::Open(int bi) {
     e.kb.version++;
 }
 
+void VrKeyboard::CaptureNextKey(std::function<void(const std::string&)> done) {
+    if (!e.kb.visible) Open(-1);
+    run_.capture = std::move(done);
+    e.Toast("Press the key you want on the keyboard", 3.0);
+}
+
 void VrKeyboard::Close() {
+    run_.capture = nullptr;
     if (e.kb.moving) {
         e.kb.moving = false;
         if (e.grab.target == GrabTarget::Keyboard) e.grab = Engine::GrabRun{};
@@ -161,6 +168,14 @@ void VrKeyboard::Press(int i, int hand) {
         bool upper = k.letter ? (e.kb.shift != e.kb.caps) : e.kb.shift;
         if (upper) combo += "Shift+";
         combo += k.combo;
+        if (run_.capture) { // asked for by the menu: hand it over instead of typing it
+            auto done = std::move(run_.capture);
+            run_.capture = nullptr;
+            e.kb.shift = e.kb.ctrl = e.kb.alt = false;
+            Close();
+            done(combo);
+            return;
+        }
         Keys::Tap(combo, 25);
         e.kb.shift = e.kb.ctrl = e.kb.alt = false; // one-shot modifiers
         if (k.combo == "Enter" && e.prof->kb.closeOnEnter) {

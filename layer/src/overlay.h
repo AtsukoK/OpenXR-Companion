@@ -75,6 +75,7 @@ private:
     void RenderKeyboard(const OverlayContext& c, LayerList& layers);
     void RenderWrists(const OverlayContext& c, LayerList& layers);
     void RenderOffsets(const OverlayContext& c, LayerList& layers);
+    void RenderMenu(const OverlayContext& c, LayerList& layers);
     void RenderPointers(const OverlayContext& c, LayerList& layers);
     void RenderToast(const OverlayContext& c, LayerList& layers);
     void StopScreen(const OverlayContext& c);
@@ -96,6 +97,7 @@ private:
     OverlayQuad keyboard_, keyboardBar_;
     OverlayQuad wrist_[2], cursor_[2];
     OverlayQuad offsets_;
+    OverlayQuad menu_;
     OverlayQuad pointerDot_, pointerBeam_, finger_;
     OverlayQuad toast_;
     // pointers and fingertips use one picture for both hands, each hand has its own quad

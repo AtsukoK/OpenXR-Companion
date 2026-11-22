@@ -19,7 +19,7 @@ bool ParseInput(const std::string& s, InputId& out);
 std::string InputName(const InputId& i);
 int ParseCompName(const std::string& s); // "trigger", "primary", ... -> Comp or -1
 
-enum class ActType { None, Key, Sequence, XrInput, Wheel, Back, Close, Layer, Reload, Keyboard, Page, Adjust, Screen, Offsets, Mirror };
+enum class ActType { None, Key, Sequence, XrInput, Wheel, Back, Close, Layer, Reload, Keyboard, Page, Adjust, Screen, Offsets, Mirror, Menu };
 
 // Text <-> enum tables for profile settings: { value, "text in the file" }.
 template <class E>
@@ -189,6 +189,7 @@ struct Binding {
     BindingBlock block = BindingBlock::Trigger;
     bool tapPassthrough = false;
     Action action;
+    int sourceIndex = -1; // its place in the profile file's list (-1: made in the headset, not saved yet)
 };
 
 struct WheelItem {
@@ -374,6 +375,9 @@ bool SavePlacement(const Profile& p, std::string& err);
 bool SaveScreenChoice(const Profile& p, std::string& err);
 // Controller offsets changed in the headset: write the controller_offsets section.
 bool SaveOffsets(const Profile& p, std::string& err);
+// What the in-game menu changes: the bindings (each keeps the fields the menu doesn't touch), the stick options and
+// the stick direction threshold. Afterwards each binding's sourceIndex is its new place in the file.
+bool SaveMenuEdits(Profile& p, std::string& err);
 // Headset mirror window: app-wide (not per profile), in %LOCALAPPDATA%\OpenXRCompanion\headset_mirror.json,
 // shared with the editor's toolbar button.
 struct MirrorSettings {

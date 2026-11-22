@@ -7,6 +7,7 @@ constexpr int kKeyboardPx = 1500; // width; height follows the layout
 constexpr int kBarPx = 1200;      // bars under the screen and the keyboard (width)
 constexpr int kPickerPx = 1000;   // screen picker (width)
 constexpr int kOffsetsPx = 900;   // controller offsets panel (width)
+constexpr int kMenuPx = 1100;     // in-game settings menu (width)
 constexpr int kWristPx = 512;
 constexpr int kCursorPx = 128;
 constexpr int kDotPx = 64;
@@ -86,13 +87,14 @@ void OverlayRenderer::Render(const OverlayContext& c, LayerList& layers) {
     RenderKeyboard(c, layers);
     RenderWrists(c, layers);
     RenderOffsets(c, layers);
+    RenderMenu(c, layers);
     RenderPointers(c, layers);
     RenderToast(c, layers);
 }
 
 void OverlayRenderer::InvalidateAll() {
     for (OverlayQuad* q :
-         { &screenBar_, &screenPicker_, &wheel_, &keyboard_, &keyboardBar_, &offsets_, &pointerDot_, &pointerBeam_, &finger_, &toast_ })
+         { &screenBar_, &screenPicker_, &wheel_, &keyboard_, &keyboardBar_, &offsets_, &menu_, &pointerDot_, &pointerBeam_, &finger_, &toast_ })
         q->Invalidate();
     for (int h = 0; h < 2; h++) {
         wrist_[h].Invalidate();
@@ -102,7 +104,7 @@ void OverlayRenderer::InvalidateAll() {
 
 void OverlayRenderer::Destroy(const OverlayContext& c) {
     StopScreen(c);
-    for (OverlayQuad* q : { &wheel_, &keyboard_, &keyboardBar_, &offsets_, &pointerDot_, &pointerBeam_, &finger_, &toast_ })
+    for (OverlayQuad* q : { &wheel_, &keyboard_, &keyboardBar_, &offsets_, &menu_, &pointerDot_, &pointerBeam_, &finger_, &toast_ })
         q->Destroy(c);
     for (int h = 0; h < 2; h++) {
         wrist_[h].Destroy(c);
@@ -348,6 +350,18 @@ void OverlayRenderer::RenderOffsets(const OverlayContext& c, LayerList& layers) 
         });
     }
     offsets_.Submit(layers, c.local, ov.pose, { ov.w, ov.h });
+}
+
+void OverlayRenderer::RenderMenu(const OverlayContext& c, LayerList& layers) {
+    const MenuView& mv = eng_.menuView;
+    if (!mv.open || !c.local) {
+        if (menu_.Exists()) menu_.Destroy(c);
+        return;
+    }
+    const int h = (int)(kMenuPx * mv.h / mv.w);
+    if (menu_.Ensure(c, kMenuPx, h))
+        menu_.Redraw(c, mv.version, scratch_, [&](std::vector<uint32_t>& px) { DrawMenu(px, kMenuPx, h, mv, eng_.prof->style); });
+    menu_.Submit(layers, c.local, mv.pose, { mv.w, mv.h });
 }
 
 // ---------------------------------------------------------------- pointers, fingertips, toasts

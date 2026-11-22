@@ -5,6 +5,8 @@
 #include "engine_types.h"
 #include "vr_keyboard.h"
 #include "offsets_panel.h"
+#include "in_game_menu.h"
+#include <functional>
 #include <set>
 
 struct HandRaw {
@@ -186,6 +188,7 @@ class Engine {
     friend class ScreenMirror;
     friend class OffsetsPanel;
     friend class VrKeyboard;
+    friend class InGameMenu;
 
 public:
     // ---------------- driving it (the layer, once per frame)
@@ -210,6 +213,7 @@ public:
     PointerView pointer[2]; // per controller
     ScreenView screen;
     OffsetView offView;
+    MenuView menuView; // the in-game settings menu
     std::string toast;
     uint64_t toastVersion = 0;
     double toastUntil = 0;
@@ -219,6 +223,7 @@ public:
     bool reloadRequested = false;
     bool saveRequested = false;                    // leaving adjust mode: write the placement to the profile
     bool offsSaveRequested = false;                // write offs into the profile
+    bool menuSaveRequested = false;                // the in-game menu changed the profile (bindings, sticks): write them
     MirrorRequest mirrorAsk = MirrorRequest::None; // the headset mirror window
     bool mirrorOn = false;                         // set by the layer
 
@@ -234,12 +239,16 @@ public:
     Vec3 FingertipPos(int hand) const;
     // Is this action a toggle that is currently on? (key toggle, game input toggle, layer)
     bool IsOn(const Action& a) const;
+    // Change the profile's bindings (the in-game menu): whatever a binding is doing is ended first, and the
+    // per-binding state is rebuilt after, so a held key or layer never sticks.
+    void EditBindings(const std::function<void(std::vector<Binding>&)>& edit);
 
 private:
     WristPanels wristPanels{ *this };
     ScreenMirror screenMirror{ *this };
     VrKeyboard keyboard{ *this };
     OffsetsPanel offsetsPanel{ *this };
+    InGameMenu menu{ *this };
     struct BState {
         bool armed = false;
         double armTime = 0;

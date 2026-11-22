@@ -486,6 +486,20 @@ static void SaveOffsetsIfAsked() {
     }
 }
 
+// The in-game menu changed bindings or stick options: write them into the profile.
+static void SaveMenuEditsIfAsked() {
+    if (!gEng.menuSaveRequested || !gEng.prof) return;
+    gEng.menuSaveRequested = false;
+    std::string err;
+    if (SaveMenuEdits(*gEng.prof, err)) {
+        MarkOwnSave();
+        Log("in-game menu: settings saved to %s", gEng.prof->sourceName.c_str());
+    } else {
+        Log("in-game menu: save failed: %s", err.c_str());
+        gEng.Toast("Could not save the settings: " + err, 6.0);
+    }
+}
+
 // Wheel / wrist buttons, the window's X and the editor's file all switch the headset mirror.
 static void UpdateHeadsetMirror() {
     if (gEng.mirrorAsk != MirrorRequest::None) { // a wheel / wrist button: switch the headset mirror, and remember it for the editor
@@ -566,6 +580,7 @@ static void ReadInputsAndUpdate() {
     SendHaptics();
     PushHandOffsets();
     SaveOffsetsIfAsked();
+    SaveMenuEditsIfAsked();
     UpdateHeadsetMirror();
     if (gEng.reloadRequested) {
         gEng.reloadRequested = false;

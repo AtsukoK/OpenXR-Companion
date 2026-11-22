@@ -148,6 +148,8 @@ static Action ParseAction(const json& j, const std::string& ctx) {
         a.type = ActType::Offsets;
     else if (t == "headset_mirror" || t == "mirror")
         a.type = ActType::Mirror;
+    else if (t == "settings_menu" || t == "settings")
+        a.type = ActType::Menu;
     else if (t == "none" || t.empty())
         a.type = ActType::None;
     else
@@ -421,6 +423,7 @@ static void ParseBindings(const json& list, std::vector<Binding>& out) {
         if (!block.empty() && !ParseEnum(kBindingBlockNames, Lower(block), B.block)) B.block = BindingBlock::None;
         Get(b, "tap_passthrough", B.tapPassthrough);
         B.action = ParseAction(b.value("action", json::object()), ctx);
+        B.sourceIndex = (int)out.size();
         out.push_back(std::move(B));
     }
 }
@@ -879,6 +882,72 @@ bool SaveOffsets(const Profile& p, std::string& err) {
             err = "cannot write " + WToUtf8(path);
             return false;
         }
+        return true;
+    } catch (const std::exception& e) {
+        err = e.what();
+        return false;
+    }
+}
+
+// One binding as the file holds it: the original entry (keeps fields the menu doesn't edit) with the menu's fields set.
+static json MenuBindingJson(const Binding& b, const json& original) {
+    json o = original.is_object() ? original : json::object();
+    o["name"] = b.name;
+    o["enabled"] = b.enabled;
+    o["input"] = b.chordText;
+    o["gesture"] = EnumKey(kGestureNames, b.gesture);
+    if (b.gesture == Gesture::Hold) o["hold_ms"] = b.holdMs;
+    o["block"] = EnumKey(kBindingBlockNames, b.block);
+    if (b.action.type == ActType::Key) {
+        json a = o.contains("action") && o["action"].is_object() ? o["action"] : json::object();
+        a["type"] = "key";
+        a["keys"] = b.action.keys;
+        a["mode"] = ActModeKey(b.action.mode);
+        o["action"] = a;
+    }
+    return o;
+}
+
+bool SaveMenuEdits(Profile& p, std::string& err) {
+    std::wstring path = SaveTarget(p);
+    std::string text;
+    if (!ReadFile(path, text)) {
+        err = "cannot read " + WToUtf8(path);
+        return false;
+    }
+    try {
+        json j = json::parse(text, nullptr, true, true);
+        auto r2 = [](float v) {
+            return std::round(v * 100.f) / 100.f;
+        };
+        json sticks = json::object();
+        const char* hands[2] = { "left", "right" };
+        for (int h = 0; h < 2; h++) {
+            const StickShape& s = p.sticks[h];
+            if (!s.ChangesGame() && s.directionAngleDeg <= 0) continue; // all off: not written
+            sticks[hands[h]] = { { "inner_deadzone", r2(s.innerDeadzone) },
+                                 { "outer_deadzone", r2(s.outerDeadzone) },
+                                 { "direction_angle", std::round(s.directionAngleDeg) } };
+        }
+        if (sticks.empty())
+            j.erase("sticks");
+        else
+            j["sticks"] = sticks;
+        j["thresholds"]["stick_on"] = r2(p.stickOn);
+        j["thresholds"]["stick_off"] = r2(p.stickOff);
+        json old = j.contains("bindings") && j["bindings"].is_array() ? j["bindings"] : json::array();
+        json list = json::array();
+        for (const Binding& b : p.bindings) {
+            bool hasOriginal = b.sourceIndex >= 0 && b.sourceIndex < (int)old.size();
+            list.push_back(MenuBindingJson(b, hasOriginal ? old[b.sourceIndex] : json()));
+        }
+        j["bindings"] = list;
+        if (!WriteFileAtomic(path, j.dump(2))) {
+            err = "cannot write " + WToUtf8(path);
+            return false;
+        }
+        for (int i = 0; i < (int)p.bindings.size(); i++)
+            p.bindings[i].sourceIndex = i;
         return true;
     } catch (const std::exception& e) {
         err = e.what();

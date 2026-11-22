@@ -3,7 +3,7 @@ project(OpenXRCompanion CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 add_library(OpenXRCompanion SHARED
-    src/layer.cpp src/engine.cpp src/screen_mirror.cpp src/wheel.cpp src/adjust.cpp src/vr_keyboard.cpp src/wrist_panels.cpp src/config.cpp src/keys.cpp src/panel.cpp src/common.cpp src/screen.cpp src/wincap.cpp src/offsets_panel.cpp src/mirror.cpp src/tracking_log.cpp src/head_smoothing.cpp src/game_offsets.cpp src/overlay.cpp src/game_input.cpp)
+    src/layer.cpp src/engine.cpp src/screen_mirror.cpp src/wheel.cpp src/adjust.cpp src/vr_keyboard.cpp src/wrist_panels.cpp src/config.cpp src/keys.cpp src/panel.cpp src/common.cpp src/screen.cpp src/wincap.cpp src/offsets_panel.cpp src/mirror.cpp src/tracking_log.cpp src/head_smoothing.cpp src/game_offsets.cpp src/overlay.cpp src/game_input.cpp src/menu.cpp src/in_game_menu.cpp src/menu_pages.cpp)
 target_include_directories(OpenXRCompanion PRIVATE
     ${CMAKE_SOURCE_DIR}/../third_party/openxr-sdk/include
     ${CMAKE_SOURCE_DIR}/../third_party)
@@ -17,7 +17,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
 endif()
 
 add_executable(vro_test test/test.cpp test/test_parts.cpp
-    src/engine.cpp src/screen_mirror.cpp src/wheel.cpp src/adjust.cpp src/vr_keyboard.cpp src/wrist_panels.cpp src/config.cpp src/keys.cpp src/panel.cpp src/common.cpp src/screen.cpp src/wincap.cpp src/offsets_panel.cpp src/mirror.cpp src/tracking_log.cpp src/head_smoothing.cpp src/game_offsets.cpp src/overlay.cpp src/game_input.cpp)
+    src/engine.cpp src/screen_mirror.cpp src/wheel.cpp src/adjust.cpp src/vr_keyboard.cpp src/wrist_panels.cpp src/config.cpp src/keys.cpp src/panel.cpp src/common.cpp src/screen.cpp src/wincap.cpp src/offsets_panel.cpp src/mirror.cpp src/tracking_log.cpp src/head_smoothing.cpp src/game_offsets.cpp src/overlay.cpp src/game_input.cpp src/menu.cpp src/in_game_menu.cpp src/menu_pages.cpp)
 target_include_directories(vro_test PRIVATE
     ${CMAKE_SOURCE_DIR}/../third_party/openxr-sdk/include
     ${CMAKE_SOURCE_DIR}/../third_party)

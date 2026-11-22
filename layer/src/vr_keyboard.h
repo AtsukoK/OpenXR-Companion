@@ -2,6 +2,7 @@
 // The VR keyboard: typing by pointing, the Move/Adjust keyboard placing, and the bar that docks it with the mirrored screen.
 #include "config.h"
 #include "engine_types.h"
+#include <functional>
 
 class Engine;
 
@@ -20,6 +21,9 @@ public:
     void Press(int key, int hand);
     void ToggleMove();
     void Open(int bi);
+    // The next key pressed is handed to `done` instead of being typed (the in-game menu setting a binding's key).
+    // Opens the keyboard if needed and closes it after; closing it first cancels.
+    void CaptureNextKey(std::function<void(const std::string&)> done);
     void UpdatePlacing();
     void UpdateBar();
     void Update();
@@ -35,5 +39,6 @@ private:
         double nextRepeat = 0;
         int opener = -1;                              // the binding that opened it (-1: a menu button)
         XrPosef frame{ { 0, 0, 0, 1 }, { 0, 0, 0 } }; // the head (turned like the head) when it opened
+        std::function<void(const std::string&)> capture; // set while a key is asked for
     } run_;
 };

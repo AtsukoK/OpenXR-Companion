@@ -45,6 +45,7 @@ void Engine::Reset() {
     adjustClosedAt = -1;
     offView.open = false;
     offView.version++;
+    menu.Close();
     offsetsPanel.run_.grabArmed = false;
     offGrabHand = -1;
     offsetsPanel.run_.uiHand = -1;
@@ -81,6 +82,8 @@ bool Engine::IsOn(const Action& a) const {
         return a.mode != ActMode::Off && mirrorOn;
     case ActType::Offsets:
         return (a.mode == ActMode::Panel && offView.open) || ((a.mode == ActMode::Enable || a.mode == ActMode::On) && offs.enabled);
+    case ActType::Menu:
+        return menuView.open;
     default:
         return false;
     }
@@ -148,6 +151,14 @@ bool Engine::LayersOk(const Binding& b) const {
     for (auto& l : b.notLayers)
         if (layers.count(l)) return false;
     return true;
+}
+
+void Engine::EditBindings(const std::function<void(std::vector<Binding>&)>& edit) {
+    for (int i = 0; i < (int)bs.size(); i++)
+        if (bs[i].armed) EndB(i);
+    xrHolds.clear();
+    edit(prof->bindings);
+    bs.assign(prof->bindings.size(), BState{});
 }
 
 Override Engine::MakeOv(const InputId& t) {
@@ -281,6 +292,10 @@ bool Engine::RunAction(const Action& a, int hand, int bi, bool fromWheel) {
     case ActType::Mirror:
         mirrorAsk = a.mode == ActMode::On ? MirrorRequest::On : a.mode == ActMode::Off ? MirrorRequest::Off : MirrorRequest::Toggle;
         return false;
+    case ActType::Menu:
+        if (wr.open) CloseWheel();
+        menu.Toggle();
+        return false;
     case ActType::Adjust:
         adjust = !adjust;
         grab = GrabRun{};
@@ -387,6 +402,9 @@ void Engine::ProcessBindings() {
         if (wr.open && b.action.type != ActType::Wheel && b.action.type != ActType::Keyboard && b.action.type != ActType::Adjust) continue;
         if (kb.visible && b.action.type != ActType::Keyboard && b.action.type != ActType::Adjust)
             continue; // adjust: place the open keyboard
+        if (menu.IsCapturingInput()) continue; // the press picks a button for a binding, it doesn't use one
+        if (menu.PointingHand() == trig.hand && (trig.comp == C_TRIGGER || trig.comp == C_STICK) && b.action.type != ActType::Menu)
+            continue; // the trigger and stick of the hand pointing at the menu work the menu
         if (!LayersOk(b)) continue;
         bool others = true;
         for (size_t k = 0; k + 1 < b.chord.size(); k++)
@@ -466,6 +484,7 @@ void Engine::UpdatePointers() {
         if (screenMirror.run_.uiHand == h && screen.pickOpen) test(screen.pickPose, screen.pickW / 2, screen.pickH / 2);
         if (screenMirror.run_.uiHand == h && screen.barVisible) test(screen.barPose, screen.barW / 2, screen.barH / 2);
         if (offView.open && h != offGrabHand) test(offView.pose, offView.w / 2, offView.h / 2);
+        if (menuView.open && !kb.visible) test(menuView.pose, menuView.w / 2, menuView.h / 2);
         int panel = 1 - h; // a hand points at the panel on the other arm
         const WristView& wv = wrist[panel];
         bool wristUp = wv.visible && grab.target != WristGrab(panel);
@@ -551,6 +570,11 @@ void Engine::ComputeBlocks() {
     if (screenMirror.run_.uiHand >= 0) want[screenMirror.run_.uiHand][C_TRIGGER] = true;
     if (offsetsPanel.run_.uiHand >= 0) want[offsetsPanel.run_.uiHand][C_TRIGGER] = want[offsetsPanel.run_.uiHand][C_STICK] = true;
     if (offsetsPanel.run_.grabArmed || offGrabHand >= 0) want[0][C_GRIP] = want[1][C_GRIP] = true; // grab-to-set uses the grips
+    if (menu.PointingHand() >= 0) want[menu.PointingHand()][C_TRIGGER] = want[menu.PointingHand()][C_STICK] = true;
+    if (menu.IsCapturingInput()) // the press that picks a button for a binding never reaches the game
+        for (auto& h : want)
+            for (auto& c : h)
+                c = true;
     for (int h = 0; h < 2; h++) // the pressing (other) hand's trigger belongs to the panel while over a button
         if (wrist[h].visible && wrist[h].hover >= 0) want[1 - h][C_TRIGGER] = true;
     for (int h = 0; h < 2; h++)
@@ -623,6 +647,7 @@ void Engine::Update(const Frame& f) {
     screenMirror.Update(); // places a docked screen/keyboard too, before the screen takes the pointer
     keyboard.UpdateBar();
     offsetsPanel.Update();
+    menu.Update();
     ComputeBlocks();
     UpdatePointers();
     lastNow = now;
