@@ -569,16 +569,18 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
     // Sideways: centred on where the eye looks straight ahead (on Quest that sits toward the nose, so the
     // middle of the picture put the view too far to one side), but never closer than kSideMargin to the
     // picture's side edges: the nose side has a black unrendered strip. Small margin top and bottom.
-    const float kSideMargin = 0.08f;
+    const float kSideMargin = 0.12f; // 0.08 still showed the strip on Quest 3 when steadying lagged
     const float m = 0.04f;
     bool steady = smoothing > 0.001f;
+    float sideM = std::max(m, kSideMargin);
     if (steady) { // leave headroom round the crop so the steadied camera can lag without showing the picture's edges
-        const float hr = 0.07f, maxc = 1.f - 2 * (m + hr);
-        float s = std::min({ 1.f, maxc / cw, maxc / ch });
+        // sideways around where the eye looks (cu), past the side margins; up and down past the small margin
+        const float hr = 0.07f;
+        float maxcx = std::max(0.2f, 2 * (std::min(cu, 1.f - cu) - sideM - hr)), maxcy = 1.f - 2 * (m + hr);
+        float s = std::min({ 1.f, maxcx / cw, maxcy / ch });
         cw *= s;
         ch *= s;
     }
-    float sideM = std::max(m, kSideMargin);
     float cl = std::clamp(cu - cw / 2, std::min(sideM, (1.f - cw) / 2), std::max(1.f - sideM - cw, (1.f - cw) / 2));
     float ct = std::clamp(cv - ch / 2, std::min(m, (1.f - ch) / 2), std::max(1.f - m - ch, (1.f - ch) / 2));
 
