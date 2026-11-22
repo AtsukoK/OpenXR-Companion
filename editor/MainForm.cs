@@ -474,7 +474,8 @@ public partial class MainForm : Form
         // Screenshots show the app's built-in default profile, never the user's own (nothing is saved).
         var builtin = Path.Combine(Path.GetTempPath(), "vro_builtin_default.json");
         File.WriteAllText(builtin, Native.DefaultProfile() ?? "{}");
-        f.LoadFile(builtin);
+        // VRO_SHOTS_PROFILE: another profile file to show instead (pictures of a particular setup; still nothing is saved).
+        f.LoadFile(Environment.GetEnvironmentVariable("VRO_SHOTS_PROFILE") is string shown && File.Exists(shown) ? shown : builtin);
         void Snap(string name, TreeNode n)
         {
             if (n == null)
