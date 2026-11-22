@@ -18,20 +18,20 @@ namespace ControllerSilhouettes;
 static class Program
 {
     // WebXR profile folder -> our layout id (editor/ControllerLayouts.cs)
-    // topTurnDeg: an extra turn of the top view, for controllers whose buttons face along the handle (the head and
-    // strap are all you see from above, so there is no handle to stand upright).
-    static readonly (string profile, string id, bool hasThumbrest, float topTurnDeg)[] Profiles =
+    // topFromSide: for controllers whose buttons face along the handle (the Index): looking at the buttons shows only
+    // the head and strap, so the "top" picture looks across the controller instead (along its Y axis): head on
+    // top, handle down, strap beside it, which is how it is usually pictured.
+    static readonly (string profile, string id, bool hasThumbrest, bool topFromSide)[] Profiles =
     {
-        ("meta-quest-touch-plus", "quest3", true, 0),
-        ("oculus-touch-v3", "quest2", true, 0),
-        ("oculus-touch-v2", "rifts", true, 0),
-        ("meta-quest-touch-pro", "questpro", true, 0),
-        ("pico-4", "pico4", false, 0),
-        ("valve-index", "index", false, TopTurnIndex),
-        ("microsoft-mixed-reality", "wmr", false, 0),
-        ("hp-mixed-reality", "reverbg2", false, 0),
+        ("meta-quest-touch-plus", "quest3", true, false),
+        ("oculus-touch-v3", "quest2", true, false),
+        ("oculus-touch-v2", "rifts", true, false),
+        ("meta-quest-touch-pro", "questpro", true, false),
+        ("pico-4", "pico4", false, false),
+        ("valve-index", "index", false, true),
+        ("microsoft-mixed-reality", "wmr", false, false),
+        ("hp-mixed-reality", "reverbg2", false, false),
     };
-    static float TopTurnIndex => float.TryParse(Environment.GetEnvironmentVariable("SIL_INDEX_TURN"), out var t) ? t : -50;
 
     static int Main(string[] args)
     {
@@ -50,7 +50,7 @@ static class Program
         }
         Directory.CreateDirectory(preview);
         var results = new List<Traced>();
-        foreach (var (profile, id, hasThumbrest, topTurnDeg) in Profiles)
+        foreach (var (profile, id, hasThumbrest, topFromSide) in Profiles)
             foreach (string hand in new[] { "left", "right" })
             {
                 string file = Path.Combine(models, profile, hand + ".glb");
@@ -60,11 +60,16 @@ static class Program
                     continue;
                 }
                 var tris = Glb.Load(file);
-                var traced = Tracer.Trace(id, hand, tris, hasThumbrest, hand == "right" ? topTurnDeg : -topTurnDeg);
+                var traced = Tracer.Trace(id, hand, tris, hasThumbrest, topFromSide);
                 results.Add(traced);
                 Preview.Save(traced, Path.Combine(preview, $"{id}_{hand}.png"));
                 Console.WriteLine($"{id}/{hand}: {tris.Count} triangles, parts {string.Join(", ", traced.Parts.Select(p => p.Comp + (p.Estimated ? "*" : "")))}");
             }
+        if (results.Count < Profiles.Length * 2) // never replace the outlines with fewer than before
+        {
+            Console.WriteLine($"only {results.Count} of {Profiles.Length * 2} models found: nothing written (see README.md for where to get them)");
+            return 2;
+        }
         Emit.CSharp(results, Path.Combine(repo, "editor", "ControllerSilhouettes.g.cs"));
         Emit.Cpp(results, Path.Combine(repo, "layer", "src", "controller_silhouettes.inc"));
         return 0;
@@ -216,7 +221,7 @@ static class Tracer
     static readonly string[] SideParts = { "trigger", "grip" };
     const int Grid = 640; // mask size along the longer side
 
-    public static Traced Trace(string id, string hand, List<Tri> tris, bool hasThumbrest, float topTurnDeg)
+    public static Traced Trace(string id, string hand, List<Tri> tris, bool hasThumbrest, bool topFromSide)
     {
         Vector3 Centroid(IEnumerable<Tri> ts)
         {
@@ -249,11 +254,11 @@ static class Tracer
         var across = Vector3.Normalize(Vector3.Cross(up, faceN));
 
         // top view: looking at the face; side view: looking from the side, front (the face's direction... trigger) on the left
-        if (topTurnDeg != 0) // turn the top view's axes about the face
+        if (topFromSide) // across the controller (along Y), handle upright
         {
-            var turn = Quaternion.CreateFromAxisAngle(faceN, topTurnDeg * MathF.PI / 180);
-            across = Vector3.Transform(across, turn);
-            up = Vector3.Transform(up, turn);
+            faceN = -Vector3.UnitY;
+            up = handleAxis;
+            across = Vector3.Normalize(Vector3.Cross(up, faceN));
         }
         var topView = Project(tris, across, up, TopParts, Grid);
         var sideView = Project(tris, sideAcross, handleAxis, SideParts, Grid);
@@ -318,6 +323,16 @@ static class Tracer
             var pts = p.Loops.SelectMany(l => l).ToList();
             float x0 = pts.Min(q => q.X), y0 = pts.Min(q => q.Y), x1 = pts.Max(q => q.X), y1 = pts.Max(q => q.Y);
             return new RectangleF(x0, y0, x1 - x0, y1 - y0);
+        }
+        // A grip that is part of the body (the Index's squeeze sensor): along the front of the handle, below the trigger.
+        var trigger = t.Parts.FirstOrDefault(x => x.Comp == "trigger" && !x.Top);
+        if (trigger != null && !t.Parts.Any(x => x.Comp == "grip"))
+        {
+            var tp = trigger.Loops.SelectMany(l => l).ToList();
+            var body = t.Side.SelectMany(l => l).ToList();
+            float tx = tp.Average(q => q.X), ty = tp.Max(q => q.Y), bottom = body.Max(q => q.Y), width = body.Max(q => q.X) - body.Min(q => q.X);
+            float gx = tx + (t.Hand == "right" ? 1 : -1) * width * 0.12f, gTop = ty + (bottom - ty) * 0.08f, gBottom = ty + (bottom - ty) * 0.75f;
+            t.Parts.Add(new TracedPart("grip", false, new() { Pill(gx, (gTop + gBottom) / 2, width * 0.18f, gBottom - gTop) }, true));
         }
         var a = Box("primary");
         var b = Box("secondary");

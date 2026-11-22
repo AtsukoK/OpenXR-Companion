@@ -11,5 +11,6 @@ Only outlines are kept (no textures, no logos).
 
 The top view looks at the buttons with the handle down (WebXR grip space: the handle runs along Z); the side view
 keeps the handle upright with the trigger at the front. `SIL_AXES=<profile>` renders the six straight-on views of
-one model, to pick a turn for controllers like the Index (`topTurnDeg`).
+one model. The Index is pictured across the controller instead (`topFromSide`): its buttons face along the handle.
+Models go in `models/` here (ignored by git); the tool writes nothing unless every model is there.
 The models themselves are not kept in the repository.
