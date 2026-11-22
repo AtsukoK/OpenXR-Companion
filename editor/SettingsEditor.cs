@@ -482,21 +482,29 @@ public class SettingsEditor : EditorBase
                 var eye = new ChoiceBox(new Choice[] { new("left", "Left eye"), new("right", "Right eye") }, 200) { Code = HeadsetMirrorFile.Eye };
                 eye.SelectedIndexChanged += (o, e) => HeadsetMirrorFile.Eye = eye.Code;
                 mir.AddRow("Eye", eye);
+                var preset = new ChoiceBox(new Choice[] {
+                    new("custom", "Custom"),
+                    new("gaze", "Centred where you look (default)"),
+                    new("gaze_room", "Centred, steadying makes its own room"),
+                    new("both", "Wide: both eyes, centred where you look"),
+                    new("original", "Original: middle of the picture"),
+                    new("exact", "Exact headset view (no zoom, no steadying)") }, 300);
+                mir.AddRow("Preset", preset, "Sets zoom, steadying, centre, edge margin, steadying's own room and both eyes together. Change any of them afterwards and it shows Custom.");
                 var both = new CheckBox { Text = "Fill in from the other eye", AutoSize = true, Checked = HeadsetMirrorFile.BothEyes };
                 both.CheckedChanged += (o, e) => HeadsetMirrorFile.BothEyes = both.Checked;
                 mir.AddRow("", both, "Where you look sits toward the nose in each eye's picture, and that side ends in a black strip. With this on, the other eye fills that side in, so the view stays centred on where you look even at zoom 1. Far things line up; close things (your hands, the gun) can look a little doubled on that side.");
-                var zoom = new NumericUpDown { Minimum = 1, Maximum = 3, Increment = 0.05m, DecimalPlaces = 2, Width = 90, Value = (decimal)Math.Clamp(HeadsetMirrorFile.Zoom, 1, 3) };
+                var zoom = new NumericUpDown { Minimum = 1, Maximum = 3, Increment = 0.05m, DecimalPlaces = 2, Width = 90, Value = (decimal)Math.Round(Math.Clamp(HeadsetMirrorFile.Zoom, 1, 3), 2) };
                 zoom.ValueChanged += (o, e) => HeadsetMirrorFile.Zoom = (double)zoom.Value;
                 mir.AddRow("Zoom", zoom, "1 = the whole eye picture (very wide, blurry edges). 1.3 looks like a normal camera. The same with steadying on or off. It always fills the window; resize the window for a different shape.");
                 var fps = new NumericUpDown { Minimum = 0, Maximum = 240, Increment = 5, Width = 90, Value = Math.Clamp(HeadsetMirrorFile.Fps, 0, 240) };
                 fps.ValueChanged += (o, e) => HeadsetMirrorFile.Fps = (int)fps.Value;
-                var st = new NumericUpDown { Minimum = 0, Maximum = 1, Increment = 0.05m, DecimalPlaces = 2, Width = 90, Value = (decimal)Math.Clamp(HeadsetMirrorFile.Smoothing, 0, 1) };
+                var st = new NumericUpDown { Minimum = 0, Maximum = 1, Increment = 0.05m, DecimalPlaces = 2, Width = 90, Value = (decimal)Math.Round(Math.Clamp(HeadsetMirrorFile.Smoothing, 0, 1), 2) };
                 st.ValueChanged += (o, e) => HeadsetMirrorFile.Smoothing = (double)st.Value;
                 mir.AddRow("Steady the picture", st, "Smooths small head shakes out of the window (like a camera stabiliser); real head turns still follow. 0 = off (the exact headset view), 0.5 = the default, 1 = strongest. It can only lag into the picture the zoom leaves out: at zoom 1 it barely works, from about 1.3 it works fully.");
                 var centre = new ChoiceBox(new Choice[] { new("gaze", "Where the eye looks"), new("middle", "Middle of the picture") }, 200) { Code = HeadsetMirrorFile.Center };
                 centre.SelectedIndexChanged += (o, e) => HeadsetMirrorFile.Center = centre.Code;
                 mir.AddRow("Centre the view on", centre, "Where the eye looks: what you aim at sits in the middle of the window. Middle of the picture: the older way, a little off to one side on Quest, but further from the black strip on the nose side.");
-                var margin = new NumericUpDown { Minimum = 0, Maximum = 0.3m, Increment = 0.01m, DecimalPlaces = 2, Width = 90, Value = (decimal)Math.Clamp(HeadsetMirrorFile.SideMargin, 0, 0.3) };
+                var margin = new NumericUpDown { Minimum = 0, Maximum = 0.3m, Increment = 0.01m, DecimalPlaces = 2, Width = 90, Value = (decimal)Math.Round(Math.Clamp(HeadsetMirrorFile.SideMargin, 0, 0.3), 2) };
                 margin.ValueChanged += (o, e) => HeadsetMirrorFile.SideMargin = (double)margin.Value;
                 mir.AddRow("Edge margin", margin, "How far the view stays from the eye picture's sides (0.12 = 12% of its width), to keep the black strip on the nose side out. Lower it if you see no strip, raise it if you do.");
                 var room = new CheckBox { Text = "Steadying makes its own room", AutoSize = true, Checked = HeadsetMirrorFile.SteadyRoom };
@@ -506,6 +514,45 @@ public class SettingsEditor : EditorBase
                 var quality = new ChoiceBox(new Choice[] { new("light", "Light (cheaper, default)"), new("full", "Full (copy with mipmaps)") }, 200) { Code = HeadsetMirrorFile.Quality };
                 quality.SelectedIndexChanged += (o, e) => HeadsetMirrorFile.Quality = quality.Code;
                 mir.AddRow("Picture", quality, "Light draws straight from the game's picture: much cheaper, looks the same at normal window sizes. Full copies the picture and makes mipmaps first: smoother only when the window is much smaller than the headset picture (light switches to it by itself then).");
+                // zoom, steadying, centre, edge margin, own room, both eyes
+                var presets = new Dictionary<string, (decimal zoom, decimal steady, string centre, decimal margin, bool room, bool both)>
+                {
+                    ["gaze"] = (1.4m, 0.5m, "gaze", 0.12m, false, false),
+                    ["gaze_room"] = (1.3m, 0.5m, "gaze", 0.12m, true, false),
+                    ["both"] = (1.0m, 0.5m, "gaze", 0.12m, false, true),
+                    ["original"] = (1.3m, 0.5m, "middle", 0.04m, true, false),
+                    ["exact"] = (1.0m, 0m, "middle", 0m, false, false),
+                };
+                bool applying = false;
+                string Matching()
+                {
+                    foreach (var (key, v) in presets)
+                        if (zoom.Value == v.zoom && st.Value == v.steady && centre.Code == v.centre && margin.Value == v.margin &&
+                            room.Checked == v.room && both.Checked == v.both)
+                            return key;
+                    return "custom";
+                }
+                void ShowMatching() { applying = true; preset.Code = Matching(); applying = false; }
+                ShowMatching();
+                preset.SelectedIndexChanged += (o, e) =>
+                {
+                    if (applying || !presets.TryGetValue(preset.Code ?? "", out var v)) return;
+                    applying = true;
+                    zoom.Value = v.zoom;
+                    st.Value = v.steady;
+                    centre.Code = v.centre;
+                    margin.Value = v.margin;
+                    room.Checked = v.room;
+                    both.Checked = v.both;
+                    applying = false;
+                };
+                EventHandler changed = (o, e) => { if (!applying) ShowMatching(); };
+                zoom.ValueChanged += changed;
+                st.ValueChanged += changed;
+                centre.SelectedIndexChanged += changed;
+                margin.ValueChanged += changed;
+                room.CheckedChanged += changed;
+                both.CheckedChanged += changed;
                 mir.AddRow("", new Label { AutoSize = true, ForeColor = Color.DimGray, MaximumSize = new Size(460, 0), Text = "These apply straight away, in every game and profile (no need to save)." });
             }
 

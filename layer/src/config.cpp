@@ -952,15 +952,15 @@ bool SaveMirrorSettings(const MirrorSettings& m) {
     }
     j["on"] = m.on;
     j["eye"] = m.eye ? "right" : "left";
-    j["zoom"] = std::round(m.zoom * 100.f) / 100.f;
+    j["zoom"] = std::round((double)m.zoom * 100.0) / 100.0; // double: a float 1.4 would be saved as 1.39999997
     j["fps"] = m.fps;
-    j["smoothing"] = std::round(m.smoothing * 100.f) / 100.f;
+    j["smoothing"] = std::round((double)m.smoothing * 100.0) / 100.0;
     j["on_top"] = m.onTop;
     j["quality"] = m.light ? "light" : "full";
     j["both_eyes"] = m.bothEyes;
     j["center"] = m.centerOnGaze ? "gaze" : "middle";
     j["steady_room"] = m.steadyRoom;
-    j["side_margin"] = std::round(m.sideMargin * 100.f) / 100.f;
+    j["side_margin"] = std::round((double)m.sideMargin * 100.0) / 100.0;
     return WriteFileAtomic(MirrorSettingsPath(), j.dump(2));
 }
 
