@@ -553,7 +553,7 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
     float tL = std::tan(fov.angleLeft), tR = std::tan(fov.angleRight), tU = std::tan(fov.angleUp), tD = std::tan(fov.angleDown);
     float ex = (float)rc.extent.width, ey = (float)rc.extent.height;
     float cu = (0 - tL) / (tR - tL), cv = (tU - 0) / (tU - tD);
-    float z = std::clamp(zoom, 1.f, 3.f); // below 1: see after the steadying crop
+    float z = std::clamp(zoom, 1.f, 3.f);
     float vw = ex / z, vh = vw * H / W;
     if (vh > ey / z) {
         vh = ey / z;
@@ -573,21 +573,8 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
     const float m = 0.04f;
     bool steady = smoothing > 0.001f;
     float sideM = std::max(m, kSideMargin);
-    if (steady) { // leave headroom round the crop so the steadied camera can lag without showing the picture's edges
-        // Sideways only a little (the side margins are already wide): where the view sits off-centre the lag is
-        // limited on that side instead (below), so it stops at the margin rather than zooming everything in.
-        const float hr = 0.07f, hrSide = 0.04f;
-        float maxcx = 1.f - 2 * (sideM + hrSide), maxcy = 1.f - 2 * (m + hr);
-        float s = std::min({ 1.f, maxcx / cw, maxcy / ch });
-        cw *= s;
-        ch *= s;
-    }
-    if (zoom < 1.f) { // fine-tuning below 1: a wider view, into the margins (the black edge may show, steadying lags less)
-        float w = std::clamp(zoom, 0.5f, 1.f);
-        float f = std::min({ 1.f / w, 1.f / cw, 1.f / ch }); // same factor both ways: keeps the window's shape
-        cw *= f;
-        ch *= f;
-    }
+    // Steadying never changes the crop: zoom means the same with it on or off (1 = the whole eye picture).
+    // It lags only into the room the zoom leaves (limited below), so at 1 it barely moves; from ~1.3 it has room.
     float cl = std::clamp(cu - cw / 2, std::min(sideM, (1.f - cw) / 2), std::max(1.f - sideM - cw, (1.f - cw) / 2));
     float ct = std::clamp(cv - ch / 2, std::min(m, (1.f - ch) / 2), std::max(1.f - m - ch, (1.f - ch) / 2));
 

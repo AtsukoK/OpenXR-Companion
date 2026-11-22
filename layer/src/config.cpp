@@ -923,7 +923,7 @@ bool LoadMirrorSettings(MirrorSettings& m) {
         m.eye = Lower(e) == "left" ? 0 : 1;
         Get(j, "smoothing", m.smoothing);
         m.smoothing = std::clamp(m.smoothing, 0.f, 1.f);
-        m.zoom = std::clamp(m.zoom, 0.5f, 3.f);
+        m.zoom = std::clamp(m.zoom, 1.f, 3.f);
         m.fps = std::clamp(m.fps, 0, 240);
         std::string q = "light";
         Get(j, "quality", q);
