@@ -92,6 +92,17 @@ static class Program
                 Preview.Save(traced, Path.Combine(preview, $"vive_{hand}.png"));
                 Console.WriteLine($"vive/{hand}: from the photo, parts {string.Join(", ", traced.Parts.Select(p => p.Comp))}");
             }
+        // The Steam Frame: no model; outlined from Valve's reference drawing of the controllers (only the outer shape
+        // is traced, the parts are placed where the drawing has them).
+        string frameArt = Path.Combine(models, "photos", "steam_frame.png");
+        if (File.Exists(frameArt))
+            foreach (string hand in new[] { "left", "right" })
+            {
+                var traced = LineArtTracer.TraceFrame(hand, frameArt);
+                results.Add(traced);
+                Preview.Save(traced, Path.Combine(preview, $"frame_{hand}.png"));
+                Console.WriteLine($"frame/{hand}: from the drawing, parts {string.Join(", ", traced.Parts.Select(p => p.Comp))}");
+            }
         if (results.Count < Profiles.Length * 2) // never replace the outlines with fewer than before
         {
             Console.WriteLine($"only {results.Count} of {Profiles.Length * 2} models found: nothing written (see README.md for where to get them)");
@@ -589,7 +600,7 @@ static class PhotoTracer
     };
 
     // Each point moved to the average of its neighbours (a closed loop), then thinned again.
-    static List<PointF> Smooth(List<PointF> loop, int k)
+    internal static List<PointF> Smooth(List<PointF> loop, int k)
     {
         int n = loop.Count;
         var o = new List<PointF>(n);
@@ -607,8 +618,8 @@ static class PhotoTracer
         return o.Where((p, i) => i % 2 == 0).ToList();
     }
 
-    static bool[,] Dilate(bool[,] m, int r) => Morph(m, r, true);
-    static bool[,] Erode(bool[,] m, int r) => Morph(m, r, false);
+    internal static bool[,] Dilate(bool[,] m, int r) => Morph(m, r, true);
+    internal static bool[,] Erode(bool[,] m, int r) => Morph(m, r, false);
     static bool[,] Morph(bool[,] m, int r, bool grow)
     {
         int w = m.GetLength(0), h = m.GetLength(1);
@@ -698,6 +709,96 @@ static class PhotoTracer
             float rad = ob.Width * r * s;
             var circle = Enumerable.Range(0, 32).Select(i => new PointF(c.X + rad * MathF.Cos(i * MathF.PI / 16), c.Y + rad * MathF.Sin(i * MathF.PI / 16))).ToList();
             traced.Parts.Add(new TracedPart(comp, true, new() { circle }, false));
+        }
+        return traced;
+    }
+}
+
+// ------------------------------------------------------------ an outline from a line drawing (light lines on dark)
+static class LineArtTracer
+{
+    // Valve's Steam Frame drawing (2400 x 1224): the left controller's front, then the right one's. Where each one
+    // is (a box around it), and its parts' centres and sizes, in the drawing's pixels (measured by eye).
+    static readonly RectangleF LeftBox = RectangleF.FromLTRB(240, 340, 640, 1040), RightBox = RectangleF.FromLTRB(710, 340, 1110, 1040);
+    static readonly (string comp, float cx, float cy, float w, float h, bool round)[] LeftParts =
+    {
+        ("thumbstick", 491, 551, 86, 86, true), ("menu", 443, 446, 36, 13, false), ("system", 396, 590, 36, 36, true),
+        // the D-pad: a cross of four arms around a square middle (that sits still)
+        ("dpad_up", 364, 452, 42, 46, false), ("dpad_down", 364, 540, 42, 46, false),
+        ("dpad_left", 320, 496, 46, 42, false), ("dpad_right", 408, 496, 46, 42, false),
+    };
+    static readonly (string comp, float cx, float cy, float w, float h, bool round)[] RightParts =
+    {
+        ("thumbstick", 840, 550, 86, 86, true), ("menu", 888, 446, 36, 13, false), ("system", 930, 590, 36, 36, true),
+        ("button4", 961, 461, 38, 38, true), ("button3", 932, 502, 38, 38, true),
+        ("secondary", 1004, 490, 38, 38, true), ("primary", 974, 532, 38, 38, true),
+    };
+
+    public static Traced TraceFrame(string hand, string file)
+    {
+        using var bmp = new Bitmap(file);
+        var box = hand == "left" ? LeftBox : RightBox;
+        int x0 = (int)box.X, y0 = (int)box.Y, w = (int)box.Width, h = (int)box.Height;
+        // lines: lighter than the background
+        var line = new bool[w, h];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                var c = bmp.GetPixel(x0 + x, y0 + y);
+                line[x, y] = c.R * 0.3f + c.G * 0.59f + c.B * 0.11f > 60;
+            }
+        line = PhotoTracer.Dilate(line, 2); // closes the gaps of thin, soft-edged lines
+        // outside: the background reachable from the box's edge without crossing a line
+        var outside = new bool[w, h];
+        var stack = new Stack<(int, int)>();
+        for (int x = 0; x < w; x++) { stack.Push((x, 0)); stack.Push((x, h - 1)); }
+        for (int y = 0; y < h; y++) { stack.Push((0, y)); stack.Push((w - 1, y)); }
+        while (stack.Count > 0)
+        {
+            var (x, y) = stack.Pop();
+            if (x < 0 || y < 0 || x >= w || y >= h || outside[x, y] || line[x, y]) continue;
+            outside[x, y] = true;
+            stack.Push((x + 1, y)); stack.Push((x - 1, y)); stack.Push((x, y + 1)); stack.Push((x, y - 1));
+        }
+        var body = new bool[w, h];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+                body[x, y] = !outside[x, y];
+        body = PhotoTracer.Erode(PhotoTracer.Dilate(PhotoTracer.Erode(body, 5), 5), 2); // drops the label lines that touch the outline
+        var loops = Contours.Trace(body);
+        float Area(List<PointF> l)
+        {
+            float a = 0;
+            for (int i = 0; i < l.Count; i++)
+                a += l[i].X * l[(i + 1) % l.Count].Y - l[(i + 1) % l.Count].X * l[i].Y;
+            return Math.Abs(a) / 2;
+        }
+        var outer = loops.OrderByDescending(Area).First().Select(p => new PointF(p.X + x0, p.Y + y0)).ToList();
+        var ob = RectangleF.FromLTRB(outer.Min(p => p.X), outer.Min(p => p.Y), outer.Max(p => p.X), outer.Max(p => p.Y));
+        float s = Math.Min((200 - 12) / ob.Width, (260 - 12) / ob.Height);
+        float ox = (200 - ob.Width * s) / 2 - ob.X * s, oy = (260 - ob.Height * s) / 2 - ob.Y * s;
+        PointF Fit(PointF p) => new((float)Math.Round(p.X * s + ox, 1), (float)Math.Round(p.Y * s + oy, 1));
+        var traced = new Traced("frame", hand, new() { outer.Select(Fit).ToList() }, new List<List<PointF>>(), new List<TracedPart>());
+        foreach (var (comp, cx, cy, pw, ph, round) in hand == "left" ? LeftParts : RightParts)
+        {
+            var c = Fit(new PointF(cx, cy));
+            float rw = pw * s / 2, rh = ph * s / 2;
+            List<PointF> loop;
+            if (round)
+                loop = Enumerable.Range(0, 32).Select(i => new PointF(c.X + rw * MathF.Cos(i * MathF.PI / 16), c.Y + rh * MathF.Sin(i * MathF.PI / 16))).ToList();
+            else
+            { // a rounded box
+                float r = Math.Min(rw, rh) * 0.6f;
+                loop = new();
+                (float x, float y, float a0)[] corners = { (c.X + rw - r, c.Y - rh + r, -MathF.PI / 2), (c.X + rw - r, c.Y + rh - r, 0), (c.X - rw + r, c.Y + rh - r, MathF.PI / 2), (c.X - rw + r, c.Y - rh + r, MathF.PI) };
+                foreach (var (kx, ky, a0) in corners)
+                    for (int i = 0; i <= 4; i++)
+                    {
+                        float a = a0 + i * MathF.PI / 8;
+                        loop.Add(new PointF(kx + r * MathF.Cos(a), ky + r * MathF.Sin(a)));
+                    }
+            }
+            traced.Parts.Add(new TracedPart(comp, true, new() { loop.Select(p => new PointF((float)Math.Round(p.X, 2), (float)Math.Round(p.Y, 2))).ToList() }, false));
         }
         return traced;
     }
