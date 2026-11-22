@@ -983,11 +983,7 @@ const char* DefaultProfileJson() {
     { "name": "VR keyboard (hold left menu)", "enabled": false, "input": "left.menu", "gesture": "hold", "hold_ms": 600, "block": "trigger",
       "action": { "type": "keyboard" } },
     { "name": "Shift layer (hold left grip + click left stick)", "enabled": false, "input": "left.grip+left.thumbstick", "gesture": "while_held", "block": "trigger",
-      "action": { "type": "layer", "layer": "shift", "mode": "hold" } },
-    { "name": "Quick save (shift + A)", "enabled": false, "input": "right.a", "layers": "shift", "gesture": "press",
-      "action": { "type": "key", "keys": "F5" } },
-    { "name": "Quick load (shift + hold B)", "enabled": false, "input": "right.b", "layers": "shift", "gesture": "hold", "hold_ms": 800,
-      "action": { "type": "key", "keys": "F9" } }
+      "action": { "type": "layer", "layer": "shift", "mode": "hold" } }
   ],
   "wheels": {
     "right": { "title": "Right hand", "items": [
