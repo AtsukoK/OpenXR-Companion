@@ -53,7 +53,7 @@ static std::string ActionWords(const Action& a) {
     case ActType::Layer:
         return "layer '" + a.layer + "'" + mode;
     case ActType::XrInput:
-        return "game sees " + InputWords(a.target);
+        return "game sees " + InputWords(a.target) + mode;
     case ActType::None:
         return "off in the game";
     default:
@@ -76,6 +76,22 @@ static void SetFiringInput(Binding& b, const InputId& id) {
     b.chordText.clear();
     for (size_t i = 0; i < b.chord.size(); i++)
         b.chordText += (i ? "+" : "") + InputName(b.chord[i]);
+}
+
+// What the binding does, from the binding keyboard: a key or mouse button, or a controller button the game sees.
+static void SetKeyAction(Binding& b, const std::string& keys) {
+    bool wasKey = b.action.type == ActType::Key;
+    b.action.type = ActType::Key;
+    b.action.keys = keys;
+    if (!wasKey) b.action.mode = ActMode::Hold; // held with the button: works for keys, mouse buttons and the wheel
+    b.name = InputWords(b.chord.back()) + ": " + keys;
+}
+static void SetButtonAction(Binding& b, const InputId& target) {
+    bool wasButton = b.action.type == ActType::XrInput;
+    b.action.type = ActType::XrInput;
+    b.action.target = target;
+    if (!wasButton) b.action.mode = ActMode::Hold;
+    b.name = InputWords(b.chord.back()) + ": " + InputWords(target);
 }
 
 static bool HasTouch(int comp) {
@@ -119,7 +135,8 @@ MenuPage ControllerBindings(Engine& e, InGameMenu& m, int hand) {
     MenuPage p;
     p.title = hand ? "Right bindings" : "Left bindings";
     p.rows.push_back(MenuRow::Live(LiveKind::Controller, hand, 3));
-    p.rows.push_back(MenuRow::Button("+ New binding", "Press the button you want, then a key on the VR keyboard", [&e, &m, hand] {
+    p.rows.push_back(MenuRow::Button("+ New binding", "Press the button you want, then pick a key, a mouse button or a controller button",
+                                     [&e, &m, hand] {
         m.CaptureInput([&e, &m](const InputId& id) {
             Binding b;
             b.name = "New binding";
@@ -127,7 +144,7 @@ MenuPage ControllerBindings(Engine& e, InGameMenu& m, int hand) {
             b.gesture = Gesture::Press;
             b.block = BindingBlock::Trigger;
             b.action.type = ActType::Key;
-            b.action.mode = ActMode::Tap;
+            b.action.mode = ActMode::Hold;
             int index = 0;
             e.EditBindings([&](std::vector<Binding>& list) {
                 list.push_back(b);
@@ -135,15 +152,7 @@ MenuPage ControllerBindings(Engine& e, InGameMenu& m, int hand) {
             });
             m.Changed();
             m.Push([&e, &m, index] { return BindingDetail(e, m, index); });
-            m.CaptureKey([&e, &m, index](const std::string& keys) {
-                e.EditBindings([&](std::vector<Binding>& list) {
-                    if (index < (int)list.size()) {
-                        list[index].action.keys = keys;
-                        list[index].name = InputWords(list[index].chord.back()) + ": " + keys;
-                    }
-                });
-                m.Changed();
-            });
+            PickAction(e, m, index);
         });
     }));
     int shown = 0;
@@ -156,6 +165,19 @@ MenuPage ControllerBindings(Engine& e, InGameMenu& m, int hand) {
     }
     if (shown == 0) p.rows.push_back(MenuRow::Note("No bindings on this controller yet"));
     return p;
+}
+
+// Opens the binding keyboard for binding `index`: a key or mouse button makes it press that, its "Controller button"
+// key then asks for the controller button the game should see instead.
+void PickAction(Engine& e, InGameMenu& m, int index) {
+    auto change = [&e, &m, index](std::function<void(Binding&)> f) {
+        e.EditBindings([&](std::vector<Binding>& list) {
+            if (index < (int)list.size()) f(list[index]);
+        });
+        m.Changed();
+    };
+    m.CaptureAction([change](const std::string& keys) { change([keys](Binding& x) { SetKeyAction(x, keys); }); },
+                    [change](const InputId& target) { change([target](Binding& x) { SetButtonAction(x, target); }); });
 }
 
 MenuPage BindingDetail(Engine& e, InGameMenu& m, int index) {
@@ -201,20 +223,20 @@ MenuPage BindingDetail(Engine& e, InGameMenu& m, int index) {
         hold.unit = "ms";
         p.rows.push_back(hold);
     }
-    if (b.action.type == ActType::Key) {
-        p.rows.push_back(MenuRow::Button("Key: " + (b.action.keys.empty() ? std::string("(none)") : b.action.keys),
-                                         "Press here, then the key on the VR keyboard", [&m, edit] {
-                                             m.CaptureKey([edit](const std::string& keys) { edit([keys](Binding& x) { x.action.keys = keys; }); });
-                                         }));
+    bool isKey = b.action.type == ActType::Key, isButton = b.action.type == ActType::XrInput;
+    p.rows.push_back(MenuRow::Button("Does: " + ActionWords(b.action),
+                                     isKey || isButton ? "Press here, then pick a key, a mouse button or Controller button on the VR keyboard"
+                                                       : "Set in the editor. Press here to make it a key, mouse button or controller button instead",
+                                     [&e, &m, index] { PickAction(e, m, index); }));
+    if (isKey || isButton) {
         static const ActMode modes[] = { ActMode::Tap, ActMode::Hold, ActMode::Toggle };
-        p.rows.push_back(MenuRow::Choice("The key is", "", { "Tapped", "Held with the button", "On / off" },
+        p.rows.push_back(MenuRow::Choice(isKey ? "The key is" : "The game's button is", "", { "Tapped", "Held", "On / off" },
                                          [get] {
                                              ActMode md = get().action.mode;
                                              return md == ActMode::Hold ? 1 : md == ActMode::Toggle ? 2 : 0;
                                          },
                                          [edit](int i) { edit([i](Binding& x) { x.action.mode = modes[i]; }); }));
-    } else
-        p.rows.push_back(MenuRow::Note("Does: " + ActionWords(b.action), "Change what it does in the editor"));
+    }
     p.rows.push_back(MenuRow::Choice("Game sees the button", "While this binding is in use", { "No", "Yes" },
                                      [get] { return get().block == BindingBlock::None ? 1 : 0; },
                                      [edit](int i) { edit([i](Binding& x) { x.block = i ? BindingBlock::None : BindingBlock::Trigger; }); }));

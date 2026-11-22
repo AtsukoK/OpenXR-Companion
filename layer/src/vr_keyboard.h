@@ -23,7 +23,9 @@ public:
     void Open(int bi);
     // The next key pressed is handed to `done` instead of being typed (the in-game menu setting a binding's key).
     // Opens the keyboard if needed and closes it after; closing it first cancels.
-    void CaptureNextKey(std::function<void(const std::string&)> done);
+    // The next key pressed is handed to done instead of typed. With controllerButton, the keyboard shows the binding
+    // layout (mouse buttons, more keys) and its "Controller button" key calls controllerButton instead.
+    void CaptureNextKey(std::function<void(const std::string&)> done, std::function<void()> controllerButton = nullptr);
     void UpdatePlacing();
     void UpdateBar();
     void Update();
@@ -40,5 +42,6 @@ private:
         int opener = -1;                              // the binding that opened it (-1: a menu button)
         XrPosef frame{ { 0, 0, 0, 1 }, { 0, 0, 0 } }; // the head (turned like the head) when it opened
         std::function<void(const std::string&)> capture; // set while a key is asked for
+        std::function<void()> captureController;         // set while a binding is picked: its "Controller button" key
     } run_;
 };

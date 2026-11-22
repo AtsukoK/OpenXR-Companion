@@ -144,6 +144,7 @@ void TestInGameMenu() {
     CHECK(d.PressRow("Right controller bindings") && e.menuView.title == "Right bindings", "menu: the right controller's bindings");
     d.PressRow("+ New binding");
     CHECK(!e.menuView.status.empty(), "menu: asking for a button says so on the panel");
+    SaveMenuPicture(e, *p, L"menu_capture.png");
     f.h[1].b1 = true; // right A
     d.Step();
     f.h[1].b1 = false;
@@ -152,7 +153,14 @@ void TestInGameMenu() {
           "menu: the next button press becomes the new binding's button");
     CHECK(e.kb.visible && e.menuView.title == "New binding", "menu: then the VR keyboard opens for its key, on the binding's page");
     float uw, uh;
-    const auto& keys = KbLayout(uw, uh);
+    const auto& keys = KbLayout(uw, uh, true);
+    CHECK(e.kb.binding, "menu: the keyboard shows the binding layout (mouse buttons, Controller button)");
+    {
+        int W = 1400, H = (int)(1400 * uh / uw);
+        std::vector<uint32_t> px;
+        DrawKeyboard(px, W, H, e.kb, p->style);
+        SavePng(px, W, H, L"keyboard_binding.png");
+    }
     int qKey = -1;
     for (int i = 0; i < (int)keys.size(); i++)
         if (keys[i].combo == "q") qKey = i;
@@ -162,7 +170,34 @@ void TestInGameMenu() {
     d.Step();
     d.PullTrigger();
     CHECK(p->bindings.back().action.keys == "q" && !e.kb.visible, "menu: the key pressed on the VR keyboard becomes the binding's key, not typed");
-    CHECK(d.Row("Key: q") >= 0 && p->bindings.back().name == "Right A: q", "menu: the page and the name show the new key");
+    CHECK(d.Row("Does: q (held)") >= 0 && p->bindings.back().name == "Right A: q", "menu: the page and the name show the new key");
+
+    // What it does, again: a mouse button, then a controller button the game should see.
+    auto pressKey = [&](const char* combo, int kind) {
+        const auto& ks = KbLayout(uw, uh, true);
+        int at = -1;
+        for (int i = 0; i < (int)ks.size(); i++)
+            if (ks[i].kind == kind && (kind != KB_KEY || ks[i].combo == combo)) at = i;
+        if (at < 0) return false;
+        d.Step(0.4);
+        d.AimAt(e.kb.pose, e.kb.widthM, e.kb.heightM, (ks[at].x + ks[at].w / 2) / uw, (ks[at].y + ks[at].h / 2) / uh);
+        d.Step();
+        d.PullTrigger();
+        return true;
+    };
+    CHECK(d.PressRow("Does: q (held)") && e.kb.visible && e.kb.binding, "menu: Does opens the binding keyboard");
+    CHECK(pressKey("rmb", KB_KEY) && p->bindings.back().action.keys == "rmb" && p->bindings.back().action.type == ActType::Key,
+          "menu: a mouse button on the binding keyboard becomes what it does");
+    d.PressRow("Does: rmb (held)");
+    CHECK(pressKey("", KB_CONTROLLER) && !e.kb.visible && !e.menuView.status.empty(), "menu: Controller button asks for a button");
+    f.h[1].b2 = true; // right B: the button the game should see
+    d.Step();
+    f.h[1].b2 = false;
+    d.Step();
+    const Binding& asButton = p->bindings.back();
+    CHECK(asButton.action.type == ActType::XrInput && InputName(asButton.action.target) == "right.b" && asButton.action.mode == ActMode::Hold &&
+              d.Row("Does: game sees Right B (held)") >= 0,
+          "menu: the pressed controller button becomes what the game sees");
 
     int way = d.Row("Way");
     CHECK(way >= 0 && !e.menuView.rows[way].canLess && e.menuView.rows[way].canMore && e.menuView.rows[way].value == "Press",
@@ -229,6 +264,8 @@ void TestMenuSave() {
     added.name = "New";
     added.sourceIndex = -1;
     added.layers.clear();
+    added.action.type = ActType::XrInput; // made a controller button in the headset
+    ParseInput("left.trigger", added.action.target);
     p->bindings.push_back(added);
     p->sticks[1].innerDeadzone = 0.12f;
     bool ok = SaveMenuEdits(*p, err);
@@ -242,6 +279,9 @@ void TestMenuSave() {
           "menu save: the menu's changes are in the file");
     CHECK(q->bindings[0].layers.size() == 1 && q->bindings[0].tapMs == 222 && q->bindings[0].action.tapMs == 90,
           "menu save: fields the menu doesn't edit (layer, tap times) are kept");
+    CHECK(q->bindings[1].action.type == ActType::XrInput && InputName(q->bindings[1].action.target) == "left.trigger" &&
+              q->bindings[1].action.keys.empty(),
+          "menu save: a binding made a controller button saves as xr_input with its target (no key left over)");
     CHECK(q->sticks[1].innerDeadzone == 0.12f && q->sticks[0].innerDeadzone == 0.f, "menu save: stick options saved per hand");
     CHECK(p->bindings[1].sourceIndex == 1, "menu save: after saving, the new binding knows its place in the file");
     _wputenv_s(L"OPENXR_COMPANION_TEST_DATA", L"");

@@ -47,7 +47,7 @@ struct WheelView {
     float alpha = 1.f; // see-through while adjusting other things (1 = solid)
 };
 // Keyboard layout in key units (one letter key = 1x1).
-enum KbKind { KB_KEY, KB_SHIFT, KB_CAPS, KB_CTRL, KB_ALT, KB_CLOSE, KB_MOVE };
+enum KbKind { KB_KEY, KB_SHIFT, KB_CAPS, KB_CTRL, KB_ALT, KB_CLOSE, KB_MOVE, KB_CONTROLLER };
 struct KbKey {
     std::string label, shiftLabel, combo;
     float x, y, w, h;
@@ -55,7 +55,9 @@ struct KbKey {
     bool letter;
     bool repeat;
 };
-const std::vector<KbKey>& KbLayout(float& unitsW, float& unitsH);
+// forBinding: the layout used while picking what a binding does: two more rows (mouse buttons and the wheel,
+// Home / End / Page keys, and "Controller button" for a button the game should see).
+const std::vector<KbKey>& KbLayout(float& unitsW, float& unitsH, bool forBinding = false);
 
 struct KeyboardView {
     bool visible = false;
@@ -65,6 +67,7 @@ struct KeyboardView {
     int pressed = -1;
     bool shift = false, caps = false, ctrl = false, alt = false;
     bool moving = false; // Move key: grab it with a grip to place it, stick = size
+    bool binding = false; // picking what a binding does: the binding layout (see KbLayout)
     uint64_t version = 0;
     // button bar under the keyboard: docking with the screen
     XrPosef barPose{ { 0, 0, 0, 1 }, { 0, 0, 0 } };

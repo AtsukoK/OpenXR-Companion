@@ -29,6 +29,9 @@ public:
     void CaptureInput(std::function<void(const InputId&)> done);
     // Ask for a key: the VR keyboard opens, and the next key pressed on it is returned instead of typed.
     void CaptureKey(std::function<void(const std::string&)> done);
+    // Ask what a binding should do: the VR keyboard opens with the mouse buttons too; a key or mouse button goes to
+    // key, its "Controller button" key asks for a controller button (pressed) that goes to button.
+    void CaptureAction(std::function<void(const std::string&)> key, std::function<void(const InputId&)> button);
 
     int PointingHand() const { return run_.uiHand; } // the hand using the menu, -1 when none (its trigger and stick are ours)
     bool IsCapturingInput() const { return static_cast<bool>(run_.inputDone); }

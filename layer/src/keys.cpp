@@ -78,6 +78,8 @@ static const std::map<std::string, K>& Table() {
         k("scrolllock", VK_SCROLL);
         k("pause", VK_PAUSE);
         k("printscreen", VK_SNAPSHOT, true);
+        k("lwin", VK_LWIN, true);
+        k("apps", VK_APPS, true);
         k("numlock", VK_NUMLOCK, true);
         k("numadd", VK_ADD);
         k("numsub", VK_SUBTRACT);

@@ -3,11 +3,18 @@
 #include "keys.h"
 #include <algorithm>
 
-const std::vector<KbKey>& KbLayout(float& W, float& Hh) {
-    static std::vector<KbKey> keys;
+static void BuildLayout(std::vector<KbKey>& keys, bool forBinding);
+
+const std::vector<KbKey>& KbLayout(float& W, float& Hh, bool forBinding) {
+    static std::vector<KbKey> typing, binding;
     W = 15.f;
-    Hh = 6.f;
-    if (!keys.empty()) return keys;
+    Hh = forBinding ? 8.f : 6.f;
+    auto& keys = forBinding ? binding : typing;
+    if (keys.empty()) BuildLayout(keys, forBinding);
+    return keys;
+}
+
+static void BuildLayout(std::vector<KbKey>& keys, bool forBinding) {
     float x = 0, y = 0;
     auto add = [&](std::string label, std::string shiftLabel, std::string combo, float w, int kind = KB_KEY, bool letter = false,
                    bool repeat = false) {
@@ -62,7 +69,27 @@ const std::vector<KbKey>& KbLayout(float& W, float& Hh) {
     add("→", "", "Right", 1, KB_KEY, false, true);
     add("Move", "", "", 1.5f, KB_MOVE);
     add("Close", "", "", 2, KB_CLOSE);
-    return keys;
+    if (!forBinding) return;
+    // Picking what a binding does: the mouse, more keys, and a button the game should see instead.
+    row();
+    add("Left click", "", "lmb", 1.75f);
+    add("Right click", "", "rmb", 1.75f);
+    add("Middle", "", "mmb", 1.5f);
+    add("Mouse 4", "", "mouse4", 1.5f);
+    add("Mouse 5", "", "mouse5", 1.5f);
+    add("Wheel \u2191", "", "wheelup", 1.5f);
+    add("Wheel \u2193", "", "wheeldown", 1.5f);
+    add("Controller button", "", "", 4, KB_CONTROLLER);
+    row();
+    add("Home", "", "Home", 1.5f);
+    add("End", "", "End", 1.5f);
+    add("Page \u2191", "", "PageUp", 1.5f);
+    add("Page \u2193", "", "PageDown", 1.5f);
+    add("Insert", "", "Insert", 1.5f);
+    add("Print", "", "PrintScreen", 1.5f);
+    add("Pause", "", "Pause", 1.5f);
+    add("Win", "", "LWin", 1.5f);
+    add("Menu key", "", "Apps", 3);
 }
 
 void VrKeyboard::Open(int bi) {
@@ -72,7 +99,7 @@ void VrKeyboard::Open(int bi) {
     } // opener again = close
     if (e.wr.open) e.CloseWheel();
     float uw, uh;
-    KbLayout(uw, uh);
+    KbLayout(uw, uh, e.kb.binding);
     e.kb = KeyboardView{};
     e.kb.visible = true;
     e.kb.widthM = e.prof->kb.width;
@@ -96,14 +123,23 @@ void VrKeyboard::Open(int bi) {
     e.kb.version++;
 }
 
-void VrKeyboard::CaptureNextKey(std::function<void(const std::string&)> done) {
+void VrKeyboard::CaptureNextKey(std::function<void(const std::string&)> done, std::function<void()> controllerButton) {
     if (!e.kb.visible) Open(-1);
     run_.capture = std::move(done);
-    e.Toast("Press the key you want on the keyboard", 3.0);
+    run_.captureController = std::move(controllerButton);
+    e.kb.binding = true; // the binding layout: taller, with the mouse and "Controller button"
+    float uw, uh;
+    KbLayout(uw, uh, true);
+    e.kb.heightM = e.kb.widthM * uh / uw;
+    e.kb.hover[0] = e.kb.hover[1] = -1;
+    e.kb.version++;
+    e.Toast(run_.captureController ? "Pick a key, a mouse button, or Controller button" : "Press the key you want on the keyboard", 3.0);
 }
 
 void VrKeyboard::Close() {
     run_.capture = nullptr;
+    run_.captureController = nullptr;
+    e.kb.binding = false;
     if (e.kb.moving) {
         e.kb.moving = false;
         if (e.grab.target == GrabTarget::Keyboard) e.grab = Engine::GrabRun{};
@@ -126,7 +162,7 @@ int VrKeyboard::KeyAt(int h) const {
     if (t <= 0) return -1;
     Vec3 l = RotateInv(e.kb.pose.orientation, (o + d * t) - c);
     float uw, uh;
-    const auto& keys = KbLayout(uw, uh);
+    const auto& keys = KbLayout(uw, uh, e.kb.binding);
     float u = (l.x / e.kb.widthM + 0.5f) * uw, v = (0.5f - l.y / e.kb.heightM) * uh;
     for (int i = 0; i < (int)keys.size(); i++) {
         const auto& k = keys[i];
@@ -137,7 +173,7 @@ int VrKeyboard::KeyAt(int h) const {
 
 void VrKeyboard::Press(int i, int hand) {
     float uw, uh;
-    const auto& keys = KbLayout(uw, uh);
+    const auto& keys = KbLayout(uw, uh, e.kb.binding);
     const KbKey& k = keys[i];
     if (e.prof->haptics) e.haptics.push_back({ hand, std::min(1.f, e.prof->hapticAmp * 1.4f), 0.02f });
     e.kb.pressed = i;
@@ -161,6 +197,16 @@ void VrKeyboard::Press(int i, int hand) {
     case KB_MOVE:
         ToggleMove();
         break;
+    case KB_CONTROLLER: { // picking a binding: a controller button the game should see, picked by pressing it
+        auto pick = std::move(run_.captureController);
+        if (!pick) break;
+        run_.capture = nullptr;
+        run_.captureController = nullptr;
+        e.kb.shift = e.kb.ctrl = e.kb.alt = false;
+        Close();
+        pick();
+        return;
+    }
     default: {
         std::string combo;
         if (e.kb.ctrl) combo += "Ctrl+";
@@ -171,6 +217,7 @@ void VrKeyboard::Press(int i, int hand) {
         if (run_.capture) { // asked for by the menu: hand it over instead of typing it
             auto done = std::move(run_.capture);
             run_.capture = nullptr;
+            run_.captureController = nullptr;
             e.kb.shift = e.kb.ctrl = e.kb.alt = false;
             Close();
             done(combo);
@@ -216,7 +263,7 @@ void VrKeyboard::UpdatePlacing() {
     float dt = (float)std::clamp(e.now - e.lastNow, 0.0, 0.1);
     if (std::fabs(hr.sy) > 0.2f) {
         float uw, uh;
-        KbLayout(uw, uh);
+        KbLayout(uw, uh, e.kb.binding);
         e.prof->kb.width = std::clamp(e.prof->kb.width * (1.f + hr.sy * dt * 0.8f), 0.2f, 1.5f);
         e.kb.widthM = e.prof->kb.width;
         e.kb.heightM = e.kb.widthM * uh / uw;
@@ -253,7 +300,7 @@ void VrKeyboard::Update() {
         }
     if (e.now - run_.openTime < 0.25) return; // ignore the press that opened it
     float uw, uh;
-    const auto& keys = KbLayout(uw, uh);
+    const auto& keys = KbLayout(uw, uh, e.kb.binding);
     for (int h = 0; h < 2; h++) {
         bool down = e.cur[h][C_TRIGGER][F_PRESS], edge = down && !e.prev[h][C_TRIGGER][F_PRESS];
         if (edge && e.kb.hover[h] >= 0) {

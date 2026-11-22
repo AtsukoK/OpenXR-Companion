@@ -13,6 +13,8 @@ namespace MenuPages {
 MenuPage Home(Engine& e, InGameMenu& m);
 MenuPage ControllerBindings(Engine& e, InGameMenu& m, int hand); // one controller's bindings, and "new binding"
 MenuPage BindingDetail(Engine& e, InGameMenu& m, int index); // one binding: on, button, how, key, hide from game
+// What binding `index` does, picked on the VR keyboard: a key, a mouse button, or a controller button the game sees.
+void PickAction(Engine& e, InGameMenu& m, int index);
 MenuPage StickOptions(Engine& e, InGameMenu& m, int hand);
 MenuPage TestControllers(Engine& e, InGameMenu& m); // both controllers live    // one stick's deadzones and direction zone
 

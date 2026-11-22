@@ -461,7 +461,7 @@ void DrawKeyboard(std::vector<uint32_t>& out, int W, int Hp, const KeyboardView&
     g.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);
     g.Clear(Color(0, 0, 0, 0));
     float uw, uh;
-    const auto& keys = KbLayout(uw, uh);
+    const auto& keys = KbLayout(uw, uh, kb.binding);
     float pad = W * 0.006f;
     float sx = (W - 2 * pad) / uw, sy = (Hp - 2 * pad) / uh;
 

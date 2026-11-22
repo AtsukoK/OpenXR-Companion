@@ -911,10 +911,19 @@ static json MenuBindingJson(const Binding& b, const json& original) {
     o["gesture"] = EnumKey(kGestureNames, b.gesture);
     if (b.gesture == Gesture::Hold) o["hold_ms"] = b.holdMs;
     o["block"] = EnumKey(kBindingBlockNames, b.block);
-    if (b.action.type == ActType::Key) {
+    // A key or a controller button (the two the menu can set): the original action is kept when it was already that
+    // kind (its other fields stay), else it is replaced.
+    bool isKey = b.action.type == ActType::Key, isButton = b.action.type == ActType::XrInput;
+    if (isKey || isButton) {
         json a = o.contains("action") && o["action"].is_object() ? o["action"] : json::object();
-        a["type"] = "key";
-        a["keys"] = b.action.keys;
+        std::string was = a.contains("type") && a["type"].is_string() ? a["type"].get<std::string>() : "";
+        bool sameKind = isKey ? (was == "key" || was == "keys") : (was == "xr_input" || was == "button");
+        if (!sameKind) a = json::object();
+        a["type"] = isKey ? "key" : "xr_input";
+        if (isKey)
+            a["keys"] = b.action.keys;
+        else
+            a["target"] = InputName(b.action.target);
         a["mode"] = ActModeKey(b.action.mode);
         o["action"] = a;
     }

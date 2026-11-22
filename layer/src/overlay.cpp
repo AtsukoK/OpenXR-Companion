@@ -301,7 +301,7 @@ void OverlayRenderer::RenderKeyboard(const OverlayContext& c, LayerList& layers)
     const Style& st = eng_.prof->style;
 
     float unitsW, unitsH;
-    KbLayout(unitsW, unitsH);
+    KbLayout(unitsW, unitsH, kb.binding);
     const int h = (int)(kKeyboardPx * unitsH / unitsW);
     if (keyboard_.Ensure(c, kKeyboardPx, h))
         keyboard_.Redraw(c, kb.version, scratch_, [&](std::vector<uint32_t>& px) { DrawKeyboard(px, kKeyboardPx, h, kb, st); });

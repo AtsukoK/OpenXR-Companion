@@ -265,6 +265,13 @@ void InGameMenu::CaptureKey(std::function<void(const std::string&)> done) {
     e.keyboard.CaptureNextKey(std::move(done));
 }
 
+void InGameMenu::CaptureAction(std::function<void(const std::string&)> key, std::function<void(const InputId&)> button) {
+    e.keyboard.CaptureNextKey(std::move(key), [this, button = std::move(button)] {
+        e.Toast("Press the controller button the game should see", 3.0);
+        CaptureInput(button);
+    });
+}
+
 // Waiting for a button: first every trigger is let go (the one that asked), then the next press or stick push.
 // Touch alone doesn't count: a touch comes before every press. The binding page can switch the way to touch.
 void InGameMenu::UpdateInputCapture() {
