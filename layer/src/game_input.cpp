@@ -45,7 +45,7 @@ bool ParseGameInputPath(const std::string& path, int& hand, int& comp, InputFeat
         comp = c;
         if (feat == "touch")
             feature = InputFeature::Touch;
-        else if (feat.empty() && c == C_STICK)
+        else if (feat.empty() && (c == C_STICK || c == C_TRACKPAD))
             feature = InputFeature::Vector;
         else if (feat == "x")
             feature = InputFeature::X;

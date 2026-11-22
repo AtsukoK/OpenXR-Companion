@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### New
+- The **Index trackpad** and the **WMR touchpad** can be bound: press, touch, and swipes (up / down / left / right). The Steam Frame's X / Y, bumpers and D-pad can be bound to touch, like A / B.
 - **Controller configuration overview** is now the first page of the in-game menu: both controllers from above and from the side, with a tag on every button showing its name and what it does: your bindings, or else the game's own controls under the game's own names (read from the game's actions). Point at a tag to open that button's page: what the game does with it and every way to use it (press, quick tap, hold, double-tap, touch, stick directions), assigned or not. **Edit bindings**, **Test controllers** and the sticks are under it. The overview panel is wider than the other pages.
 - In-game bindings: pick what a binding does on the VR keyboard: a key (with Ctrl / Alt / Shift), a mouse button or the wheel, or **Controller button** (the game sees another controller button). Works for bindings made in the editor too.
 - Clearer wording on a binding's page: Enabled, Input, Activation, Gesture, Action, Key / Button behavior (Tap, Hold, Toggle), Pass input to game.

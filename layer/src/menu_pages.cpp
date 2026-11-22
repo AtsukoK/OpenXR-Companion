@@ -10,9 +10,11 @@ namespace MenuPages {
 std::string InputWords(const InputId& id) {
     if (!id.valid()) return "?";
     static const char* rightNames[C_COUNT] = { "A",  "B",      "trigger",    "grip",         "thumbstick",   "thumbrest",  "menu",
-                                               "X",  "Y",      "bumper",     "D-pad up",     "D-pad down",   "D-pad left", "D-pad right" };
+                                               "X",  "Y",      "bumper",     "D-pad up",     "D-pad down",   "D-pad left", "D-pad right",
+                                               "trackpad" };
     static const char* leftNames[C_COUNT] = { "X",  "Y",      "trigger",    "grip",         "thumbstick",   "thumbrest",  "menu",
-                                              "X",  "Y",      "bumper",     "D-pad up",     "D-pad down",   "D-pad left", "D-pad right" };
+                                              "X",  "Y",      "bumper",     "D-pad up",     "D-pad down",   "D-pad left", "D-pad right",
+                                              "trackpad" };
     std::string s = std::string(id.hand == 0 ? "Left " : "Right ") + (id.hand == 0 ? leftNames[id.comp] : rightNames[id.comp]);
     switch (id.feat) {
     case F_TOUCH:
@@ -41,7 +43,8 @@ static int GestureIndex(Gesture g) {
 
 std::string PartName(int hand, int comp, ControllerKind kind) {
     static const char* names[C_COUNT] = { "A",  "B",      "Trigger",  "Grip",       "Thumbstick", "Thumbrest",  "Menu",
-                                          "X",  "Y",      "Bumper",   "D-pad up",   "D-pad down", "D-pad left", "D-pad right" };
+                                          "X",  "Y",      "Bumper",   "D-pad up",   "D-pad down", "D-pad left", "D-pad right",
+                                          "Trackpad" };
     if (comp < 0 || comp >= C_COUNT) return "?";
     bool xy = hand == 0 && kind != ControllerKind::Index && kind != ControllerKind::SteamFrame;
     if (comp == C_BTN1 && xy) return "X";
@@ -125,7 +128,8 @@ static void SetButtonAction(Binding& b, const InputId& target) {
 }
 
 static bool HasTouch(int comp) {
-    return comp == C_BTN1 || comp == C_BTN2 || comp == C_TRIGGER || comp == C_STICK;
+    return comp == C_BTN1 || comp == C_BTN2 || comp == C_TRIGGER || comp == C_STICK || comp == C_TRACKPAD ||
+           (comp >= C_FRAME_FIRST && comp <= C_FRAME_LAST);
 }
 
 // What a part does, for its tag: the player's bindings first (blue), then the game's own controls; "Not used".
@@ -205,6 +209,9 @@ struct PartWay {
     const char* name;
 };
 static std::vector<PartWay> WaysOf(int comp) {
+    if (comp == C_TRACKPAD)
+        return { { F_PRESS, Gesture::Press, "Press" },   { F_TOUCH, Gesture::Press, "Touch" },       { F_UP, Gesture::Press, "Swipe up" },
+                 { F_DOWN, Gesture::Press, "Swipe down" }, { F_LEFT, Gesture::Press, "Swipe left" }, { F_RIGHT, Gesture::Press, "Swipe right" } };
     if (comp == C_STICK)
         return { { F_PRESS, Gesture::Press, "Click" },   { F_UP, Gesture::Press, "Push up" },      { F_DOWN, Gesture::Press, "Push down" },
                  { F_LEFT, Gesture::Press, "Push left" }, { F_RIGHT, Gesture::Press, "Push right" }, { F_TOUCH, Gesture::Press, "Touch" } };
@@ -214,7 +221,8 @@ static std::vector<PartWay> WaysOf(int comp) {
                                { F_PRESS, Gesture::Tap, "Quick tap" },
                                { F_PRESS, Gesture::Hold, "Hold" },
                                { F_PRESS, Gesture::DoubleTap, "Double-tap" } };
-    if (comp == C_BTN1 || comp == C_BTN2 || comp == C_TRIGGER) w.push_back({ F_TOUCH, Gesture::Press, "Touch" });
+    if (comp == C_BTN1 || comp == C_BTN2 || comp == C_TRIGGER || (comp >= C_FRAME_FIRST && comp <= C_FRAME_LAST))
+        w.push_back({ F_TOUCH, Gesture::Press, "Touch" }); // the Steam Frame senses touch on all its buttons
     return w;
 }
 

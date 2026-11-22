@@ -31,9 +31,9 @@ static std::vector<std::string> Split(const std::string& s, char sep) {
 
 const char* const kCompNames[2][C_COUNT] = {
     { "x", "y", "trigger", "grip", "thumbstick", "thumbrest", "menu", "button3", "button4", "bumper", "dpad_up", "dpad_down",
-      "dpad_left", "dpad_right" },
+      "dpad_left", "dpad_right", "trackpad" },
     { "a", "b", "trigger", "grip", "thumbstick", "thumbrest", "menu", "button3", "button4", "bumper", "dpad_up", "dpad_down",
-      "dpad_left", "dpad_right" },
+      "dpad_left", "dpad_right", "trackpad" },
 };
 
 int ParseCompName(const std::string& n) {
@@ -50,7 +50,8 @@ int ParseCompName(const std::string& n) {
     if (s == "b" || s == "y" || s == "secondary" || s == "btn2") return C_BTN2;
     if (s == "trigger") return C_TRIGGER;
     if (s == "grip" || s == "squeeze") return C_GRIP;
-    if (s == "thumbstick" || s == "stick" || s == "trackpad") return C_STICK;
+    if (s == "thumbstick" || s == "stick") return C_STICK;
+    if (s == "trackpad" || s == "touchpad") return C_TRACKPAD;
     if (s == "thumbrest") return C_THUMBREST;
     if (s == "menu") return C_MENU;
     return -1;
@@ -85,7 +86,7 @@ bool ParseInput(const std::string& str, InputId& out) {
             r.feat = F_RIGHT;
         else
             return false;
-        if (r.feat >= F_UP && r.comp != C_STICK) return false;
+        if (r.feat >= F_UP && r.comp != C_STICK && r.comp != C_TRACKPAD) return false; // directions: sticks and trackpads
         if (r.comp == C_THUMBREST) r.feat = F_TOUCH;
     }
     out = r;

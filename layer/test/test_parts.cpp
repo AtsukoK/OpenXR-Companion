@@ -493,4 +493,8 @@ void TestSteamFrame() {
     CHECK(SteamFramePathFor(touch, "/user/hand/right/input/thumbrest/touch").empty(), "frame: no thumbrest on the Frame");
     CHECK(SteamFramePathFor(idx, "/user/hand/right/input/aim/pose") == "/user/hand/right/input/aim/pose", "frame: poses stay");
     CHECK(ControllerKindOf("/interaction_profiles/valve/frame_controller_valve") == ControllerKind::SteamFrame, "frame: the kind");
+    CHECK(ParseInput("right.trackpad.up", id) && id.comp == C_TRACKPAD && id.feat == F_UP && InputName(id) == "right.trackpad.up",
+          "trackpad: its own part, with swipe directions");
+    CHECK(ParseGameInputPath("/user/hand/right/input/trackpad/force", hand, comp, f) && comp == C_TRACKPAD, "trackpad: the game's trackpad");
+    CHECK(ParseInput("right.button3.touch", id) && id.comp == C_BTN3 && id.feat == F_TOUCH, "frame: X has touch");
 }

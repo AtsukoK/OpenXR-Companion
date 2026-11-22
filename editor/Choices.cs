@@ -54,6 +54,10 @@ public static class Choices
         new("bumper", "Bumper  (Steam Frame)"),
         new("dpad_up", "D-pad up  (Steam Frame, left hand)"), new("dpad_down", "D-pad down  (Steam Frame, left hand)"),
         new("dpad_left", "D-pad left  (Steam Frame, left hand)"), new("dpad_right", "D-pad right  (Steam Frame, left hand)"),
+        new("button3.touch", "X  (Steam Frame, just touching)"), new("button4.touch", "Y  (Steam Frame, just touching)"),
+        new("trackpad", "Trackpad pressed  (Index, WMR touchpad)"), new("trackpad.touch", "Trackpad  (just touching)"),
+        new("trackpad.up", "Trackpad swiped up"), new("trackpad.down", "Trackpad swiped down"),
+        new("trackpad.left", "Trackpad swiped left"), new("trackpad.right", "Trackpad swiped right"),
     };
     public static readonly Choice[] Gestures =
     {
@@ -143,7 +147,7 @@ public static class InputText
         var bits = part.Trim().ToLowerInvariant().Split('.');
         string hand = bits[0] is "left" or "l" ? "left" : "right";
         string comp = bits.Length > 1 ? bits[1] : "trigger";
-        comp = comp switch { "a" or "x" or "btn1" => "primary", "b" or "y" or "btn2" => "secondary", "btn3" => "button3", "btn4" => "button4", "stick" or "trackpad" => "thumbstick", "squeeze" => "grip", "view" => "menu", _ => comp };
+        comp = comp switch { "a" or "x" or "btn1" => "primary", "b" or "y" or "btn2" => "secondary", "btn3" => "button3", "btn4" => "button4", "stick" => "thumbstick", "touchpad" => "trackpad", "squeeze" => "grip", "view" => "menu", _ => comp };
         string feat = bits.Length > 2 && bits[2] is not ("click" or "press") ? "." + bits[2] : "";
         if (comp == "thumbrest")
             feat = "";

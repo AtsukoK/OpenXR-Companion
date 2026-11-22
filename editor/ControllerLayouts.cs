@@ -16,7 +16,7 @@ public sealed record BodyPiece(ControllerView View, BodyShape Shape, RectangleF 
 // One button, stick, pad, trigger or grip.
 // Comp: the input name used in bindings ("primary", "secondary", "trigger", "grip", "thumbstick", "thumbrest", "menu";
 // on the Steam Frame also "button3" / "button4" (its right X / Y), "bumper", "dpad_up" / "dpad_down" / "dpad_left" / "dpad_right"),
-// or a part OpenXR Companion can't read ("trackpad", "touchpad", "system"), which then has a NotUsable reason.
+// "trackpad" (Index trackpad, WMR touchpad), or a part OpenXR Companion can't read ("system"), which then has a NotUsable reason.
 // Ways: how it can be used, as the input's last part: "" (press / pull / squeeze / click), "touch", "up", "down", "left", "right".
 public sealed record ControllerPart(string Comp, string Label, string LeftLabel, ControllerView View, PartShape Shape, RectangleF Box,
                                     string[] Ways, int Hands = ControllerPart.BothHands, string NotUsable = null, float Turn = 0)
@@ -41,6 +41,8 @@ public static class ControllerLayouts
     static readonly string[] PressTouch = { "", "touch" };
     static readonly string[] StickWays = { "", "touch", "up", "down", "left", "right" };
     static readonly string[] StickNoTouch = { "", "up", "down", "left", "right" };
+    // A trackpad (Index, WMR): pressed, touched, or swiped (touched toward an edge).
+    static readonly string[] PadWays = { "", "touch", "up", "down", "left", "right" };
 
     const string SystemButton = "This button opens the headset's own menu, so games and OpenXR Companion never see it.";
 
@@ -155,17 +157,17 @@ public static class ControllerLayouts
             new ControllerPart[]
             {
                 new("thumbstick", "Thumbstick", null, ControllerView.Top, PartShape.Stick, R(44, 62, 42, 42), StickWays),
-                new("button4", "Y", null, ControllerView.Top, PartShape.Button, R(120, 38, 19, 19), Press, ControllerPart.RightHand),
-                new("button3", "X", null, ControllerView.Top, PartShape.Button, R(102, 58, 19, 19), Press, ControllerPart.RightHand),
+                new("button4", "Y", null, ControllerView.Top, PartShape.Button, R(120, 38, 19, 19), PressTouch, ControllerPart.RightHand),
+                new("button3", "X", null, ControllerView.Top, PartShape.Button, R(102, 58, 19, 19), PressTouch, ControllerPart.RightHand),
                 new("secondary", "B", null, ControllerView.Top, PartShape.Button, R(138, 58, 19, 19), PressTouch, ControllerPart.RightHand),
                 new("primary", "A", null, ControllerView.Top, PartShape.Button, R(120, 78, 19, 19), PressTouch, ControllerPart.RightHand),
-                new("dpad_up", "D-pad up", null, ControllerView.Top, PartShape.Button, R(121, 38, 16, 20), Press, ControllerPart.LeftHand),
-                new("dpad_down", "D-pad down", null, ControllerView.Top, PartShape.Button, R(121, 76, 16, 20), Press, ControllerPart.LeftHand),
-                new("dpad_left", "D-pad left", null, ControllerView.Top, PartShape.Button, R(136, 59, 20, 16), Press, ControllerPart.LeftHand),
-                new("dpad_right", "D-pad right", null, ControllerView.Top, PartShape.Button, R(102, 59, 20, 16), Press, ControllerPart.LeftHand),
+                new("dpad_up", "D-pad up", null, ControllerView.Top, PartShape.Button, R(121, 38, 16, 20), PressTouch, ControllerPart.LeftHand),
+                new("dpad_down", "D-pad down", null, ControllerView.Top, PartShape.Button, R(121, 76, 16, 20), PressTouch, ControllerPart.LeftHand),
+                new("dpad_left", "D-pad left", null, ControllerView.Top, PartShape.Button, R(136, 59, 20, 16), PressTouch, ControllerPart.LeftHand),
+                new("dpad_right", "D-pad right", null, ControllerView.Top, PartShape.Button, R(102, 59, 20, 16), PressTouch, ControllerPart.LeftHand),
                 new("menu", "Menu", "View", ControllerView.Top, PartShape.Pill, R(74, 42, 20, 8), Press),
                 new("system", "Steam button", null, ControllerView.Top, PartShape.Button, R(108, 104, 15, 15), Press, NotUsable: SystemButton),
-                new("bumper", "Bumper", null, ControllerView.Side, PartShape.Pill, R(12, 40, 30, 12), Press, Turn: -30),
+                new("bumper", "Bumper", null, ControllerView.Side, PartShape.Pill, R(12, 40, 30, 12), PressTouch, Turn: -30),
                 new("trigger", "Trigger", null, ControllerView.Side, PartShape.Trigger, R(8, 64, 26, 44), PressTouch),
                 new("grip", "Grip", null, ControllerView.Side, PartShape.Grip, R(32, 128, 24, 80), Press, Turn: -6),
             }),
@@ -184,8 +186,7 @@ public static class ControllerLayouts
                 new("thumbstick", "Thumbstick", null, ControllerView.Top, PartShape.Stick, R(80, 24, 36, 36), StickWays),
                 new("secondary", "B", null, ControllerView.Top, PartShape.Button, R(70, 72, 17, 17), PressTouch),
                 new("primary", "A", null, ControllerView.Top, PartShape.Button, R(76, 96, 17, 17), PressTouch),
-                new("trackpad", "Trackpad", null, ControllerView.Top, PartShape.Pad, R(98, 68, 28, 66), Press,
-                    NotUsable: "OpenXR Companion doesn't read the Index trackpad yet. Games still get it as usual."),
+                new("trackpad", "Trackpad", null, ControllerView.Top, PartShape.Pad, R(98, 68, 28, 66), PadWays),
                 new("system", "System", null, ControllerView.Top, PartShape.Button, R(93, 144, 13, 13), Press, NotUsable: SystemButton),
                 new("trigger", "Trigger", null, ControllerView.Side, PartShape.Trigger, R(8, 52, 26, 42), PressTouch),
                 new("grip", "Grip (squeeze)", null, ControllerView.Side, PartShape.Grip, R(26, 106, 24, 132), Press, Turn: -6),
@@ -217,8 +218,7 @@ public static class ControllerLayouts
             new ControllerPart[]
             {
                 new("thumbstick", "Thumbstick", null, ControllerView.Top, PartShape.Stick, R(70, 108, 32, 32), StickNoTouch),
-                new("touchpad", "Touchpad", null, ControllerView.Top, PartShape.Pad, R(104, 110, 28, 28), Press,
-                    NotUsable: "OpenXR Companion doesn't read the WMR touchpad yet. Games still get it as usual."),
+                new("trackpad", "Touchpad", null, ControllerView.Top, PartShape.Pad, R(104, 110, 28, 28), PadWays),
                 new("menu", "Menu", null, ControllerView.Top, PartShape.Button, R(92, 156, 16, 16), Press),
                 new("system", "Windows button", null, ControllerView.Top, PartShape.Button, R(92, 184, 16, 16), Press, NotUsable: SystemButton),
                 new("trigger", "Trigger", null, ControllerView.Side, PartShape.Trigger, R(10, 76, 26, 44), Press),

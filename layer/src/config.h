@@ -6,11 +6,14 @@
 #include <optional>
 
 // Physical controller parts. BTN1 = A (right) / X (left), BTN2 = B / Y. MENU is also the Steam Frame's left View.
-// The rest are only on the Steam Frame: its right X / Y (BTN3 / BTN4), the bumpers above the triggers, the left D-pad.
+// BTN3 .. DPAD_RIGHT are only on the Steam Frame: its right X / Y, the bumpers above the triggers, the left D-pad
+// (C_FRAME_FIRST .. C_FRAME_LAST). TRACKPAD: the Index trackpad and the WMR touchpad (the Vive's trackpad is its
+// STICK; its game bindings are blocked together with it).
 enum Comp {
     C_BTN1, C_BTN2, C_TRIGGER, C_GRIP, C_STICK, C_THUMBREST, C_MENU,
-    C_BTN3, C_BTN4, C_BUMPER, C_DPAD_UP, C_DPAD_DOWN, C_DPAD_LEFT, C_DPAD_RIGHT, C_COUNT
+    C_BTN3, C_BTN4, C_BUMPER, C_DPAD_UP, C_DPAD_DOWN, C_DPAD_LEFT, C_DPAD_RIGHT, C_TRACKPAD, C_COUNT
 };
+constexpr int C_FRAME_FIRST = C_BTN3, C_FRAME_LAST = C_DPAD_RIGHT;
 // The names of the parts in profiles ("right.a", "left.dpad_up"), per hand: [hand][comp].
 extern const char* const kCompNames[2][C_COUNT];
 // How the part is read. PRESS = click or analog over threshold.

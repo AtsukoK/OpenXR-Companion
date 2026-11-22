@@ -79,8 +79,19 @@ enum OA {
     A_DPAD_DOWN,
     A_DPAD_LEFT,
     A_DPAD_RIGHT,
+    A_BTN3T, // their touches, same order
+    A_BTN4T,
+    A_BUMPERT,
+    A_DPAD_UPT,
+    A_DPAD_DOWNT,
+    A_DPAD_LEFTT,
+    A_DPAD_RIGHTT,
+    A_PAD,      // the Index trackpad / WMR touchpad: position
+    A_PADPRESS, // force (Index) or click (WMR)
+    A_PADT,
     A_COUNT
 };
+static_assert(A_DPAD_RIGHTT - A_BTN3T == C_FRAME_LAST - C_FRAME_FIRST, "the Frame's touches follow the Comp order");
 static_assert(A_DPAD_RIGHT - A_BTN3 == C_DPAD_RIGHT - C_BTN3, "the Frame's actions follow the Comp order");
 static const struct {
     const char* name;
@@ -98,6 +109,12 @@ static const struct {
     { "vro_bumper", XR_ACTION_TYPE_BOOLEAN_INPUT },      { "vro_dpad_up", XR_ACTION_TYPE_BOOLEAN_INPUT },
     { "vro_dpad_down", XR_ACTION_TYPE_BOOLEAN_INPUT },   { "vro_dpad_left", XR_ACTION_TYPE_BOOLEAN_INPUT },
     { "vro_dpad_right", XR_ACTION_TYPE_BOOLEAN_INPUT },
+    { "vro_btn3_touch", XR_ACTION_TYPE_BOOLEAN_INPUT },  { "vro_btn4_touch", XR_ACTION_TYPE_BOOLEAN_INPUT },
+    { "vro_bumper_touch", XR_ACTION_TYPE_BOOLEAN_INPUT }, { "vro_dpad_up_touch", XR_ACTION_TYPE_BOOLEAN_INPUT },
+    { "vro_dpad_down_touch", XR_ACTION_TYPE_BOOLEAN_INPUT }, { "vro_dpad_left_touch", XR_ACTION_TYPE_BOOLEAN_INPUT },
+    { "vro_dpad_right_touch", XR_ACTION_TYPE_BOOLEAN_INPUT },
+    { "vro_pad", XR_ACTION_TYPE_VECTOR2F_INPUT },        { "vro_pad_press", XR_ACTION_TYPE_FLOAT_INPUT },
+    { "vro_pad_touch", XR_ACTION_TYPE_BOOLEAN_INPUT },
 };
 struct PB {
     int act;
@@ -136,10 +153,14 @@ static const PB kIndex[] = {
     { A_STICK, "input/thumbstick", 3 },
     { A_STICKC, "input/thumbstick/click", 3 },
     { A_STICKT, "input/thumbstick/touch", 3 },
+    { A_PAD, "input/trackpad", 3 },
+    { A_PADPRESS, "input/trackpad/force", 3 },
+    { A_PADT, "input/trackpad/touch", 3 },
 };
 static const PB kWmr[] = {
     { A_MENU, "input/menu/click", 3 },  { A_GRIP, "input/squeeze/click", 3 },      { A_TRIG, "input/trigger/value", 3 },
     { A_STICK, "input/thumbstick", 3 }, { A_STICKC, "input/thumbstick/click", 3 },
+    { A_PAD, "input/trackpad", 3 },     { A_PADPRESS, "input/trackpad/click", 3 },  { A_PADT, "input/trackpad/touch", 3 },
 };
 // HP Reverb G2: the WMR controller with X / Y (left) and A / B (right) added; no touch sensing.
 static const PB kHpReverb[] = {
@@ -158,6 +179,9 @@ static const PB kSteamFrame[] = {
     { A_MENU, "input/menu/click", 2 },      { A_MENU, "input/view/click", 1 },     { A_DPAD_UP, "input/dpad_up/click", 1 },
     { A_DPAD_DOWN, "input/dpad_down/click", 1 }, { A_DPAD_LEFT, "input/dpad_left/click", 1 },
     { A_DPAD_RIGHT, "input/dpad_right/click", 1 }, { A_BUMPER, "input/bumper/click", 3 },
+    { A_BTN3T, "input/x/touch", 2 },        { A_BTN4T, "input/y/touch", 2 },       { A_BUMPERT, "input/bumper/touch", 3 },
+    { A_DPAD_UPT, "input/dpad_up/touch", 1 }, { A_DPAD_DOWNT, "input/dpad_down/touch", 1 },
+    { A_DPAD_LEFTT, "input/dpad_left/touch", 1 }, { A_DPAD_RIGHTT, "input/dpad_right/touch", 1 },
     { A_TRIG, "input/trigger/value", 3 },   { A_TRIGT, "input/trigger/touch", 3 }, { A_GRIP, "input/squeeze/value", 3 },
     { A_STICK, "input/thumbstick", 3 },     { A_STICKC, "input/thumbstick/click", 3 }, { A_STICKT, "input/thumbstick/touch", 3 },
 };
@@ -445,9 +469,10 @@ struct OurActionReader {
         if (isActive) *isActive = active;
         return active ? s.currentState : 0.f;
     }
-    void Stick(float& x, float& y) const {
+    void Stick(float& x, float& y) const { Vector(A_STICK, x, y); }
+    void Vector(int a, float& x, float& y) const {
         XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO };
-        gi.action = gOurs.action[A_STICK];
+        gi.action = gOurs.action[a];
         gi.subactionPath = gOurs.handPath[hand];
         XrActionStateVector2f s{ XR_TYPE_ACTION_STATE_VECTOR2F };
         if (XR_SUCCEEDED(N.GetActionStateVector2f(gSession.handle, &gi, &s)) && s.isActive) {
@@ -472,15 +497,21 @@ static void ReadHand(int h, HandRaw& r) {
     r.st = in.Bool(A_STICKT);
     r.rest = in.Bool(A_REST);
     r.menu = in.Bool(A_MENU);
-    for (int c = C_BTN3; c < C_COUNT; c++)
-        r.more[c] = in.Bool(A_BTN3 + (c - C_BTN3));
+    for (int c = C_FRAME_FIRST; c <= C_FRAME_LAST; c++) {
+        r.more[c] = in.Bool(A_BTN3 + (c - C_FRAME_FIRST));
+        r.moreT[c] = in.Bool(A_BTN3T + (c - C_FRAME_FIRST));
+    }
+    in.Vector(A_PAD, r.padX, r.padY);
+    r.padPress = in.Float(A_PADPRESS);
+    r.padTouch = in.Bool(A_PADT);
     r.gripValid = Locate(gSession.gripSpace[h], gSession.local, r.gripPose);
     r.aimValid = Locate(gSession.aimSpace[h], gSession.local, r.aimPose);
     r.touchCtl = gSession.touchController[h];
     r.kind = gSession.controllerKind[h];
     bool anythingPressed = r.b1 || r.b2 || r.trig > 0.5f || r.grip > 0.5f || r.sc || r.rest || r.menu;
-    for (int c = C_BTN3; c < C_COUNT; c++)
+    for (int c = C_FRAME_FIRST; c <= C_FRAME_LAST; c++)
         anythingPressed = anythingPressed || r.more[c];
+    anythingPressed = anythingPressed || r.padPress > 0.5f;
     gInputLog.Frame(h, r.gripValid, r.aimValid, isTriggerActive, anythingPressed);
 }
 

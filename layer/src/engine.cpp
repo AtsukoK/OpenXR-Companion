@@ -126,8 +126,18 @@ void Engine::ComputeDown() {
         hyst(C_STICK, F_LEFT, left && r.sx < -p.stickOn, left && r.sx < -p.stickOff);
         cur[h][C_THUMBREST][F_TOUCH] = cur[h][C_THUMBREST][F_PRESS] = r.rest;
         cur[h][C_MENU][F_PRESS] = cur[h][C_MENU][F_TOUCH] = r.menu;
-        for (int c = C_BTN3; c < C_COUNT; c++)
-            cur[h][c][F_PRESS] = cur[h][c][F_TOUCH] = r.more[c];
+        for (int c = C_FRAME_FIRST; c <= C_FRAME_LAST; c++) {
+            cur[h][c][F_PRESS] = r.more[c];
+            cur[h][c][F_TOUCH] = r.moreT[c] || r.more[c];
+        }
+        // The trackpad: pressed (by force or click), touched, and swiped: touched toward an edge.
+        hyst(C_TRACKPAD, F_PRESS, r.padPress > p.pressOn, r.padPress > p.pressOff);
+        cur[h][C_TRACKPAD][F_TOUCH] = r.padTouch || cur[h][C_TRACKPAD][F_PRESS];
+        bool padOn = cur[h][C_TRACKPAD][F_TOUCH];
+        hyst(C_TRACKPAD, F_UP, padOn && r.padY > p.stickOn && std::fabs(r.padY) > std::fabs(r.padX), padOn && r.padY > p.stickOff);
+        hyst(C_TRACKPAD, F_DOWN, padOn && r.padY < -p.stickOn && std::fabs(r.padY) > std::fabs(r.padX), padOn && r.padY < -p.stickOff);
+        hyst(C_TRACKPAD, F_RIGHT, padOn && r.padX > p.stickOn && std::fabs(r.padX) > std::fabs(r.padY), padOn && r.padX > p.stickOff);
+        hyst(C_TRACKPAD, F_LEFT, padOn && r.padX < -p.stickOn && std::fabs(r.padX) > std::fabs(r.padY), padOn && r.padX < -p.stickOff);
     }
 }
 
@@ -579,6 +589,8 @@ void Engine::ComputeBlocks() {
                 c = true;
     for (int h = 0; h < 2; h++) // the pressing (other) hand's trigger belongs to the panel while over a button
         if (wrist[h].visible && wrist[h].hover >= 0) want[1 - h][C_TRIGGER] = true;
+    for (int h = 0; h < 2; h++) // the Vive's trackpad is our stick: the game's trackpad bindings go with it
+        if (fr.h[h].kind == ControllerKind::Vive && want[h][C_STICK]) want[h][C_TRACKPAD] = true;
     for (int h = 0; h < 2; h++)
         for (int c = 0; c < C_COUNT; c++) {
             // Once blocked, stay blocked until the part is let go so the game never sees a half press.
