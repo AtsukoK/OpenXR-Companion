@@ -41,6 +41,7 @@ private:
     void UpdatePointing();
     void UpdateStick(float dt);
     void UpdateInputCapture();
+    void UpdateLive();
     void SaveWhenDue();
 
     Engine& e;
@@ -52,6 +53,7 @@ private:
         double repeatAt = 0, flashUntil = 0, saveAt = -1;
         float stickCarry = 0; // part-steps of a number moved by the stick
         double scrollAt = 0;  // the stick scrolls a row at a time, this often
+        double liveAt = 0;    // next copy of the live controller state
         std::function<void(const InputId&)> inputDone;
         bool inputArmed = false; // the trigger that asked has been let go
     } run_;

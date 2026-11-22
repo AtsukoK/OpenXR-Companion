@@ -77,6 +77,9 @@ void InGameMenu::BuildView() {
         vr.detail = r.detail;
         vr.value = r.ValueText();
         vr.isDanger = r.isDanger;
+        vr.live = r.live;
+        vr.liveHand = r.liveHand;
+        vr.span = r.span;
         if (r.kind == MenuRowKind::Toggle) vr.isOn = r.isOn && r.isOn();
         if (r.kind == MenuRowKind::Number && r.value) {
             float x = r.value();
@@ -103,7 +106,7 @@ void InGameMenu::BuildView() {
     v.title = page_.title;
     v.status = status;
     v.canBack = stack_.size() > 1;
-    v.first = std::clamp(v.first, 0, std::max(0, (int)v.rows.size() - MenuView::kVisibleRows));
+    v.first = std::clamp(v.first, 0, MenuMaxFirst(v));
     v.version++;
 }
 
@@ -138,7 +141,7 @@ void InGameMenu::Activate(const MenuHit& hit, bool repeat) {
         v.version++;
         return;
     case MenuPart::ScrollDown:
-        v.first = std::min(std::max(0, (int)v.rows.size() - MenuView::kVisibleRows), v.first + 1);
+        v.first = std::min(MenuMaxFirst(v), v.first + 1);
         v.version++;
         return;
     default:
@@ -227,7 +230,7 @@ void InGameMenu::UpdateStick(float dt) {
     MenuView& v = e.menuView;
     float sx = e.fr.h[g].sx, sy = e.fr.h[g].sy;
     if (std::fabs(sy) > 0.6f && std::fabs(sy) > std::fabs(sx) && e.now >= run_.scrollAt) {
-        int max = std::max(0, (int)v.rows.size() - MenuView::kVisibleRows);
+        int max = MenuMaxFirst(v);
         int first = std::clamp(v.first + (sy < 0 ? 1 : -1), 0, max);
         if (first != v.first) {
             v.first = first;
@@ -291,6 +294,36 @@ void InGameMenu::UpdateInputCapture() {
             }
 }
 
+// Live rows: copy what the controllers do now into the view, at most 20 times a second and only when it changed
+// (each change redraws the whole panel).
+void InGameMenu::UpdateLive() {
+    MenuView& v = e.menuView;
+    bool hasLive = std::any_of(v.rows.begin(), v.rows.end(), [](const MenuViewRow& r) { return r.kind == MenuRowKind::Live; });
+    if (!hasLive || e.now < run_.liveAt) return;
+    run_.liveAt = e.now + 0.05;
+    bool changed = v.stickOn != e.prof->stickOn;
+    v.stickOn = e.prof->stickOn;
+    for (int h = 0; h < 2; h++) {
+        const HandRaw& r = e.fr.h[h];
+        LiveHand now;
+        now.kind = r.kind;
+        for (int c = 0; c < C_COUNT; c++) {
+            now.press[c] = e.cur[h][c][F_PRESS];
+            now.touch[c] = e.cur[h][c][F_TOUCH];
+        }
+        now.trigger = r.trig;
+        now.grip = r.grip;
+        now.stickX = r.sx;
+        now.stickY = r.sy;
+        now.shape = e.prof->sticks[h];
+        if (!(now == v.live[h])) {
+            v.live[h] = now;
+            changed = true;
+        }
+    }
+    if (changed) v.version++;
+}
+
 void InGameMenu::SaveWhenDue() {
     if (run_.saveAt > 0 && e.now >= run_.saveAt) {
         run_.saveAt = -1;
@@ -309,6 +342,7 @@ void InGameMenu::Update() {
         return;
     }
     float dt = (float)std::clamp(e.now - e.lastNow, 0.0, 0.1);
+    UpdateLive();
     UpdateInputCapture();
     UpdatePointing();
     UpdateStick(dt);

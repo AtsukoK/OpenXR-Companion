@@ -221,6 +221,7 @@ struct SessionState {
     XrSpace gripSpace[2]{}, aimSpace[2]{};
     XrTime predictedTime = 0;                  // the last xrWaitFrame's display time
     bool touchController[2]{};                 // Meta Touch controllers (aim ray needs correcting)
+    ControllerKind controllerKind[2]{};        // which controller each hand holds (the in-game menu draws it)
     std::string profileName[2] = { "?", "?" }; // the interaction profile the runtime uses for each hand
     double lastProfileCheck = -10;             // when the interaction profiles were last asked
 };
@@ -369,6 +370,7 @@ static void CheckInteractionProfiles(double now) {
                 touch ? " (Touch: aim correction available)" : "");
         gSession.profileName[h] = p;
         gSession.touchController[h] = touch;
+        gSession.controllerKind[h] = ControllerKindOf(p);
     }
 }
 
@@ -443,6 +445,7 @@ static void ReadHand(int h, HandRaw& r) {
     r.gripValid = Locate(gSession.gripSpace[h], gSession.local, r.gripPose);
     r.aimValid = Locate(gSession.aimSpace[h], gSession.local, r.aimPose);
     r.touchCtl = gSession.touchController[h];
+    r.kind = gSession.controllerKind[h];
     bool anythingPressed = r.b1 || r.b2 || r.trig > 0.5f || r.grip > 0.5f || r.sc || r.rest || r.menu;
     gInputLog.Frame(h, r.gripValid, r.aimValid, isTriggerActive, anythingPressed);
 }

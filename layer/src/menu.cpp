@@ -69,6 +69,33 @@ MenuRow MenuRow::Choice(std::string label, std::string detail, std::vector<std::
     return r;
 }
 
+MenuRow MenuRow::Live(LiveKind what, int hand, int span) {
+    MenuRow r;
+    r.kind = MenuRowKind::Live;
+    r.live = what;
+    r.liveHand = hand;
+    r.span = span;
+    return r;
+}
+
+bool LiveHand::operator==(const LiveHand& o) const {
+    auto isClose = [](float a, float b) { return std::fabs(a - b) < 0.01f; }; // tiny tremble doesn't redraw
+    for (int c = 0; c < C_COUNT; c++)
+        if (press[c] != o.press[c] || touch[c] != o.touch[c]) return false;
+    return kind == o.kind && isClose(trigger, o.trigger) && isClose(grip, o.grip) && isClose(stickX, o.stickX) && isClose(stickY, o.stickY) &&
+           shape.innerDeadzone == o.shape.innerDeadzone && shape.outerDeadzone == o.shape.outerDeadzone &&
+           shape.directionAngleDeg == o.shape.directionAngleDeg;
+}
+
+int MenuMaxFirst(const MenuView& view) {
+    int slots = 0, first = (int)view.rows.size();
+    while (first > 0 && slots + view.rows[first - 1].span <= MenuView::kVisibleRows) {
+        first--;
+        slots += view.rows[first].span;
+    }
+    return first;
+}
+
 std::string MenuRow::ValueText() const {
     switch (kind) {
     case MenuRowKind::Toggle:
@@ -100,10 +127,12 @@ void MenuLayout(const MenuView& view, std::vector<MenuBox>& out) {
     // rows
     const float rowsTop = headerH, rowsH = 1 - headerH - footerH;
     const float rowH = rowsH / MenuView::kVisibleRows;
-    int last = std::min((int)view.rows.size(), view.first + MenuView::kVisibleRows);
-    for (int i = view.first; i < last; i++) {
+    int slot = 0;
+    for (int i = view.first; i < (int)view.rows.size(); i++) {
         const MenuViewRow& r = view.rows[i];
-        float y = rowsTop + (i - view.first) * rowH, h = rowH;
+        if (slot + r.span > MenuView::kVisibleRows) break;
+        float y = rowsTop + slot * rowH, h = rowH * r.span;
+        slot += r.span;
         switch (r.kind) {
         case MenuRowKind::Number:
         case MenuRowKind::Choice:
@@ -113,6 +142,7 @@ void MenuLayout(const MenuView& view, std::vector<MenuBox>& out) {
             break;
         case MenuRowKind::Heading:
         case MenuRowKind::Note:
+        case MenuRowKind::Live:
             out.push_back({ 0, y, 1, h, { MenuPart::None, i } }); // drawn, not pressable
             break;
         default:
@@ -121,7 +151,7 @@ void MenuLayout(const MenuView& view, std::vector<MenuBox>& out) {
         }
     }
     // scroll arrows when there is more than fits
-    bool more = (int)view.rows.size() > MenuView::kVisibleRows;
+    bool more = MenuMaxFirst(view) > 0;
     if (more) {
         float y = 1 - footerH + pad * 0.5f, h = footerH - pad;
         out.push_back({ 1 - pad - 0.18f, y, 0.08f, h, { MenuPart::ScrollUp, -1 } });

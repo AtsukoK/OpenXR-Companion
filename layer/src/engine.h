@@ -19,6 +19,7 @@ struct HandRaw {
     bool rest = false, menu = false;
     bool gripValid = false, aimValid = false;
     bool touchCtl = false; // a Meta Touch controller (its aim ray needs correcting)
+    ControllerKind kind = ControllerKind::Unknown; // from the runtime's interaction profile (the menu's pictures)
     XrPosef gripPose{ { 0, 0, 0, 1 }, { 0, 0, 0 } }, aimPose{ { 0, 0, 0, 1 }, { 0, 0, 0 } };
 };
 struct Frame {

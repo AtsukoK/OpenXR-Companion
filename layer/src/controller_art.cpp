@@ -1,0 +1,80 @@
+// Controller drawings for the in-game menu: see controller_art.h.
+#include "controller_art.h"
+
+ControllerKind ControllerKindOf(const std::string& p) {
+    if (p.find("touch") != std::string::npos) return ControllerKind::Touch;
+    if (p.find("index") != std::string::npos) return ControllerKind::Index;
+    if (p.find("vive_controller") != std::string::npos) return ControllerKind::Vive;
+    if (p.find("hp/mixed_reality") != std::string::npos) return ControllerKind::HpReverb;
+    if (p.find("microsoft/motion") != std::string::npos) return ControllerKind::Wmr;
+    return ControllerKind::Unknown;
+}
+
+const char* ControllerKindName(ControllerKind k) {
+    switch (k) {
+    case ControllerKind::Touch:
+        return "Touch controller";
+    case ControllerKind::Index:
+        return "Index controller";
+    case ControllerKind::Vive:
+        return "Vive wand";
+    case ControllerKind::Wmr:
+        return "WMR controller";
+    case ControllerKind::HpReverb:
+        return "Reverb G2 controller";
+    default:
+        return "Controller";
+    }
+}
+
+static const ControllerArt kTouch{
+    { { ArtShape::Ellipse, 30, 40, 146, 110, -10 }, { ArtShape::RoundRect, 74, 126, 56, 128, 6 } },
+    { { C_STICK, ArtShape::Circle, 48, 66, 38, 38 },
+      { C_BTN2, ArtShape::Circle, 126, 58, 22, 22 },
+      { C_BTN1, ArtShape::Circle, 112, 88, 22, 22 },
+      { C_THUMBREST, ArtShape::Pill, 148, 84, 14, 32 },
+      { C_MENU, ArtShape::Circle, 72, 114, 14, 14, 1 },
+      { -1, ArtShape::Circle, 72, 114, 14, 14, 2 } },
+};
+static const ControllerArt kIndex{
+    { { ArtShape::RoundRect, 60, 12, 80, 156 }, { ArtShape::RoundRect, 70, 140, 60, 116, 3 } },
+    { { C_STICK, ArtShape::Circle, 80, 24, 36, 36 },
+      { C_BTN2, ArtShape::Circle, 70, 72, 17, 17 },
+      { C_BTN1, ArtShape::Circle, 76, 96, 17, 17 },
+      { -1, ArtShape::Pill, 98, 68, 28, 66 },
+      { -1, ArtShape::Circle, 93, 144, 13, 13 } },
+};
+static const ControllerArt kVive{
+    { { ArtShape::Ring, 38, 4, 124, 104, 0, 22 }, { ArtShape::RoundRect, 66, 92, 68, 164 } },
+    { { C_MENU, ArtShape::Circle, 91, 104, 18, 18 }, { C_STICK, ArtShape::Circle, 70, 128, 60, 60 }, { -1, ArtShape::Circle, 93, 200, 14, 14 } },
+};
+static const ControllerArt kWmr{
+    { { ArtShape::Ring, 12, 6, 176, 112, 0, 20 }, { ArtShape::RoundRect, 68, 96, 64, 160 } },
+    { { C_STICK, ArtShape::Circle, 70, 108, 32, 32 },
+      { -1, ArtShape::Circle, 104, 110, 28, 28 },
+      { C_MENU, ArtShape::Circle, 92, 156, 16, 16 },
+      { -1, ArtShape::Circle, 92, 184, 16, 16 } },
+};
+static const ControllerArt kReverb{
+    { { ArtShape::Ring, 16, 6, 168, 110, -8, 16 }, { ArtShape::Ellipse, 38, 82, 128, 84, -10 }, { ArtShape::RoundRect, 76, 140, 52, 114, 6 } },
+    { { C_STICK, ArtShape::Circle, 52, 98, 34, 34 },
+      { C_BTN2, ArtShape::Circle, 124, 92, 20, 20 },
+      { C_BTN1, ArtShape::Circle, 110, 118, 20, 20 },
+      { C_MENU, ArtShape::Circle, 76, 140, 13, 13 },
+      { -1, ArtShape::Circle, 96, 146, 13, 13 } },
+};
+
+const ControllerArt& ArtFor(ControllerKind k) {
+    switch (k) {
+    case ControllerKind::Index:
+        return kIndex;
+    case ControllerKind::Vive:
+        return kVive;
+    case ControllerKind::Wmr:
+        return kWmr;
+    case ControllerKind::HpReverb:
+        return kReverb;
+    default:
+        return kTouch; // the most common, and a fair stand-in for unknown ones
+    }
+}

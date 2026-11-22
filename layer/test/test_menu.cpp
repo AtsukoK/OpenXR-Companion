@@ -91,6 +91,27 @@ void TestInGameMenu() {
           "menu: home links to bindings, sticks and controller offsets");
     SaveMenuPicture(e, *p, L"menu_home.png");
 
+    // Live controllers: what is pressed now reaches the panel (a few times a second).
+    CHECK(d.PressRow("Test controllers") && e.menuView.title == "Test controllers", "menu: the controller test page");
+    f.h[1].b1 = true;  // right A pressed
+    f.h[0].b2t = true; // left Y only touched
+    f.h[0].trig = 0.6f;
+    f.h[1].sx = 0.5f;
+    f.h[1].sy = 0.8f;
+    d.Step(0.15);
+    const LiveHand &liveL = e.menuView.live[0], &liveR = e.menuView.live[1];
+    CHECK(liveR.press[C_BTN1] && liveL.touch[C_BTN2] && !liveL.press[C_BTN2] && std::fabs(liveL.trigger - 0.6f) < 0.01f &&
+              std::fabs(liveR.stickY - 0.8f) < 0.01f,
+          "menu: the test page shows what is pressed, touched and pushed right now");
+    SaveMenuPicture(e, *p, L"menu_test_controllers.png");
+    f.h[1].b1 = false;
+    f.h[0].b2t = false;
+    f.h[0].trig = 0.f;
+    f.h[1].sx = f.h[1].sy = 0.f;
+    d.Step(0.15);
+    CHECK(!e.menuView.live[1].press[C_BTN1], "menu: and lets go with you");
+    d.Press(MenuPart::Back);
+
     // Stick options: + five times on the inner deadzone.
     CHECK(d.PressRow("Right stick") && e.menuView.title == "Right stick", "menu: pointing at a link and pulling the trigger opens it");
     int inner = d.Row("Inner deadzone");
@@ -99,8 +120,13 @@ void TestInGameMenu() {
         d.Press(MenuPart::More, inner);
     CHECK(std::fabs(p->sticks[1].innerDeadzone - 0.05f) < 1e-4f && e.menuView.rows[inner].value == "5 %",
           "menu: + raises the right stick's inner deadzone, 1 % a press, shown in %");
+    f.h[1].sx = 0.3f; // the stick a little forward right, for the picture
+    f.h[1].sy = 0.6f;
+    d.Step(0.15);
     CHECK(!e.menuSaveRequested, "menu: not saved on every press");
     SaveMenuPicture(e, *p, L"menu_stick.png");
+    f.h[1].sx = f.h[1].sy = 0.f;
+    d.Step(0.1);
     d.Step(1.2);
     CHECK(e.menuSaveRequested, "menu: saved a moment after the last change");
     e.menuSaveRequested = false;

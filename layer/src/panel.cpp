@@ -666,6 +666,165 @@ constexpr uint32_t Text = 0xFFEDEFF2, SubText = 0xFF9BA3AD, Heading = 0xFF7D8590
 constexpr uint32_t Track = 0xFF3A414B, Knob = 0xFFFFFFFF, IconButton = 0xFF2A3038;
 } // namespace MenuColors
 
+// A path for one shape of a controller drawing, placed in `box` (design units -> pixels), mirrored for the left hand.
+static void ArtPath(GraphicsPath& p, ArtShape shape, float x, float y, float w, float h, float turnDeg, float ringWidth, int hand,
+                    const RectF& box) {
+    float s = std::min(box.Width / kArtWidth, box.Height / kArtHeight);
+    float ox = box.X + (box.Width - kArtWidth * s) / 2, oy = box.Y + (box.Height - kArtHeight * s) / 2;
+    if (hand == 0) { // mirrored
+        x = kArtWidth - x - w;
+        turnDeg = -turnDeg;
+    }
+    RectF r(ox + x * s, oy + y * s, w * s, h * s);
+    auto rounded = [&](float radius) {
+        float d = std::min(radius * 2, std::min(r.Width, r.Height));
+        p.AddArc(r.X, r.Y, d, d, 180, 90);
+        p.AddArc(r.X + r.Width - d, r.Y, d, d, 270, 90);
+        p.AddArc(r.X + r.Width - d, r.Y + r.Height - d, d, d, 0, 90);
+        p.AddArc(r.X, r.Y + r.Height - d, d, d, 90, 90);
+        p.CloseFigure();
+    };
+    switch (shape) {
+    case ArtShape::Ellipse:
+    case ArtShape::Circle:
+        p.AddEllipse(r);
+        break;
+    case ArtShape::RoundRect:
+        rounded(std::min(r.Width, r.Height) / 2.2f);
+        break;
+    case ArtShape::Pill:
+        rounded(std::min(r.Width, r.Height) / 2);
+        break;
+    case ArtShape::Ring: {
+        p.AddEllipse(r);
+        float rw = ringWidth * s;
+        p.AddEllipse(RectF(r.X + rw, r.Y + rw, r.Width - 2 * rw, r.Height - 2 * rw)); // alternate fill: the hole
+        break;
+    }
+    }
+    if (turnDeg != 0) {
+        Matrix m;
+        m.RotateAt(turnDeg, PointF(r.X + r.Width / 2, r.Y + r.Height / 2));
+        p.Transform(&m);
+    }
+}
+
+// A horizontal bar with its label, filled to `value` (0..1).
+static void LiveBar(Graphics& g, Font* font, const wchar_t* label, float value, float x, float y, float w, float h) {
+    using namespace MenuColors;
+    SolidBrush text{ Color(SubText) }, track{ Color(Track) }, fill{ Color(Accent) };
+    StringFormat left;
+    left.SetLineAlignment(StringAlignmentCenter);
+    g.DrawString(label, -1, font, RectF(x, y, w, h * 0.55f), &left, &text);
+    float by = y + h * 0.6f, bh = std::max(4.f, h * 0.16f);
+    g.FillRectangle(&track, x, by, w, bh);
+    g.FillRectangle(&fill, x, by, w * std::clamp(value, 0.f, 1.f), bh);
+}
+
+// One controller from above, what is pressed now lit, and its trigger / grip bars beside it.
+static void DrawLiveController(Graphics& g, const RectF& box, int hand, const LiveHand& live, Font* font) {
+    using namespace MenuColors;
+    const ControllerArt& art = ArtFor(live.kind);
+    RectF pic(box.X, box.Y, box.Width * 0.46f, box.Height);
+    SolidBrush body{ Color(0xFF3A414B) }, part{ Color(0xFF1C2027) }, lit{ Color(Accent) }, touched{ Color(0x661A9FFF) };
+    SolidBrush plain{ Color(0xFF2E343C) }, white{ Color(0xFFFFFFFF) };
+    Pen edge(Color(0xFF59616C), 1.5f), ring(Color(Accent), 3.f);
+    for (const ArtPiece& b : art.body) {
+        GraphicsPath p(FillModeAlternate);
+        ArtPath(p, b.shape, b.x, b.y, b.w, b.h, b.turnDeg, b.ringWidth, hand, pic);
+        g.FillPath(&body, &p);
+        g.DrawPath(&edge, &p);
+    }
+    for (const ArtPart& a : art.parts) {
+        if (!(a.hands & (hand == 0 ? 1 : 2))) continue;
+        GraphicsPath p;
+        ArtPath(p, a.shape, a.x, a.y, a.w, a.h, 0, 0, hand, pic);
+        bool readable = a.comp >= 0;
+        bool pressed = readable && live.press[a.comp], touchedOnly = readable && !pressed && live.touch[a.comp];
+        g.FillPath(!readable ? &plain : pressed ? &lit : touchedOnly ? &touched : &part, &p);
+        g.DrawPath(touchedOnly ? &ring : &edge, &p);
+        if (a.comp == C_STICK) { // where the stick is pushed
+            RectF b;
+            p.GetBounds(&b);
+            float cx = b.X + b.Width / 2 + live.stickX * b.Width * 0.32f, cy = b.Y + b.Height / 2 - live.stickY * b.Height * 0.32f;
+            float d = b.Width * 0.3f;
+            g.FillEllipse(&white, cx - d / 2, cy - d / 2, d, d);
+        }
+    }
+    // the analog parts as bars, and its name
+    float bx = box.X + box.Width * 0.52f, bw = box.Width * 0.44f, rowH = box.Height / 4;
+    SolidBrush name{ Color(Text) };
+    StringFormat left;
+    left.SetLineAlignment(StringAlignmentCenter);
+    std::wstring title = std::wstring(hand == 0 ? L"Left " : L"Right ") + Utf8ToW(ControllerKindName(live.kind));
+    g.DrawString(title.c_str(), -1, font, RectF(bx, box.Y + rowH * 0.1f, bw, rowH * 0.7f), &left, &name);
+    LiveBar(g, font, L"Trigger", live.trigger, bx, box.Y + rowH * 1.0f, bw, rowH * 0.9f);
+    LiveBar(g, font, L"Grip", live.grip, bx, box.Y + rowH * 2.0f, bw, rowH * 0.9f);
+    wchar_t stick[64];
+    swprintf(stick, 64, L"Stick  %+.2f, %+.2f", live.stickX, live.stickY);
+    SolidBrush sub{ Color(SubText) };
+    g.DrawString(stick, -1, font, RectF(bx, box.Y + rowH * 3.0f, bw, rowH * 0.8f), &left, &sub);
+}
+
+// One stick to scale: the direction zones, the deadzones, where the stick is (white) and what the game sees (blue).
+static void DrawLiveStick(Graphics& g, const RectF& box, int hand, const LiveHand& live, float stickOn, Font* font) {
+    using namespace MenuColors;
+    float d = std::min(box.Height * 0.94f, box.Width * 0.46f), r = d / 2;
+    PointF c(box.X + box.Width * 0.05f + r, box.Y + box.Height / 2);
+    RectF circle(c.X - r, c.Y - r, d, d);
+    SolidBrush base{ Color(0xFF2A3038) }, zone{ Color(0x551A9FFF) }, dead{ Color(0xFF59616C) }, full{ Color(0x88F08C1E) };
+    g.FillEllipse(&base, circle);
+    const StickShape& s = live.shape;
+    float half = s.directionAngleDeg > 0 ? s.directionAngleDeg : 45.f, from = r * stickOn;
+    for (float axis : { -90.f, 0.f, 90.f, 180.f }) { // where up / right / down / left count for bindings
+        GraphicsPath wedge;
+        wedge.AddArc(circle, axis - half, 2 * half);
+        wedge.AddArc(RectF(c.X - from, c.Y - from, 2 * from, 2 * from), axis + half, -2 * half);
+        wedge.CloseFigure();
+        g.FillPath(&zone, &wedge);
+    }
+    if (s.outerDeadzone > 0) {
+        GraphicsPath band(FillModeAlternate);
+        band.AddEllipse(circle);
+        float ir = r * (1 - s.outerDeadzone);
+        band.AddEllipse(RectF(c.X - ir, c.Y - ir, 2 * ir, 2 * ir));
+        g.FillPath(&full, &band);
+    }
+    if (s.innerDeadzone > 0) {
+        float ir = r * s.innerDeadzone;
+        g.FillEllipse(&dead, c.X - ir, c.Y - ir, 2 * ir, 2 * ir);
+    }
+    Pen edge(Color(0xFF59616C), 2.f);
+    g.DrawEllipse(&edge, circle);
+    float gx = live.stickX, gy = live.stickY;
+    ShapeStick(s, gx, gy);
+    SolidBrush white{ Color(0xFFFFFFFF) }, game{ Color(Accent) };
+    float dot = std::max(8.f, d * 0.07f);
+    g.FillEllipse(&white, c.X + live.stickX * r - dot / 2, c.Y - live.stickY * r - dot / 2, dot, dot);
+    if (s.ChangesGame()) {
+        Pen gameRing(Color(Accent), 3.f);
+        g.DrawEllipse(&gameRing, c.X + gx * r - dot * 0.8f, c.Y - gy * r - dot * 0.8f, dot * 1.6f, dot * 1.6f);
+    }
+    // the numbers, and which direction counts right now
+    const char* dirs[4] = { "Up", "Right", "Down", "Left" };
+    const float axes[4][2] = { { 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 } };
+    std::string counting = "none";
+    for (int i = 0; i < 4; i++)
+        if (live.stickX * axes[i][0] + live.stickY * axes[i][1] > stickOn && InDirectionZone(s, live.stickX, live.stickY, axes[i][0], axes[i][1]))
+            counting = dirs[i];
+    wchar_t lines[3][80];
+    swprintf(lines[0], 80, L"Stick:  %+.2f, %+.2f", live.stickX, live.stickY);
+    swprintf(lines[1], 80, L"Game sees:  %+.2f, %+.2f", gx, gy);
+    swprintf(lines[2], 80, L"Direction:  %hs", counting.c_str());
+    SolidBrush text{ Color(Text) }, sub{ Color(SubText) };
+    StringFormat left;
+    left.SetLineAlignment(StringAlignmentCenter);
+    float tx = box.X + box.Width * 0.56f, lineH = box.Height / 4;
+    for (int i = 0; i < 3; i++)
+        g.DrawString(lines[i], -1, font, RectF(tx, box.Y + lineH * (i + 0.4f), box.Width * 0.44f, lineH), &left, i == 0 ? &text : &sub);
+    (void)hand;
+}
+
 void DrawMenu(std::vector<uint32_t>& out, int W, int H, const MenuView& v, const Style& st) {
     using namespace MenuColors;
     EnsureGdi();
@@ -759,7 +918,7 @@ void DrawMenu(std::vector<uint32_t>& out, int W, int H, const MenuView& v, const
             iconButton(b, L"\x25B4", v.first > 0);
             continue;
         case MenuPart::ScrollDown:
-            iconButton(b, L"\x25BE", v.first + MenuView::kVisibleRows < (int)v.rows.size());
+            iconButton(b, L"\x25BE", v.first < MenuMaxFirst(v));
             continue;
         case MenuPart::Less:
             iconButton(b, v.rows[b.hit.row].kind == MenuRowKind::Choice ? L"\x2039" : L"\x2212", v.rows[b.hit.row].canLess);
@@ -773,6 +932,19 @@ void DrawMenu(std::vector<uint32_t>& out, int W, int H, const MenuView& v, const
         const MenuViewRow& r = v.rows[b.hit.row];
         float x = b.x * W, y = b.y * H, w = b.w * W, h = b.h * H;
         const float inset = W * 0.04f;
+        if (r.kind == MenuRowKind::Live) { // a live picture across the row
+            RectF area(inset, y + h * 0.04f, W - 2 * inset, h * 0.9f);
+            if (r.live == LiveKind::Stick)
+                DrawLiveStick(g, area, r.liveHand, v.live[r.liveHand], v.stickOn, detailFont.get());
+            else if (r.live == LiveKind::Controller)
+                DrawLiveController(g, area, r.liveHand, v.live[r.liveHand], detailFont.get());
+            else
+                for (int hand = 0; hand < 2; hand++)
+                    DrawLiveController(g, RectF(area.X + area.Width / 2 * hand, area.Y, area.Width / 2 - 8, area.Height), hand, v.live[hand],
+                                       detailFont.get());
+            g.DrawLine(&separator, inset, y + h - 1, W - inset, y + h - 1);
+            continue;
+        }
         if (r.kind == MenuRowKind::Heading) { // small grey capitals, sitting low
             std::string caps = r.label;
             for (char& c : caps)

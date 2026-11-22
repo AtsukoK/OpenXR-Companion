@@ -15,6 +15,13 @@ A panel in front of you (like SteamVR's dashboard) to change bindings and sticks
 - While a hand points at the menu its trigger and stick work the menu (hidden from the game, its bindings skipped);
   while a button is being picked everything is hidden from the game and no binding fires.
 
+## Live pictures
+- MenuRowKind::Live (span > 1 slots; MenuLayout / MenuMaxFirst handle tall rows). LiveKind: Controller, BothControllers, Stick.
+- controller_art.cpp: top-view drawings for Touch, Index, Vive, WMR, Reverb G2 (ControllerKindOf(interaction profile);
+  HandRaw::kind set by the layer). Unknown = the Touch drawing.
+- InGameMenu::UpdateLive copies press / touch / trigger / grip / stick and the stick options into MenuView::live at
+  most every 50 ms, and only bumps the version when something changed beyond 0.01 (a GDI+ redraw per change).
+
 ## Checks
 - test_menu.cpp: TestInGameMenu (open, link, numbers, save timing, new binding by pressing a button + typing the key,
   choices, On switch, delete, close) and TestMenuSave (kept fields, delete, add, sticks). Pictures: layer/menu_*.png.

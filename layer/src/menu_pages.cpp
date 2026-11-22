@@ -89,6 +89,8 @@ MenuPage Home(Engine& e, InGameMenu& m) {
             if (b.enabled && b.chord.back().hand == hand) n++;
         return std::to_string(n) + " on";
     };
+    p.rows.push_back(MenuRow::Link("Test controllers", "See what each button, the triggers and the sticks do right now",
+                                   [&e, &m] { m.Push([&e, &m] { return TestControllers(e, m); }); }));
     p.rows.push_back(MenuRow::Heading("Controller buttons"));
     for (int hand : { 1, 0 })
         p.rows.push_back(MenuRow::Link(hand ? "Right controller bindings" : "Left controller bindings", countOn(hand),
@@ -114,6 +116,7 @@ MenuPage Home(Engine& e, InGameMenu& m) {
 MenuPage ControllerBindings(Engine& e, InGameMenu& m, int hand) {
     MenuPage p;
     p.title = hand ? "Right bindings" : "Left bindings";
+    p.rows.push_back(MenuRow::Live(LiveKind::Controller, hand, 3));
     p.rows.push_back(MenuRow::Button("+ New binding", "Press the button you want, then a key on the VR keyboard", [&e, &m, hand] {
         m.CaptureInput([&e, &m](const InputId& id) {
             Binding b;
@@ -225,6 +228,17 @@ MenuPage BindingDetail(Engine& e, InGameMenu& m, int index) {
     return p;
 }
 
+MenuPage TestControllers(Engine& e, InGameMenu& m) {
+    MenuPage p;
+    p.title = "Test controllers";
+    p.rows.push_back(MenuRow::Live(LiveKind::BothControllers, 1, 4));
+    p.rows.push_back(MenuRow::Note("Press, touch and push things: they light up here", "A ring = touched, filled = pressed. The white dot is the stick."));
+    for (int hand : { 1, 0 })
+        p.rows.push_back(MenuRow::Link(hand ? "Right stick" : "Left stick", "Its deadzones, with the stick live",
+                                       [&e, &m, hand] { m.Push([&e, &m, hand] { return StickOptions(e, m, hand); }); }));
+    return p;
+}
+
 MenuPage StickOptions(Engine& e, InGameMenu& m, int hand) {
     MenuPage p;
     p.title = hand ? "Right stick" : "Left stick";
@@ -236,6 +250,7 @@ MenuPage StickOptions(Engine& e, InGameMenu& m, int hand) {
         r.atMin = "off";
         return r;
     };
+    p.rows.push_back(MenuRow::Live(LiveKind::Stick, hand, 3));
     p.rows.push_back(MenuRow::Heading("What the game sees"));
     p.rows.push_back(share("Inner deadzone", "Small pushes count as none (stops drift)", &s->innerDeadzone));
     p.rows.push_back(share("Outer deadzone", "Near the edge already counts as full", &s->outerDeadzone));

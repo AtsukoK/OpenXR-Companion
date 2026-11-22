@@ -94,12 +94,14 @@ A panel in front of you with pages of settings, like SteamVR's dashboard, opened
 with the `settings_menu` action (the default left wrist panel has one on its More page).
 
 - `menu.h` / `menu.cpp`: the model. A `MenuPage` is a title and `MenuRow`s: Heading, Note, Link, Button, Toggle,
-  Number, Choice. Rows carry small functions that read and change their value, so a page is built straight from
+  Number, Choice, and Live (a picture several rows tall: a controller with what is pressed now, both controllers,
+  or a stick with its zones; drawings in `controller_art.cpp`). Rows carry small functions that read and change their value, so a page is built straight from
   the profile and edits go straight back into it. Also the view the overlay draws (`MenuView`) and `MenuLayout`,
   the one place that says where each clickable part sits (used by drawing and pointing alike).
 - `in_game_menu.cpp`: `InGameMenu` runs it: the page stack (Back), pointing and the trigger, the stick (up / down
   scrolls, left / right moves the number pointed at), asking for a button (`CaptureInput`) or a key from the VR
-  keyboard (`CaptureKey`), and saving a moment after the last change (`menuSaveRequested`, then `SaveMenuEdits`).
+  keyboard (`CaptureKey`), copying the controllers' state into the view for Live rows (at most 20 times a second,
+  only when it changed, since each change redraws the panel), and saving a moment after the last change (`menuSaveRequested`, then `SaveMenuEdits`).
 - `menu_pages.cpp`: the pages. Bindings change through `Engine::EditBindings`, which ends whatever a binding is
   doing first, so nothing sticks.
 

@@ -6,6 +6,7 @@
 // page can be built straight from the profile and its edits go straight back into it. To add a part of the app to
 // the menu: write a page builder (menu_pages.cpp) and link to it from the home page.
 #include "common.h"
+#include "controller_art.h"
 #include <functional>
 #include <string>
 #include <vector>
@@ -18,6 +19,14 @@ enum class MenuRowKind {
     Toggle,  // on / off
     Number,  // a value with - and + (the stick moves it too)
     Choice,  // one of a few options, < and > step through them
+    Live,    // a live picture (a controller with what is pressed now, a stick with its zones), several rows tall
+};
+
+// What a Live row shows.
+enum class LiveKind {
+    Controller,      // one controller from above: pressed / touched parts light up, the stick dot moves, trigger and grip bars
+    BothControllers, // left and right side by side
+    Stick,           // one stick to scale: deadzones, direction zones, where the stick is and what the game sees
 };
 
 struct MenuRow {
@@ -39,6 +48,9 @@ struct MenuRow {
     std::vector<std::string> options; // Choice
     std::function<int()> chosen;      // Choice
     std::function<void(int)> choose;  // Choice
+    LiveKind live = LiveKind::Controller; // Live
+    int liveHand = 1;                     // Live: 0 left, 1 right
+    int span = 1;                         // rows of height it takes (Live rows are taller)
 
     static MenuRow Heading(std::string label);
     static MenuRow Note(std::string label, std::string detail = "");
@@ -49,6 +61,7 @@ struct MenuRow {
                           float max, float step);
     static MenuRow Choice(std::string label, std::string detail, std::vector<std::string> options, std::function<int()> chosen,
                           std::function<void(int)> choose);
+    static MenuRow Live(LiveKind what, int hand, int span);
 
     // The value as shown on the right ("12 %", "off", "Hold", "ON").
     std::string ValueText() const;
@@ -67,7 +80,9 @@ struct MenuViewRow {
     bool isOn = false;            // Toggle
     bool canLess = false, canMore = false; // Number / Choice: - and + can still change it
     bool isDanger = false;
-    float fraction = -1;                   // Number: where the value sits between its min and max (0..1), for the slider
+    float fraction = -1;
+    LiveKind live = LiveKind::Controller;
+    int liveHand = 1, span = 1;                   // Number: where the value sits between its min and max (0..1), for the slider
 };
 
 // The parts of the panel that can be pointed at.
@@ -78,6 +93,15 @@ struct MenuHit {
     int row = -1; // index into MenuView::rows (Row / Less / More)
     bool operator==(const MenuHit& o) const { return part == o.part && row == o.row; }
     bool operator!=(const MenuHit& o) const { return !(*this == o); }
+};
+
+// One hand's controller right now, for Live rows (copied from the engine a few times a second while shown).
+struct LiveHand {
+    ControllerKind kind = ControllerKind::Unknown;
+    bool press[C_COUNT]{}, touch[C_COUNT]{};
+    float trigger = 0, grip = 0, stickX = 0, stickY = 0;
+    StickShape shape; // this hand's stick options
+    bool operator==(const LiveHand& o) const;
 };
 
 struct MenuView {
@@ -91,8 +115,13 @@ struct MenuView {
     int first = 0;             // the first row shown (scrolled)
     static constexpr int kVisibleRows = 8;
     MenuHit hover, pressed;
+    LiveHand live[2];
+    float stickOn = 0.7f; // where a stick direction counts as pushed
     uint64_t version = 0;
 };
+
+// The largest `first` that still fills the panel (rows can be taller than one slot).
+int MenuMaxFirst(const MenuView& view);
 
 // One clickable box, in panel coordinates (u right, v down, both 0..1).
 struct MenuBox {

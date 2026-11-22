@@ -13,7 +13,8 @@ namespace MenuPages {
 MenuPage Home(Engine& e, InGameMenu& m);
 MenuPage ControllerBindings(Engine& e, InGameMenu& m, int hand); // one controller's bindings, and "new binding"
 MenuPage BindingDetail(Engine& e, InGameMenu& m, int index); // one binding: on, button, how, key, hide from game
-MenuPage StickOptions(Engine& e, InGameMenu& m, int hand);    // one stick's deadzones and direction zone
+MenuPage StickOptions(Engine& e, InGameMenu& m, int hand);
+MenuPage TestControllers(Engine& e, InGameMenu& m); // both controllers live    // one stick's deadzones and direction zone
 
 // "Right A", "Left thumbstick: up", "Right trigger (touch)": an input in words.
 std::string InputWords(const InputId& id);
