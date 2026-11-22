@@ -66,11 +66,14 @@ static class Program
                 Console.WriteLine($"{id}/{hand}: {tris.Count} triangles, parts {string.Join(", ", traced.Parts.Select(p => p.Comp + (p.Estimated ? "*" : "")))}");
             }
         // The Vive wands have no model: outlined from a photo (the wand in the photo's right half, seen from the front).
-        string photo = Path.Combine(models, "photos", "vive_wands.png");
+        string photo = Path.Combine(models, "photos", "vive_back.png"); // the back shows the crown's ring best
+        bool fromBack = File.Exists(photo);
+        if (!fromBack)
+            photo = Path.Combine(models, "photos", "vive_wands.png");
         if (File.Exists(photo))
             foreach (string hand in new[] { "left", "right" })
             {
-                var traced = PhotoTracer.Trace("vive", hand, photo);
+                var traced = PhotoTracer.Trace("vive", hand, photo, fromBack);
                 results.Add(traced);
                 Preview.Save(traced, Path.Combine(preview, $"vive_{hand}.png"));
                 Console.WriteLine($"vive/{hand}: from the photo, parts {string.Join(", ", traced.Parts.Select(p => p.Comp))}");
@@ -479,6 +482,12 @@ static class PhotoTracer
     {
         ("menu", 0.5f, 0.2f, 0.05f), ("thumbstick", 0.5f, 0.36f, 0.22f), ("system", 0.5f, 0.55f, 0.045f),
     };
+    // The same parts on the outline from the back photo (its crown is taller): carried over from the front photo
+    // along the handle (just under the crown, then down it).
+    static readonly (string comp, float cx, float cy, float r)[] ViveFromBack =
+    {
+        ("menu", 0.5f, 0.37f, 0.045f), ("thumbstick", 0.5f, 0.53f, 0.18f), ("system", 0.5f, 0.72f, 0.04f),
+    };
 
     // Each point moved to the average of its neighbours (a closed loop), then thinned again.
     static List<PointF> Smooth(List<PointF> loop, int k)
@@ -524,37 +533,43 @@ static class PhotoTracer
         return o;
     }
 
-    public static Traced Trace(string id, string hand, string file)
+    // The photo's dark shapes in its right half (the right-hand wand), smoothed and made symmetric, as loops.
+    static List<List<PointF>> TraceAt(Bitmap bmp, float threshold)
     {
-        using var bmp = new Bitmap(file);
-        int w = bmp.Width, h = bmp.Height, x0 = w / 2; // the wand on the right
+        int w = bmp.Width, h = bmp.Height, x0 = w / 2;
         var mask = new bool[w - x0, h];
         for (int y = 0; y < h; y++)
             for (int x = x0; x < w; x++)
             {
                 var c = bmp.GetPixel(x, y);
-                mask[x - x0, y] = c.R * 0.3f + c.G * 0.59f + c.B * 0.11f < 90;
+                mask[x - x0, y] = c.R * 0.3f + c.G * 0.59f + c.B * 0.11f < threshold;
             }
-        // smooth the carpet's speckle off the edge, and close the wand's lighter reflections
+        // smooth the floor's speckle off the edge, and close the wand's lighter reflections
         mask = Erode(Dilate(mask, 3), 3);
         mask = Dilate(Erode(mask, 2), 2);
-        // the wand is symmetric: keep only what is dark on both sides of its middle (drops carpet stuck to one side)
-        {
-            var first = Contours.Trace(mask);
-            var big = first.OrderByDescending(l => l.Count).First();
-            float cx = (big.Min(p => p.X) + big.Max(p => p.X)) / 2;
-            int mw = mask.GetLength(0);
-            var sym = new bool[mw, h];
-            for (int y = 0; y < h; y++)
-                for (int x = 0; x < mw; x++)
-                {
-                    int mx = (int)Math.Round(2 * cx - x - 1);
-                    sym[x, y] = mask[x, y] && mx >= 0 && mx < mw && mask[mx, y];
-                }
-            mask = sym;
-        }
-        // keep the biggest loop (the wand) and the crown's opening; specks are dropped; pixel steps smoothed
-        var loops = Contours.Trace(mask).Select(l => Smooth(l, 3)).ToList();
+        // the wand is symmetric: keep only what is dark on both sides of its middle (drops floor stuck to one side)
+        var first = Contours.Trace(mask);
+        var big = first.OrderByDescending(l => l.Count).First();
+        float cx = (big.Min(p => p.X) + big.Max(p => p.X)) / 2;
+        int mw = mask.GetLength(0);
+        var sym = new bool[mw, h];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < mw; x++)
+            {
+                int mx = (int)Math.Round(2 * cx - x - 1);
+                sym[x, y] = mask[x, y] && mx >= 0 && mx < mw && mask[mx, y];
+            }
+        return Contours.Trace(sym).Select(l => Smooth(l, 3)).ToList(); // pixel steps smoothed
+    }
+
+    // fromBack: the photo shows the back: the outline is mirrored to be the front.
+    public static Traced Trace(string id, string hand, string file, bool fromBack)
+    {
+        using var bmp = new Bitmap(file);
+        // Darker than this counts as the wand. On the back photo the grey handle is lighter than the crown (the outline
+        // needs a lighter limit), while the shadow inside the crown's ring needs a darker one to stay an opening.
+        var loops = TraceAt(bmp, fromBack ? 118 : 90);
+        var holeLoops = fromBack ? TraceAt(bmp, 90) : loops;
         float Area(List<PointF> l)
         {
             float a = 0;
@@ -565,13 +580,20 @@ static class PhotoTracer
         var outer = loops.OrderByDescending(Area).First();
         var ob = RectangleF.FromLTRB(outer.Min(p => p.X), outer.Min(p => p.Y), outer.Max(p => p.X), outer.Max(p => p.Y));
         var body = new List<List<PointF>> { outer };
-        body.AddRange(loops.Where(l => l != outer && Area(l) > Area(outer) * 0.005f && l.All(p => ob.Contains(p)) &&
-                                       l.Average(p => p.Y) < ob.Y + ob.Height * 0.2f)); // the opening in the tracking crown
+        var holeOuter = holeLoops.OrderByDescending(Area).First();
+        body.AddRange(holeLoops.Where(l => l != holeOuter && l != outer && Area(l) > Area(outer) * 0.005f && l.All(p => ob.Contains(p)) &&
+                                           l.Average(p => p.Y) < ob.Y + ob.Height * 0.4f)); // the opening in the tracking crown
         float s = Math.Min((200 - 12) / ob.Width, (260 - 12) / ob.Height);
         float ox = (200 - ob.Width * s) / 2 - ob.X * s, oy = (260 - ob.Height * s) / 2 - ob.Y * s;
-        PointF Fit(PointF p) => new((float)Math.Round(p.X * s + ox, 1), (float)Math.Round(p.Y * s + oy, 1));
+        PointF Fit(PointF p)
+        {
+            float x = p.X * s + ox;
+            if (fromBack)
+                x = 200 - x;
+            return new((float)Math.Round(x, 1), (float)Math.Round(p.Y * s + oy, 1));
+        }
         var traced = new Traced(id, hand, body.Select(l => l.Select(Fit).ToList()).ToList(), new List<List<PointF>>(), new List<TracedPart>());
-        foreach (var (comp, cx, cy, r) in ViveParts)
+        foreach (var (comp, cx, cy, r) in fromBack ? ViveFromBack : ViveParts)
         {
             var c = Fit(new PointF(ob.X + ob.Width * cx, ob.Y + ob.Height * cy));
             float rad = ob.Width * r * s;
