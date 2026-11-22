@@ -431,6 +431,8 @@ static void ParseBindings(const json& list, std::vector<Binding>& out) {
         if (!gesture.empty() && !ParseEnum(kGestureNames, Lower(gesture), B.gesture))
             throw std::runtime_error(ctx + ": unknown gesture '" + gesture + "'");
         Get(b, "hold_ms", B.holdMs);
+        Get(b, "press_at", B.pressAt);
+        B.pressAt = B.pressAt <= 0 ? 0.f : std::clamp(B.pressAt, 0.02f, 0.98f);
         Get(b, "tap_ms", B.tapMs);
         Get(b, "double_tap_ms", B.doubleTapMs);
         B.layers = StrList(b, "layers");
@@ -914,6 +916,8 @@ static json MenuBindingJson(const Binding& b, const json& original) {
     o["input"] = b.chordText;
     o["gesture"] = EnumKey(kGestureNames, b.gesture);
     if (b.gesture == Gesture::Hold) o["hold_ms"] = b.holdMs;
+    if (b.pressAt > 0) o["press_at"] = std::round(b.pressAt * 100) / 100;
+    else o.erase("press_at");
     o["block"] = EnumKey(kBindingBlockNames, b.block);
     // A key or a controller button (the two the menu can set): the original action is kept when it was already that
     // kind (its other fields stay), else it is replaced.

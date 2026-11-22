@@ -92,6 +92,7 @@ enum OA {
     A_TRIGC,  // dual-stage clicks
     A_GRIPC,
     A_GRIPT,  // grip touch (Steam Frame)
+    A_GRIPF,  // grip force (Index): squeezing harder once the grip is closed
     A_COUNT
 };
 static_assert(A_DPAD_RIGHTT - A_BTN3T == C_FRAME_LAST - C_FRAME_FIRST, "the Frame's touches follow the Comp order");
@@ -119,7 +120,7 @@ static const struct {
     { "vro_pad", XR_ACTION_TYPE_VECTOR2F_INPUT },        { "vro_pad_press", XR_ACTION_TYPE_FLOAT_INPUT },
     { "vro_pad_touch", XR_ACTION_TYPE_BOOLEAN_INPUT },
     { "vro_trigger_click", XR_ACTION_TYPE_BOOLEAN_INPUT }, { "vro_grip_click", XR_ACTION_TYPE_BOOLEAN_INPUT },
-    { "vro_grip_touch", XR_ACTION_TYPE_BOOLEAN_INPUT },
+    { "vro_grip_touch", XR_ACTION_TYPE_BOOLEAN_INPUT }, { "vro_grip_force", XR_ACTION_TYPE_FLOAT_INPUT },
 };
 struct PB {
     int act;
@@ -162,6 +163,7 @@ static const PB kIndex[] = {
     { A_PADPRESS, "input/trackpad/force", 3 },
     { A_PADT, "input/trackpad/touch", 3 },
     { A_TRIGC, "input/trigger/click", 3 },
+    { A_GRIPF, "input/squeeze/force", 3 },
 };
 static const PB kWmr[] = {
     { A_MENU, "input/menu/click", 3 },  { A_GRIP, "input/squeeze/click", 3 },      { A_TRIG, "input/trigger/value", 3 },
@@ -514,6 +516,7 @@ static void ReadHand(int h, HandRaw& r) {
     r.trigClick = in.Bool(A_TRIGC);
     r.gripClick = in.Bool(A_GRIPC);
     r.gripTouch = in.Bool(A_GRIPT);
+    r.gripForce = in.Float(A_GRIPF);
     r.gripValid = Locate(gSession.gripSpace[h], gSession.local, r.gripPose);
     r.aimValid = Locate(gSession.aimSpace[h], gSession.local, r.aimPose);
     r.touchCtl = gSession.touchController[h];

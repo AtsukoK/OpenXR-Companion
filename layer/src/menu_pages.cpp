@@ -227,8 +227,10 @@ static std::vector<PartWay> WaysOf(int comp, ControllerKind kind) {
     if (comp == C_BTN1 || comp == C_BTN2 || comp == C_TRIGGER || (comp >= C_FRAME_FIRST && comp <= C_FRAME_LAST))
         w.push_back({ F_TOUCH, Gesture::Press, "Touch" }); // the Steam Frame senses touch on all its buttons
     if (comp == C_GRIP && frame) w.push_back({ F_TOUCH, Gesture::Press, "Touch" });
-    // the click at the end of a dual-stage pull: the Frame's grips and triggers, the Index trigger
-    if ((comp == C_GRIP && frame) || (comp == C_TRIGGER && (frame || kind == ControllerKind::Index)))
+    // the click at the end of a dual-stage pull: the Frame's grips and triggers, the Index trigger; the Index grip's
+    // firm squeeze (force) stands in for a click
+    bool index = kind == ControllerKind::Index;
+    if ((comp == C_GRIP && (frame || index)) || (comp == C_TRIGGER && (frame || index)))
         w.push_back({ F_FULL, Gesture::Press, comp == C_GRIP ? "Full squeeze" : "Full pull" });
     return w;
 }
@@ -416,6 +418,18 @@ MenuPage BindingDetail(Engine& e, InGameMenu& m, int index) {
                                                  if (i == 1) x.block = BindingBlock::None; // hiding a touch would hide its presses
                                              });
                                          }));
+    if (e.AnalogOf(firing) >= 0) {
+        // Hair trigger (low) or a long pull (high); the profile's usual point when at the minimum.
+        bool force = firing.feat == F_FULL;
+        MenuRow at = MenuRow::Number(force ? "Squeeze strength" : "Press point",
+                                     force ? "How hard to squeeze past a closed grip" : "Low = hair trigger, high = a long pull",
+                                     [get] { return get().pressAt; },
+                                     [edit](float v) { edit([v](Binding& x) { x.pressAt = v < 0.025f ? 0.f : v; }); }, 0, 0.95f, 0.05f);
+        at.scale = 100;
+        at.unit = "%";
+        at.atMin = "Default";
+        p.rows.push_back(at);
+    }
     p.rows.push_back(MenuRow::Choice("Gesture", "", kGestureWords, [get] { return GestureIndex(get().gesture); },
                                      [edit](int i) { edit([i](Binding& x) { x.gesture = kGestures[i]; }); }));
     if (b.gesture == Gesture::Hold) {

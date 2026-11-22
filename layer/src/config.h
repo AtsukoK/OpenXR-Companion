@@ -195,6 +195,9 @@ struct Binding {
     std::string chordText;
     Gesture gesture = Gesture::Press;
     int holdMs = 400, tapMs = 300, doubleTapMs = 350;
+    // How far an analog input (trigger, grip, trackpad force; the Index grip's full squeeze) must go to count, 0..1.
+    // 0 = the profile's usual threshold. Low = hair trigger, high = a long pull. Released a little below it.
+    float pressAt = 0;
     std::vector<std::string> layers, notLayers;
     BindingBlock block = BindingBlock::Trigger;
     bool tapPassthrough = false;

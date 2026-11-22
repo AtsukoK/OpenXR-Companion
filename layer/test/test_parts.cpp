@@ -501,3 +501,47 @@ void TestSteamFrame() {
           "frame: the grip's click at the end (full squeeze)");
     CHECK(!ParseInput("left.a.full", id), "frame: only triggers and grips have a full pull");
 }
+
+void TestPressPoints() { // a binding's own press point (hair trigger, long pull) and the Index grip's full squeeze (force)
+    std::string err;
+    auto p = ParseProfileText(R"({ "bindings": [
+      { "name": "hair", "input": "right.trigger", "gesture": "while_held", "press_at": 0.1,
+        "action": { "type": "layer", "layer": "hair", "mode": "hold" } },
+      { "name": "long", "input": "left.trigger", "gesture": "while_held", "press_at": 0.9,
+        "action": { "type": "layer", "layer": "long", "mode": "hold" } },
+      { "name": "full", "input": "left.grip.full", "gesture": "while_held",
+        "action": { "type": "layer", "layer": "full", "mode": "hold" } } ] })", err);
+    CHECK(p && err.empty(), ("press points: profile parses: " + err).c_str());
+    if (!p) return;
+    CHECK(std::fabs(p->bindings[0].pressAt - 0.1f) < 1e-4f, "press points: press_at is read");
+    Engine e;
+    e.SetProfile(p);
+    Frame f;
+    f.headValid = true;
+    for (auto& h : f.h) {
+        h.kind = ControllerKind::Index;
+        h.gripValid = h.aimValid = true;
+        h.aimPose = h.gripPose = { { 0, 0, 0, 1 }, { 0, 1.f, -0.3f } };
+    }
+    double t = 1.0;
+    auto step = [&] { t += 0.011; f.t = t; e.Update(f); };
+    auto on = [&](int i) { return e.IsOn(p->bindings[i].action); };
+    step();
+    f.h[1].trig = 0.15f; step();
+    CHECK(on(0), "press points: a hair trigger fires at 15%");
+    f.h[1].trig = 0.05f; step();
+    CHECK(!on(0), "press points: and lets go below it");
+    f.h[0].trig = 0.8f; step();
+    CHECK(!on(1), "press points: a long pull doesn't fire at 80%");
+    f.h[0].trig = 0.95f; step();
+    CHECK(on(1), "press points: but does at 95%");
+    f.h[0].trig = 0.85f; step();
+    CHECK(on(1), "press points: a small wobble below the point keeps it held");
+    f.h[0].trig = 0; step();
+    f.h[0].grip = 1.f; f.h[0].gripForce = 0.2f; step();
+    CHECK(!on(2), "index full squeeze: a closed grip alone isn't a full squeeze");
+    f.h[0].gripForce = 0.6f; step();
+    CHECK(on(2), "index full squeeze: a firm squeeze (force) is");
+    f.h[0].gripForce = 0.1f; step();
+    CHECK(!on(2), "index full squeeze: easing off ends it");
+}

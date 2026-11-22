@@ -28,6 +28,7 @@ struct HandRaw {
     bool more[C_COUNT]{}, moreT[C_COUNT]{}; // pressed / touched: the Steam Frame's parts C_FRAME_FIRST .. C_FRAME_LAST
     float padX = 0, padY = 0, padPress = 0; // the Index trackpad / WMR touchpad: where it is touched, how hard pressed
     bool padTouch = false;
+    float gripForce = 0; // Index: squeeze past a closed grip (its full-squeeze click)
     bool trigClick = false, gripClick = false, gripTouch = false; // dual-stage clicks (Frame, Index trigger), grip touch (Frame)
     bool gripValid = false, aimValid = false;
     bool touchCtl = false; // a Meta Touch controller (its aim ray needs correcting)
@@ -273,6 +274,7 @@ private:
         bool fired = false;
         bool needEnd = false;
         double lastTap = -1;
+        bool analogDown = false, analogPrev = false; // its own press point (Binding::pressAt)
     };
     struct Pulse {
         int hand, comp;
@@ -335,6 +337,15 @@ private:
     // ---------------- bindings, wheel, pointers (engine.cpp, wheel.cpp)
     bool Down(const InputId& i) const { return cur[i.hand][i.comp][i.feat]; }
     bool Pressed(const InputId& i) const { return cur[i.hand][i.comp][i.feat] && !prev[i.hand][i.comp][i.feat]; }
+public:
+    // The analog amount behind an input (-1: not analog), for a binding's own press point.
+    float AnalogOf(const InputId& i) const;
+
+private:
+    void UpdateBindingPressPoints();
+    // The firing input of binding i, with its own press point when it has one.
+    bool TrigDown(int i) const;
+    bool TrigPressed(int i) const;
     void ComputeDown();
     bool LayersOk(const Binding& b) const;
     void ProcessBindings();

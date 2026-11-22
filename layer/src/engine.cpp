@@ -96,6 +96,9 @@ void Engine::Toast(const std::string& s, double sec) {
     toastVersion++;
 }
 
+// The Index grip's "full squeeze": force once the grip is closed (a light squeeze is already near 1 on the value).
+static constexpr float kIndexGripFullOn = 0.5f, kIndexGripFullOff = 0.35f;
+
 void Engine::ComputeDown() {
     memcpy(prev, cur, sizeof(cur));
     memset(cur, 0, sizeof(cur));
@@ -113,7 +116,11 @@ void Engine::ComputeDown() {
         cur[h][C_TRIGGER][F_TOUCH] = r.trigT || cur[h][C_TRIGGER][F_PRESS];
         hyst(C_GRIP, F_PRESS, r.grip > p.pressOn, r.grip > p.pressOff);
         cur[h][C_GRIP][F_TOUCH] = r.gripTouch || cur[h][C_GRIP][F_PRESS];
-        cur[h][C_GRIP][F_FULL] = r.gripClick;    // the click at the end of the squeeze
+        // The click at the end of the squeeze. The Index grip has no click: a firm squeeze (force) stands in for it.
+        if (r.kind == ControllerKind::Index)
+            hyst(C_GRIP, F_FULL, r.gripForce > kIndexGripFullOn, r.gripForce > kIndexGripFullOff);
+        else
+            cur[h][C_GRIP][F_FULL] = r.gripClick;
         cur[h][C_TRIGGER][F_FULL] = r.trigClick; // and of the pull
         cur[h][C_STICK][F_PRESS] = r.sc;
         cur[h][C_STICK][F_TOUCH] = r.st || r.sc;
@@ -374,8 +381,48 @@ void Engine::EndB(int bi) {
     }
 }
 
+float Engine::AnalogOf(const InputId& i) const {
+    const HandRaw& r = fr.h[i.hand];
+    if (i.feat == F_PRESS) {
+        if (i.comp == C_TRIGGER) return r.trig;
+        if (i.comp == C_GRIP) return r.grip;
+        if (i.comp == C_TRACKPAD && r.kind == ControllerKind::Index) return r.padPress; // WMR's is a click
+    }
+    if (i.feat == F_FULL && i.comp == C_GRIP && r.kind == ControllerKind::Index) return r.gripForce;
+    return -1;
+}
+
+void Engine::UpdateBindingPressPoints() {
+    auto& B = prof->bindings;
+    for (int i = 0; i < (int)B.size() && i < (int)bs.size(); i++) {
+        BState& s = bs[i];
+        s.analogPrev = s.analogDown;
+        float at = B[i].pressAt;
+        float v = at > 0 ? AnalogOf(B[i].chord.back()) : -1;
+        if (v < 0) {
+            s.analogDown = false;
+            continue;
+        }
+        float off = std::max(at - 0.12f, at * 0.5f); // a small gap so a shaky hand near the point doesn't flicker
+        s.analogDown = s.analogDown ? v > off : v > at;
+    }
+}
+
+bool Engine::TrigDown(int i) const {
+    const Binding& b = prof->bindings[i];
+    if (b.pressAt > 0 && AnalogOf(b.chord.back()) >= 0) return bs[i].analogDown;
+    return Down(b.chord.back());
+}
+
+bool Engine::TrigPressed(int i) const {
+    const Binding& b = prof->bindings[i];
+    if (b.pressAt > 0 && AnalogOf(b.chord.back()) >= 0) return bs[i].analogDown && !bs[i].analogPrev;
+    return Pressed(b.chord.back());
+}
+
 void Engine::ProcessBindings() {
     auto& B = prof->bindings;
+    UpdateBindingPressPoints();
     // Releases and holds of armed bindings.
     for (int i = 0; i < (int)B.size(); i++) {
         BState& s = bs[i];
@@ -383,7 +430,7 @@ void Engine::ProcessBindings() {
         const Binding& b = B[i];
         const InputId& trig = b.chord.back();
         double dur = now - s.armTime;
-        if (!Down(trig)) {
+        if (!TrigDown(i)) {
             s.armed = false;
             if (b.gesture == Gesture::Tap && dur * 1000 < b.tapMs) {
                 bool otherFired = false;
@@ -413,7 +460,7 @@ void Engine::ProcessBindings() {
         const Binding& b = B[i];
         if (!b.enabled || bs[i].armed) continue;
         const InputId& trig = b.chord.back();
-        if (!Pressed(trig)) continue;
+        if (!TrigPressed(i)) continue;
         if (wr.open && b.action.type != ActType::Wheel && b.action.type != ActType::Keyboard && b.action.type != ActType::Adjust) continue;
         if (kb.visible && b.action.type != ActType::Keyboard && b.action.type != ActType::Adjust)
             continue; // adjust: place the open keyboard

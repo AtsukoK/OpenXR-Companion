@@ -45,6 +45,8 @@ public static class ControllerLayouts
     static readonly string[] PadWays = { "", "touch", "up", "down", "left", "right" };
     // Dual-stage: a click at the end of the pull / squeeze (Steam Frame grips and triggers, Index trigger).
     static readonly string[] PressTouchFull = { "", "touch", "full" };
+    // Index grip: no click, a firm squeeze (force) counts as the full squeeze.
+    static readonly string[] PressFull = { "", "full" };
 
     const string SystemButton = "This button opens the headset's own menu, so games and OpenXR Companion never see it.";
 
@@ -191,7 +193,7 @@ public static class ControllerLayouts
                 new("trackpad", "Trackpad", null, ControllerView.Top, PartShape.Pad, R(98, 68, 28, 66), PadWays),
                 new("system", "System", null, ControllerView.Top, PartShape.Button, R(93, 144, 13, 13), Press, NotUsable: SystemButton),
                 new("trigger", "Trigger", null, ControllerView.Side, PartShape.Trigger, R(8, 52, 26, 42), PressTouchFull),
-                new("grip", "Grip (squeeze)", null, ControllerView.Side, PartShape.Grip, R(26, 106, 24, 132), Press, Turn: -6),
+                new("grip", "Grip (squeeze)", null, ControllerView.Side, PartShape.Grip, R(26, 106, 24, 132), PressFull, Turn: -6),
             }),
         new("vive", "HTC Vive wands", "HTC Vive, Vive Pro (wand controllers)", "vive",
             new[]

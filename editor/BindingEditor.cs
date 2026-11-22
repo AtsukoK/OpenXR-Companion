@@ -15,7 +15,8 @@ public class BindingEditor : EditorBase
     readonly ChoiceBox block = new(Choices.Blocks, 360);
     readonly CheckBox passthrough = new() { Text = "If I let go early, the game still gets a normal tap", AutoSize = true };
     readonly ActionEditor action = new(false);
-    readonly Label lHold, lTap, lDbl, lPass;
+    readonly NumericUpDown pressAt = new() { Minimum = 0, Maximum = 95, Increment = 5, Width = 90 };
+    readonly Label lHold, lTap, lDbl, lPass, lPressAt;
 
     static NumericUpDown Ms() => new() { Minimum = 50, Maximum = 5000, Increment = 50, Width = 90 };
 
@@ -27,6 +28,7 @@ public class BindingEditor : EditorBase
         when.AddRow("", enabled);
         when.AddRow("Input", chord, "For a combo, the button that fires goes last; the others must already be held.");
         when.AddRow("Gesture", gesture);
+        lPressAt = when.AddRow("Press point (%)", pressAt, "How far the trigger or grip must go. 0 = usual, low = hair trigger, high = a long pull. For an Index full squeeze: how hard.");
         lHold = when.AddRow("Hold time (ms)", hold);
         lTap = when.AddRow("Tap shorter than (ms)", tap);
         lDbl = when.AddRow("Second tap within (ms)", dbl);
@@ -58,13 +60,15 @@ public class BindingEditor : EditorBase
         notLayers.Text = b.NotLayers ?? "";
         block.Code = b.Block;
         passthrough.Checked = b.TapPassthrough;
+        pressAt.Value = (decimal)Math.Clamp(Math.Round(b.PressAt * 100), 0, 95);
         action.Bind(b.Action ??= new ActionModel());
         loading = false;
         Sync();
 
         name.TextChanged += (s, e) => { b.Name = name.Text; Fire(); };
         enabled.CheckedChanged += (s, e) => { b.Enabled = enabled.Checked; Fire(); };
-        chord.Changed += () => { b.Input = chord.Value; Fire(); };
+        chord.Changed += () => { b.Input = chord.Value; Sync(); Fire(); };
+        pressAt.ValueChanged += (s, e) => { b.PressAt = pressAt.Value <= 1 ? 0 : (double)pressAt.Value / 100; Fire(); };
         gesture.SelectedIndexChanged += (s, e) => { b.Gesture = gesture.Code; Sync(); Fire(); };
         hold.ValueChanged += (s, e) => { b.HoldMs = (int)hold.Value; Fire(); };
         tap.ValueChanged += (s, e) => { b.TapMs = (int)tap.Value; Fire(); };
@@ -82,5 +86,16 @@ public class BindingEditor : EditorBase
         FormPanel.Show(lPass, b.Gesture == GestureKind.Hold);
         FormPanel.Show(lTap, b.Gesture == GestureKind.Tap);
         FormPanel.Show(lDbl, b.Gesture is GestureKind.DoubleTap or GestureKind.DoubleTapHold);
+        FormPanel.Show(lPressAt, IsAnalog(b.Input));
+    }
+
+    // The firing input (last of the chord) is a trigger / grip press, an Index trackpad press, or a full squeeze.
+    static bool IsAnalog(string input)
+    {
+        var last = (input ?? "").Split('+')[^1].Trim().ToLowerInvariant();
+        var parts = last.Split('.');
+        if (parts.Length < 2) return false;
+        string comp = parts[1], way = parts.Length > 2 ? parts[2] : "";
+        return (comp is "trigger" or "grip" && way is "" or "full") || (comp == "trackpad" && way == "");
     }
 }

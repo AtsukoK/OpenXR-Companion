@@ -25,6 +25,12 @@ only when the user says so.
 - Dual-stage (2026-11-22): feature F_FULL ("right.grip.full", "right.trigger.full") = the click at the end: Frame
   grips + triggers (squeeze/click, trigger/click), Index trigger (trigger/click). Frame grip touch (squeeze/touch) read too.
   Game paths squeeze/click and trigger/click still count as the grip / trigger for blocking.
+- Press points + Index grip full squeeze (2026-11-22, late): Binding::pressAt / JSON "press_at" (0 = profile default,
+  0.02..0.98; release 0.12 lower) for analog firing inputs (trigger, grip, Index trackpad force, Index grip full).
+  Engine::AnalogOf / UpdateBindingPressPoints / TrigDown / TrigPressed (per-binding latch in BState). Menu row "Press point"
+  ("Squeeze strength" for the Index full squeeze, Default at the minimum); editor "Press point (%)" shown for analog inputs.
+  Index grip: squeeze/force read (A_GRIPF); its F_FULL = force > 0.5 (off 0.35), offered in menu + editor.
+  Frame grip: user report = analog squeeze + physical click at the end (= squeeze/click, already F_FULL). Test TestPressPoints.
 - Open ideas: overview pictures could be bigger (spare height); long tag text gets cut; highlight the part on PartPage.
 - Pictures: layer/menu_overview.png, menu_part.png, menu_binding.png, keyboard_binding.png, menu_test_frame.png (tests).
 

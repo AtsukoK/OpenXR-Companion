@@ -466,6 +466,8 @@ public class BindingModel
     [Category("2 Timing")][JsonPropertyName("hold_ms")] public int HoldMs { get; set; } = 400;
     [Category("2 Timing")][JsonPropertyName("tap_ms")] public int TapMs { get; set; } = 300;
     [Category("2 Timing")][JsonPropertyName("double_tap_ms")] public int DoubleTapMs { get; set; } = 350;
+    [Category("2 Timing"), Description("Trigger, grip, Index trackpad press and Index grip full squeeze: how far it must go to count, 0.02..0.98. 0 = the usual point. Low = hair trigger, high = a long pull.")]
+    [JsonPropertyName("press_at"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public double PressAt { get; set; }
     [Category("3 Conditions"), TypeConverter(typeof(LayerConv)), Description("Only active while ALL these layers are on (comma separated). This is how a chord or toggle changes what normal buttons do.")]
     [JsonPropertyName("layers")] public string Layers { get; set; } = "";
     [Category("3 Conditions"), TypeConverter(typeof(LayerConv)), Description("Not active while any of these layers is on (comma separated).")]
