@@ -1,6 +1,8 @@
 # RESUME HERE (2026-11-22, late)
-Branch controller-buttons (worktree "OpenXR Companion - Buttons"), all committed locally (last 8070a2e), NOT pushed, build in
-G:/Claude/VR Radial Overlay/dist2. Nothing below tested in a headset yet.
+Branch controller-buttons (worktree "OpenXR Companion - Buttons"), all committed locally (last 416c417 + this notes
+commit), NOT pushed; dist2 (G:/Claude/VR Radial Overlay/dist2) matches it. Nothing below tested in a headset yet.
+Next: user tests in the headset (overview menu, binding keyboard, Frame / Index extras); then merge to main and release
+only when the user says so.
 - In-game menu opens on **Controller configuration** (MenuPages::Overview, wide page 0.82 m): both controllers top + side
   (silhouettes now carry side views: SilPart.side, Silhouette.sideBody), tags per part (MenuRowKind::Overview, layout
   OverviewLayout in menu.cpp shared by drawing/pointing, MenuHit.sub). Tags: part name + the player's bindings (blue,
