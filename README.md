@@ -13,6 +13,7 @@ Hand tools for any OpenXR game: radial wheels, wrist panels, button combos, a VR
 | [Radial wheels](#quick-start) | Menus that open from a controller button; pick with the stick or by pointing. Sub-wheels, key presses, macros, toggles. |
 | [Wrist panels](#the-default-left-wrist-panel) | Buttons on your forearm that appear when you look at it. |
 | [Bindings and combos](#using-the-editor) | Any controller button, double tap, hold or combo can press keys, run macros, open wheels or switch layers. |
+| [Controller buttons](#controller-buttons) | A picture of your controller: click a button to make it (or just touching it) press a key, act as another of the game's buttons, or turn it off for the game. |
 | [VR keyboard](#quick-start) | Type into the game or a mirrored window. |
 | [Screen mirror](#screen-mirror-a-monitor-or-window-in-vr) | A monitor or one window on your wrist or in front of you, usable with the laser like a mouse. |
 | [Headset mirror](#headset-mirror-what-the-headset-shows-on-your-monitor) | A desktop window with what the headset shows, overlays included. For OBS or someone watching. |
@@ -87,6 +88,27 @@ The editor opens on the **Overview**: one card per feature, with a switch to tur
 **Bindings** decide what a controller button does. Pick the hand and button, how it's used (press, hold, double tap...), and what happens. You can open a wheel, press a key (**Record key** captures it from your keyboard), run a macro, open the VR keyboard, and more. "+ add another button" makes a combo.
 
 ![Binding page: button, gesture, layer conditions and the action](docs/images/editor-binding.png)
+
+### Controller buttons
+
+Click **Right controller** or **Left controller** in the list to see a drawing of your controller. Pick your controller type at the top (Quest 3 / 3S, Quest 2 / Rift S, Quest Pro, Pico 4, Valve Index and Index-style controllers such as the Steam Frame's, Vive wands, Windows Mixed Reality, HP Reverb G2). Buttons that already do something show a blue number.
+
+Click a button to see each way of using it: pressing it, just touching it (resting a finger on it, where the controller can feel that), pushing the stick up, down, left or right. For each one:
+
+- **+ Press a key**: holds a keyboard key or mouse button down while you use it.
+- **+ Act as another button**: the game sees another of its buttons instead, for as long as you hold it (like remapping in SteamVR).
+- **Turn off in the game**: the game no longer sees that button.
+- **+ Something else**: any other action (a wheel, a macro, a layer...) in the binding editor.
+
+These make ordinary bindings, listed under the controller, so you can change or switch them off later. A touch binding never hides the button's presses from the game. Parts OpenXR Companion can't read (system buttons, the Index trackpad, the WMR touchpad) are shown greyed out.
+
+![Controller page: a Quest 3 controller with its buttons named, A selected, and what pressing or touching A does](docs/images/editor-controller-buttons.png)
+
+<details><summary>All controller pictures</summary>
+
+![Drawings of every supported controller type, right and left hand](docs/images/controllers-all.png)
+
+</details>
 
 **Wheels** show a live picture. Click a segment to edit that item, use "+ Add item" or "+ Add sub-wheel" under a wheel in the list, and drag items to reorder them.
 

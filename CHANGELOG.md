@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### New
+- **Controller buttons pages**: Right / Left controller in the editor now show a drawing of your controller (Quest 3 / 3S, Quest 2 / Rift S, Quest Pro, Pico 4, Valve Index and Index-style, Vive wands, Windows Mixed Reality, HP Reverb G2). Click a button to see what pressing it, touching it or pushing the stick does, and change it: **press a key**, **act as another of the game's buttons** (like SteamVR's remapping), **turn it off in the game**, or anything else. These are ordinary bindings, listed under the controller.
+
+### Fixed
+- **HP Reverb G2**: bindings on its X / Y / A / B buttons now work. They were read as on the first WMR controllers, which have no such buttons.
+
 ## v0.2.13 (2026-11-22)
 
 ### Fixed

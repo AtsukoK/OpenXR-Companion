@@ -87,6 +87,19 @@ All under `%LOCALAPPDATA%\OpenXRCompanion` (see `config.cpp`): `profiles\*.json`
 `head_smoothing.json`, `headset_mirror.json`, `logs\<game>.log`. Saves go through a temp file and a rename
 (`WriteFileAtomic`), so a reader never sees half a file.
 
+## The editor: controller pages
+
+The Right / Left controller pages draw the controller and offer quick choices per button. All of it is editor-side:
+the quick choices make ordinary bindings, so the layer needs nothing new for them.
+
+- `ControllerLayouts.cs`: each controller type's drawing and parts, as data (design units, right hand; the left hand is
+  mirrored). A part names the input its bindings use, how it can be used (press, touch, stick directions), and why
+  not, for parts the layer can't read.
+- `ControllerPicture.cs`: draws one layout for one hand, with name tags, and reports clicks.
+- `ControllerButtonsPage.cs`: the page; `QuickBindings.cs`: the bindings its choices make;
+  `QuickBindingDialogs.cs`: the key / game button questions.
+- `--controller-pics <dir>` renders every picture; `--selftest` checks every quick binding against the layer's parser.
+
 ## Tests
 
 `layer/test/test.cpp` builds into `vro_test.exe` and runs without a headset:
