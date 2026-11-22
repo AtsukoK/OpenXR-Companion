@@ -367,13 +367,10 @@ static class Tracer
         }
         var topView = Project(tris, across, up, TopParts, Grid);
         var sideView = Project(tris, sideAcross, handleAxis, SideParts, Grid);
-        // the stick sits toward the middle of the body (left on a right controller): flip so it does
+        // The view from above is used as projected: looking at the buttons from outside, so left is left. (It used to
+        // be flipped to put the stick toward the middle, which is wrong: a right Quest controller has its thumbstick
+        // on the right of A / B, as the model says and the real one shows.)
         bool rightHand = hand == "right";
-        float StickX(View v) => v.PartBoxes.TryGetValue("thumbstick", out var b) ? b.X + b.Width / 2 : 0;
-        float FaceX(View v) => v.PartBoxes.TryGetValue("primary", out var b) ? b.X + b.Width / 2 : StickX(v);
-        bool stickLeft = StickX(topView) < FaceX(topView);
-        if (stickLeft != rightHand)
-            topView.FlipX();
         // side view: the trigger at the front, on the left for the right hand (mirrored for the left)
         float TriggerX(View v) => v.PartBoxes.TryGetValue("trigger", out var b) ? b.X + b.Width / 2 : 0;
         float BodyX(View v) => v.Body.SelectMany(l => l).Average(p => p.X);
@@ -535,11 +532,11 @@ static class Tracer
         if (a.IsEmpty || stick.IsEmpty)
             return;
         bool rightHand = t.Hand == "right";
-        float outward = rightHand ? 1 : -1; // away from the stick
+        float outward = a.X + a.Width / 2 >= stick.X + stick.Width / 2 ? 1 : -1; // from the stick past the buttons
         float button = Math.Max(a.Width, a.Height);
         if (hasThumbrest && !t.Parts.Any(p => p.Comp == "thumbrest"))
         {
-            float faceEdge = rightHand ? Math.Max(a.Right, b.IsEmpty ? a.Right : b.Right) : Math.Min(a.Left, b.IsEmpty ? a.Left : b.Left);
+            float faceEdge = outward > 0 ? Math.Max(a.Right, b.IsEmpty ? a.Right : b.Right) : Math.Min(a.Left, b.IsEmpty ? a.Left : b.Left);
             float cx = faceEdge + outward * button * 0.75f, cy = b.IsEmpty ? a.Y + a.Height / 2 : (a.Y + a.Height / 2 + b.Y + b.Height / 2) / 2;
             t.Parts.Add(new TracedPart("thumbrest", true, new() { Pill(cx, cy, button * 0.5f, button * 1.5f) }, true));
         }
