@@ -93,14 +93,14 @@ The editor opens on the **Overview**: one card per feature, with a switch to tur
 
 Click **Right controller** or **Left controller** in the list to see a drawing of your controller. Pick your controller type at the top (Quest 3 / 3S, Quest 2 / Rift S, Quest Pro, Pico 4, Valve Index and Index-style controllers such as the Steam Frame's, Vive wands, Windows Mixed Reality, HP Reverb G2). Buttons that already do something show a blue number.
 
-Click a button to see each way of using it: pressing it, just touching it (resting a finger on it, where the controller can feel that), pushing the stick up, down, left or right. For each one:
+Click a button to see each way of using it: pressing it, just touching it (resting a finger on it, where the controller can feel that), pushing the stick up, down, left or right. Each lists what it does now (normal bindings first, then those that only work in a layer such as shift), and **+ Add…** offers:
 
 - **+ Press a key**: holds a keyboard key or mouse button down while you use it.
 - **+ Act as another button**: the game sees another of its buttons instead, for as long as you hold it (like remapping in SteamVR).
 - **Turn off in the game**: the game no longer sees that button.
 - **+ Something else**: any other action (a wheel, a macro, a layer...) in the binding editor.
 
-Tick **Only when held for a moment** first to keep the button's normal use in the game: the choice then starts only when you hold the button (0.4 s), the game doesn't see it while you hold, and a quick tap still reaches the game as a normal press. Like the Bannerlord VR radial menu on a held button.
+The **Hold:** choices keep the button's normal use in the game: your choice starts only when you hold the button (0.4 s), the game doesn't see it while you hold, and a quick tap still reaches the game as a normal press. Like the Bannerlord VR radial menu on a held button.
 
 These make ordinary bindings, listed under the controller, so you can change or switch them off later. A touch binding never hides the button's presses from the game. Parts OpenXR Companion can't read (system buttons, the Index trackpad, the WMR touchpad) are shown greyed out.
 

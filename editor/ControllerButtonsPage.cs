@@ -143,20 +143,17 @@ public class ControllerButtonsPage : UserControl
                                     .ToList();
         if (bound.Count == 0)
             card.Controls.Add(Note("Nothing set: the game gets it as usual."));
-        foreach (var b in bound)
-            card.Controls.Add(BindingLink(b));
-        bool isTouchOnly = IsTouchOnly(part, way);
-        var holdOnly = new CheckBox
+        string shownLayer = null;
+        foreach (var bd in bound)
         {
-            Text = "Only when held for a moment (a quick tap still reaches the game as usual)",
-            AutoSize = true,
-            Margin = new Padding(0, 6, 0, 0),
-            Visible = !isTouchOnly, // a touch has no tap of its own to give back
-        };
-        FormPanel.Tips.SetToolTip(holdOnly, "For the next choice you make below. While you hold the button the game doesn't see it;\n" +
-                                            "after " + QuickBindings.DefaultHoldMs + " ms your choice starts. Let go sooner and the game gets a normal press.");
-        card.Controls.Add(holdOnly);
-        card.Controls.Add(QuickChoices(input, what, isTouchOnly, () => holdOnly.Checked));
+            if (IsLayerOnly(bd) && bd.Layers != shownLayer) // a small heading for each layer's group
+            {
+                shownLayer = bd.Layers;
+                card.Controls.Add(new Label { Text = "In layer " + bd.Layers, AutoSize = true, ForeColor = Theme.SubText, Font = new Font("Segoe UI", 8.5f, FontStyle.Bold), Margin = new Padding(0, 6, 0, 0) });
+            }
+            card.Controls.Add(BindingRow(bd));
+        }
+        card.Controls.Add(AddMenuButton(input, what, IsTouchOnly(part, way)));
         return card;
     }
 
@@ -164,61 +161,98 @@ public class ControllerButtonsPage : UserControl
 
     static bool IsLayerOnly(BindingModel b) => !string.IsNullOrWhiteSpace(b.Layers);
 
-    LinkLabel BindingLink(BindingModel b)
+    // How it is used, in two words: "Press", "Hold", "With Left grip: Double-tap".
+    static string WhenText(BindingModel b)
     {
-        string gesture = Choices.Gestures.FirstOrDefault(g => g.Code == b.Gesture)?.Text.Split("  (")[0].Split(" (")[0] ?? b.Gesture;
-        var others = (b.Input ?? "").Split('+').Select(p => p.Trim()).Where(p => p.Length > 0).ToList();
-        string combo = others.Count > 1 ? " (with " + InputText.Friendly(string.Join("+", others.Take(others.Count - 1))) + " held)" : "";
-        string layerNote = IsLayerOnly(b) ? $"In layer {b.Layers}: " : "";
-        string hidden = b.Block == "none" ? "" : " Hidden from the game.";
-        var link = new LinkLabel
+        string gesture = b.Gesture switch
         {
-            Text = $"{layerNote}{b.Name}: {gesture}{combo} → {MainForm.Plain(b.Action)}.{hidden}{(b.Enabled ? "" : " (switched off)")}",
-            AutoSize = true,
-            MaximumSize = new Size(700, 0),
-            LinkColor = b.Enabled ? Theme.Link : Theme.OffText,
-            Margin = new Padding(IsLayerOnly(b) ? 18 : 0, 2, 0, 2), // layer ones indented under the normal ones
+            GestureKind.Tap => "Quick tap",
+            GestureKind.Hold => "Hold",
+            GestureKind.DoubleTap => "Double-tap",
+            GestureKind.WhileHeld => "While held",
+            _ => "Press",
         };
-        link.LinkClicked += (s, e) => open(b);
-        return link;
+        var parts = (b.Input ?? "").Split('+').Select(p => p.Trim()).Where(p => p.Length > 0).ToList();
+        return parts.Count > 1 ? "With " + InputText.Friendly(string.Join("+", parts.Take(parts.Count - 1))) + ": " + gesture : gesture;
     }
 
-    // isHoldOnly: read when a choice is clicked; makes it a hold binding that gives quick taps back to the game.
-    Control QuickChoices(string input, string what, bool isTouchOnly, Func<bool> isHoldOnly)
+    // What it does, short: "Space", "Ctrl (held)", "Game sees Right B", "Opens wheel 'right'".
+    static string DoesText(ActionModel a)
     {
-        var row = new FlowLayoutPanel { AutoSize = true, WrapContents = true, Margin = new Padding(0, 6, 0, 0), MaximumSize = new Size(700, 0) };
-        void Choice(string text, Func<BindingModel> make)
+        string mode = a?.Mode switch { "hold" => " (held)", "toggle" => " (on / off)", _ => "" };
+        return a?.Type switch
         {
-            var b = new Button { Text = text, AutoSize = true, Height = 30, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(0, 0, 6, 4), BackColor = Theme.Button, ForeColor = Theme.Text };
-            b.FlatAppearance.BorderColor = Theme.CardBorder;
-            b.Click += (s, e) =>
+            ActionType.Key => (a.Keys ?? "?") + mode,
+            ActionType.XrInput => "Game sees " + InputText.Friendly(a.Target),
+            ActionType.None => "Nothing: off in the game",
+            _ => MainForm.Plain(a),
+        };
+    }
+
+    // One binding: how it's used, what it does (click to edit), its name. Greyed when switched off.
+    Control BindingRow(BindingModel b)
+    {
+        bool isOn = b.Enabled;
+        var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(IsLayerOnly(b) ? 14 : 0, 1, 0, 1) };
+        row.Controls.Add(new Label { Text = WhenText(b), AutoSize = false, Width = 150, Height = 20, ForeColor = isOn ? Theme.SubText : Theme.OffText, Margin = new Padding(0, 2, 6, 0) });
+        var does = new LinkLabel
+        {
+            Text = DoesText(b.Action),
+            AutoSize = true,
+            MinimumSize = new Size(150, 0), // the names line up
+            MaximumSize = new Size(330, 0),
+            LinkColor = isOn ? Theme.Link : Theme.OffText,
+            LinkBehavior = LinkBehavior.HoverUnderline,
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            Margin = new Padding(0, 2, 8, 0),
+        };
+        does.LinkClicked += (s, e) => open(b);
+        row.Controls.Add(does);
+        string extra = (b.Block == "none" && b.Action?.Type != ActionType.None ? "game also gets the button · " : "") + (isOn ? "" : "off · ");
+        row.Controls.Add(new Label { Text = extra + b.Name, AutoSize = true, MaximumSize = new Size(240, 0), ForeColor = Theme.OffText, Margin = new Padding(0, 3, 0, 0) });
+        FormPanel.Tips.SetToolTip(does, "Click to edit '" + b.Name + "'");
+        return row;
+    }
+
+    // One "+ Add" button per way of using a button; its menu holds the quick choices.
+    Control AddMenuButton(string input, string what, bool isTouchOnly)
+    {
+        var add = new Button { Text = "+ Add…", AutoSize = true, Height = 28, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(0, 6, 0, 0), BackColor = Theme.Button, ForeColor = Theme.Text };
+        add.FlatAppearance.BorderColor = Theme.CardBorder;
+        var menu = new ContextMenuStrip();
+        void Item(string text, Func<BindingModel> make, bool holdOnly = false)
+            => menu.Items.Add(text, null, (s, e) =>
             {
                 var made = make();
                 if (made == null)
                     return;
-                if (isHoldOnly())
+                if (holdOnly)
                     QuickBindings.OnlyWhenHeld(made);
                 profile.Bindings.Add(made);
                 added(made, false);
                 ShowAll();
-            };
-            row.Controls.Add(b);
-        }
-        Choice("+ Press a key…", () => QuickBindingDialogs.AskKey(FindForm(), what) is string keys ? QuickBindings.Key(input, what, keys) : null);
+            });
+        BindingModel Key() => QuickBindingDialogs.AskKey(FindForm(), what) is string keys ? QuickBindings.Key(input, what, keys) : null;
+        BindingModel Remap() => QuickBindingDialogs.AskGameButton(FindForm(), what, layout, hand) is var (target, name) ? QuickBindings.GameButton(input, what, target, name) : null;
+        Item("Press a key…", Key);
         if (!isTouchOnly) // touching can't stand in for another button or be hidden without hiding its presses
         {
-            Choice("+ Act as another button…", () => QuickBindingDialogs.AskGameButton(FindForm(), what, layout, hand) is var (target, name) ? QuickBindings.GameButton(input, what, target, name) : null);
-            Choice("Turn off in the game", () => QuickBindings.OffInGame(input, what));
+            Item("Act as another of the game's buttons…", Remap);
+            Item("Turn off in the game", () => QuickBindings.OffInGame(input, what));
+            menu.Items.Add(new ToolStripSeparator());
+            Item("Hold: press a key (a quick tap still reaches the game)…", Key, holdOnly: true);
+            Item("Hold: act as another button (a quick tap still reaches the game)…", Remap, holdOnly: true);
         }
-        Choice("+ Something else…", () =>
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("Something else (wheel, macro, layer…)", null, (s, e) =>
         {
             var b = QuickBindings.Blank(input, what);
-            if (isHoldOnly())
-                QuickBindings.OnlyWhenHeld(b);
             profile.Bindings.Add(b);
             added(b, true); // finished in the binding editor
-            return null;
         });
-        return row;
+        if (Theme.IsDark)
+            ThemeWalker.Apply(menu);
+        add.Click += (s, e) => menu.Show(add, new Point(0, add.Height));
+        return add;
     }
 }
