@@ -539,7 +539,7 @@ public class SettingsEditor : EditorBase
                 // zoom, smoothing (0 = off), centre, edge margin, own room, both eyes
                 var presets = new Dictionary<string, (decimal zoom, decimal steady, string centre, decimal margin, bool room, bool both)>
                 {
-                    ["gaze"] = (1.4m, 0.5m, "gaze", 0.12m, false, false),
+                    ["gaze"] = (1.3m, 0.5m, "gaze", 0.12m, false, false), // = the app's defaults
                     ["gaze_room"] = (1.3m, 0.5m, "gaze", 0.12m, true, false),
                     ["both"] = (1.0m, 0.5m, "gaze", 0.12m, false, true),
                     ["original"] = (1.3m, 0.5m, "middle", 0.04m, true, false),

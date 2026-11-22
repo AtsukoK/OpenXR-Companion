@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.2.12 (2026-11-22)
+
+### New
+- **Headset mirror presets**: one dropdown sets zoom, head camera smoothing, centre, edge margin and one or both eyes together (Centred where you look, the default; Centred with smoothing's own room; Wide: both eyes; Original; Exact headset view). Change anything afterwards and it shows Custom.
+- **Both eyes** in the headset mirror's Eye choice: the view centres on where that eye looks, and the other eye fills in the nose side, where one eye's picture ends in a black strip. Far things line up; close things on that side can look a little doubled.
+- **Head camera smoothing** (was "Steady the picture") is now an on/off switch with its own strength, kept while it is off.
+- **Centre the view on** where the eye looks (new default) or the middle of the picture (the old way), an **Edge margin** to keep the black strip out, and **Smoothing makes its own room** (off by default) for smoothing that always works fully at low zoom.
+- **Picture: Light / Full** for the headset mirror. Light (default) draws straight from the game's picture and costs about half as much GPU time; Full is the old copy with mipmaps.
+- The headset mirror shows the game's **flat menu screens** (for example TTWVR's theater menus and loading screens) when the game shows no VR view, and black instead of leftover garbage when there is nothing.
+
+### Changed
+- **Headset mirror full screen**: maximizing (button or title double-click) now covers the whole monitor, taskbar included; double-click the picture to go in and out of full screen.
+- The headset mirror is centred on where you look. On Quest that sits toward the nose, so the old view was a little off to one side.
+- Zoom means the same with smoothing on or off: 1 is the whole eye picture.
+- The headset mirror is sharper when the window is a bit smaller than the headset picture.
+- **The screen mirror is sharper in 32-bit games** (Fallout / TTWVR): a 1920-wide monitor is shown at full size instead of half (the automatic limit is 1920 in every game now, and a picture is only halved when it is over 1.5 times the limit).
+- Code cleanup: long functions split into named steps, graphics objects that free themselves, named constants in the editor. Nothing changes in how the app works.
+
+### Fixed
+- **Keys from your menus (quick load and so on) could go to the headset mirror window** instead of the game after you clicked or moved the mirror. The mirror is never taken for the game any more and hands focus straight back.
+- The headset mirror's settings file kept numbers like 1.399999976 for 1.4.
+
 ## v0.2.11 (2026-11-21)
 
 ### New

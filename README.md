@@ -185,11 +185,19 @@ Open the VR keyboard. The bar under it has **Dock screen above keys** (the scree
 A desktop window showing what the headset shows, **including the wheel, wrist panels, mirrored screen, lasers and messages** (a game's own mirror can't show those, because they're added after the game). Good for recording or streaming (capture the window in OBS) or for someone watching.
 
 - Turn it on with the first button on the editor's toolbar, or the **Headset mirror** button on the left wrist panel (More). Closing the window turns it off.
-- **Settings > Headset mirror**: which eye (right by default), **zoom** (1.3 looks like a normal camera; the picture always fills the window, so resize the window for another shape), **steady the picture** (irons small head shakes out of the window like a camera stabiliser; 0.5 by default; the view in the headset is not changed) and a **frame rate cap** (60 is smooth and cheap).
+- **Settings > Headset mirror**:
+  - **Preset**: sets the options below together (centred where you look, wide with both eyes, the original look, the exact headset view). Change anything afterwards and it shows Custom.
+  - **Eye**: left, right, or **both eyes**: centred on where that eye looks, with the other eye filling in the nose side (where one eye's picture ends in a black strip). Far things line up; close things on that side can look a little doubled.
+  - **Zoom**: 1 is the whole eye picture, 1.3 looks like a normal camera. The picture always fills the window, so resize the window for another shape.
+  - **Head camera smoothing** with its **strength**: irons small head shakes out of the window like a camera stabiliser (on at 0.5 by default; the view in the headset is not changed). It drifts into the picture the zoom leaves out, so it works fully from about zoom 1.3, or turn on **Smoothing makes its own room**.
+  - **Centre the view on** where the eye looks (default) or the middle of the picture, and an **Edge margin** that keeps the black strip on the nose side out.
+  - **Frame rate cap** (60 is smooth and cheap) and **Picture**: Light (default, draws straight from the game's picture, about half the cost) or Full.
+- **Full screen**: maximize the window (button or title double-click) to cover the whole monitor, taskbar included; double-click the picture to go in and out.
+- When the game shows only a flat screen (menus, loading screens), the mirror shows that screen.
 - **Always on top of other windows** keeps it above the game on your monitor. The mirror never takes focus from the game, even when you click, move or resize it, so the game keeps your keyboard and controller input. Use borderless or windowed mode in the game; exclusive fullscreen can still cover it.
 - It never holds the game up. D3D11 games for now.
 
-![Settings > Headset mirror: show the window, always on top, eye, zoom, steady the picture, frame rate cap](docs/images/editor-headset-mirror.png)
+![Settings > Headset mirror: show the window, always on top, eye, preset, zoom, head camera smoothing, frame rate cap](docs/images/editor-headset-mirror.png)
 
 ## Controller offsets (fix how the game's hands point)
 
@@ -210,7 +218,7 @@ All off by default; 0.5 is a good start. Each one holds still through small shak
 | Settings > Pointing > **Steady the laser** | the laser, and the mouse on a mirrored screen |
 | Settings > Screen mirror > **Steady the screen** | a screen on your wrist or following your view |
 | Settings > Controller offsets > **Steady the game's hands** | the hands and guns in the game |
-| Settings > Headset mirror > **Steady the picture** | the headset mirror window only (on at 0.5) |
+| Settings > Headset mirror > **Head camera smoothing** | the headset mirror window only (on at 0.5) |
 
 ## Experimental features
 
