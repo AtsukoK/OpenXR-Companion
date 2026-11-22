@@ -482,9 +482,9 @@ public class SettingsEditor : EditorBase
                 var eye = new ChoiceBox(new Choice[] { new("left", "Left eye"), new("right", "Right eye") }, 200) { Code = HeadsetMirrorFile.Eye };
                 eye.SelectedIndexChanged += (o, e) => HeadsetMirrorFile.Eye = eye.Code;
                 mir.AddRow("Eye", eye);
-                var zoom = new NumericUpDown { Minimum = 1, Maximum = 3, Increment = 0.05m, DecimalPlaces = 2, Width = 90, Value = (decimal)Math.Clamp(HeadsetMirrorFile.Zoom, 1, 3) };
+                var zoom = new NumericUpDown { Minimum = 0.5m, Maximum = 3, Increment = 0.05m, DecimalPlaces = 2, Width = 90, Value = (decimal)Math.Clamp(HeadsetMirrorFile.Zoom, 0.5, 3) };
                 zoom.ValueChanged += (o, e) => HeadsetMirrorFile.Zoom = (double)zoom.Value;
-                mir.AddRow("Zoom", zoom, "1 = the whole eye picture (very wide, blurry edges). 1.3 looks like a normal camera. It always fills the window; resize the window for a different shape.");
+                mir.AddRow("Zoom", zoom, "1 = the whole eye picture (very wide, blurry edges). 1.3 looks like a normal camera. With steadying on, the view needs some room, so anything up to about 1.5 looks the same; go below 1 to fine-tune a wider view (a black edge may show at the sides). It always fills the window; resize the window for a different shape.");
                 var fps = new NumericUpDown { Minimum = 0, Maximum = 240, Increment = 5, Width = 90, Value = Math.Clamp(HeadsetMirrorFile.Fps, 0, 240) };
                 fps.ValueChanged += (o, e) => HeadsetMirrorFile.Fps = (int)fps.Value;
                 var st = new NumericUpDown { Minimum = 0, Maximum = 1, Increment = 0.05m, DecimalPlaces = 2, Width = 90, Value = (decimal)Math.Clamp(HeadsetMirrorFile.Smoothing, 0, 1) };

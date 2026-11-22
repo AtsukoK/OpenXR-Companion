@@ -553,7 +553,7 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
     float tL = std::tan(fov.angleLeft), tR = std::tan(fov.angleRight), tU = std::tan(fov.angleUp), tD = std::tan(fov.angleDown);
     float ex = (float)rc.extent.width, ey = (float)rc.extent.height;
     float cu = (0 - tL) / (tR - tL), cv = (tU - 0) / (tU - tD);
-    float z = std::clamp(zoom, 1.f, 3.f);
+    float z = std::clamp(zoom, 1.f, 3.f); // below 1: see after the steadying crop
     float vw = ex / z, vh = vw * H / W;
     if (vh > ey / z) {
         vh = ey / z;
@@ -581,6 +581,12 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
         float s = std::min({ 1.f, maxcx / cw, maxcy / ch });
         cw *= s;
         ch *= s;
+    }
+    if (zoom < 1.f) { // fine-tuning below 1: a wider view, into the margins (the black edge may show, steadying lags less)
+        float w = std::clamp(zoom, 0.5f, 1.f);
+        float f = std::min({ 1.f / w, 1.f / cw, 1.f / ch }); // same factor both ways: keeps the window's shape
+        cw *= f;
+        ch *= f;
     }
     float cl = std::clamp(cu - cw / 2, std::min(sideM, (1.f - cw) / 2), std::max(1.f - sideM - cw, (1.f - cw) / 2));
     float ct = std::clamp(cv - ch / 2, std::min(m, (1.f - ch) / 2), std::max(1.f - m - ch, (1.f - ch) / 2));
