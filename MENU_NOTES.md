@@ -1,3 +1,24 @@
+# RESUME HERE (2026-11-22, late)
+Branch controller-buttons (worktree "OpenXR Companion - Buttons"), all committed locally (last 8070a2e), NOT pushed, build in
+G:/Claude/VR Radial Overlay/dist2. Nothing below tested in a headset yet.
+- In-game menu opens on **Controller configuration** (MenuPages::Overview, wide page 0.82 m): both controllers top + side
+  (silhouettes now carry side views: SilPart.side, Silhouette.sideBody), tags per part (MenuRowKind::Overview, layout
+  OverviewLayout in menu.cpp shared by drawing/pointing, MenuHit.sub). Tags: part name + the player's bindings (blue,
+  gesture line grey) + the game's own action names (Engine::gameUses, recorded in layer.cpp RecordGameUses from
+  xrCreateAction names + suggested bindings, per interaction profile). Bar under it: Edit bindings (old Home), Test
+  controllers, Right/Left stick. Tag -> MenuPages::PartPage (game use + each way, "Not assigned" -> new binding + keyboard).
+- Binding keyboard (KbLayout forBinding): mouse buttons, wheel, Home/End..., "Controller button" -> xr_input target
+  (CaptureAction). Saved by SaveMenuEdits (xr_input with target).
+- Wording: Enabled / Input / Activation / Gesture / Action / Key-Button behavior (Tap Hold Toggle) / Pass input to game.
+  Editor still uses its old words (Way/When/Does) - user may want those aligned too.
+- Steam Frame: own ControllerKind, comps C_BTN3..C_DPAD_RIGHT, opt-in steam_frame.json native mode (see BUTTONS_NOTES),
+  outlines from Valve CAD (CC BY-NC-SA, credited).
+- Controller pictures fixed 2026-11-22: face view no longer flipped (right Quest: stick RIGHT of A/B, user confirmed with
+  the real controller). Index picture unchanged. Fallback drawings (ControllerLayouts top parts, controller_art kTouch)
+  still have the old mirrored layout but are only used without a silhouette.
+- Open ideas: overview pictures could be bigger (spare height); long tag text gets cut; highlight the part on PartPage.
+- Pictures: layer/menu_overview.png, menu_part.png, menu_binding.png, keyboard_binding.png, menu_test_frame.png (tests).
+
 # In-game settings menu (branch controller-buttons)
 
 ## What it is
