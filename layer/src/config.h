@@ -1,5 +1,6 @@
 #pragma once
 #include "common.h"
+#include "stick_shape.h"
 #include <map>
 #include <memory>
 #include <optional>
@@ -44,12 +45,14 @@ const char* EnumKey(const EnumName<E> (&table)[N], E value) {
 }
 
 // How a binding's input has to be used to fire it.
-enum class Gesture { Press, Tap, Hold, DoubleTap, WhileHeld };
+// DoubleTapHold: the second press starts it, and it lasts while that press is held (double flick forward = sprint).
+enum class Gesture { Press, Tap, Hold, DoubleTap, WhileHeld, DoubleTapHold };
 inline constexpr EnumName<Gesture> kGestureNames[] = { { Gesture::Press, "press" },
                                                        { Gesture::Tap, "tap" },
                                                        { Gesture::Hold, "hold" },
                                                        { Gesture::DoubleTap, "double_tap" },
-                                                       { Gesture::WhileHeld, "while_held" } };
+                                                       { Gesture::WhileHeld, "while_held" },
+                                                       { Gesture::DoubleTapHold, "double_tap_hold" } };
 
 // How a wheel item is chosen: on letting go of the opener, on letting the stick back, or with a button.
 enum class ConfirmMode { Auto, Release, StickReturn, Button };
@@ -341,6 +344,7 @@ struct Profile {
     bool enabled = true;
     BlockWhileOpen blockWhileOpen = BlockWhileOpen::Hand;
     float pressOn = 0.6f, pressOff = 0.4f, stickOn = 0.7f, stickOff = 0.5f;
+    StickShape sticks[2]; // per hand (0 left, 1 right): deadzones for the game, direction zones for bindings
     bool haptics = true;
     float hapticAmp = 0.35f;
     bool notifications = true;

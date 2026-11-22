@@ -112,10 +112,15 @@ void Engine::ComputeDown() {
         cur[h][C_GRIP][F_TOUCH] = cur[h][C_GRIP][F_PRESS];
         cur[h][C_STICK][F_PRESS] = r.sc;
         cur[h][C_STICK][F_TOUCH] = r.st || r.sc;
-        hyst(C_STICK, F_UP, r.sy > p.stickOn, r.sy > p.stickOff);
-        hyst(C_STICK, F_DOWN, r.sy < -p.stickOn, r.sy < -p.stickOff);
-        hyst(C_STICK, F_RIGHT, r.sx > p.stickOn, r.sx > p.stickOff);
-        hyst(C_STICK, F_LEFT, r.sx < -p.stickOn, r.sx < -p.stickOff);
+        // A direction also has to be within the hand's direction zone (when one is set), so a forward push that
+        // leans a little sideways doesn't also count as left or right.
+        const StickShape& zone = p.sticks[h];
+        bool up = InDirectionZone(zone, r.sx, r.sy, 0, 1), down = InDirectionZone(zone, r.sx, r.sy, 0, -1);
+        bool right = InDirectionZone(zone, r.sx, r.sy, 1, 0), left = InDirectionZone(zone, r.sx, r.sy, -1, 0);
+        hyst(C_STICK, F_UP, up && r.sy > p.stickOn, up && r.sy > p.stickOff);
+        hyst(C_STICK, F_DOWN, down && r.sy < -p.stickOn, down && r.sy < -p.stickOff);
+        hyst(C_STICK, F_RIGHT, right && r.sx > p.stickOn, right && r.sx > p.stickOff);
+        hyst(C_STICK, F_LEFT, left && r.sx < -p.stickOn, left && r.sx < -p.stickOff);
         cur[h][C_THUMBREST][F_TOUCH] = cur[h][C_THUMBREST][F_PRESS] = r.rest;
         cur[h][C_MENU][F_PRESS] = cur[h][C_MENU][F_TOUCH] = r.menu;
     }
@@ -323,7 +328,8 @@ void Engine::Fire(int bi) {
     s.fired = true;
     Log("fire '%s' (%s)", b.name.c_str(), b.chordText.c_str());
     bool holds = RunAction(b.action, b.chord.back().hand, bi, false);
-    bool wantsEnd = holds && (b.gesture == Gesture::Press || b.gesture == Gesture::Hold || b.gesture == Gesture::WhileHeld);
+    bool wantsEnd = holds && (b.gesture == Gesture::Press || b.gesture == Gesture::Hold || b.gesture == Gesture::WhileHeld ||
+                              b.gesture == Gesture::DoubleTapHold);
     if (wantsEnd)
         s.needEnd = true;
     else if (holds)
@@ -403,7 +409,7 @@ void Engine::ProcessBindings() {
         s.fired = false;
         if (b.gesture == Gesture::Press || b.gesture == Gesture::WhileHeld)
             Fire(i);
-        else if (b.gesture == Gesture::DoubleTap) {
+        else if (b.gesture == Gesture::DoubleTap || b.gesture == Gesture::DoubleTapHold) {
             if (s.lastTap >= 0 && (now - s.lastTap) * 1000 <= b.doubleTapMs) {
                 s.lastTap = -1;
                 Fire(i);

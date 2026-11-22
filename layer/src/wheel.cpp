@@ -61,7 +61,7 @@ void Engine::OpenWheel(const Action& a, int bi, int hand) {
         const InputId& t = b.chord.back();
         if (t.feat == F_TOUCH)
             wr.confirm = ConfirmMode::StickReturn;
-        else if (b.gesture == Gesture::WhileHeld || b.gesture == Gesture::Hold)
+        else if (b.gesture == Gesture::WhileHeld || b.gesture == Gesture::Hold || b.gesture == Gesture::DoubleTapHold)
             wr.confirm = ConfirmMode::Release;
         else
             wr.confirm = ConfirmMode::Button;

@@ -198,6 +198,7 @@ public:
     // ---------------- what the game should see
     bool Blocked(int hand, int comp) const { return blockOut[hand][comp]; }    // held back for a menu
     const Override& Ov(int hand, int comp) const { return ovOut[hand][comp]; } // pushed into the game by a binding
+    const StickShape& StickShapeOf(int hand) const { return prof->sticks[hand]; } // deadzones of the game's stick
     // The pose the game's grip (kind 0) or aim (kind 1) space of a hand is moved by; false = leave it.
     bool OffsetPose(int hand, int kind, XrPosef& out) const;
     OffsetStyle offs; // live controller offsets (from the profile, changed in the headset)

@@ -357,3 +357,113 @@ void TestHoldOnlyQuickBinding() {
     step(0.15);
     CHECK(!sawPress && !e.IsOn(heldLayer) && !e.Blocked(1, C_BTN1), "hold only: after a hold the game gets no press of A, all let go");
 }
+
+// Stick options (all off by default): deadzones for what the game sees, direction zones for bindings, and the
+// double flick (double tap and hold) gesture.
+void TestStickOptions() {
+    // Shaping alone.
+    StickShape off;
+    float x = 0.1f, y = 0.f;
+    ShapeStick(off, x, y);
+    CHECK(x == 0.1f, "sticks: with nothing set the stick passes through unchanged");
+    StickShape dz;
+    dz.innerDeadzone = 0.2f;
+    dz.outerDeadzone = 0.2f;
+    x = 0.15f, y = 0.f;
+    ShapeStick(dz, x, y);
+    CHECK(x == 0.f, "sticks: a push inside the inner deadzone counts as none");
+    x = 0.f, y = 0.5f;
+    ShapeStick(dz, x, y);
+    CHECK(std::fabs(y - 0.5f) < 1e-4f && x == 0.f, "sticks: the rest is stretched (halfway stays halfway with 0.2 / 0.2)");
+    x = 0.6f, y = 0.6f; // 0.85 long: past the outer deadzone
+    ShapeStick(dz, x, y);
+    CHECK(std::fabs(std::sqrt(x * x + y * y) - 1.f) < 1e-4f && std::fabs(x - y) < 1e-5f, "sticks: past the outer deadzone is full, same direction");
+
+    // The game's stick through the filter: shaped per hand.
+    std::string err;
+    auto p = ParseProfileText(R"JSON({ "sticks": { "right": { "inner_deadzone": 0.25 } },
+      "bindings": [
+        { "name": "Up = layer up", "input": "right.thumbstick.up", "gesture": "while_held", "block": "none",
+          "action": { "type": "layer", "layer": "up", "mode": "hold" } },
+        { "name": "Right = layer right", "input": "right.thumbstick.right", "gesture": "while_held", "block": "none",
+          "action": { "type": "layer", "layer": "right", "mode": "hold" } },
+        { "name": "Sprint", "input": "left.thumbstick.up", "gesture": "double_tap_hold", "double_tap_ms": 350, "block": "none",
+          "action": { "type": "layer", "layer": "sprint", "mode": "hold" } }
+      ] })JSON",
+                              err);
+    CHECK(p != nullptr && p->sticks[1].innerDeadzone == 0.25f && p->sticks[0].innerDeadzone == 0.f,
+          ("sticks: the profile's stick options read, per hand " + err).c_str());
+    if (!p) return;
+    Engine e;
+    e.SetProfile(p);
+    GameInputFilter gi;
+    gi.SetHandPaths(101, 102);
+    XrAction move = (XrAction)(uintptr_t)90;
+    gi.AddBinding(move, 0, C_STICK, InputFeature::Vector);
+    gi.AddBinding(move, 1, C_STICK, InputFeature::Vector);
+    auto noRequery = [](XrPath, XrActionStateVector2f&) {
+        return false;
+    };
+    XrActionStateVector2f st{ XR_TYPE_ACTION_STATE_VECTOR2F };
+    st.isActive = XR_TRUE;
+    st.currentState = { 0.2f, 0.f };
+    gi.NewSync();
+    gi.Filter(e, move, 102, 1, st, noRequery);
+    CHECK(st.currentState.x == 0.f, "sticks: the game sees no push inside the right stick's inner deadzone");
+    st.currentState = { 0.2f, 0.f };
+    gi.Filter(e, move, 101, 1, st, noRequery);
+    CHECK(st.currentState.x == 0.2f, "sticks: the left stick (nothing set) passes through");
+    st.currentState = { 0.2f, 0.f };
+    gi.Filter(e, move, XR_NULL_PATH, 1, st, noRequery);
+    CHECK(st.currentState.x == 0.2f, "sticks: both hands asked at once with different settings: left alone");
+
+    // Direction zones: none set, a diagonal is both up and right; with 30 degrees it is neither.
+    Action upLayer, rightLayer, sprintLayer;
+    upLayer.type = rightLayer.type = sprintLayer.type = ActType::Layer;
+    upLayer.layer = "up";
+    rightLayer.layer = "right";
+    sprintLayer.layer = "sprint";
+    Frame f;
+    double t = 0;
+    auto step = [&](double secs) {
+        for (double end = t + secs; t < end;) {
+            t += 0.011;
+            f.t = t;
+            e.Update(f);
+        }
+    };
+    f.h[1].sx = 0.75f;
+    f.h[1].sy = 0.8f;
+    step(0.05);
+    CHECK(e.IsOn(upLayer) && e.IsOn(rightLayer), "sticks: no direction zone: a diagonal counts as up and right (as before)");
+    f.h[1].sx = f.h[1].sy = 0;
+    step(0.05);
+    p->sticks[1].directionAngleDeg = 30;
+    f.h[1].sx = 0.75f;
+    f.h[1].sy = 0.8f;
+    step(0.05);
+    CHECK(!e.IsOn(upLayer) && !e.IsOn(rightLayer), "sticks: 30 degree zones: a diagonal counts as neither");
+    f.h[1].sx = 0.3f;
+    f.h[1].sy = 0.95f;
+    step(0.05);
+    CHECK(e.IsOn(upLayer) && !e.IsOn(rightLayer), "sticks: forward leaning a little right counts only as up");
+    f.h[1].sx = f.h[1].sy = 0;
+    step(0.05);
+
+    // Double flick forward and hold = sprint while held; a single flick does nothing.
+    f.h[0].sy = 1.f;
+    step(0.08);
+    f.h[0].sy = 0.f;
+    step(0.4);
+    CHECK(!e.IsOn(sprintLayer), "sticks: one flick forward doesn't start the double flick binding");
+    f.h[0].sy = 1.f;
+    step(0.08);
+    f.h[0].sy = 0.f;
+    step(0.1);
+    f.h[0].sy = 1.f;
+    step(0.3);
+    CHECK(e.IsOn(sprintLayer), "sticks: a second flick soon after starts it, held while pushed");
+    f.h[0].sy = 0.f;
+    step(0.05);
+    CHECK(!e.IsOn(sprintLayer), "sticks: letting the stick back ends it");
+}

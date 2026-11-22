@@ -10,6 +10,7 @@ void TestFingertipAdjust();
 void TestKeySequences();
 void TestQuickBindings();
 void TestHoldOnlyQuickBinding();
+void TestStickOptions();
 
 // ---------------------------------------------------------------- a pretend OpenXR runtime under the real layer DLL
 #include <openxr/openxr_loader_negotiation.h>
@@ -2659,6 +2660,7 @@ int main(int argc, char** argv) {
     TestKeySequences();
     TestQuickBindings();
     TestHoldOnlyQuickBinding();
+    TestStickOptions();
     printf("\n%d failures\n", fails);
     Keys::Shutdown();
     DrawShutdown();

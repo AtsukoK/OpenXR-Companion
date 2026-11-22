@@ -61,6 +61,9 @@ private:
     };
 
     Verdict Evaluate(const Engine& eng, XrAction a, XrPath sub) const;
+    // Which hand's stick shaping applies to this action and query: -1 when it reads no stick, or both sticks with
+    // different shaping (then nothing is changed).
+    int StickHand(const Engine& eng, XrAction a, XrPath sub) const;
     int HandsMask(XrPath sub) const;
     bool CanRequery(XrAction a, int hand) const;
     bool Changed(XrAction a, XrPath sub, float v0, float v1);

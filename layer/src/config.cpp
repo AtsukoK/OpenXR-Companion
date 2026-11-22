@@ -544,6 +544,20 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
         Get(t, "stick_on", p->stickOn);
         Get(t, "stick_off", p->stickOff);
     }
+    if (j.contains("sticks") && j["sticks"].is_object()) { // { "left": {...}, "right": {...} }
+        const char* hands[2] = { "left", "right" };
+        for (int h = 0; h < 2; h++) {
+            if (!j["sticks"].contains(hands[h])) continue;
+            const auto& k = j["sticks"][hands[h]];
+            StickShape& s = p->sticks[h];
+            Get(k, "inner_deadzone", s.innerDeadzone);
+            Get(k, "outer_deadzone", s.outerDeadzone);
+            Get(k, "direction_angle", s.directionAngleDeg);
+            s.innerDeadzone = std::clamp(s.innerDeadzone, 0.f, 0.9f);
+            s.outerDeadzone = std::clamp(s.outerDeadzone, 0.f, 0.9f);
+            s.directionAngleDeg = s.directionAngleDeg <= 0 ? 0.f : std::clamp(s.directionAngleDeg, 5.f, 45.f);
+        }
+    }
     Get(j, "haptics", p->haptics);
     Get(j, "haptic_strength", p->hapticAmp);
     Get(j, "notifications", p->notifications);
