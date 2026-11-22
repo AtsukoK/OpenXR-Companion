@@ -743,13 +743,32 @@ static void DrawLiveController(Graphics& g, const RectF& box, int hand, const Li
     SolidBrush body{ Color(0xFF3A414B) }, part{ Color(0xFF1C2027) }, lit{ Color(Accent) }, touched{ Color(0x661A9FFF) };
     SolidBrush plain{ Color(0xFF2E343C) }, white{ Color(0xFFFFFFFF) };
     Pen edge(Color(0xFF59616C), 1.5f), ring(Color(Accent), 3.f);
-    // The letter on a face button (A/B, X/Y on the left, the Index has A/B on both) or the menu's three lines.
+    // The letter on a face button (A/B, X/Y on the left; the Index has A/B on both, the Steam Frame's right hand has
+    // all four), the menu's three lines, or the D-pad's arrows.
     auto letterOf = [&](int comp) -> const wchar_t* {
         bool xy = hand == 0 && live.kind != ControllerKind::Index;
-        if (comp == C_BTN1) return xy ? L"X" : L"A";
-        if (comp == C_BTN2) return xy ? L"Y" : L"B";
-        if (comp == C_MENU) return L"≡";
-        return nullptr;
+        switch (comp) {
+        case C_BTN1:
+            return xy ? L"X" : L"A";
+        case C_BTN2:
+            return xy ? L"Y" : L"B";
+        case C_BTN3:
+            return L"X";
+        case C_BTN4:
+            return L"Y";
+        case C_MENU:
+            return L"≡";
+        case C_DPAD_UP:
+            return L"▴";
+        case C_DPAD_DOWN:
+            return L"▾";
+        case C_DPAD_LEFT:
+            return L"◂";
+        case C_DPAD_RIGHT:
+            return L"▸";
+        default:
+            return nullptr;
+        }
     };
     FontFamily letterFamily(L"Segoe UI");
     StringFormat centered;

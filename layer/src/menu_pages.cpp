@@ -8,8 +8,10 @@ namespace MenuPages {
 
 std::string InputWords(const InputId& id) {
     if (!id.valid()) return "?";
-    static const char* rightNames[C_COUNT] = { "A", "B", "trigger", "grip", "thumbstick", "thumbrest", "menu" };
-    static const char* leftNames[C_COUNT] = { "X", "Y", "trigger", "grip", "thumbstick", "thumbrest", "menu" };
+    static const char* rightNames[C_COUNT] = { "A",  "B",      "trigger",    "grip",         "thumbstick",   "thumbrest",  "menu",
+                                               "X",  "Y",      "bumper",     "D-pad up",     "D-pad down",   "D-pad left", "D-pad right" };
+    static const char* leftNames[C_COUNT] = { "X",  "Y",      "trigger",    "grip",         "thumbstick",   "thumbrest",  "menu",
+                                              "X",  "Y",      "bumper",     "D-pad up",     "D-pad down",   "D-pad left", "D-pad right" };
     std::string s = std::string(id.hand == 0 ? "Left " : "Right ") + (id.hand == 0 ? leftNames[id.comp] : rightNames[id.comp]);
     switch (id.feat) {
     case F_TOUCH:

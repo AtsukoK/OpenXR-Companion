@@ -12,7 +12,9 @@ public partial class MainForm
     {
         ("touch", "Meta Quest / Rift, Pico (Touch-style controllers)",
                   "Double-tap the thumbrest (just touch it, no press) to open that hand's wheel."),
-        ("index", "Valve Index, Steam Frame, Pimax Crystal, Bigscreen (Index-style)",
+        ("index", "Valve Index, Pimax Crystal, Bigscreen (Index-style)",
+                  "Double-click the thumbstick (press it in twice quickly) to open that hand's wheel."),
+        ("frame", "Steam Frame",
                   "Double-click the thumbstick (press it in twice quickly) to open that hand's wheel."),
         ("wmr",   "Windows Mixed Reality / HP Reverb",
                   "Hold the menu button to open that hand's wheel, point the stick, let go to pick. A quick tap still reaches the game."),
@@ -143,6 +145,7 @@ public partial class MainForm
                     b.Name = side + " hand wheel";
                     break;
                 case "index":
+                case "frame":
                     b.Input = hand + ".thumbstick";
                     b.Gesture = GestureKind.DoubleTap;
                     b.DoubleTapMs = 400;
@@ -241,5 +244,51 @@ public partial class MainForm
         all.Save(Path.Combine(dir, "controllers_all.png"));
         foreach (var s in sheets)
             s.Dispose();
+    }
+}
+
+// The Steam Frame setting (all PCs' games, not one profile): the layer then asks SteamVR for the Frame controller
+// itself, so all its buttons work, and gives SteamVR a Frame version of each game's bindings. Read when a game starts.
+internal static class SteamFrameSetting
+{
+    static string FilePath => Path.Combine(MainForm.DataFolder, "steam_frame.json");
+
+    public static bool Load()
+    {
+        try
+        {
+            if (!File.Exists(FilePath))
+                return false;
+            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(FilePath));
+            return doc.RootElement.TryGetProperty("native", out var v) && v.ValueKind == System.Text.Json.JsonValueKind.True;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        { return false; }
+    }
+
+    public static void Save(bool native)
+    {
+        try
+        { AtomicFile.WriteAllText(FilePath, native ? "{ \"native\": true }" : "{ \"native\": false }"); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+
+    public static CheckBox NewCheckBox()
+    {
+        var box = new CheckBox
+        {
+            Text = "Use all the Steam Frame's buttons (restart the game after changing)",
+            AutoSize = true,
+            Checked = Load(),
+            Margin = new Padding(16, 6, 0, 0),
+        };
+        new ToolTip { AutoPopDelay = 30000 }.SetToolTip(box,
+            "Off: SteamVR shows the Frame to games as Index controllers, so its right X / Y, left D-pad, View and bumpers can't be used here.\n" +
+            "On: OpenXR Companion asks SteamVR for the Frame controller itself and gives it the game's own bindings moved onto the Frame\n" +
+            "(left X / Y or A / B on the D-pad down / up, the menu on View / Menu). Games that support the Frame keep their own bindings.\n" +
+            "Your SteamVR binding changes for the game are not used while this is on.");
+        box.CheckedChanged += (s, e) => Save(box.Checked);
+        return box;
     }
 }

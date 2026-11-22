@@ -71,8 +71,17 @@ enum OA {
     A_GRIPPOSE,
     A_AIMPOSE,
     A_HAPTIC,
+    // the Steam Frame's other parts (pressed), in Comp order from C_BTN3
+    A_BTN3,
+    A_BTN4,
+    A_BUMPER,
+    A_DPAD_UP,
+    A_DPAD_DOWN,
+    A_DPAD_LEFT,
+    A_DPAD_RIGHT,
     A_COUNT
 };
+static_assert(A_DPAD_RIGHT - A_BTN3 == C_DPAD_RIGHT - C_BTN3, "the Frame's actions follow the Comp order");
 static const struct {
     const char* name;
     XrActionType type;
@@ -85,6 +94,10 @@ static const struct {
     { "vro_thumbrest", XR_ACTION_TYPE_BOOLEAN_INPUT },   { "vro_menu", XR_ACTION_TYPE_BOOLEAN_INPUT },
     { "vro_grip_pose", XR_ACTION_TYPE_POSE_INPUT },      { "vro_aim_pose", XR_ACTION_TYPE_POSE_INPUT },
     { "vro_haptic", XR_ACTION_TYPE_VIBRATION_OUTPUT },
+    { "vro_btn3", XR_ACTION_TYPE_BOOLEAN_INPUT },        { "vro_btn4", XR_ACTION_TYPE_BOOLEAN_INPUT },
+    { "vro_bumper", XR_ACTION_TYPE_BOOLEAN_INPUT },      { "vro_dpad_up", XR_ACTION_TYPE_BOOLEAN_INPUT },
+    { "vro_dpad_down", XR_ACTION_TYPE_BOOLEAN_INPUT },   { "vro_dpad_left", XR_ACTION_TYPE_BOOLEAN_INPUT },
+    { "vro_dpad_right", XR_ACTION_TYPE_BOOLEAN_INPUT },
 };
 struct PB {
     int act;
@@ -138,6 +151,18 @@ static const PB kVive[] = {
     { A_MENU, "input/menu/click", 3 }, { A_GRIP, "input/squeeze/click", 3 },    { A_TRIG, "input/trigger/value", 3 },
     { A_STICK, "input/trackpad", 3 },  { A_STICKC, "input/trackpad/click", 3 }, { A_STICKT, "input/trackpad/touch", 3 },
 };
+// Steam Frame (XR_VALVE_frame_controller_interaction): right A / B / X / Y and Menu; left D-pad and View.
+static const PB kSteamFrame[] = {
+    { A_BTN1, "input/a/click", 2 },         { A_BTN1T, "input/a/touch", 2 },       { A_BTN2, "input/b/click", 2 },
+    { A_BTN2T, "input/b/touch", 2 },        { A_BTN3, "input/x/click", 2 },        { A_BTN4, "input/y/click", 2 },
+    { A_MENU, "input/menu/click", 2 },      { A_MENU, "input/view/click", 1 },     { A_DPAD_UP, "input/dpad_up/click", 1 },
+    { A_DPAD_DOWN, "input/dpad_down/click", 1 }, { A_DPAD_LEFT, "input/dpad_left/click", 1 },
+    { A_DPAD_RIGHT, "input/dpad_right/click", 1 }, { A_BUMPER, "input/bumper/click", 3 },
+    { A_TRIG, "input/trigger/value", 3 },   { A_TRIGT, "input/trigger/touch", 3 }, { A_GRIP, "input/squeeze/value", 3 },
+    { A_STICK, "input/thumbstick", 3 },     { A_STICKC, "input/thumbstick/click", 3 }, { A_STICKT, "input/thumbstick/touch", 3 },
+};
+static const char* const kSteamFrameProfile = "/interaction_profiles/valve/frame_controller_valve";
+static const char* const kSteamFrameExtension = "XR_VALVE_frame_controller_interaction";
 static const PB kSimple[] = { { A_TRIG, "input/select/click", 3 }, { A_MENU, "input/menu/click", 3 } };
 
 // A controller type with no table above (a new headset, such as the Steam Frame): our bindings are taken from
@@ -190,6 +215,8 @@ static std::vector<PB> ProfileTable(const std::string& p) {
         add(kHpReverb, std::size(kHpReverb));
     else if (p == "/interaction_profiles/htc/vive_controller")
         add(kVive, std::size(kVive));
+    else if (p == kSteamFrameProfile)
+        add(kSteamFrame, std::size(kSteamFrame));
     else if (p == "/interaction_profiles/khr/simple_controller")
         add(kSimple, std::size(kSimple));
     else
@@ -442,11 +469,15 @@ static void ReadHand(int h, HandRaw& r) {
     r.st = in.Bool(A_STICKT);
     r.rest = in.Bool(A_REST);
     r.menu = in.Bool(A_MENU);
+    for (int c = C_BTN3; c < C_COUNT; c++)
+        r.more[c] = in.Bool(A_BTN3 + (c - C_BTN3));
     r.gripValid = Locate(gSession.gripSpace[h], gSession.local, r.gripPose);
     r.aimValid = Locate(gSession.aimSpace[h], gSession.local, r.aimPose);
     r.touchCtl = gSession.touchController[h];
     r.kind = gSession.controllerKind[h];
     bool anythingPressed = r.b1 || r.b2 || r.trig > 0.5f || r.grip > 0.5f || r.sc || r.rest || r.menu;
+    for (int c = C_BTN3; c < C_COUNT; c++)
+        anythingPressed = anythingPressed || r.more[c];
     gInputLog.Frame(h, r.gripValid, r.aimValid, isTriggerActive, anythingPressed);
 }
 
@@ -627,9 +658,59 @@ static XrResult XRAPI_CALL Hook_xrCreateAction(XrActionSet set, const XrActionCr
     return r;
 }
 
+// ---------------------------------------------------------------- Steam Frame setting
+// With the setting on (and SteamVR offering the extension), the game's Index bindings (or its Touch ones when it has
+// no Index ones) are also suggested for the Frame, moved onto the Frame's parts. SteamVR then uses the Frame's own
+// profile, so every Frame button reaches us; the game keeps its usual controls. A game that binds the Frame itself
+// keeps its own Frame bindings.
+struct SteamFrameState {
+    bool wanted = false;     // the setting
+    bool enabled = false;    // the extension is on in this instance
+    bool gameBinds = false;  // the game suggested Frame bindings itself
+    std::string source;      // the profile the Frame bindings were made from
+};
+static SteamFrameState gFrame;
+
+static void SuggestSteamFrameFrom(XrInstance inst, const std::string& prof, const XrInteractionProfileSuggestedBinding* sb) {
+    bool isIndex = prof == "/interaction_profiles/valve/index_controller";
+    bool isTouch = prof == "/interaction_profiles/oculus/touch_controller";
+    if (!gFrame.enabled || gFrame.gameBinds || !(isIndex || isTouch)) return;
+    if (isTouch && gFrame.source == "/interaction_profiles/valve/index_controller") return; // Index ones fit better
+    std::vector<XrActionSuggestedBinding> all;
+    for (uint32_t i = 0; i < sb->countSuggestedBindings; i++) {
+        std::string to = SteamFramePathFor(prof, S(sb->suggestedBindings[i].binding));
+        if (to.empty()) continue;
+        all.push_back({ sb->suggestedBindings[i].action, P(to) });
+        int hand, comp;
+        InputFeature feature;
+        if (ParseGameInputPath(to, hand, comp, feature)) gInput.AddBinding(sb->suggestedBindings[i].action, hand, comp, feature);
+    }
+    size_t gameCount = all.size();
+    if (gOurs.set != XR_NULL_HANDLE) {
+        for (const PB* t : { kSteamFrame, kCommonPoses })
+            for (size_t i = 0, n = t == kSteamFrame ? std::size(kSteamFrame) : std::size(kCommonPoses); i < n; i++)
+                for (int h = 0; h < 2; h++)
+                    if (t[i].hands & (1 << h))
+                        all.push_back({ gOurs.action[t[i].act], P(std::string(h ? "/user/hand/right/" : "/user/hand/left/") + t[i].sub) });
+    }
+    XrInteractionProfileSuggestedBinding fsb{ XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING };
+    fsb.interactionProfile = P(kSteamFrameProfile);
+    fsb.countSuggestedBindings = (uint32_t)all.size();
+    fsb.suggestedBindings = all.data();
+    XrResult r = N.SuggestInteractionProfileBindings(inst, &fsb);
+    if (XR_FAILED(r)) {
+        Log("Steam Frame: suggesting the game's %s bindings for the Frame failed (%d)", prof.c_str(), r);
+        return;
+    }
+    gFrame.source = prof;
+    gOurs.profiles.insert(kSteamFrameProfile);
+    Log("Steam Frame: %zu of the game's %s bindings + %zu ours suggested for the Frame", gameCount, prof.c_str(), all.size() - gameCount);
+}
+
 static XrResult XRAPI_CALL Hook_xrSuggestInteractionProfileBindings(XrInstance inst, const XrInteractionProfileSuggestedBinding* sb) {
     std::lock_guard l(gMx);
     std::string prof = S(sb->interactionProfile);
+    if (prof == kSteamFrameProfile) gFrame.gameBinds = true;
     std::set<std::string> appPaths; // what the game binds on this controller
     for (uint32_t i = 0; i < sb->countSuggestedBindings; i++) {
         std::string bp = S(sb->suggestedBindings[i].binding);
@@ -682,6 +763,7 @@ static XrResult XRAPI_CALL Hook_xrSuggestInteractionProfileBindings(XrInstance i
     gOurs.profiles.insert(prof);
     Log("suggest %s: %u app + %zu ours%s", prof.c_str(), sb->countSuggestedBindings, all.size() - sb->countSuggestedBindings,
         learned ? " (learned from the game's bindings)" : "");
+    SuggestSteamFrameFrom(inst, prof, sb);
     return r;
 }
 
@@ -1048,7 +1130,25 @@ static XrResult XRAPI_CALL Hook_xrCreateApiLayerInstance(const XrInstanceCreateI
     gNextGipa = li->nextInfo->nextGetInstanceProcAddr;
     XrApiLayerCreateInfo chain = *li;
     chain.nextInfo = li->nextInfo->next;
-    XrResult r = li->nextInfo->nextCreateApiLayerInstance(info, &chain, inst);
+    // Steam Frame setting: also turn on the Frame's extension; without it (another runtime, older SteamVR) the
+    // game starts as usual.
+    gFrame = {};
+    gFrame.wanted = LoadSteamFrameNative();
+    XrResult r = XR_ERROR_EXTENSION_NOT_PRESENT;
+    if (gFrame.wanted) {
+        std::vector<const char*> ext(info->enabledExtensionNames, info->enabledExtensionNames + info->enabledExtensionCount);
+        bool has = false;
+        for (const char* e : ext)
+            has = has || strcmp(e, kSteamFrameExtension) == 0;
+        if (!has) ext.push_back(kSteamFrameExtension);
+        XrInstanceCreateInfo withFrame = *info;
+        withFrame.enabledExtensionCount = (uint32_t)ext.size();
+        withFrame.enabledExtensionNames = ext.data();
+        r = li->nextInfo->nextCreateApiLayerInstance(&withFrame, &chain, inst);
+        gFrame.enabled = XR_SUCCEEDED(r);
+        Log("Steam Frame setting on: the Frame's extension %s (%d)", gFrame.enabled ? "is on" : "is not offered, left off", r);
+    }
+    if (!gFrame.enabled) r = li->nextInfo->nextCreateApiLayerInstance(info, &chain, inst);
     if (XR_FAILED(r)) return r;
     gInst = *inst;
     auto get = [&](const char* nm, auto& f) {

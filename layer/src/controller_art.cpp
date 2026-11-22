@@ -6,6 +6,7 @@ ControllerKind ControllerKindOf(const std::string& p) {
     if (p.find("touch_pro") != std::string::npos || p.find("touch_controller_pro") != std::string::npos) return ControllerKind::TouchPro;
     if (p.find("touch") != std::string::npos) return ControllerKind::Touch;
     if (p.find("index") != std::string::npos) return ControllerKind::Index;
+    if (p.find("valve/frame_controller") != std::string::npos) return ControllerKind::SteamFrame;
     if (p.find("vive_controller") != std::string::npos) return ControllerKind::Vive;
     if (p.find("hp/mixed_reality") != std::string::npos) return ControllerKind::HpReverb;
     if (p.find("microsoft/motion") != std::string::npos) return ControllerKind::Wmr;
@@ -28,6 +29,8 @@ const char* ControllerKindName(ControllerKind k) {
         return "WMR controller";
     case ControllerKind::HpReverb:
         return "Reverb G2 controller";
+    case ControllerKind::SteamFrame:
+        return "Steam Frame controller";
     default:
         return "Controller";
     }
@@ -70,6 +73,24 @@ static const ControllerArt kReverb{
       { -1, ArtShape::Circle, 96, 146, 13, 13 } },
 };
 
+// The right Frame controller: a round head with the stick on the inside, A / B / X / Y on the outside, the menu
+// slot above and the Steam button below; a bumper on the top edge. The left one (mirrored) has a D-pad there.
+static const ControllerArt kSteamFrame{
+    { { ArtShape::Ellipse, 28, 14, 146, 132 }, { ArtShape::RoundRect, 66, 118, 52, 136, 4 } },
+    { { C_STICK, ArtShape::Circle, 44, 62, 42, 42 },
+      { C_BUMPER, ArtShape::Pill, 82, 8, 40, 9 },
+      { C_MENU, ArtShape::Pill, 74, 42, 20, 8 },
+      { -1, ArtShape::Circle, 108, 104, 15, 15 },
+      { C_BTN4, ArtShape::Circle, 120, 38, 19, 19, 2 },
+      { C_BTN3, ArtShape::Circle, 102, 58, 19, 19, 2 },
+      { C_BTN2, ArtShape::Circle, 138, 58, 19, 19, 2 },
+      { C_BTN1, ArtShape::Circle, 120, 78, 19, 19, 2 },
+      { C_DPAD_UP, ArtShape::RoundRect, 121, 38, 16, 20, 1 },
+      { C_DPAD_DOWN, ArtShape::RoundRect, 121, 76, 16, 20, 1 },
+      { C_DPAD_LEFT, ArtShape::RoundRect, 136, 59, 20, 16, 1 },
+      { C_DPAD_RIGHT, ArtShape::RoundRect, 102, 59, 20, 16, 1 } },
+};
+
 const ControllerArt& ArtFor(ControllerKind k) {
     switch (k) {
     case ControllerKind::Index:
@@ -80,6 +101,8 @@ const ControllerArt& ArtFor(ControllerKind k) {
         return kWmr;
     case ControllerKind::HpReverb:
         return kReverb;
+    case ControllerKind::SteamFrame:
+        return kSteamFrame;
     default:
         return kTouch; // the most common, and a fair stand-in for unknown ones
     }

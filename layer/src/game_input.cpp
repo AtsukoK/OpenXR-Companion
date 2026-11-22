@@ -1,5 +1,35 @@
 #include "game_input.h"
 
+// Where one of the game's Index / Touch inputs is on the Frame ("" when it has no place there).
+// The left Frame has a D-pad where the others have X / Y (or A / B): the lower button is D-pad down, the upper one up.
+std::string SteamFramePathFor(const std::string& from, const std::string& path) {
+    const std::string L = "/user/hand/left/", R = "/user/hand/right/";
+    bool left = path.rfind(L, 0) == 0, right = path.rfind(R, 0) == 0;
+    if (!left && !right) return "";
+    std::string hand = left ? L : R, sub = path.substr(hand.size());
+    auto starts = [&](const char* p) {
+        return sub.rfind(p, 0) == 0;
+    };
+    auto feature = [&](const std::string& part) {
+        return sub.substr(part.size());
+    };
+    bool isIndex = from.find("index") != std::string::npos;
+    if (sub == "input/grip/pose" || sub == "input/aim/pose" || sub == "output/haptic") return path;
+    if (starts("input/trigger/") || starts("input/thumbstick")) return path;
+    if (starts("input/squeeze/")) return hand + (sub == "input/squeeze/force" ? "input/squeeze/value" : sub);
+    std::string lower = isIndex || right ? "input/a" : "input/x", upper = isIndex || right ? "input/b" : "input/y";
+    if (starts(lower.c_str()) || starts(upper.c_str())) {
+        bool isLower = starts(lower.c_str());
+        std::string f = feature(isLower ? lower : upper);
+        if (right) return hand + (isLower ? "input/a" : "input/b") + f;
+        return hand + (isLower ? "input/dpad_down" : "input/dpad_up") + f;
+    }
+    // The menu: the Touch's left menu, or the Index's system button (games bind it as their menu).
+    if (starts("input/menu/") || (isIndex && starts("input/system/")))
+        return hand + (left ? "input/view" : "input/menu") + feature(starts("input/menu/") ? "input/menu" : "input/system");
+    return ""; // thumbrest, trackpad: not on the Frame
+}
+
 bool ParseGameInputPath(const std::string& path, int& hand, int& comp, InputFeature& feature) {
     const std::string prefix[2] = { "/user/hand/left/input/", "/user/hand/right/input/" };
     for (int h = 0; h < 2; h++) {
@@ -9,6 +39,7 @@ bool ParseGameInputPath(const std::string& path, int& hand, int& comp, InputFeat
         std::string part = rest.substr(0, slash);
         std::string feat = slash == std::string::npos ? "" : rest.substr(slash + 1);
         int c = part == "select" ? C_TRIGGER : ParseCompName(part);
+        if (h == 1 && (part == "x" || part == "y")) c = part == "x" ? C_BTN3 : C_BTN4; // only the Steam Frame's right hand
         if (c < 0 || part == "system") return false;
         hand = h;
         comp = c;

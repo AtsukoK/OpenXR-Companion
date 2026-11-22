@@ -17,6 +17,7 @@ struct HandRaw {
     float sx = 0, sy = 0;
     bool sc = false, st = false;
     bool rest = false, menu = false;
+    bool more[C_COUNT]{}; // pressed, for the Steam Frame's parts from C_BTN3 on (its right X / Y, bumpers, D-pad)
     bool gripValid = false, aimValid = false;
     bool touchCtl = false; // a Meta Touch controller (its aim ray needs correcting)
     ControllerKind kind = ControllerKind::Unknown; // from the runtime's interaction profile (the menu's pictures)

@@ -19,7 +19,7 @@ static const char* SilhouetteId(ControllerKind kind) {
     case ControllerKind::HpReverb:
         return "reverbg2";
     case ControllerKind::Vive:
-        return "vive"; // outlined from a photo
+        return "vive"; // from a CC BY model
     case ControllerKind::Unknown:
         return "quest3"; // the most common now
     default:

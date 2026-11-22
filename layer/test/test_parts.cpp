@@ -467,3 +467,30 @@ void TestStickOptions() {
     step(0.05);
     CHECK(!e.IsOn(sprintLayer), "sticks: letting the stick back ends it");
 }
+
+// The Steam Frame: its own parts in profiles and game paths, and the game's Index / Touch inputs moved onto it.
+void TestSteamFrame() {
+    InputId id;
+    CHECK(ParseInput("right.button3", id) && id.comp == C_BTN3 && InputName(id) == "right.button3", "frame: right X is button3");
+    CHECK(ParseInput("left.dpad_up.touch", id) && id.comp == C_DPAD_UP && id.feat == F_TOUCH, "frame: left D-pad up parses");
+    CHECK(ParseInput("left.bumper", id) && InputName(id) == "left.bumper", "frame: the bumper round-trips");
+    int hand, comp;
+    InputFeature f;
+    CHECK(ParseGameInputPath("/user/hand/right/input/x/click", hand, comp, f) && comp == C_BTN3, "frame: the game's right X is BTN3");
+    CHECK(ParseGameInputPath("/user/hand/left/input/x/click", hand, comp, f) && comp == C_BTN1, "frame: the left X stays BTN1");
+    CHECK(ParseGameInputPath("/user/hand/left/input/view/click", hand, comp, f) && comp == C_MENU, "frame: View is the menu");
+    CHECK(ParseGameInputPath("/user/hand/left/input/dpad_left/click", hand, comp, f) && comp == C_DPAD_LEFT, "frame: D-pad left");
+    const std::string idx = "/interaction_profiles/valve/index_controller", touch = "/interaction_profiles/oculus/touch_controller";
+    CHECK(SteamFramePathFor(idx, "/user/hand/right/input/a/click") == "/user/hand/right/input/a/click", "frame: Index right A stays A");
+    CHECK(SteamFramePathFor(idx, "/user/hand/left/input/a/click") == "/user/hand/left/input/dpad_down/click", "frame: Index left A is D-pad down");
+    CHECK(SteamFramePathFor(idx, "/user/hand/left/input/b/touch") == "/user/hand/left/input/dpad_up/touch", "frame: Index left B is D-pad up");
+    CHECK(SteamFramePathFor(touch, "/user/hand/left/input/y/click") == "/user/hand/left/input/dpad_up/click", "frame: Touch left Y is D-pad up");
+    CHECK(SteamFramePathFor(touch, "/user/hand/left/input/menu/click") == "/user/hand/left/input/view/click", "frame: Touch menu is View");
+    CHECK(SteamFramePathFor(idx, "/user/hand/right/input/system/click") == "/user/hand/right/input/menu/click", "frame: Index system is Menu");
+    CHECK(SteamFramePathFor(idx, "/user/hand/left/input/squeeze/force") == "/user/hand/left/input/squeeze/value", "frame: grip force is value");
+    CHECK(SteamFramePathFor(idx, "/user/hand/right/input/thumbstick/y") == "/user/hand/right/input/thumbstick/y", "frame: stick stays");
+    CHECK(SteamFramePathFor(idx, "/user/hand/right/input/trackpad/x").empty(), "frame: no trackpad on the Frame");
+    CHECK(SteamFramePathFor(touch, "/user/hand/right/input/thumbrest/touch").empty(), "frame: no thumbrest on the Frame");
+    CHECK(SteamFramePathFor(idx, "/user/hand/right/input/aim/pose") == "/user/hand/right/input/aim/pose", "frame: poses stay");
+    CHECK(ControllerKindOf("/interaction_profiles/valve/frame_controller_valve") == ControllerKind::SteamFrame, "frame: the kind");
+}

@@ -34,6 +34,17 @@ controller bindings, but the results are ordinary bindings in the profile.
 - Editor: stick options card when the thumbstick is selected; written only while something is set.
 - Tests: TestStickOptions (14 checks).
 
+## Steam Frame (2026-11-22)
+- Own ControllerKind::SteamFrame (profile /interaction_profiles/valve/frame_controller_valve, extension
+  XR_VALVE_frame_controller_interaction; paths from Valve's Steamworks "Steam Frame Input" page).
+- New comps after C_MENU: C_BTN3 / C_BTN4 (right X / Y, profile names right.button3 / button4), C_BUMPER, C_DPAD_*
+  (left D-pad). Left View = menu. Game paths: right x / y -> BTN3 / BTN4 (left x stays BTN1).
+- Setting steam_frame.json {"native": true} in the data folder (editor checkbox on the Steam Frame picture). The layer
+  then adds the extension at instance creation (falls back without it) and, whenever the game suggests Index (or Touch,
+  when no Index) bindings, also suggests them for the Frame through SteamFramePathFor (game_input.cpp) plus ours.
+  A game that suggests the Frame itself wins. Untested on a real Frame: check the log lines "Steam Frame:".
+- Picture: our own simple drawing (no Frame 3D model), editor layout "frame" and layer art kSteamFrame.
+
 ## Checks
 - `quick_test.sh`: 0 failures, including `TestQuickBindings` (touch keeps presses, remap swaps, off hides) and
   `HP Reverb G2` (X / Y / A / B suggested).

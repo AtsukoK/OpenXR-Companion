@@ -11,6 +11,7 @@ void TestKeySequences();
 void TestQuickBindings();
 void TestHoldOnlyQuickBinding();
 void TestStickOptions();
+void TestSteamFrame();
 void TestInGameMenu();
 void TestMenuSave();
 
@@ -2663,6 +2664,7 @@ int main(int argc, char** argv) {
     TestQuickBindings();
     TestHoldOnlyQuickBinding();
     TestStickOptions();
+    TestSteamFrame();
     TestInGameMenu();
     TestMenuSave();
     printf("\n%d failures\n", fails);

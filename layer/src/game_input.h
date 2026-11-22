@@ -16,6 +16,8 @@ enum class InputFeature { Value = 0, Touch = 1, Vector = 2, X = 3, Y = 4 };
 
 // "/user/hand/right/input/trigger/value" -> hand 1, C_TRIGGER, Value. False for paths we don't handle.
 bool ParseGameInputPath(const std::string& path, int& hand, int& comp, InputFeature& feature);
+// Steam Frame setting: where one of the game's Index / Touch inputs (full path) goes on the Frame; "" when nowhere.
+std::string SteamFramePathFor(const std::string& fromProfile, const std::string& path);
 
 class GameInputFilter {
 public:

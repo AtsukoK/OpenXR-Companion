@@ -17,6 +17,7 @@ public class ControllerButtonsPage : UserControl
     readonly ControllerPicture picture = new() { Dock = DockStyle.Top, Height = 360 };
     readonly FlowLayoutPanel details = new() { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(0, 6, 0, 12) };
     readonly Label models = new() { AutoSize = true, Margin = new Padding(10, 7, 0, 0) };
+    readonly CheckBox frameNative = SteamFrameSetting.NewCheckBox();
     ControllerLayout layout;
 
     // open: show a binding in its editor. added: a new binding was put in the profile (true = show it in its editor).
@@ -48,6 +49,7 @@ public class ControllerButtonsPage : UserControl
         chooserRow.Controls.Add(new Label { Text = "Controller:", AutoSize = true, Margin = new Padding(0, 7, 8, 0) });
         chooserRow.Controls.Add(chooser);
         chooserRow.Controls.Add(models);
+        chooserRow.Controls.Add(frameNative);
 
         picture.BackColor = Theme.Card;
         picture.SizeChanged += (s, e) => FitPictureHeight();
@@ -92,6 +94,7 @@ public class ControllerButtonsPage : UserControl
     void ShowAll()
     {
         models.Text = "For: " + layout.Models;
+        frameNative.Visible = layout.Id == "frame";
         picture.ShowController(layout, hand, SelectedPart?.Comp, p => QuickBindings.UseOf(profile.Bindings, hand, p), p => TagLinesOf(profile.Bindings, hand, p));
         FitPictureHeight();
         ShowDetails();

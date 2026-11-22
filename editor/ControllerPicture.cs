@@ -364,7 +364,15 @@ public class ControllerPicture : Control
     {
         if (part.Shape != PartShape.Button || part.View != ControllerView.Top) return;
         string label = part.LabelFor(hand);
-        string letter = label.Length <= 2 ? label : part.Comp == "menu" ? "≡" : null;
+        string letter = label.Length <= 2 ? label : part.Comp switch
+        {
+            "menu" => "≡",
+            "dpad_up" => "▴",
+            "dpad_down" => "▾",
+            "dpad_left" => "◂",
+            "dpad_right" => "▸",
+            _ => null,
+        };
         if (letter == null) return;
         float size = Math.Max(6f, Math.Min(bounds.Width, bounds.Height) * 0.55f);
         using var font = new Font(Font.FontFamily, size, FontStyle.Bold, GraphicsUnit.Pixel);

@@ -5,8 +5,14 @@
 #include <memory>
 #include <optional>
 
-// Physical controller parts. BTN1 = A (right) / X (left), BTN2 = B / Y.
-enum Comp { C_BTN1, C_BTN2, C_TRIGGER, C_GRIP, C_STICK, C_THUMBREST, C_MENU, C_COUNT };
+// Physical controller parts. BTN1 = A (right) / X (left), BTN2 = B / Y. MENU is also the Steam Frame's left View.
+// The rest are only on the Steam Frame: its right X / Y (BTN3 / BTN4), the bumpers above the triggers, the left D-pad.
+enum Comp {
+    C_BTN1, C_BTN2, C_TRIGGER, C_GRIP, C_STICK, C_THUMBREST, C_MENU,
+    C_BTN3, C_BTN4, C_BUMPER, C_DPAD_UP, C_DPAD_DOWN, C_DPAD_LEFT, C_DPAD_RIGHT, C_COUNT
+};
+// The names of the parts in profiles ("right.a", "left.dpad_up"), per hand: [hand][comp].
+extern const char* const kCompNames[2][C_COUNT];
 // How the part is read. PRESS = click or analog over threshold.
 enum Feat { F_PRESS, F_TOUCH, F_UP, F_DOWN, F_LEFT, F_RIGHT, F_COUNT };
 
@@ -404,6 +410,10 @@ struct HeadSmoothSettings {
 bool LoadHeadSmoothSettings(HeadSmoothSettings& h);
 void SwitchOffHeadSmoothing(); // writes "on": false, keeps the rest
 std::wstring HeadSmoothSettingsPath();
+// Steam Frame: when on, the layer asks SteamVR for the Frame controller itself (all its buttons) instead of the
+// Index / Touch stand-in, and gives SteamVR a Frame version of the game's own bindings. Off by default.
+std::wstring SteamFrameSettingsPath();
+bool LoadSteamFrameNative();
 std::wstring MirrorSettingsPath();
 bool LoadMirrorSettings(MirrorSettings& m);
 bool SaveMirrorSettings(const MirrorSettings& m);

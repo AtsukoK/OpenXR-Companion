@@ -29,8 +29,23 @@ static std::vector<std::string> Split(const std::string& s, char sep) {
     return out;
 }
 
+const char* const kCompNames[2][C_COUNT] = {
+    { "x", "y", "trigger", "grip", "thumbstick", "thumbrest", "menu", "button3", "button4", "bumper", "dpad_up", "dpad_down",
+      "dpad_left", "dpad_right" },
+    { "a", "b", "trigger", "grip", "thumbstick", "thumbrest", "menu", "button3", "button4", "bumper", "dpad_up", "dpad_down",
+      "dpad_left", "dpad_right" },
+};
+
 int ParseCompName(const std::string& n) {
     std::string s = Lower(n);
+    if (s == "button3" || s == "btn3") return C_BTN3;
+    if (s == "button4" || s == "btn4") return C_BTN4;
+    if (s == "bumper") return C_BUMPER;
+    if (s == "dpad_up") return C_DPAD_UP;
+    if (s == "dpad_down") return C_DPAD_DOWN;
+    if (s == "dpad_left") return C_DPAD_LEFT;
+    if (s == "dpad_right") return C_DPAD_RIGHT;
+    if (s == "view") return C_MENU;
     if (s == "a" || s == "x" || s == "primary" || s == "btn1") return C_BTN1;
     if (s == "b" || s == "y" || s == "secondary" || s == "btn2") return C_BTN2;
     if (s == "trigger") return C_TRIGGER;
@@ -79,11 +94,9 @@ bool ParseInput(const std::string& str, InputId& out) {
 
 std::string InputName(const InputId& i) {
     if (!i.valid()) return "?";
-    static const char* compR[] = { "a", "b", "trigger", "grip", "thumbstick", "thumbrest", "menu" };
-    static const char* compL[] = { "x", "y", "trigger", "grip", "thumbstick", "thumbrest", "menu" };
     static const char* feat[] = { "", ".touch", ".up", ".down", ".left", ".right" };
     std::string s = i.hand == 0 ? "left." : "right.";
-    s += i.hand == 0 ? compL[i.comp] : compR[i.comp];
+    s += kCompNames[i.hand == 0 ? 0 : 1][i.comp];
     if (!(i.comp == C_THUMBREST && i.feat == F_TOUCH)) s += feat[i.feat];
     return s;
 }
@@ -951,6 +964,20 @@ bool SaveMenuEdits(Profile& p, std::string& err) {
         return true;
     } catch (const std::exception& e) {
         err = e.what();
+        return false;
+    }
+}
+
+std::wstring SteamFrameSettingsPath() {
+    return DataDir() + L"\\steam_frame.json";
+}
+bool LoadSteamFrameNative() {
+    std::string text;
+    if (!ReadFile(SteamFrameSettingsPath(), text)) return false;
+    try {
+        json j = json::parse(text);
+        return j.is_object() && j.value("native", false);
+    } catch (...) {
         return false;
     }
 }

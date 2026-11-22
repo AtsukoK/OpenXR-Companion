@@ -14,7 +14,8 @@ public enum PartShape { Button, Stick, Pad, Pill, Trigger, Grip }
 public sealed record BodyPiece(ControllerView View, BodyShape Shape, RectangleF Box, float Turn = 0, float Thickness = 0, bool IsStrap = false);
 
 // One button, stick, pad, trigger or grip.
-// Comp: the input name used in bindings ("primary", "secondary", "trigger", "grip", "thumbstick", "thumbrest", "menu"),
+// Comp: the input name used in bindings ("primary", "secondary", "trigger", "grip", "thumbstick", "thumbrest", "menu";
+// on the Steam Frame also "button3" / "button4" (its right X / Y), "bumper", "dpad_up" / "dpad_down" / "dpad_left" / "dpad_right"),
 // or a part OpenXR Companion can't read ("trackpad", "touchpad", "system"), which then has a NotUsable reason.
 // Ways: how it can be used, as the input's last part: "" (press / pull / squeeze / click), "touch", "up", "down", "left", "right".
 public sealed record ControllerPart(string Comp, string Label, string LeftLabel, ControllerView View, PartShape Shape, RectangleF Box,
@@ -143,7 +144,32 @@ public static class ControllerLayouts
                 TriggerOf(PressTouch),
                 GripOf(),
             }),
-        new("index", "Valve Index (and Index-style)", "Valve Index; Steam Frame, Bigscreen, Pimax with Index-style controllers", "index",
+        new("frame", "Steam Frame", "Steam Frame controllers (for all their buttons, tick the box on the right)", "frame",
+            new[]
+            {
+                new BodyPiece(ControllerView.Top, BodyShape.Ellipse, R(28, 14, 146, 132)),
+                new BodyPiece(ControllerView.Top, BodyShape.RoundRect, R(66, 118, 52, 136), Turn: 4),
+                new BodyPiece(ControllerView.Side, BodyShape.Ellipse, R(14, 12, 104, 92), Turn: -12),
+                new BodyPiece(ControllerView.Side, BodyShape.RoundRect, R(48, 84, 50, 166), Turn: -6),
+            },
+            new ControllerPart[]
+            {
+                new("thumbstick", "Thumbstick", null, ControllerView.Top, PartShape.Stick, R(44, 62, 42, 42), StickWays),
+                new("button4", "Y", null, ControllerView.Top, PartShape.Button, R(120, 38, 19, 19), Press, ControllerPart.RightHand),
+                new("button3", "X", null, ControllerView.Top, PartShape.Button, R(102, 58, 19, 19), Press, ControllerPart.RightHand),
+                new("secondary", "B", null, ControllerView.Top, PartShape.Button, R(138, 58, 19, 19), PressTouch, ControllerPart.RightHand),
+                new("primary", "A", null, ControllerView.Top, PartShape.Button, R(120, 78, 19, 19), PressTouch, ControllerPart.RightHand),
+                new("dpad_up", "D-pad up", null, ControllerView.Top, PartShape.Button, R(121, 38, 16, 20), Press, ControllerPart.LeftHand),
+                new("dpad_down", "D-pad down", null, ControllerView.Top, PartShape.Button, R(121, 76, 16, 20), Press, ControllerPart.LeftHand),
+                new("dpad_left", "D-pad left", null, ControllerView.Top, PartShape.Button, R(136, 59, 20, 16), Press, ControllerPart.LeftHand),
+                new("dpad_right", "D-pad right", null, ControllerView.Top, PartShape.Button, R(102, 59, 20, 16), Press, ControllerPart.LeftHand),
+                new("menu", "Menu", "View", ControllerView.Top, PartShape.Pill, R(74, 42, 20, 8), Press),
+                new("system", "Steam button", null, ControllerView.Top, PartShape.Button, R(108, 104, 15, 15), Press, NotUsable: SystemButton),
+                new("bumper", "Bumper", null, ControllerView.Side, PartShape.Pill, R(12, 40, 30, 12), Press, Turn: -30),
+                new("trigger", "Trigger", null, ControllerView.Side, PartShape.Trigger, R(8, 64, 26, 44), PressTouch),
+                new("grip", "Grip", null, ControllerView.Side, PartShape.Grip, R(32, 128, 24, 80), Press, Turn: -6),
+            }),
+        new("index", "Valve Index (and Index-style)", "Valve Index; Bigscreen, Pimax with Index-style controllers; Steam Frame without the Steam Frame setting", "index",
             new[]
             {
                 new BodyPiece(ControllerView.Top, BodyShape.RoundRect, R(60, 12, 80, 156)),

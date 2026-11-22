@@ -126,6 +126,8 @@ void Engine::ComputeDown() {
         hyst(C_STICK, F_LEFT, left && r.sx < -p.stickOn, left && r.sx < -p.stickOff);
         cur[h][C_THUMBREST][F_TOUCH] = cur[h][C_THUMBREST][F_PRESS] = r.rest;
         cur[h][C_MENU][F_PRESS] = cur[h][C_MENU][F_TOUCH] = r.menu;
+        for (int c = C_BTN3; c < C_COUNT; c++)
+            cur[h][c][F_PRESS] = cur[h][c][F_TOUCH] = r.more[c];
     }
 }
 
