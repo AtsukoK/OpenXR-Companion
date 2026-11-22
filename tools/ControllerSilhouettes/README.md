@@ -2,7 +2,9 @@
 
 Traces the controller pictures from real 3D models: the WebXR input profile models
 (https://github.com/immersive-web/webxr-input-profiles, `packages/assets/profiles`, MIT licence, (c) 2019 Amazon).
-Only outlines are kept (no textures, no logos). The Vive wands have no model there: their front outline comes from
+Only outlines are kept (no textures, no logos). The Vive wands have no model there: they come from "HTC Vive
+Controller" by iShoNz on Sketchfab (CC BY 4.0; `models/htc-vive/model/model.dae` from its download, one piece,
+buttons placed by proportion). Without it, their front outline comes from
 photos (`models/photos/vive_back.png` for the outline, mirrored; `vive_wands.png`, the front, for where the buttons
 are; the wand in each photo's right half; kept out of git); their side view stays drawn.
 

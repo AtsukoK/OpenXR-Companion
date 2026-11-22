@@ -45,7 +45,8 @@ static class Program
         if (Environment.GetEnvironmentVariable("SIL_AXES") is string axesOf) // debug: the six straight-on views of one model
         {
             Directory.CreateDirectory(preview);
-            Tracer.AxisViews(Glb.Load(Path.Combine(models, axesOf, "right.glb")), Path.Combine(preview, "axes_" + axesOf + ".png"));
+            string glb = Path.Combine(models, axesOf, "right.glb"), dae = Path.Combine(models, axesOf, "model", "model.dae");
+            Tracer.AxisViews(File.Exists(glb) ? Glb.Load(glb) : Dae.Load(dae), Path.Combine(preview, "axes_" + axesOf + ".png"));
             return 0;
         }
         Directory.CreateDirectory(preview);
@@ -65,12 +66,25 @@ static class Program
                 Preview.Save(traced, Path.Combine(preview, $"{id}_{hand}.png"));
                 Console.WriteLine($"{id}/{hand}: {tris.Count} triangles, parts {string.Join(", ", traced.Parts.Select(p => p.Comp + (p.Estimated ? "*" : "")))}");
             }
-        // The Vive wands have no model: outlined from a photo (the wand in the photo's right half, seen from the front).
+        // The Vive wands: not in the WebXR set. A CC BY model when it is there (HTC Vive Controller by iShoNz on
+        // Sketchfab), else photos.
+        string viveModel = Path.Combine(models, "htc-vive", "model", "model.dae");
+        if (File.Exists(viveModel))
+        {
+            var viveTris = Dae.Load(viveModel);
+            foreach (string hand in new[] { "left", "right" })
+            {
+                var traced = Tracer.TraceVive(hand, viveTris);
+                results.Add(traced);
+                Preview.Save(traced, Path.Combine(preview, $"vive_{hand}.png"));
+                Console.WriteLine($"vive/{hand}: from the model, {viveTris.Count} triangles");
+            }
+        }
         string photo = Path.Combine(models, "photos", "vive_back.png"); // the back shows the crown's ring best
         bool fromBack = File.Exists(photo);
         if (!fromBack)
             photo = Path.Combine(models, "photos", "vive_wands.png");
-        if (File.Exists(photo))
+        if (File.Exists(photo) && !File.Exists(viveModel))
             foreach (string hand in new[] { "left", "right" })
             {
                 var traced = PhotoTracer.Trace("vive", hand, photo, fromBack);
@@ -223,6 +237,41 @@ static class Glb
     }
 }
 
+// ------------------------------------------------------------ Collada (.dae): one mesh's triangles (the Vive wand model)
+static class Dae
+{
+    public static List<Tri> Load(string path)
+    {
+        var doc = System.Xml.Linq.XDocument.Load(path);
+        System.Xml.Linq.XNamespace ns = doc.Root.Name.Namespace;
+        var tris = new List<Tri>();
+        foreach (var mesh in doc.Descendants(ns + "mesh"))
+        {
+            var sources = mesh.Elements(ns + "source").ToDictionary(e => (string)e.Attribute("id"),
+                e => e.Element(ns + "float_array").Value.Split((char[])null, StringSplitOptions.RemoveEmptyEntries).Select(x => float.Parse(x, CultureInfo.InvariantCulture)).ToArray());
+            string posId = ((string)mesh.Element(ns + "vertices").Elements(ns + "input").First(i => (string)i.Attribute("semantic") == "POSITION").Attribute("source")).TrimStart('#');
+            var pos = sources[posId];
+            Vector3 P(int i) => new(pos[3 * i], pos[3 * i + 1], pos[3 * i + 2]);
+            foreach (var prim in mesh.Elements().Where(e => e.Name.LocalName is "polylist" or "triangles"))
+            {
+                int stride = prim.Elements(ns + "input").Max(i => (int)i.Attribute("offset")) + 1;
+                int vertexOffset = (int)prim.Elements(ns + "input").First(i => (string)i.Attribute("semantic") == "VERTEX").Attribute("offset");
+                var p = prim.Element(ns + "p").Value.Split((char[])null, StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToArray();
+                var counts = prim.Element(ns + "vcount") is { } vc ? vc.Value.Split((char[])null, StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToArray()
+                                                                   : Enumerable.Repeat(3, p.Length / stride / 3).ToArray();
+                int at = 0;
+                foreach (int n in counts)
+                {
+                    for (int k = 1; k + 1 < n; k++) // a fan of triangles per polygon
+                        tris.Add(new Tri(P(p[(at) * stride + vertexOffset]), P(p[(at + k) * stride + vertexOffset]), P(p[(at + k + 1) * stride + vertexOffset]), "body"));
+                    at += n;
+                }
+            }
+        }
+        return tris;
+    }
+}
+
 // ------------------------------------------------------------ tracing
 // Outlines in design units: the top view fits 200 x 260, the side view 130 x 260 (like editor/ControllerLayouts.cs).
 record TracedPart(string Comp, bool Top, List<List<PointF>> Loops, bool Estimated);
@@ -323,6 +372,47 @@ static class Tracer
             g.DrawString(new[] { "+X", "-X", "+Y", "-Y", "+Z", "-Z" }[i], SystemFonts.DefaultFont, Brushes.White, i * 220 + 10, 8);
         }
         bmp.Save(file);
+    }
+
+    // The Vive wand model is one piece (no separate buttons), handle along Z with the crown toward -Z, the
+    // trackpad's face toward +Y. Its parts are placed by proportion (checked against photos of real wands).
+    // cx, cy: shares of the outline's width and height; w, h: shares of its width (so circles stay round).
+    static readonly (string comp, float cx, float cy, float w, float h)[] ViveTop =
+    {
+        ("menu", 0.5f, 0.31f, 0.06f, 0.06f), ("thumbstick", 0.5f, 0.45f, 0.3f, 0.3f), ("system", 0.5f, 0.6f, 0.05f, 0.05f),
+    };
+    static readonly (string comp, float cx, float cy, float w, float h)[] ViveSide =
+    {
+        ("trigger", 0.6f, 0.37f, 0.14f, 0.22f), ("grip", 0.79f, 0.49f, 0.13f, 0.2f),
+    };
+
+    public static Traced TraceVive(string hand, List<Tri> tris)
+    {
+        var up = -Vector3.UnitZ;
+        var top = Project(tris, Vector3.UnitX, up, Array.Empty<string>(), Grid);  // from the trackpad's side
+        var side = Project(tris, Vector3.UnitY, up, Array.Empty<string>(), Grid); // trigger (-Y) on the left
+        if (hand == "left")
+        {
+            top.FlipX();
+            side.FlipX();
+        }
+        var fitTop = Fit(top, 200, 260);
+        var fitSide = Fit(side, 130, 260);
+        var t = new Traced("vive", hand, top.Body.Select(l => l.Select(fitTop).ToList()).ToList(),
+                           side.Body.Select(l => l.Select(fitSide).ToList()).ToList(), new List<TracedPart>());
+        void Place(List<List<PointF>> body, bool isTop, (string comp, float cx, float cy, float w, float h)[] parts)
+        {
+            var pts = body.SelectMany(l => l).ToList();
+            float x0 = pts.Min(q => q.X), y0 = pts.Min(q => q.Y), bw = pts.Max(q => q.X) - x0, bh = pts.Max(q => q.Y) - y0;
+            foreach (var (comp, cx, cy, w, h) in parts)
+            {
+                float x = isTop || hand == "right" ? cx : 1 - cx; // the side view's front is on the right for the left hand
+                t.Parts.Add(new TracedPart(comp, isTop, new() { Pill(x0 + bw * x, y0 + bh * cy, bw * w, bw * h) }, true));
+            }
+        }
+        Place(t.Top, true, ViveTop);
+        Place(t.Side, false, ViveSide);
+        return t;
     }
 
     // Parts most models don't have as meshes (they are part of the body): a fair guess from where the others are.
@@ -748,7 +838,9 @@ static class Emit
 {
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     const string Header = "Generated by tools/ControllerSilhouettes from the WebXR input profile models\n" +
-                          "(github.com/immersive-web/webxr-input-profiles, MIT licence, Copyright (c) 2019 Amazon). Outlines only. Do not edit.";
+                          "(github.com/immersive-web/webxr-input-profiles, MIT licence, Copyright (c) 2019 Amazon), and the Vive wand from
+" +
+                          "\"HTC Vive Controller\" by iShoNz (sketchfab.com/Jonabafor), CC BY 4.0. Outlines only. Do not edit.";
 
     static string Floats(List<PointF> loop) => string.Join(", ", loop.Select(p => $"{p.X.ToString("0.0##", Inv)}f, {p.Y.ToString("0.0##", Inv)}f"));
 
