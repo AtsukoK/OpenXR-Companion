@@ -40,6 +40,9 @@ only when the user says so.
   (span 5); MenuPage/MenuView.stickFree = sticks don't scroll or change values (also Test controllers), footer says so.
   In-game stick ways now include Double flick up/down/left/right (DoubleTapHold, block none, 350 ms), like the editor's
   "+ Add..." on a direction card.
+- Editor "+ Add..." (2026-11-23): the dropdown is now a popup of cards (editor/OptionPicker.cs: PickOption group/title/
+  does/example, laid out by hand, card height measured + 20 px). Choices in ControllerButtonsPage.AddOptions (AddKind).
+  Picture: editor --picker-shot <png> (editor_add_picker.png). Other dropdowns (gesture, block, action type) could use it too.
 - Open ideas: overview pictures could be bigger (spare height); long tag text gets cut; highlight the part on PartPage.
 - Pictures: layer/menu_overview.png, menu_part.png, menu_binding.png, keyboard_binding.png, menu_test_frame.png (tests).
 

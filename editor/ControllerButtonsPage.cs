@@ -384,43 +384,75 @@ public class ControllerButtonsPage : UserControl
     {
         var add = new Button { Text = "+ Add…", AutoSize = true, Height = 28, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(0, 6, 0, 0), BackColor = Theme.Button, ForeColor = Theme.Text };
         add.FlatAppearance.BorderColor = Theme.CardBorder;
-        var menu = new ContextMenuStrip();
-        void Item(string text, Func<BindingModel> make, bool holdOnly = false)
-            => menu.Items.Add(text, null, (s, e) =>
-            {
-                var made = make();
-                if (made == null)
-                    return;
-                if (holdOnly)
-                    QuickBindings.OnlyWhenHeld(made);
-                profile.Bindings.Add(made);
-                added(made, false);
-                ShowAll();
-            });
         BindingModel Key() => QuickBindingDialogs.AskKey(FindForm(), what) is string keys ? QuickBindings.Key(input, what, keys) : null;
         BindingModel Remap() => QuickBindingDialogs.AskGameButton(FindForm(), what, layout, hand) is var (target, name) ? QuickBindings.GameButton(input, what, target, name) : null;
-        Item("Press a key…", Key);
-        if (!isTouchOnly) // touching can't stand in for another button or be hidden without hiding its presses
+        var options = AddOptions(isTouchOnly, isStickDirection);
+        add.Click += (s, e) =>
         {
-            Item("Act as another of the game's buttons…", Remap);
-            Item("Turn off in the game", () => QuickBindings.OffInGame(input, what));
-            menu.Items.Add(new ToolStripSeparator());
-            Item("Hold: press a key (a quick tap still reaches the game)…", Key, holdOnly: true);
-            Item("Hold: act as another button (a quick tap still reaches the game)…", Remap, holdOnly: true);
-            menu.Items.Add(new ToolStripSeparator());
-            Item(isStickDirection ? "Double flick: press a key, held while you keep pushing (sprint)…" : "Double-tap and hold: press a key, held until you let go…",
-                 () => QuickBindingDialogs.AskKey(FindForm(), what) is string keys ? QuickBindings.DoubleFlickKey(input, what, keys) : null);
-        }
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Something else (wheel, macro, layer…)", null, (s, e) =>
-        {
-            var b = QuickBindings.Blank(input, what);
-            profile.Bindings.Add(b);
-            added(b, true); // finished in the binding editor
-        });
-        if (Theme.IsDark)
-            ThemeWalker.Apply(menu);
-        add.Click += (s, e) => menu.Show(add, new Point(0, add.Height));
+            int pick = OptionPicker.Show(FindForm(), "Add to " + what, $"What should {what} do? Pick one; you can change it afterwards.", options.Select(o => o.option).ToList());
+            if (pick < 0)
+                return;
+            var kind = options[pick].kind;
+            BindingModel made = kind switch
+            {
+                AddKind.Key or AddKind.HoldKey => Key(),
+                AddKind.Remap or AddKind.HoldRemap => Remap(),
+                AddKind.Off => QuickBindings.OffInGame(input, what),
+                AddKind.DoubleFlick => QuickBindingDialogs.AskKey(FindForm(), what) is string keys ? QuickBindings.DoubleFlickKey(input, what, keys) : null,
+                _ => QuickBindings.Blank(input, what),
+            };
+            if (made == null)
+                return;
+            if (kind is AddKind.HoldKey or AddKind.HoldRemap)
+                QuickBindings.OnlyWhenHeld(made);
+            bool finish = kind == AddKind.Other; // finished in the binding editor
+            profile.Bindings.Add(made);
+            added(made, finish);
+            if (!finish)
+                ShowAll();
+        };
         return add;
     }
+
+    enum AddKind { Key, Remap, Off, HoldKey, HoldRemap, DoubleFlick, Other }
+
+    // The choices of "+ Add...", each with what it does and what it is good for.
+    static List<(PickOption option, AddKind kind)> AddOptions(bool isTouchOnly, bool isStickDirection)
+    {
+        var o = new List<(PickOption, AddKind)>();
+        void Opt(string group, string title, string does, string example, AddKind kind) => o.Add((new PickOption(group, title, does, example), kind));
+        Opt("When you use it", "Press a key",
+            "Pressing it presses a keyboard key or mouse button of your choice, for as long as you hold it.",
+            "game functions that only have a keyboard key, like a map, inventory, quick save (F5) or push-to-talk.", AddKind.Key);
+        if (!isTouchOnly) // touching can't stand in for another button or be hidden without hiding its presses
+        {
+            Opt("When you use it", "Act as another button",
+                "The game sees a different controller button instead of this one, so you can move a game control to where it feels better.",
+                "swapping jump and crouch, or putting a hard-to-reach button on your other hand.", AddKind.Remap);
+            Opt("When you use it", "Turn off in the game",
+                "The game no longer sees this button at all. Your own bindings on it still work.",
+                "a button you keep pressing by accident, or one you want only for your own bindings.", AddKind.Off);
+            Opt("Hold it", "Hold: press a key",
+                "Holding it for a moment presses a key. A quick tap still does what the game normally does, so you get two functions on one button.",
+                "keeping the game's tap action and adding a second one on hold, like hold B for the map.", AddKind.HoldKey);
+            Opt("Hold it", "Hold: act as another button",
+                "Holding it acts as another controller button. A quick tap still reaches the game as usual.",
+                "reaching a second game control without giving up the first one.", AddKind.HoldRemap);
+            Opt(isStickDirection ? "Flick it twice" : "Tap it twice",
+                isStickDirection ? "Double flick: press a key" : "Double-tap and hold: press a key",
+                isStickDirection ? "Flick the stick this way twice quickly, then keep pushing: the key is held while you push. The game still gets the stick as usual."
+                                 : "Tap twice quickly and keep holding the second time: the key is held until you let go.",
+                isStickDirection ? "sprinting with a double flick forward, or a dodge on a double flick sideways."
+                                 : "a second hold action on a button that already has a tap and a hold.", AddKind.DoubleFlick);
+        }
+        Opt("More", "Something else",
+            "Opens the full binding editor: radial wheels, key sequences (macros), layers, the screen mirror and every other action and timing setting.",
+            "opening a radial menu, typing a sequence of keys, or a shift layer that changes what other buttons do.", AddKind.Other);
+        return o;
+    }
+
+    // A picture of the "+ Add..." popup for a stick direction (editor --picker-shot).
+    public static void AddPickerShot(string path)
+        => OptionPicker.Shot(path, "Add to Left thumbstick: push up", "What should Left thumbstick: push up do? Pick one; you can change it afterwards.",
+                             AddOptions(false, true).Select(x => x.option).ToList());
 }
