@@ -479,9 +479,19 @@ public class SettingsEditor : EditorBase
                 var top = new CheckBox { Text = "Always on top of other windows", AutoSize = true, Checked = HeadsetMirrorFile.OnTop };
                 top.CheckedChanged += (o, e) => HeadsetMirrorFile.OnTop = top.Checked;
                 mir.AddRow("", top, "Keeps the mirror above the game on your monitor, e.g. to record or show it. The mirror never takes focus from the game, even when you click or move it, so the game keeps getting your input.");
-                var eye = new ChoiceBox(new Choice[] { new("left", "Left eye"), new("right", "Right eye") }, 200) { Code = HeadsetMirrorFile.Eye };
-                eye.SelectedIndexChanged += (o, e) => HeadsetMirrorFile.Eye = eye.Code;
-                mir.AddRow("Eye", eye);
+                // Saved as two values: "eye" (left / right) and "both_eyes" (the other eye fills the nose side).
+                var eye = new ChoiceBox(new Choice[] {
+                    new("left", "Left eye"), new("right", "Right eye"),
+                    new("both_right", "Both eyes (right eye, left fills in)"), new("both_left", "Both eyes (left eye, right fills in)") }, 300)
+                { Code = (HeadsetMirrorFile.BothEyes ? "both_" : "") + HeadsetMirrorFile.Eye };
+                eye.SelectedIndexChanged += (o, e) =>
+                {
+                    string code = eye.Code ?? "right";
+                    HeadsetMirrorFile.BothEyes = code.StartsWith("both_");
+                    HeadsetMirrorFile.Eye = code.EndsWith("left") ? "left" : "right";
+                };
+                bool BothEyesShown() => (eye.Code ?? "").StartsWith("both_");
+                mir.AddRow("Eye", eye, "One eye: exactly that eye's picture. Both eyes: centred on where that eye looks, and the other eye fills in the nose side, where one eye's picture ends in a black strip, so even zoom 1 stays centred. Far things line up; close things (your hands, the gun) can look a little doubled on that side.");
                 var preset = new ChoiceBox(new Choice[] {
                     new("custom", "Custom"),
                     new("gaze", "Centred where you look (default)"),
@@ -489,10 +499,7 @@ public class SettingsEditor : EditorBase
                     new("both", "Wide: both eyes, centred where you look"),
                     new("original", "Original: middle of the picture"),
                     new("exact", "Exact headset view (no zoom, no steadying)") }, 300);
-                mir.AddRow("Preset", preset, "Sets zoom, steadying, centre, edge margin, steadying's own room and both eyes together. Change any of them afterwards and it shows Custom.");
-                var both = new CheckBox { Text = "Fill in from the other eye", AutoSize = true, Checked = HeadsetMirrorFile.BothEyes };
-                both.CheckedChanged += (o, e) => HeadsetMirrorFile.BothEyes = both.Checked;
-                mir.AddRow("", both, "Where you look sits toward the nose in each eye's picture, and that side ends in a black strip. With this on, the other eye fills that side in, so the view stays centred on where you look even at zoom 1. Far things line up; close things (your hands, the gun) can look a little doubled on that side.");
+                mir.AddRow("Preset", preset, "Sets zoom, steadying, centre, edge margin, steadying's own room and one / both eyes together (the side you picked stays). Change any of them afterwards and it shows Custom.");
                 var zoom = new NumericUpDown { Minimum = 1, Maximum = 3, Increment = 0.05m, DecimalPlaces = 2, Width = 90, Value = (decimal)Math.Round(Math.Clamp(HeadsetMirrorFile.Zoom, 1, 3), 2) };
                 zoom.ValueChanged += (o, e) => HeadsetMirrorFile.Zoom = (double)zoom.Value;
                 mir.AddRow("Zoom", zoom, "1 = the whole eye picture (very wide, blurry edges). 1.3 looks like a normal camera. The same with steadying on or off. It always fills the window; resize the window for a different shape.");
@@ -528,7 +535,7 @@ public class SettingsEditor : EditorBase
                 {
                     foreach (var (key, v) in presets)
                         if (zoom.Value == v.zoom && st.Value == v.steady && centre.Code == v.centre && margin.Value == v.margin &&
-                            room.Checked == v.room && both.Checked == v.both)
+                            room.Checked == v.room && BothEyesShown() == v.both)
                             return key;
                     return "custom";
                 }
@@ -543,7 +550,8 @@ public class SettingsEditor : EditorBase
                     centre.Code = v.centre;
                     margin.Value = v.margin;
                     room.Checked = v.room;
-                    both.Checked = v.both;
+                    string side = (eye.Code ?? "right").EndsWith("left") ? "left" : "right";
+                    eye.Code = (v.both ? "both_" : "") + side;
                     applying = false;
                 };
                 EventHandler changed = (o, e) => { if (!applying) ShowMatching(); };
@@ -552,7 +560,7 @@ public class SettingsEditor : EditorBase
                 centre.SelectedIndexChanged += changed;
                 margin.ValueChanged += changed;
                 room.CheckedChanged += changed;
-                both.CheckedChanged += changed;
+                eye.SelectedIndexChanged += changed;
                 mir.AddRow("", new Label { AutoSize = true, ForeColor = Color.DimGray, MaximumSize = new Size(460, 0), Text = "These apply straight away, in every game and profile (no need to save)." });
             }
 
