@@ -381,6 +381,8 @@ static bool Locate(XrSpace sp, XrSpace base, XrPosef& out) {
     return true;
 }
 
+static void UpdateGameUses();
+
 // Which controllers are in use: checked once a second (the profile changes rarely).
 static void CheckInteractionProfiles(double now) {
     if (now - gSession.lastProfileCheck < 1.0 || !N.GetCurrentInteractionProfile || !gSession.handle) return;
@@ -399,6 +401,7 @@ static void CheckInteractionProfiles(double now) {
         gSession.touchController[h] = touch;
         gSession.controllerKind[h] = ControllerKindOf(p);
     }
+    UpdateGameUses();
 }
 
 // Head smoothing settings: read when the game starts, then whenever the editor changes the file.
@@ -649,11 +652,44 @@ static XrResult XRAPI_CALL Hook_xrCreateActionSet(XrInstance inst, const XrActio
     return r;
 }
 
+// ---------------------------------------------------------------- the game's own controls, by name
+// Each game action's name (as the game shows it, else its internal name), and per interaction profile which
+// controller parts the game binds them to: the in-game menu shows them as "what the game does with this button".
+static std::unordered_map<uint64_t, std::string> gActionNames;          // action -> name (under gMx)
+static std::map<std::string, std::vector<GameUse>> gGameUsesByProfile;  // profile -> uses (under gMx)
+
+static void RecordGameUses(const std::string& prof, const std::vector<XrActionSuggestedBinding>& bindings) {
+    auto& uses = gGameUsesByProfile[prof];
+    uses.clear(); // a new suggestion for a profile replaces the last one
+    for (const auto& b : bindings) {
+        auto name = gActionNames.find(H(b.action));
+        if (name == gActionNames.end() || name->second.empty()) continue;
+        int hand, comp;
+        InputFeature feature;
+        if (!ParseGameInputPath(S(b.binding), hand, comp, feature)) continue;
+        GameUse u{ hand, comp, feature == InputFeature::Touch, name->second };
+        if (std::find(uses.begin(), uses.end(), u) == uses.end()) uses.push_back(u);
+    }
+}
+
+// The uses for the controllers in use now (each hand's own profile).
+static void UpdateGameUses() {
+    std::vector<GameUse> now;
+    for (int h = 0; h < 2; h++) {
+        auto it = gGameUsesByProfile.find(gSession.profileName[h]);
+        if (it == gGameUsesByProfile.end()) continue;
+        for (const GameUse& u : it->second)
+            if (u.hand == h) now.push_back(u);
+    }
+    if (!(now == gEng.gameUses)) gEng.gameUses = std::move(now);
+}
+
 static XrResult XRAPI_CALL Hook_xrCreateAction(XrActionSet set, const XrActionCreateInfo* ci, XrAction* a) {
     XrResult r = N.CreateAction(set, ci, a);
     if (XR_SUCCEEDED(r)) {
         std::lock_guard l(gMx);
         gInput.SetSubactionPaths(*a, ci->subactionPaths, ci->countSubactionPaths);
+        gActionNames[H(*a)] = ci->localizedActionName[0] ? ci->localizedActionName : ci->actionName;
     }
     return r;
 }
@@ -686,6 +722,7 @@ static void SuggestSteamFrameFrom(XrInstance inst, const std::string& prof, cons
         if (ParseGameInputPath(to, hand, comp, feature)) gInput.AddBinding(sb->suggestedBindings[i].action, hand, comp, feature);
     }
     size_t gameCount = all.size();
+    RecordGameUses(kSteamFrameProfile, all);
     if (gOurs.set != XR_NULL_HANDLE) {
         for (const PB* t : { kSteamFrame, kCommonPoses })
             for (size_t i = 0, n = t == kSteamFrame ? std::size(kSteamFrame) : std::size(kCommonPoses); i < n; i++)
@@ -711,6 +748,7 @@ static XrResult XRAPI_CALL Hook_xrSuggestInteractionProfileBindings(XrInstance i
     std::lock_guard l(gMx);
     std::string prof = S(sb->interactionProfile);
     if (prof == kSteamFrameProfile) gFrame.gameBinds = true;
+    RecordGameUses(prof, std::vector<XrActionSuggestedBinding>(sb->suggestedBindings, sb->suggestedBindings + sb->countSuggestedBindings));
     std::set<std::string> appPaths; // what the game binds on this controller
     for (uint32_t i = 0; i < sb->countSuggestedBindings; i++) {
         std::string bp = S(sb->suggestedBindings[i].binding);

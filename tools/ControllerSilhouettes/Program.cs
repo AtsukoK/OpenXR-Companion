@@ -1058,7 +1058,7 @@ static class Emit
         var sb = new StringBuilder();
         foreach (var line in Header.Split('\n'))
             sb.AppendLine("// " + line);
-        sb.AppendLine("// Included once by controller_silhouettes.cpp. Top view only (the layer's pictures).");
+        sb.AppendLine("// Included once by controller_silhouettes.cpp. Both views: from above (200 x 260) and the side (130 x 260).");
         int n = 0;
         var tables = new List<string>();
         foreach (var t in all)
@@ -1070,18 +1070,20 @@ static class Emit
                 return $"{{ {name}, {l.Count} }}";
             }
             string body = string.Join(", ", t.Top.Select(Loop));
+            string side = string.Join(", ", t.Side.Select(Loop));
             var parts = new List<string>();
-            foreach (var p in t.Parts.Where(p => p.Top))
+            foreach (var p in t.Parts)
             {
                 string loops = string.Join(", ", p.Loops.Select(Loop));
                 string partName = $"kP{n++}";
                 sb.AppendLine($"static const SilLoop {partName}[] = {{ {loops} }};");
-                parts.Add($"{{ \"{p.Comp}\", {partName}, {p.Loops.Count} }}");
+                parts.Add($"{{ \"{p.Comp}\", {partName}, {p.Loops.Count}, {(p.Top ? "false" : "true")} }}");
             }
-            string bodyName = $"kB{n++}", partsName = $"kS{n++}";
+            string bodyName = $"kB{n++}", sideName = $"kD{n++}", partsName = $"kS{n++}";
             sb.AppendLine($"static const SilLoop {bodyName}[] = {{ {body} }};");
+            sb.AppendLine(t.Side.Count > 0 ? $"static const SilLoop {sideName}[] = {{ {side} }};" : $"static const SilLoop* const {sideName} = nullptr;");
             sb.AppendLine($"static const SilPart {partsName}[] = {{ {string.Join(", ", parts)} }};");
-            tables.Add($"{{ \"{t.Id}\", {(t.Hand == "left" ? 0 : 1)}, {bodyName}, {t.Top.Count}, {partsName}, {parts.Count} }}");
+            tables.Add($"{{ \"{t.Id}\", {(t.Hand == "left" ? 0 : 1)}, {bodyName}, {t.Top.Count}, {partsName}, {parts.Count}, {sideName}, {t.Side.Count} }}");
         }
         sb.AppendLine("static const Silhouette kSilhouettes[] = {");
         foreach (var tb in tables)

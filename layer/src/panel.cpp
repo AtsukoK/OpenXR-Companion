@@ -803,6 +803,7 @@ static void DrawLiveController(Graphics& g, const RectF& box, int hand, const Li
         g.FillPath(&body, &outline);
         g.DrawPath(&edge, &outline);
         for (int i = 0; i < sil->partCount; i++) {
+            if (sil->parts[i].side) continue; // this picture is the view from above
             GraphicsPath p(FillModeAlternate);
             SilhouettePath(p, sil->parts[i].loops, sil->parts[i].loopCount, pic);
             drawPart(p, SilhouetteComp(sil->parts[i].comp));

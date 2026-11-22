@@ -9,6 +9,14 @@
 #include <functional>
 #include <set>
 
+// One of the game's own controls on a controller part: its action's name ("Jump"), from what the game binds.
+struct GameUse {
+    int hand = 0, comp = 0;
+    bool touch = false; // bound to touching the part, not pressing it
+    std::string name;
+    bool operator==(const GameUse& o) const { return hand == o.hand && comp == o.comp && touch == o.touch && name == o.name; }
+};
+
 struct HandRaw {
     bool b1 = false, b1t = false, b2 = false, b2t = false;
     float trig = 0;
@@ -219,6 +227,7 @@ public:
     ScreenView screen;
     OffsetView offView;
     MenuView menuView; // the in-game settings menu
+    std::vector<GameUse> gameUses; // the game's own controls on the controllers in use (set by the layer)
     std::string toast;
     uint64_t toastVersion = 0;
     double toastUntil = 0;
