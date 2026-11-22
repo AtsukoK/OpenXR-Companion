@@ -90,7 +90,7 @@ public class BindingEditor : EditorBase
     }
 
     // The firing input (last of the chord) is a trigger / grip press, an Index trackpad press, or a full squeeze.
-    static bool IsAnalog(string input)
+    internal static bool IsAnalog(string input)
     {
         var last = (input ?? "").Split('+')[^1].Trim().ToLowerInvariant();
         var parts = last.Split('.');

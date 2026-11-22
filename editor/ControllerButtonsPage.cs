@@ -344,6 +344,17 @@ public class ControllerButtonsPage : UserControl
         };
         does.LinkClicked += (s, e) => open(b);
         row.Controls.Add(does);
+        if (BindingEditor.IsAnalog(b.Input)) // how far the trigger / grip must go for this binding
+        {
+            bool full = b.Input.EndsWith(".full");
+            row.Controls.Add(new Label { Text = full ? "Strength %" : "Press at %", AutoSize = true, ForeColor = Theme.SubText, Margin = new Padding(0, 3, 2, 0) });
+            var at = new NumericUpDown { Minimum = 0, Maximum = 95, Increment = 5, Width = 56, Value = (decimal)Math.Clamp(Math.Round(b.PressAt * 100), 0, 95), Margin = new Padding(0, 0, 8, 0) };
+            at.ValueChanged += (s, e) => { b.PressAt = at.Value <= 1 ? 0 : (double)at.Value / 100; changed(); };
+            FormPanel.Tips.SetToolTip(at, full
+                ? "How hard to squeeze past a closed grip. 0 = the usual strength."
+                : "How far to pull or squeeze before it counts. 0 = the usual point. Low (10) = hair trigger, high (90) = a long pull.");
+            row.Controls.Add(at);
+        }
         string extra = (b.Block == "none" && b.Action?.Type != ActionType.None ? "game also gets the button · " : "") + (isOn ? "" : "off · ");
         row.Controls.Add(new Label { Text = extra + b.Name, AutoSize = true, MaximumSize = new Size(240, 0), ForeColor = Theme.OffText, Margin = new Padding(0, 3, 0, 0) });
         FormPanel.Tips.SetToolTip(does, "Click to edit '" + b.Name + "'");
