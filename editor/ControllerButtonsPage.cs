@@ -206,6 +206,9 @@ public class ControllerButtonsPage : UserControl
             MinimumSize = new Size(720, 0),
         };
         card.Controls.Add(new Label { Text = wayName, AutoSize = true, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold), Margin = new Padding(0, 0, 0, 2) });
+        var boundAll = profile.Bindings.Where(b => QuickBindings.FiredBy(b, input)).ToList();
+        if (BindingEditor.IsAnalog(input))
+            card.Controls.Add(PressPointRow(input, boundAll));
         // What the button normally does first; bindings that only work in a layer (shift...) after, then switched-off ones.
         var bound = profile.Bindings.Where(b => QuickBindings.FiredBy(b, input))
                                     .OrderBy(b => IsLayerOnly(b))
@@ -225,6 +228,32 @@ public class ControllerButtonsPage : UserControl
         }
         card.Controls.Add(AddMenuButton(input, what, IsTouchOnly(part, way), way is "up" or "down" or "left" or "right"));
         return card;
+    }
+
+    // How far the trigger / grip must go before this way's bindings fire (hair trigger ... long pull). The game reads the
+    // analog value itself, so with nothing set there is nothing to change yet.
+    Control PressPointRow(string input, List<BindingModel> bound)
+    {
+        bool full = input.EndsWith(".full");
+        var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0, 2, 0, 4) };
+        row.Controls.Add(new Label { Text = full ? "Squeeze strength (%)" : "Press point (%)", AutoSize = true, Margin = new Padding(0, 4, 6, 0) });
+        double cur = bound.Count > 0 ? bound[0].PressAt : 0;
+        var at = new NumericUpDown { Minimum = 0, Maximum = 95, Increment = 5, Width = 64, Value = (decimal)Math.Clamp(Math.Round(cur * 100), 0, 95), Enabled = bound.Count > 0 };
+        at.ValueChanged += (s, e) =>
+        {
+            double v = at.Value <= 1 ? 0 : (double)at.Value / 100;
+            foreach (var b in bound)
+                b.PressAt = v;
+            changed();
+        };
+        row.Controls.Add(at);
+        bool mixed = bound.Select(b => b.PressAt).Distinct().Count() > 1;
+        string hint = bound.Count == 0 ? "Add something below first; then set how far it must go."
+                    : mixed ? "Your bindings here use different points; changing this sets them all."
+                    : full ? "0 = usual. Higher = squeeze harder past the closed grip."
+                    : "0 = usual. Low (10) = hair trigger, high (90) = a long pull.";
+        row.Controls.Add(new Label { Text = hint, AutoSize = true, ForeColor = Theme.SubText, Margin = new Padding(8, 4, 0, 0) });
+        return row;
     }
 
     // The picture grows with its tags (a tag lists what its part does).
@@ -344,17 +373,6 @@ public class ControllerButtonsPage : UserControl
         };
         does.LinkClicked += (s, e) => open(b);
         row.Controls.Add(does);
-        if (BindingEditor.IsAnalog(b.Input)) // how far the trigger / grip must go for this binding
-        {
-            bool full = b.Input.EndsWith(".full");
-            row.Controls.Add(new Label { Text = full ? "Strength %" : "Press at %", AutoSize = true, ForeColor = Theme.SubText, Margin = new Padding(0, 3, 2, 0) });
-            var at = new NumericUpDown { Minimum = 0, Maximum = 95, Increment = 5, Width = 56, Value = (decimal)Math.Clamp(Math.Round(b.PressAt * 100), 0, 95), Margin = new Padding(0, 0, 8, 0) };
-            at.ValueChanged += (s, e) => { b.PressAt = at.Value <= 1 ? 0 : (double)at.Value / 100; changed(); };
-            FormPanel.Tips.SetToolTip(at, full
-                ? "How hard to squeeze past a closed grip. 0 = the usual strength."
-                : "How far to pull or squeeze before it counts. 0 = the usual point. Low (10) = hair trigger, high (90) = a long pull.");
-            row.Controls.Add(at);
-        }
         string extra = (b.Block == "none" && b.Action?.Type != ActionType.None ? "game also gets the button · " : "") + (isOn ? "" : "off · ");
         row.Controls.Add(new Label { Text = extra + b.Name, AutoSize = true, MaximumSize = new Size(240, 0), ForeColor = Theme.OffText, Margin = new Padding(0, 3, 0, 0) });
         FormPanel.Tips.SetToolTip(does, "Click to edit '" + b.Name + "'");
