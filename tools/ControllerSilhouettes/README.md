@@ -8,6 +8,13 @@ buttons placed by proportion). Without it, their front outline comes from
 photos (`models/photos/vive_back.png` for the outline, mirrored; `vive_wands.png`, the front, for where the buttons
 are; the wand in each photo's right half; kept out of git); their side view stays drawn.
 
+The Steam Frame: Valve's controller CAD (https://gitlab.steamos.cloud/SteamHardware/SteamFrame,
+`documents-controller/Valve_Steam_Frame_Controller_*.zip`, CC BY-NC-SA 4.0, (c) 2026 Valve). Convert
+`Valve_Steam_Frame_Controller_L/R_*.stp` to binary STL (for example with gmsh: mesh size 1 to 4 mm, 2D mesh) as
+`models/steam-frame/controller_L.stl` / `controller_R.stl`. One solid, so the buttons come from Valve's reference
+drawing (`models/photos/steam_frame.png`, the Steam Frame Input page's controller picture), which alone also gives a
+front outline. The Frame outlines are CC BY-NC-SA 4.0 like their source (see package/THIRD_PARTY_NOTICES.txt).
+
 1. Download `left.glb` and `right.glb` of each profile in `Program.cs` (`Profiles`) into `<models>/<profile>/`.
 2. `dotnet run -c Release -- <models> <repo root>`
 3. It writes `editor/ControllerSilhouettes.g.cs`, `layer/src/controller_silhouettes.inc` and pictures for checking

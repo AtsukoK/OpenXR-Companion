@@ -43,9 +43,10 @@ controller bindings, but the results are ordinary bindings in the profile.
   then adds the extension at instance creation (falls back without it) and, whenever the game suggests Index (or Touch,
   when no Index) bindings, also suggests them for the Frame through SteamFramePathFor (game_input.cpp) plus ours.
   A game that suggests the Frame itself wins. Untested on a real Frame: check the log lines "Steam Frame:".
-- Picture: outer shape traced (LineArtTracer in tools/ControllerSilhouettes) from Valve's reference drawing of the
-  Frame controllers, saved as models/photos/steam_frame.png (not in git); parts placed by hand, D-pad as our own cross.
-  Only the outline is used, not Valve's line art. The side view is still our own drawing.
+- Picture: front and side outlines from Valve's Steam Frame controller CAD (CC BY-NC-SA 4.0, credited in
+  package/THIRD_PARTY_NOTICES.txt and README; user chose to bake it in, 2026-11-22). STEP -> STL with gmsh
+  (tools/ControllerSilhouettes/README.md), TraceFrameModel. One solid: front parts carried over from Valve's reference
+  drawing (LineArtTracer, also the fallback outline), side parts (bumper, trigger, grip) placed by eye; D-pad our cross.
 
 ## Checks
 - `quick_test.sh`: 0 failures, including `TestQuickBindings` (touch keeps presses, remap swaps, off hides) and

@@ -46,7 +46,8 @@ static class Program
         {
             Directory.CreateDirectory(preview);
             string glb = Path.Combine(models, axesOf, "right.glb"), dae = Path.Combine(models, axesOf, "model", "model.dae");
-            Tracer.AxisViews(File.Exists(glb) ? Glb.Load(glb) : Dae.Load(dae), Path.Combine(preview, "axes_" + axesOf + ".png"));
+            string stl = Path.Combine(models, axesOf, "controller_R.stl");
+            Tracer.AxisViews(File.Exists(glb) ? Glb.Load(glb) : File.Exists(stl) ? Stl.Load(stl) : Dae.Load(dae), Path.Combine(preview, "axes_" + axesOf + ".png"));
             return 0;
         }
         Directory.CreateDirectory(preview);
@@ -95,10 +96,14 @@ static class Program
         // The Steam Frame: no model; outlined from Valve's reference drawing of the controllers (only the outer shape
         // is traced, the parts are placed where the drawing has them).
         string frameArt = Path.Combine(models, "photos", "steam_frame.png");
+        string frameModels = Path.Combine(models, "steam-frame");
         if (File.Exists(frameArt))
             foreach (string hand in new[] { "left", "right" })
             {
-                var traced = LineArtTracer.TraceFrame(hand, frameArt);
+                var fromArt = LineArtTracer.TraceFrame(hand, frameArt, out var artBox);
+                string stl = Path.Combine(frameModels, hand == "left" ? "controller_L.stl" : "controller_R.stl");
+                // Valve's CAD model (CC BY-NC-SA 4.0) when it is there, with the parts carried over from the drawing.
+                var traced = File.Exists(stl) ? Tracer.TraceFrameModel(hand, Stl.Load(stl), fromArt) : fromArt;
                 results.Add(traced);
                 Preview.Save(traced, Path.Combine(preview, $"frame_{hand}.png"));
                 Console.WriteLine($"frame/{hand}: from the drawing, parts {string.Join(", ", traced.Parts.Select(p => p.Comp))}");
@@ -249,6 +254,24 @@ static class Glb
 }
 
 // ------------------------------------------------------------ Collada (.dae): one mesh's triangles (the Vive wand model)
+// ------------------------------------------------------------ binary STL (converted from a STEP file): one part, "body"
+static class Stl
+{
+    public static List<Tri> Load(string path)
+    {
+        var data = File.ReadAllBytes(path);
+        int n = BitConverter.ToInt32(data, 80);
+        var tris = new List<Tri>(n);
+        Vector3 V(int o) => new(BitConverter.ToSingle(data, o), BitConverter.ToSingle(data, o + 4), BitConverter.ToSingle(data, o + 8));
+        for (int i = 0; i < n; i++)
+        {
+            int o = 84 + i * 50 + 12;
+            tris.Add(new Tri(V(o), V(o + 12), V(o + 24), "body"));
+        }
+        return tris;
+    }
+}
+
 static class Dae
 {
     public static List<Tri> Load(string path)
@@ -432,6 +455,55 @@ static class Tracer
         }
         Place(t.Top, true, ViveTop);
         Place(t.Side, false, ViveSide);
+        return t;
+    }
+
+    // The Steam Frame CAD model: one solid (no separate parts), its face toward +Z, the handle down toward -Y at a
+    // slant. Drawn like the others: the handle upright, the face seen from a little behind. The parts come from the
+    // drawing's outline (fromArt), moved by their share of the outline's box onto the model's outline.
+    static readonly (string comp, float cx, float cy, float w, float h)[] FrameSide =
+    {
+        ("bumper", 0.3f, 0.15f, 0.14f, 0.045f), ("trigger", 0.12f, 0.255f, 0.2f, 0.055f), ("grip", 0.29f, 0.46f, 0.09f, 0.2f),
+    };
+
+    public static Traced TraceFrameModel(string hand, List<Tri> tris, Traced fromArt)
+    {
+        var verts = tris.SelectMany(t => new[] { t.A, t.B, t.C }).ToList();
+        float minY = verts.Min(v => v.Y), maxY = verts.Max(v => v.Y);
+        var tip = verts.OrderBy(v => v.Y).Take(40).Aggregate(Vector3.Zero, (a, v) => a + v) / 40;
+        var head = verts.Where(v => v.Y > maxY - (maxY - minY) * 0.35f).ToList();
+        var headC = head.Aggregate(Vector3.Zero, (a, v) => a + v) / head.Count;
+        var up = Vector3.Normalize(headC - tip);
+        var faceN = Vector3.UnitZ;
+        var view = Vector3.Normalize(faceN - Vector3.Dot(faceN, up) * up);
+        var across = Vector3.Normalize(Vector3.Cross(up, view));
+        var top = Project(tris, across, up, Array.Empty<string>(), Grid);
+        var side = Project(tris, view, up, Array.Empty<string>(), Grid);
+        if (hand == "left") // the side view's front (the trigger) is on the right for the left hand, as for the others
+            side.FlipX();
+        var fitTop = Fit(top, 200, 260);
+        var fitSide = Fit(side, 130, 260);
+        var t = new Traced("frame", hand, top.Body.Select(l => l.Select(fitTop).ToList()).ToList(),
+                           side.Body.Select(l => l.Select(fitSide).ToList()).ToList(), new List<TracedPart>());
+        RectangleF Box(List<List<PointF>> loops)
+        {
+            var pts = loops.SelectMany(l => l).ToList();
+            return RectangleF.FromLTRB(pts.Min(q => q.X), pts.Min(q => q.Y), pts.Max(q => q.X), pts.Max(q => q.Y));
+        }
+        var from = Box(fromArt.Top);
+        var to = Box(t.Top);
+        foreach (var part in fromArt.Parts)
+            t.Parts.Add(part with
+            {
+                Loops = part.Loops.Select(l => l.Select(q => new PointF((float)Math.Round(to.X + (q.X - from.X) / from.Width * to.Width, 2),
+                                                                         (float)Math.Round(to.Y + (q.Y - from.Y) / from.Height * to.Height, 2))).ToList()).ToList(),
+            });
+        var sb = Box(t.Side);
+        foreach (var (comp, cx, cy, w, h) in FrameSide)
+        {
+            float x = hand == "right" ? cx : 1 - cx; // the side view's front is on the right for the left hand
+            t.Parts.Add(new TracedPart(comp, false, new() { Pill(sb.X + sb.Width * x, sb.Y + sb.Height * cy, sb.Width * w, sb.Height * h) }, true));
+        }
         return t;
     }
 
@@ -734,7 +806,10 @@ static class LineArtTracer
         ("secondary", 1004, 490, 38, 38, true), ("primary", 974, 532, 38, 38, true),
     };
 
-    public static Traced TraceFrame(string hand, string file)
+    public static Traced TraceFrame(string hand, string file) => TraceFrame(hand, file, out _);
+
+    // drawingBox: the controller's outline box in the drawing's pixels (to carry the parts over to the model).
+    public static Traced TraceFrame(string hand, string file, out RectangleF drawingBox)
     {
         using var bmp = new Bitmap(file);
         var box = hand == "left" ? LeftBox : RightBox;
@@ -775,6 +850,7 @@ static class LineArtTracer
         }
         var outer = loops.OrderByDescending(Area).First().Select(p => new PointF(p.X + x0, p.Y + y0)).ToList();
         var ob = RectangleF.FromLTRB(outer.Min(p => p.X), outer.Min(p => p.Y), outer.Max(p => p.X), outer.Max(p => p.Y));
+        drawingBox = ob;
         float s = Math.Min((200 - 12) / ob.Width, (260 - 12) / ob.Height);
         float ox = (200 - ob.Width * s) / 2 - ob.X * s, oy = (260 - ob.Height * s) / 2 - ob.Y * s;
         PointF Fit(PointF p) => new((float)Math.Round(p.X * s + ox, 1), (float)Math.Round(p.Y * s + oy, 1));
@@ -949,7 +1025,9 @@ static class Emit
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     const string Header = "Generated by tools/ControllerSilhouettes from the WebXR input profile models\n" +
                           "(github.com/immersive-web/webxr-input-profiles, MIT licence, Copyright (c) 2019 Amazon), and the Vive wand from\n" +
-                          "\"HTC Vive Controller\" by iShoNz (sketchfab.com/Jonabafor), CC BY 4.0. Outlines only. Do not edit.";
+                          "\"HTC Vive Controller\" by iShoNz (sketchfab.com/Jonabafor), CC BY 4.0, and the Steam Frame controllers from\n" +
+                          "Valve's Steam Frame CAD models (gitlab.steamos.cloud/SteamHardware/SteamFrame, (c) 2026 Valve Corporation,\n" +
+                          "CC BY-NC-SA 4.0: the Frame outlines are under the same licence). Outlines only. Do not edit.";
 
     static string Floats(List<PointF> loop) => string.Join(", ", loop.Select(p => $"{p.X.ToString("0.0##", Inv)}f, {p.Y.ToString("0.0##", Inv)}f"));
 

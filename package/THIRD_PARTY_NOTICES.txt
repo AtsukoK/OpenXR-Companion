@@ -34,5 +34,13 @@ licensed under Creative Commons Attribution 4.0 (https://creativecommons.org/lic
 Changes: only its outline is used, as a flat 2D drawing; the buttons are placed by us.
 
 --------------------------------------------------------------------------------
+The Steam Frame controllers' outlines are traced from Valve's Steam Frame controller CAD models
+(https://gitlab.steamos.cloud/SteamHardware/SteamFrame), (c) 2026 Valve Corporation, licensed under
+Creative Commons Attribution-NonCommercial-ShareAlike 4.0 (https://creativecommons.org/licenses/by-nc-sa/4.0/).
+Changes: only their outlines are used, as flat 2D drawings (front and side); the buttons are placed by us.
+These outlines are shared under the same CC BY-NC-SA 4.0 licence and may not be used commercially.
+OpenXR Companion is not associated with or endorsed by Valve.
+
+--------------------------------------------------------------------------------
 nlohmann/json (https://github.com/nlohmann/json): MIT licence, see third_party/nlohmann in the source.
 OpenXR SDK headers (https://github.com/KhronosGroup/OpenXR-SDK): Apache-2.0, see third_party/openxr-sdk in the source.
