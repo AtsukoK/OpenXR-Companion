@@ -1172,7 +1172,9 @@ void DrawMenu(std::vector<uint32_t>& out, int W, int H, const MenuView& v, const
         }
     }
     // footer: what to do now, and a hint
-    std::string status = v.status.empty() ? "Point and pull the trigger  \xC2\xB7  stick: scroll / change a value" : v.status;
+    std::string status = !v.status.empty() ? v.status
+                         : v.stickFree ? "Point and pull the trigger  \xC2\xB7  move the sticks freely: they only test here"
+                                       : "Point and pull the trigger  \xC2\xB7  stick: scroll / change a value";
     RectF sr(W * 0.04f, footerY, W * 0.7f, H - footerY);
     g.DrawString(Utf8ToW(status).c_str(), -1, detailFont.get(), sr, &left, v.status.empty() ? (Brush*)&headingB : (Brush*)&accentB);
     Grab(bmp, out, W, H);
