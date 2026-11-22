@@ -58,7 +58,7 @@ public partial class MainForm
         {
             "overview" => "Tip: the switches on each card turn things on or off right here. The blue buttons jump to where you edit them.",
             ProfileModel or SettingsPage => "Tip: cards tagged 'Saved with profile' take effect when you save (Ctrl+S); 'Applies straight away' ones work at once. Hover or click \u24D8 for help on a setting.",
-            "bindings_left" or "bindings_right" => "Tip: click the round dot at the right of a binding to switch it on or off without deleting it. Right-click a row to duplicate, delete or move it.",
+            "bindings_left" or "bindings_right" => "Tip: click a button on the picture to change what it does. In the list, the round dot at the right of a binding switches it on or off; right-click a row to duplicate, delete or move it.",
             "wheels" => "Tip: a wheel opened by a controller binding is a main wheel. Use '+ Add sub-wheel' under a wheel to make a submenu that is linked to it automatically.",
             "wrist0" or "wrist1" => "Tip: turn your wrist toward your face and look at it to show the panel. Poke a button with your other hand's finger, or point at it and pull the trigger.",
             BindingModel => "Tip: pick the controller button and gesture first, then what it does. 'Record key' then press a key on your keyboard to bind it.",

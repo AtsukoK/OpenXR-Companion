@@ -48,7 +48,7 @@ public static class ControllerLayouts
     // Side view shared by most controllers: a head with the trigger at the front, a handle with the grip.
     static BodyPiece[] SideOfTouch() => new[]
     {
-        new BodyPiece(ControllerView.Side, BodyShape.Ellipse, R(22, 14, 96, 92)),
+        new BodyPiece(ControllerView.Side, BodyShape.Ellipse, R(16, 22, 108, 74), Turn: -18),
         new BodyPiece(ControllerView.Side, BodyShape.RoundRect, R(46, 82, 52, 168), Turn: -10),
     };
     static ControllerPart TriggerOf(string[] ways) => new("trigger", "Trigger", null, ControllerView.Side, PartShape.Trigger, R(8, 80, 26, 44), ways);

@@ -205,14 +205,12 @@ public partial class MainForm
     {
         Directory.CreateDirectory(dir);
         var profile = ProfileFromText(Native.DefaultProfile() ?? "{}");
-        int CountOf(int hand, ControllerPart part)
-            => part.IsUsable ? profile.Bindings.Count(b => part.Ways.Any(w => QuickBindings.FiredBy(b, ControllerLayouts.InputOf(hand, part, w)))) : 0;
         const int width = 860;
         var sheets = new List<Bitmap>();
         foreach (var layout in ControllerLayouts.All)
         {
-            using var right = ControllerPicture.Render(layout, 1, null, p => CountOf(1, p), width);
-            using var left = ControllerPicture.Render(layout, 0, null, p => CountOf(0, p), width);
+            using var right = ControllerPicture.Render(layout, 1, null, p => QuickBindings.UseOf(profile.Bindings, 1, p), width);
+            using var left = ControllerPicture.Render(layout, 0, null, p => QuickBindings.UseOf(profile.Bindings, 0, p), width);
             var sheet = new Bitmap(width, right.Height + left.Height + 64);
             using (var g = Graphics.FromImage(sheet))
             {

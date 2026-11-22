@@ -50,6 +50,15 @@ public static class QuickBindings
         Action = new ActionModel { Type = ActionType.Key, Keys = "F1" },
     };
 
+    // The bindings on a part of one hand's controller, switched on and off (none on a part that can't be used).
+    public static PartUse UseOf(IEnumerable<BindingModel> bindings, int hand, ControllerPart part)
+    {
+        if (!part.IsUsable)
+            return default;
+        var on = bindings.Where(b => part.Ways.Any(w => FiredBy(b, ControllerLayouts.InputOf(hand, part, w)))).ToList();
+        return new PartUse(on.Count(b => b.Enabled), on.Count(b => !b.Enabled));
+    }
+
     // The binding is fired by this input (its last button; any others of a combo must be held first).
     public static bool FiredBy(BindingModel b, string input)
     {

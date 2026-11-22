@@ -73,6 +73,9 @@ public class ControllerButtonsPage : UserControl
         ShowAll();
     }
 
+    // Which part a page for this hand starts with (screenshots; otherwise the last one clicked).
+    internal static void StartWith(int hand, string comp) => lastSelected[hand] = comp;
+
     ControllerPart SelectedPart
     {
         get
@@ -83,14 +86,10 @@ public class ControllerButtonsPage : UserControl
         }
     }
 
-    // The bindings fired by any way of using this part.
-    List<BindingModel> BindingsOn(ControllerPart part)
-        => part.IsUsable ? profile.Bindings.Where(b => part.Ways.Any(w => QuickBindings.FiredBy(b, ControllerLayouts.InputOf(hand, part, w)))).ToList() : new();
-
     void ShowAll()
     {
         models.Text = "For: " + layout.Models;
-        picture.ShowController(layout, hand, SelectedPart?.Comp, p => BindingsOn(p).Count);
+        picture.ShowController(layout, hand, SelectedPart?.Comp, p => QuickBindings.UseOf(profile.Bindings, hand, p));
         ShowDetails();
     }
 
@@ -153,10 +152,11 @@ public class ControllerButtonsPage : UserControl
         string gesture = Choices.Gestures.FirstOrDefault(g => g.Code == b.Gesture)?.Text.Split("  (")[0].Split(" (")[0] ?? b.Gesture;
         var others = (b.Input ?? "").Split('+').Select(p => p.Trim()).Where(p => p.Length > 0).ToList();
         string combo = others.Count > 1 ? " (with " + InputText.Friendly(string.Join("+", others.Take(others.Count - 1))) + " held)" : "";
+        string layers = string.IsNullOrWhiteSpace(b.Layers) ? "" : $" (only while layer {b.Layers} is on)";
         string hidden = b.Block == "none" ? "" : " Hidden from the game.";
         var link = new LinkLabel
         {
-            Text = $"{b.Name}: {gesture}{combo} → {MainForm.Plain(b.Action)}.{hidden}{(b.Enabled ? "" : " (switched off)")}",
+            Text = $"{b.Name}: {gesture}{combo}{layers} → {MainForm.Plain(b.Action)}.{hidden}{(b.Enabled ? "" : " (switched off)")}",
             AutoSize = true,
             MaximumSize = new Size(700, 0),
             LinkColor = b.Enabled ? Theme.Link : Theme.OffText,

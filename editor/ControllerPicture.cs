@@ -2,6 +2,9 @@ using System.Drawing.Drawing2D;
 
 namespace OpenXRCompanionEditor;
 
+// How many bindings a part has: switched on, and switched off.
+public readonly record struct PartUse(int On, int Off);
+
 // Draws one controller (a ControllerLayout, for one hand) with a name tag for each part, and says which part
 // was clicked. Parts that already do something get a count badge; the selected part is outlined.
 public class ControllerPicture : Control
@@ -17,7 +20,7 @@ public class ControllerPicture : Control
     ControllerLayout layout = ControllerLayouts.All[0];
     int hand = 1;
     string selected, hovered;
-    Func<ControllerPart, int> bindingCount = _ => 0;
+    Func<ControllerPart, PartUse> useOf = _ => default;
     readonly List<(ControllerPart part, GraphicsPath shape, RectangleF tag)> hits = new();
 
     public event Action<ControllerPart> PartClicked;
@@ -28,12 +31,12 @@ public class ControllerPicture : Control
         Cursor = Cursors.Hand;
     }
 
-    public void ShowController(ControllerLayout newLayout, int newHand, string selectedComp, Func<ControllerPart, int> countOf)
+    public void ShowController(ControllerLayout newLayout, int newHand, string selectedComp, Func<ControllerPart, PartUse> use)
     {
         layout = newLayout;
         hand = newHand;
         selected = selectedComp;
-        bindingCount = countOf;
+        useOf = use;
         Invalidate();
     }
 
@@ -44,10 +47,10 @@ public class ControllerPicture : Control
     }
 
     // A picture of one controller as a bitmap (previews and screenshots).
-    public static Bitmap Render(ControllerLayout layout, int hand, string selectedComp, Func<ControllerPart, int> countOf, int width)
+    public static Bitmap Render(ControllerLayout layout, int hand, string selectedComp, Func<ControllerPart, PartUse> use, int width)
     {
         using var pic = new ControllerPicture { Size = new Size(width, (int)(width * CanvasHeight / CanvasWidth)), BackColor = Theme.Card };
-        pic.ShowController(layout, hand, selectedComp, countOf);
+        pic.ShowController(layout, hand, selectedComp, use);
         var bmp = new Bitmap(pic.Width, pic.Height);
         pic.DrawToBitmap(bmp, new Rectangle(Point.Empty, pic.Size));
         return bmp;
@@ -258,7 +261,7 @@ public class ControllerPicture : Control
 
     void DrawPart(Graphics g, ControllerPart part, GraphicsPath shape)
     {
-        int count = part.IsUsable ? bindingCount(part) : 0;
+        int count = part.IsUsable ? useOf(part).On : 0;
         bool isSelected = part.Comp == selected;
         bool isHovered = part.Comp == hovered;
         Color fill = !part.IsUsable ? BodyFill : count > 0 ? Color.FromArgb(Theme.IsDark ? 150 : 110, Accent) : PartFill;
@@ -300,7 +303,8 @@ public class ControllerPicture : Control
 
     void DrawTag(Graphics g, ControllerPart part, RectangleF tag)
     {
-        int count = part.IsUsable ? bindingCount(part) : 0;
+        var use = part.IsUsable ? useOf(part) : default;
+        int count = use.On;
         bool isSelected = part.Comp == selected;
         using (var p = RoundRect(tag, 6))
         {
@@ -315,7 +319,10 @@ public class ControllerPicture : Control
         using var sub = new SolidBrush(count > 0 ? Accent : Theme.SubText);
         var fmt = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
         g.DrawString(part.LabelFor(hand), nameFont, text, new RectangleF(tag.X + 6, tag.Y + 2, tag.Width - 10, 16), fmt);
-        string status = !part.IsUsable ? "not available" : count == 0 ? "nothing set" : count == 1 ? "1 binding" : count + " bindings";
+        string status = !part.IsUsable ? "not available"
+                        : count > 0 ? (count == 1 ? "1 binding" : count + " bindings") + (use.Off > 0 ? $", {use.Off} off" : "")
+                        : use.Off > 0 ? $"{use.Off} switched off"
+                                      : "nothing set";
         g.DrawString(status, subFont, sub, new RectangleF(tag.X + 6, tag.Y + 17, tag.Width - 10, 14), fmt);
     }
 
