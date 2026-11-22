@@ -2,7 +2,8 @@
 
 Traces the controller pictures from real 3D models: the WebXR input profile models
 (https://github.com/immersive-web/webxr-input-profiles, `packages/assets/profiles`, MIT licence, (c) 2019 Amazon).
-Only outlines are kept (no textures, no logos).
+Only outlines are kept (no textures, no logos). The Vive wands have no model there: their front outline comes from
+a photo (`models/photos/vive_wands.png`, the wand in the right half; kept out of git), their side view stays drawn.
 
 1. Download `left.glb` and `right.glb` of each profile in `Program.cs` (`Profiles`) into `<models>/<profile>/`.
 2. `dotnet run -c Release -- <models> <repo root>`

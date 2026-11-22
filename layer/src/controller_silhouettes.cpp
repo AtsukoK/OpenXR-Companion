@@ -18,10 +18,12 @@ static const char* SilhouetteId(ControllerKind kind) {
         return "wmr";
     case ControllerKind::HpReverb:
         return "reverbg2";
+    case ControllerKind::Vive:
+        return "vive"; // outlined from a photo
     case ControllerKind::Unknown:
         return "quest3"; // the most common now
     default:
-        return nullptr; // Vive wands: no model
+        return nullptr; // any other kind: the simple drawing (controller_art.cpp)
     }
 }
 

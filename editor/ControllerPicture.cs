@@ -125,8 +125,11 @@ public class ControllerPicture : Control
     }
 
     // With a real outline: the parts it has (a part without one, like a button that is part of the body, isn't drawn).
+    // A view without a traced outline (the Vive's side: only a front photo) keeps the layout's own shapes there.
     List<ControllerPart> ShownParts()
-        => layout.PartsFor(hand).Where(p => silhouette == null || ControllerSilhouettes.PartFor(silhouette, p) != null).ToList();
+        => layout.PartsFor(hand).Where(p => silhouette == null || ControllerSilhouettes.PartFor(silhouette, p) != null || !HasOutline(p.View)).ToList();
+
+    bool HasOutline(ControllerView view) => silhouette != null && (view == ControllerView.Top ? silhouette.Top : silhouette.Side).Length > 0;
 
     // Traced loops placed in a view (already for this hand: no mirroring).
     GraphicsPath LoopsPath(ControllerView view, float[][] loops)
@@ -317,9 +320,8 @@ public class ControllerPicture : Control
                 g.FillPath(fill, p);
                 g.DrawPath(edge, p);
             }
-            return;
         }
-        foreach (var piece in layout.Body)
+        foreach (var piece in layout.Body.Where(b => !HasOutline(b.View)))
         {
             using var p = BodyPath(piece);
             if (piece.IsStrap)
