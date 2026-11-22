@@ -354,8 +354,23 @@ public class ControllerPicture : Control
         }
         using (var edge = new Pen(isSelected ? SelectedEdge : isHovered ? Accent : BodyEdge, isSelected ? 3f : isHovered ? 2.2f : 1.4f) { DashStyle = part.IsUsable ? DashStyle.Solid : DashStyle.Dot })
             g.DrawPath(edge, shape);
+        DrawButtonLetter(g, part, shape.GetBounds());
         if (count > 0)
             DrawBadge(g, shape.GetBounds(), count);
+    }
+
+    // The letter printed on a face button (A, B, X, Y) or the menu's three lines, so the buttons read at a glance.
+    void DrawButtonLetter(Graphics g, ControllerPart part, RectangleF bounds)
+    {
+        if (part.Shape != PartShape.Button || part.View != ControllerView.Top) return;
+        string label = part.LabelFor(hand);
+        string letter = label.Length <= 2 ? label : part.Comp == "menu" ? "≡" : null;
+        if (letter == null) return;
+        float size = Math.Max(6f, Math.Min(bounds.Width, bounds.Height) * 0.55f);
+        using var font = new Font(Font.FontFamily, size, FontStyle.Bold, GraphicsUnit.Pixel);
+        using var brush = new SolidBrush(Color.FromArgb(230, Theme.IsDark ? Color.White : Color.Black));
+        using var fmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+        g.DrawString(letter, font, brush, bounds, fmt);
     }
 
     static void DrawBadge(Graphics g, RectangleF partBounds, int count)

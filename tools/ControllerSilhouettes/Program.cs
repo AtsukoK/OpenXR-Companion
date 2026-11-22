@@ -316,9 +316,18 @@ static class Tracer
         var across = Vector3.Normalize(Vector3.Cross(up, faceN));
 
         // top view: looking at the face; side view: looking from the side, front (the face's direction... trigger) on the left
-        if (topFromSide) // across the controller (along Y), handle upright
+        // The "buttons" picture looks at the face from a little behind it: straight out of the face, minus the part
+        // along the handle. The handle is shown upright at its full length and the buttons stay in view, so the
+        // controller's whole shape (head, handle, grip) is recognisable.
+        if (topFromSide) // the Index: its face points along the handle, so look across it (along Y) instead
         {
             faceN = -Vector3.UnitY;
+            up = handleAxis;
+            across = Vector3.Normalize(Vector3.Cross(up, faceN));
+        }
+        else
+        {
+            faceN = sideAcross;
             up = handleAxis;
             across = Vector3.Normalize(Vector3.Cross(up, faceN));
         }

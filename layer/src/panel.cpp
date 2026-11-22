@@ -743,6 +743,18 @@ static void DrawLiveController(Graphics& g, const RectF& box, int hand, const Li
     SolidBrush body{ Color(0xFF3A414B) }, part{ Color(0xFF1C2027) }, lit{ Color(Accent) }, touched{ Color(0x661A9FFF) };
     SolidBrush plain{ Color(0xFF2E343C) }, white{ Color(0xFFFFFFFF) };
     Pen edge(Color(0xFF59616C), 1.5f), ring(Color(Accent), 3.f);
+    // The letter on a face button (A/B, X/Y on the left, the Index has A/B on both) or the menu's three lines.
+    auto letterOf = [&](int comp) -> const wchar_t* {
+        bool xy = hand == 0 && live.kind != ControllerKind::Index;
+        if (comp == C_BTN1) return xy ? L"X" : L"A";
+        if (comp == C_BTN2) return xy ? L"Y" : L"B";
+        if (comp == C_MENU) return L"≡";
+        return nullptr;
+    };
+    FontFamily letterFamily(L"Segoe UI");
+    StringFormat centered;
+    centered.SetAlignment(StringAlignmentCenter);
+    centered.SetLineAlignment(StringAlignmentCenter);
     // How one part looks: lit when pressed, a ring when only touched; the stick shows where it is pushed.
     auto drawPart = [&](GraphicsPath& p, int comp) {
         bool readable = comp >= 0;
@@ -755,6 +767,15 @@ static void DrawLiveController(Graphics& g, const RectF& box, int hand, const Li
             float cx = b.X + b.Width / 2 + live.stickX * b.Width * 0.32f, cy = b.Y + b.Height / 2 - live.stickY * b.Height * 0.32f;
             float d = b.Width * 0.3f;
             g.FillEllipse(&white, cx - d / 2, cy - d / 2, d, d);
+        }
+        if (const wchar_t* letter = readable ? letterOf(comp) : nullptr) {
+            RectF b;
+            p.GetBounds(&b);
+            float size = (b.Width < b.Height ? b.Width : b.Height) * 0.6f;
+            if (size >= 6.f) {
+                Font f(&letterFamily, size, FontStyleBold, UnitPixel);
+                g.DrawString(letter, -1, &f, b, &centered, &white);
+            }
         }
     };
     if (const Silhouette* sil = SilhouetteFor(live.kind, hand)) { // the real outline, when there is a model
