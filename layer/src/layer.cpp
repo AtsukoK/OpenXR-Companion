@@ -14,6 +14,7 @@
 #include <map>
 #include <set>
 #include <climits>
+#include <fstream>
 
 #define LAYER_NAME "XR_APILAYER_NOVENDOR_openxr_companion"
 
@@ -278,6 +279,7 @@ struct SessionState {
     Gfx gfx;
     XrSpace local = XR_NULL_HANDLE; // world-locked overlay space
     XrSpace view = XR_NULL_HANDLE;  // the head
+    XrSpace stage = XR_NULL_HANDLE; // the playspace (may be missing): the menu opens toward its front
     XrSpace gripSpace[2]{}, aimSpace[2]{};
     XrTime predictedTime = 0;                  // the last xrWaitFrame's display time
     bool touchController[2]{};                 // Meta Touch controllers (aim ray needs correcting)
@@ -417,6 +419,20 @@ static bool Locate(XrSpace sp, XrSpace base, XrPosef& out) {
 static void UpdateGameUses();
 
 // Which controllers are in use: checked once a second (the profile changes rarely).
+// The controller picture picked in the editor ("quest3"...), read at most every 2 s (this runs every frame).
+static std::string EditorControllerPicture() {
+    static std::string pick;
+    static double readAt = -1;
+    double now = NowSec();
+    if (readAt >= 0 && now - readAt < 2.0) return pick;
+    readAt = now;
+    pick.clear();
+    std::ifstream f(DataDir() + L"\controller_picture.txt");
+    std::getline(f, pick);
+    pick.erase(pick.find_last_not_of(" \r\n\t") + 1);
+    return pick;
+}
+
 static void CheckInteractionProfiles(double now) {
     if (now - gSession.lastProfileCheck < 1.0 || !N.GetCurrentInteractionProfile || !gSession.handle) return;
     gSession.lastProfileCheck = now;
@@ -433,6 +449,13 @@ static void CheckInteractionProfiles(double now) {
         gSession.profileName[h] = p;
         gSession.touchController[h] = touch;
         gSession.controllerKind[h] = ControllerKindOf(p);
+        // Quest 3 / Pro through SteamVR or Virtual Desktop report the plain Touch profile: use the controller picked in
+        // the editor (controller_picture.txt) to draw the right one.
+        if (gSession.controllerKind[h] == ControllerKind::Touch) {
+            std::string pick = EditorControllerPicture();
+            if (pick == "quest3") gSession.controllerKind[h] = ControllerKind::TouchPlus;
+            else if (pick == "questpro") gSession.controllerKind[h] = ControllerKind::TouchPro;
+        }
     }
     UpdateGameUses();
 }
@@ -651,6 +674,7 @@ static void ReadInputsAndUpdate() {
         ReadHand(h, f.h[h]);
     gInputLog.Summary(f.t);
     f.headValid = Locate(gSession.view, gSession.local, f.head);
+    f.stageValid = gSession.stage && Locate(gSession.stage, gSession.local, f.stage);
     if (gInputLog.InputMissingFor(f.t, f.headValid, 15.0))
         gEng.Toast("OpenXR Companion gets no controller input. Check SteamVR's controller bindings for this game "
                    "(Steam Frame: Index bindings), then restart the game.",
@@ -863,6 +887,8 @@ static XrResult XRAPI_CALL Hook_xrCreateSession(XrInstance inst, const XrSession
     N.CreateReferenceSpace(gSession.handle, &rs, &gSession.local);
     rs.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_VIEW;
     N.CreateReferenceSpace(gSession.handle, &rs, &gSession.view);
+    rs.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_STAGE;
+    if (XR_FAILED(N.CreateReferenceSpace(gSession.handle, &rs, &gSession.stage))) gSession.stage = XR_NULL_HANDLE;
     ReloadProfile(true);
     return r;
 }
@@ -888,7 +914,8 @@ static void DestroySessionStuff() {
     }
     if (gSession.local) N.DestroySpace(gSession.local);
     if (gSession.view) N.DestroySpace(gSession.view);
-    gSession.local = gSession.view = XR_NULL_HANDLE;
+    if (gSession.stage) N.DestroySpace(gSession.stage);
+    gSession.local = gSession.view = gSession.stage = XR_NULL_HANDLE;
     gEng.Reset();
     gMirror.Shutdown();
     gSession.gfx.Release();

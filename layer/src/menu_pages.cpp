@@ -186,6 +186,8 @@ static std::vector<int> PartsOf(ControllerKind kind, int hand) {
 MenuPage Overview(Engine& e, InGameMenu& m) {
     MenuPage p;
     p.title = "Controller configuration";
+    p.scale = 2.4f;     // big and further away: easy to read and point at, still inside the view
+    p.distance = 1.4f;
     p.width = 0.82f; // wider than the other pages: about 66 degrees across at its distance, inside the view
     std::vector<MenuTag> tags;
     for (int hand = 0; hand < 2; hand++) {

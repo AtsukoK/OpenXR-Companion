@@ -35,12 +35,24 @@ void InGameMenu::Close() {
     Log("in-game menu closed");
 }
 
-// In front of you, a little below eye level, facing your eyes.
+// Toward the front of the playspace (where it has one; else where you look), a little below eye level, facing you.
 void InGameMenu::Place() {
-    XrPosef frame = YawFrame(e.fr.head);
-    XrPosef local{ { 0, 0, 0, 1 }, { 0, -0.12f, -0.6f } };
-    e.menuView.pose = PMul(frame, local);
-    e.menuView.pose.orientation = BillboardTo(V(e.menuView.pose.position), V(e.fr.head.position));
+    anchor_ = YawFrame(e.fr.head);
+    if (e.fr.stageValid) {
+        XrPosef st = e.fr.stage;
+        st.position = e.fr.head.position;
+        anchor_.orientation = YawFrame(st).orientation; // the playspace's forward, turned only left/right
+    }
+    placedAt_ = 0;
+    PlaceAt(page_.distance > 0 ? page_.distance : kMenuDistance);
+}
+
+void InGameMenu::PlaceAt(float distance) {
+    if (distance == placedAt_) return;
+    placedAt_ = distance;
+    XrPosef local{ { 0, 0, 0, 1 }, { 0, -0.2f * distance, -distance } }; // the same angle below the eyes at any distance
+    e.menuView.pose = PMul(anchor_, local);
+    e.menuView.pose.orientation = BillboardTo(V(e.menuView.pose.position), V(anchor_.position));
 }
 
 void InGameMenu::Push(MenuPageBuilder page) {
@@ -103,11 +115,14 @@ void InGameMenu::BuildView() {
         same = a.label == b.label && a.detail == b.detail && a.value == b.value && a.isOn == b.isOn && a.canLess == b.canLess &&
                a.canMore == b.canMore && a.kind == b.kind && a.fraction == b.fraction && a.tags == b.tags && a.items == b.items;
     }
-    float width = page_.width > 0 ? page_.width : kMenuWidth;
-    same = same && v.w == width;
+    float scale = page_.scale > 0 ? page_.scale : 1.f;
+    float width = (page_.width > 0 ? page_.width : kMenuWidth) * scale;
+    PlaceAt(page_.distance > 0 ? page_.distance : kMenuDistance);
+    same = same && v.w == width && v.scale == scale;
     if (same) return;
     v.w = width;
-    v.h = kMenuHeight;
+    v.h = kMenuHeight * scale;
+    v.scale = scale;
     v.rows = std::move(rows);
     v.title = page_.title;
     v.status = status;

@@ -31,6 +31,10 @@ only when the user says so.
   ("Squeeze strength" for the Index full squeeze, Default at the minimum); editor "Press point (%)" shown for analog inputs.
   Index grip: squeeze/force read (A_GRIPF); its F_FULL = force > 0.5 (off 0.35), offered in menu + editor.
   Frame grip: user report = analog squeeze + physical click at the end (= squeeze/click, already F_FULL). Test TestPressPoints.
+- Headset test 2026-11-23 fixes: (1) Quest 3 via VD/SteamVR reports plain touch_controller -> drew Quest 2; now the
+  editor's pick (controller_picture.txt, read every 2 s) upgrades Touch to TouchPlus / TouchPro. (2) Overview bigger and
+  further: MenuPage scale 2.4 + distance 1.4 m (MenuView.scale keeps texture pixels the same); other pages 0.6 m.
+  (3) Menu opens toward the playspace's front (STAGE space -Z, yaw only) at the head; falls back to head yaw.
 - Open ideas: overview pictures could be bigger (spare height); long tag text gets cut; highlight the part on PartPage.
 - Pictures: layer/menu_overview.png, menu_part.png, menu_binding.png, keyboard_binding.png, menu_test_frame.png (tests).
 

@@ -39,6 +39,8 @@ struct Frame {
     HandRaw h[2];
     bool headValid = false;
     XrPosef head{ { 0, 0, 0, 1 }, { 0, 0, 0 } };
+    bool stageValid = false; // the playspace (STAGE) and where it is: its -Z is the playspace's front
+    XrPosef stage{ { 0, 0, 0, 1 }, { 0, 0, 0 } };
     double t = 0;
 };
 // A fake value pushed into the game's own actions bound to a controller part.

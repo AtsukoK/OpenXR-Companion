@@ -38,6 +38,7 @@ public:
 
 private:
     void Place();
+    void PlaceAt(float distance);
     void BuildView();
     void Activate(const MenuHit& hit, bool repeat);
     void Step(int row, int direction);
@@ -48,6 +49,8 @@ private:
     void SaveWhenDue();
 
     Engine& e;
+    XrPosef anchor_{ { 0, 0, 0, 1 }, { 0, 0, 0 } }; // where the menu opened: eye position, turned toward where it shows
+    float placedAt_ = 0;
     std::vector<MenuPageBuilder> stack_;
     MenuPage page_;
     struct Run {
