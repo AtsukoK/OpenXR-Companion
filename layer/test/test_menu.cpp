@@ -155,6 +155,7 @@ void TestInGameMenu() {
 
     // Stick options: + five times on the inner deadzone.
     CHECK(d.PressRow("Right stick") && e.menuView.title == "Right stick", "menu: pointing at a link and pulling the trigger opens it");
+    CHECK(d.PressRow("Deadzones") && e.menuView.title == "Right stick: deadzones", "menu: the stick's deadzones on their own page");
     int inner = d.Row("Inner deadzone");
     CHECK(inner >= 0 && e.menuView.rows[inner].value == "off" && !e.menuView.rows[inner].canLess, "menu: a number at its minimum shows 'off', - is greyed");
     for (int i = 0; i < 5; i++)
@@ -171,6 +172,12 @@ void TestInGameMenu() {
     d.Step(1.2);
     CHECK(e.menuSaveRequested, "menu: saved a moment after the last change");
     e.menuSaveRequested = false;
+    f.h[1].sy = -1.f; // the stick being tested doesn't scroll or change the page
+    d.Step(0.5);
+    CHECK(e.menuView.first == 0 && std::fabs(p->sticks[1].innerDeadzone - 0.05f) < 1e-4f, "menu: the sticks don't scroll a stick page");
+    f.h[1].sy = 0.f;
+    d.Step(0.1);
+    d.Press(MenuPart::Back);
     CHECK(d.Press(MenuPart::Back) && e.menuView.title.rfind("Edit bindings", 0) == 0, "menu: Back returns to the home page");
 
     // A new binding: press the button, then type the key on the VR keyboard.

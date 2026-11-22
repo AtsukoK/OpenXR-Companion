@@ -35,6 +35,11 @@ only when the user says so.
   editor's pick (controller_picture.txt, read every 2 s) upgrades Touch to TouchPlus / TouchPro. (2) Overview bigger and
   further: MenuPage scale 2.4 + distance 1.4 m (MenuView.scale keeps texture pixels the same); other pages 0.6 m.
   (3) Menu opens toward the playspace's front (STAGE space -Z, yaw only) at the head; falls back to head yaw.
+- Headset test 2 fixes (2026-11-23): overview hands spaced apart (x0 0.005 / 0.517, tag col 0.105) so middle tags
+  don't touch; stick pages split: StickOptions = hub (Deadzones / Directions / Bindings) with a big live stick
+  (span 5); MenuPage/MenuView.stickFree = sticks don't scroll or change values (also Test controllers), footer says so.
+  In-game stick ways now include Double flick up/down/left/right (DoubleTapHold, block none, 350 ms), like the editor's
+  "+ Add..." on a direction card.
 - Open ideas: overview pictures could be bigger (spare height); long tag text gets cut; highlight the part on PartPage.
 - Pictures: layer/menu_overview.png, menu_part.png, menu_binding.png, keyboard_binding.png, menu_test_frame.png (tests).
 

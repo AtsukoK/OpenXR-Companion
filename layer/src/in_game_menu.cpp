@@ -118,11 +118,12 @@ void InGameMenu::BuildView() {
     float scale = page_.scale > 0 ? page_.scale : 1.f;
     float width = (page_.width > 0 ? page_.width : kMenuWidth) * scale;
     PlaceAt(page_.distance > 0 ? page_.distance : kMenuDistance);
-    same = same && v.w == width && v.scale == scale;
+    same = same && v.w == width && v.scale == scale && v.stickFree == page_.stickFree;
     if (same) return;
     v.w = width;
     v.h = kMenuHeight * scale;
     v.scale = scale;
+    v.stickFree = page_.stickFree;
     v.rows = std::move(rows);
     v.title = page_.title;
     v.status = status;
@@ -254,7 +255,7 @@ void InGameMenu::UpdatePointing() {
 // The pointing hand's stick: up / down scrolls, left / right moves the number or choice pointed at.
 void InGameMenu::UpdateStick(float dt) {
     int g = run_.uiHand;
-    if (g < 0 || run_.inputDone) return;
+    if (g < 0 || run_.inputDone || page_.stickFree) return;
     MenuView& v = e.menuView;
     float sx = e.fr.h[g].sx, sy = e.fr.h[g].sy;
     if (std::fabs(sy) > 0.6f && std::fabs(sy) > std::fabs(sx) && e.now >= run_.scrollAt) {

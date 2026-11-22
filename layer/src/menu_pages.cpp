@@ -218,7 +218,10 @@ static std::vector<PartWay> WaysOf(int comp, ControllerKind kind) {
                  { F_DOWN, Gesture::Press, "Swipe down" }, { F_LEFT, Gesture::Press, "Swipe left" }, { F_RIGHT, Gesture::Press, "Swipe right" } };
     if (comp == C_STICK)
         return { { F_PRESS, Gesture::Press, "Click" },   { F_UP, Gesture::Press, "Push up" },      { F_DOWN, Gesture::Press, "Push down" },
-                 { F_LEFT, Gesture::Press, "Push left" }, { F_RIGHT, Gesture::Press, "Push right" }, { F_TOUCH, Gesture::Press, "Touch" } };
+                 { F_LEFT, Gesture::Press, "Push left" }, { F_RIGHT, Gesture::Press, "Push right" }, { F_TOUCH, Gesture::Press, "Touch" },
+                 // a double flick, then held: lasts while you keep pushing (sprint on a double flick forward)
+                 { F_UP, Gesture::DoubleTapHold, "Double flick up" },     { F_DOWN, Gesture::DoubleTapHold, "Double flick down" },
+                 { F_LEFT, Gesture::DoubleTapHold, "Double flick left" }, { F_RIGHT, Gesture::DoubleTapHold, "Double flick right" } };
     if (comp == C_THUMBREST) return { { F_TOUCH, Gesture::Press, "Touch" }, { F_TOUCH, Gesture::DoubleTap, "Double-tap" } };
     const char* press = comp == C_TRIGGER ? "Pull" : comp == C_GRIP ? "Squeeze" : "Press";
     bool frame = kind == ControllerKind::SteamFrame;
@@ -275,6 +278,10 @@ MenuPage PartPage(Engine& e, InGameMenu& m, int hand, int comp) {
                                              b.name = InputWords(id);
                                              b.gesture = way.gesture;
                                              b.block = way.feat == F_TOUCH ? BindingBlock::None : BindingBlock::Trigger;
+                                             if (way.gesture == Gesture::DoubleTapHold) {
+                                                 b.block = BindingBlock::None; // the game still gets the push (you keep walking)
+                                                 b.doubleTapMs = 350;
+                                             }
                                              b.action.type = ActType::Key;
                                              b.action.mode = ActMode::Hold;
                                              int index = 0;
@@ -472,6 +479,7 @@ MenuPage BindingDetail(Engine& e, InGameMenu& m, int index) {
 MenuPage TestControllers(Engine& e, InGameMenu& m) {
     MenuPage p;
     p.title = "Test controllers";
+    p.stickFree = true;
     p.rows.push_back(MenuRow::Live(LiveKind::BothControllers, 1, 4));
     p.rows.push_back(MenuRow::Note("Press, touch and push things: they light up here", "A ring = touched, filled = pressed. The white dot is the stick."));
     for (int hand : { 1, 0 })
@@ -480,25 +488,37 @@ MenuPage TestControllers(Engine& e, InGameMenu& m) {
     return p;
 }
 
-MenuPage StickOptions(Engine& e, InGameMenu& m, int hand) {
+// One stick setting at a time, with the stick big and live above it (the sticks don't scroll these pages).
+static MenuPage StickPage(const char* title, int hand) {
     MenuPage p;
-    p.title = hand ? "Right stick" : "Left stick";
+    p.title = title;
+    p.stickFree = true;
+    p.rows.push_back(MenuRow::Live(LiveKind::Stick, hand, 5));
+    return p;
+}
+
+static MenuRow ShareRow(const char* label, const char* detail, float* field) {
+    MenuRow r = MenuRow::Number(label, detail, [field] { return *field; }, [field](float v) { *field = v; }, 0, 0.9f, 0.01f);
+    r.scale = 100;
+    r.unit = "%";
+    r.atMin = "off";
+    return r;
+}
+
+static MenuPage StickDeadzones(Engine& e, int hand) {
+    MenuPage p = StickPage(hand ? "Right stick: deadzones" : "Left stick: deadzones", hand);
     StickShape* s = &e.prof->sticks[hand];
-    auto share = [&m](const char* label, const char* detail, float* field) {
-        MenuRow r = MenuRow::Number(label, detail, [field] { return *field; }, [field, &m](float v) { *field = v; }, 0, 0.9f, 0.01f);
-        r.scale = 100;
-        r.unit = "%";
-        r.atMin = "off";
-        return r;
-    };
-    p.rows.push_back(MenuRow::Live(LiveKind::Stick, hand, 3));
-    p.rows.push_back(MenuRow::Heading("What the game sees"));
-    p.rows.push_back(share("Inner deadzone", "Small pushes count as none (stops drift)", &s->innerDeadzone));
-    p.rows.push_back(share("Outer deadzone", "Near the edge already counts as full", &s->outerDeadzone));
-    p.rows.push_back(MenuRow::Heading("Your stick bindings"));
+    p.rows.push_back(ShareRow("Inner deadzone", "Small pushes count as none (stops drift)", &s->innerDeadzone));
+    p.rows.push_back(ShareRow("Outer deadzone", "Near the edge already counts as full", &s->outerDeadzone));
+    return p;
+}
+
+static MenuPage StickDirections(Engine& e, int hand) {
+    MenuPage p = StickPage(hand ? "Right stick: directions" : "Left stick: directions", hand);
+    StickShape* s = &e.prof->sticks[hand];
     MenuRow zone = MenuRow::Number("Direction zone", "Directions only count close to straight",
                                    [s] { return s->directionAngleDeg; }, [s](float v) { s->directionAngleDeg = v; }, 0, 45, 5);
-    zone.unit = "\xC2\xB0";
+    zone.unit = "Â°";
     zone.atMin = "off";
     p.rows.push_back(zone);
     MenuRow pressAt = MenuRow::Number("Direction counts at", "How far to push (both sticks)", [&e] { return e.prof->stickOn; },
@@ -510,6 +530,17 @@ MenuPage StickOptions(Engine& e, InGameMenu& m, int hand) {
     pressAt.scale = 100;
     pressAt.unit = "%";
     p.rows.push_back(pressAt);
+    return p;
+}
+
+MenuPage StickOptions(Engine& e, InGameMenu& m, int hand) {
+    MenuPage p = StickPage(hand ? "Right stick" : "Left stick", hand);
+    p.rows.push_back(MenuRow::Link("Deadzones", "What the game sees: drift and the edge",
+                                   [&e, &m, hand] { m.Push([&e, hand] { return StickDeadzones(e, hand); }); }));
+    p.rows.push_back(MenuRow::Link("Directions", "For your Up / Down / Left / Right bindings",
+                                   [&e, &m, hand] { m.Push([&e, hand] { return StickDirections(e, hand); }); }));
+    p.rows.push_back(MenuRow::Link("Bindings", "Click, push, double flick...",
+                                   [&e, &m, hand] { m.Push([&e, &m, hand] { return PartPage(e, m, hand, C_STICK); }); }));
     return p;
 }
 

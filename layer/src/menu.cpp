@@ -179,8 +179,9 @@ void OverviewLayout(const MenuView& view, const MenuViewRow& row, float y, float
     const float aspect = view.h > 0 ? view.w / view.h : 1.f;
     const float lineH = 0.03f, gap = 0.012f, captionH = 0.045f;
     for (int hand = 0; hand < 2; hand++) {
-        float x0 = 0.01f + hand * 0.495f;
-        const float colW = 0.115f, topW = 0.15f, sideW = 0.1f, gapU = 0.005f;
+        // the two hands with a clear gap between them, so the middle tags don't run into each other
+        float x0 = hand == 0 ? 0.005f : 0.517f;
+        const float colW = 0.105f, topW = 0.15f, sideW = 0.1f, gapU = 0.006f;
         float picTop = y + captionH, picH = h - captionH - 0.01f;
         out.caption[hand] = { x0, y + 0.005f, 0.48f, captionH, {} };
         out.top[hand] = { x0 + colW + gapU, picTop, topW, picH, {} };

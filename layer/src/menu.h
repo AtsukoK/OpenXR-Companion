@@ -92,6 +92,7 @@ struct MenuPage {
     float width = 0; // metres at scale 1; 0 = the usual width (the overview is wider)
     float scale = 1;    // the whole page bigger (same look, same pixels per design unit)
     float distance = 0; // metres from the eyes; 0 = the usual 0.6
+    bool stickFree = false; // the sticks are being tested here: they don't scroll the page or change values
 };
 constexpr float kMenuWidth = 0.5f, kMenuHeight = 0.56f; // the usual panel size, metres
 constexpr float kMenuDistance = 0.6f;                   // the usual distance from the eyes
@@ -136,6 +137,7 @@ struct MenuView {
     XrPosef pose{ { 0, 0, 0, 1 }, { 0, 0, 0 } };
     float w = 0.5f, h = 0.56f; // metres
     float scale = 1;           // the page drawn bigger: w / scale is its design width
+    bool stickFree = false;    // the sticks are being tested: they don't scroll (the footer says so)
     std::string title;
     std::string status; // a line at the bottom: what to do now ("Press the button you want...")
     bool canBack = false;
