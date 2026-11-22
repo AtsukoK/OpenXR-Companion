@@ -34,6 +34,7 @@ public:
     // Light: draw straight from the game's eye image (no full-size copy, no mipmaps), much cheaper; the full
     // copy is still used when the image can't be read directly or the window is under a third of the picture's size.
     bool light = true;
+    bool bothEyes = false; // fill the nose side from the other eye, so the view centres on where this eye looks
     bool lastDirect = false; // the last frame was drawn the light way (tests)
     float zoom = 1.3f; // 1 = the whole eye picture, more = cropped in like a normal camera
     int fps = 60;      // most frames a second the window updates (0 = every headset frame)

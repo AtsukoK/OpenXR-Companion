@@ -198,7 +198,7 @@ void HeadsetMirror::Shutdown() {
 
 // ------------------------------------------------------------ GPU
 static const char* kShader = R"(
-cbuffer C : register(b0) { float4 P[4]; float4 UV; float4 Mode; };
+cbuffer C : register(b0) { float4 P[4]; float4 UV; float4 Mode; float4 Fade; };
 Texture2D T : register(t0); SamplerState S : register(s0);
 struct V { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
 V vs(uint id : SV_VertexID) {
@@ -228,9 +228,11 @@ float4 Footprint(float2 uv) {
 }
 float4 ps(V i) : SV_Target {
     float4 c = Mode.y > 0.5 ? Bicubic(i.uv) : Mode.z > 0.5 ? Footprint(i.uv) : T.Sample(S, i.uv); // else the mipmaps (trilinear)
-    if (Mode.x < 0.5) return float4(c.rgb, 1);          // opaque
-    if (Mode.x > 1.5) return float4(c.rgb * c.a, c.a);  // straight alpha -> premultiplied
-    return c;                                           // premultiplied
+    float4 o = Mode.x < 0.5 ? float4(c.rgb, 1)            // opaque
+             : Mode.x > 1.5 ? float4(c.rgb * c.a, c.a)  // straight alpha -> premultiplied
+             : c;                                        // premultiplied
+    if (Fade.z > 0.5) o *= saturate((i.uv.x - Fade.x) / (Fade.y - Fade.x)); // soft edge (both eyes: the nose side)
+    return o;
 }
 )";
 
@@ -246,7 +248,7 @@ bool HeadsetMirror::InitGpu(ID3D11Device* d) {
     }
     dev->CreateVertexShader(bv->GetBufferPointer(), bv->GetBufferSize(), nullptr, &vs);
     dev->CreatePixelShader(bp->GetBufferPointer(), bp->GetBufferSize(), nullptr, &ps);
-    D3D11_BUFFER_DESC bd{ 96, D3D11_USAGE_DEFAULT, D3D11_BIND_CONSTANT_BUFFER };
+    D3D11_BUFFER_DESC bd{ 112, D3D11_USAGE_DEFAULT, D3D11_BIND_CONSTANT_BUFFER };
     dev->CreateBuffer(&bd, nullptr, &cb);
     D3D11_SAMPLER_DESC sd{};
     sd.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
@@ -432,6 +434,7 @@ void HeadsetMirror::FlatFrame(ID3D11DeviceContext* ctx, const std::vector<const 
             float P[4][4];
             float UV[4];
             float Mode[4];
+            float Fade[4];
         } c{};
         const float corner[4][2] = { { -1, 1 }, { 1, 1 }, { -1, -1 }, { 1, -1 } };
         for (int i = 0; i < 4; i++) {
@@ -573,9 +576,34 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
     const float m = 0.04f;
     bool steady = smoothing > 0.001f;
     float sideM = std::max(m, kSideMargin);
+    // Both eyes: the other eye fills the nose side, so the view can centre on where this eye looks even at zoom 1.
+    // Its picture is drawn as if far away (only its direction counts): distant things line up, close ones double a little.
+    const bool noseLeft = eye == 1; // the right eye's nose side is on its left
+    const XrCompositionLayerProjectionView* ov = nullptr;
+    ID3D11ShaderResourceView* otherSrv = nullptr;
+    float ou0 = 0, ov0 = 0, ou1 = 1, ov1 = 1;
+    if (bothEyes && proj->viewCount > 1) {
+        ov = &proj->views[eye ? 0 : 1];
+        auto oit = sws.find((uint64_t)ov->subImage.swapchain);
+        if (oit != sws.end() && oit->second.last >= 0 && oit->second.last < (int)oit->second.imgs.size() &&
+            (oit->second.arraySize == 1 || ov->subImage.imageArrayIndex == 0) && oit->second.samples == 1) {
+            otherSrv = Srv(oit->second.imgs[oit->second.last], oit->second.format);
+            float tw = (float)oit->second.w, th = (float)oit->second.h;
+            const XrRect2Di& orc = ov->subImage.imageRect;
+            ou0 = orc.offset.x / tw;
+            ov0 = orc.offset.y / th;
+            ou1 = (orc.offset.x + orc.extent.width) / tw;
+            ov1 = (orc.offset.y + orc.extent.height) / th;
+        }
+        if (!otherSrv) ov = nullptr;
+    }
+    const bool combine = ov != nullptr;
+    float mL = sideM, mR = sideM; // how close the view may come to this eye picture's left / right edge
+    if (combine) (noseLeft ? mL : mR) = -0.3f;
     // Steadying never changes the crop: zoom means the same with it on or off (1 = the whole eye picture).
     // It lags only into the room the zoom leaves (limited below), so at 1 it barely moves; from ~1.3 it has room.
-    float cl = std::clamp(cu - cw / 2, std::min(sideM, (1.f - cw) / 2), std::max(1.f - sideM - cw, (1.f - cw) / 2));
+    float lo = mL, hi = 1.f - mR - cw;
+    float cl = lo <= hi ? std::clamp(cu - cw / 2, lo, hi) : (lo + hi) / 2;
     float ct = std::clamp(cv - ch / 2, std::min(m, (1.f - ch) / 2), std::max(1.f - m - ch, (1.f - ch) / 2));
 
     // window pixels per eye pixel: above 1 the picture is stretched -> sharper bicubic stretch
@@ -649,6 +677,7 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
         float P[4][4];
         float UV[4];
         float Mode[4];
+        float Fade[4];
     } c{};
     ComPtr<ID3D11DeviceContext1> c1;
     if (FAILED(ctx->QueryInterface(IID_PPV_ARGS(&c1)))) {
@@ -670,9 +699,9 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
     ctx->PSSetSamplers(0, 1, samp.GetAddressOf());
     auto draw = [&](ID3D11ShaderResourceView* srv, float mode, ID3D11BlendState* bs) {
         c.Mode[0] = mode;
-        bool isEye = srv == eyeView;
+        bool isOther = otherSrv && srv == otherSrv, isEye = srv == eyeView || isOther;
         c.Mode[1] = isEye && magnify ? 1.f : 0.f;
-        c.Mode[2] = isEye && direct && !magnify ? 1.f : 0.f;
+        c.Mode[2] = isEye && (direct || isOther) && !magnify ? 1.f : 0.f;
         ctx->UpdateSubresource(cb.Get(), 0, nullptr, &c, 0, 0);
         ctx->OMSetBlendState(bs, nullptr, 0xffffffff);
         ctx->PSSetShaderResources(0, 1, &srv);
@@ -690,7 +719,7 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
         Vec3 f = RotateInv(real, Rotate(cam.orientation, { 0, 0, -1 }));
         if (f.z < -0.01f) {
             float dx = f.x / -f.z, dy = f.y / -f.z;
-            float lx = (dx > 0 ? 1 - sideM - cl - cw : cl - sideM) * (tR - tL);
+            float lx = (dx > 0 ? 1 - mR - cl - cw : cl - mL) * (tR - tL);
             float ly = (dy > 0 ? ct - m : 1 - m - ct - ch) * (tU - tD);
             lx = std::max(lx * 0.85f, 0.f);
             ly = std::max(ly * 0.85f, 0.f); // spare a little for roll
@@ -743,7 +772,7 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
     };
 
     // the eye picture
-    if (!steady) { // straight copy, filling the window
+    if (!steady && !combine) { // straight copy, filling the window
         const float full[4][2] = { { -1, 1 }, { 1, 1 }, { -1, -1 }, { 1, -1 } };
         for (int i = 0; i < 4; i++) {
             c.P[i][0] = full[i][0];
@@ -759,14 +788,34 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
     } else { // as a flat picture 1 m in front of the real eye, filling its field of view, seen from the steadied camera
         const float clear[4] = { 0, 0, 0, 1 };
         ctx->ClearRenderTargetView(rtv.Get(), clear);
+        if (combine) { // the other eye first, underneath, far away and seen from this eye's spot
+            const XrFovf& of = ov->fov;
+            float oL = std::tan(of.angleLeft), oR = std::tan(of.angleRight), oU = std::tan(of.angleUp), oD = std::tan(of.angleDown);
+            const float D = 50.f;
+            XrPosef at{ ov->pose.orientation, view.pose.position };
+            XrPosef local{ { 0, 0, 0, 1 }, { (oL + oR) / 2 * D, (oU + oD) / 2 * D, -D } };
+            if (project(PMul(at, local), (oR - oL) / 2 * D, (oU - oD) / 2 * D)) {
+                c.UV[0] = ou0;
+                c.UV[1] = ov0;
+                c.UV[2] = ou1;
+                c.UV[3] = ov1;
+                draw(otherSrv, 0, blendOpaque.Get());
+            }
+            // this eye on top, fading out toward its nose side (over its black strip)
+            float f0 = noseLeft ? 0.10f : 0.90f, f1 = noseLeft ? 0.18f : 0.82f;
+            c.Fade[0] = uo + f0 * uScale;
+            c.Fade[1] = uo + f1 * uScale;
+            c.Fade[2] = 1.f;
+        }
         XrPosef local{ { 0, 0, 0, 1 }, { (tL + tR) / 2, (tU + tD) / 2, -1.f } };
         if (project(PMul(view.pose, local), (tR - tL) / 2, (tU - tD) / 2)) {
             c.UV[0] = uo;
             c.UV[1] = vo;
             c.UV[2] = uo + uScale;
             c.UV[3] = vo + vScale;
-            draw(eyeView, 0, blendOpaque.Get());
+            draw(eyeView, 0, combine ? blendPremul.Get() : blendOpaque.Get());
         }
+        c.Fade[2] = 0.f;
     }
 
     // every quad layer after the game's picture, where it really is

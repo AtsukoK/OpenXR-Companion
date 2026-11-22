@@ -928,6 +928,7 @@ bool LoadMirrorSettings(MirrorSettings& m) {
         std::string q = "light";
         Get(j, "quality", q);
         m.light = Lower(q) != "full";
+        Get(j, "both_eyes", m.bothEyes);
         return true;
     } catch (...) {
         return false;
@@ -950,6 +951,7 @@ bool SaveMirrorSettings(const MirrorSettings& m) {
     j["smoothing"] = std::round(m.smoothing * 100.f) / 100.f;
     j["on_top"] = m.onTop;
     j["quality"] = m.light ? "light" : "full";
+    j["both_eyes"] = m.bothEyes;
     return WriteFileAtomic(MirrorSettingsPath(), j.dump(2));
 }
 

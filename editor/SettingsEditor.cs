@@ -482,6 +482,9 @@ public class SettingsEditor : EditorBase
                 var eye = new ChoiceBox(new Choice[] { new("left", "Left eye"), new("right", "Right eye") }, 200) { Code = HeadsetMirrorFile.Eye };
                 eye.SelectedIndexChanged += (o, e) => HeadsetMirrorFile.Eye = eye.Code;
                 mir.AddRow("Eye", eye);
+                var both = new CheckBox { Text = "Fill in from the other eye", AutoSize = true, Checked = HeadsetMirrorFile.BothEyes };
+                both.CheckedChanged += (o, e) => HeadsetMirrorFile.BothEyes = both.Checked;
+                mir.AddRow("", both, "Where you look sits toward the nose in each eye's picture, and that side ends in a black strip. With this on, the other eye fills that side in, so the view stays centred on where you look even at zoom 1. Far things line up; close things (your hands, the gun) can look a little doubled on that side.");
                 var zoom = new NumericUpDown { Minimum = 1, Maximum = 3, Increment = 0.05m, DecimalPlaces = 2, Width = 90, Value = (decimal)Math.Clamp(HeadsetMirrorFile.Zoom, 1, 3) };
                 zoom.ValueChanged += (o, e) => HeadsetMirrorFile.Zoom = (double)zoom.Value;
                 mir.AddRow("Zoom", zoom, "1 = the whole eye picture (very wide, blurry edges). 1.3 looks like a normal camera. The same with steadying on or off. It always fills the window; resize the window for a different shape.");

@@ -2423,6 +2423,36 @@ int main(int argc, char** argv) {
                     CHECK(W <= Hh || at(3, Hh / 2) == 0x000000, "mirror: no VR view: black either side of a square screen");
                 }
             }
+            // Both eyes: the left eye (green) fills the right eye's nose side, so even at zoom 1 the view can
+            // centre on where the right eye looks and the window's left edge comes from the left eye.
+            {
+                ID3D11Texture2D* leftTex = makeTex(800, 800, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, 0xFF00FF00); // RGBA bytes: green
+                XrSwapchain sl = (XrSwapchain)(uintptr_t)104;
+                reg(sl, leftTex, 800, 800, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
+                views[0].subImage.swapchain = sl;
+                // like a headset: each eye sees further to its own outer side than toward the nose
+                views[0].fov = { -0.95f, 0.75f, 0.85f, -0.85f };
+                views[1].fov = { -0.75f, 0.95f, 0.85f, -0.85f };
+                std::vector<const XrCompositionLayerBaseHeader*> eyesOnly{ (const XrCompositionLayerBaseHeader*)&proj };
+                m.zoom = 1.f;
+                m.smoothing = 0.f;
+                m.eye = 1;
+                auto edgeColour = [&](bool both) {
+                    m.bothEyes = both;
+                    m.grab = true;
+                    m.Frame(dev, ctx, eyesOnly, 7000000000LL, locate);
+                    return m.grabbed.empty() ? 0xFFFFFFFFu : (m.grabbed[(size_t)(m.grabH / 2) * m.grabW + 3] & 0xFFFFFF);
+                };
+                CHECK(edgeColour(false) == 0x0000FF, "mirror: one eye: the window's left edge is that eye's picture");
+                CHECK(edgeColour(true) == 0x00FF00,"mirror: both eyes: the left eye fills the right eye's nose side");
+                CHECK((m.grabbed[(size_t)(m.grabH / 2) * m.grabW + m.grabW / 2] & 0xFFFFFF) == 0x0000FF,
+                      "mirror: both eyes: the middle is still the chosen eye");
+                m.bothEyes = false;
+                views[0].subImage.swapchain = se;
+                for (auto& v : views)
+                    v.fov = { -0.7853982f, 0.7853982f, 0.7853982f, -0.7853982f };
+                leftTex->Release();
+            }
             // Cost at a Quest 3 eye size (4480x3360), timed on the GPU: printed, not checked (depends on the PC).
             if (getenv("VRO_MIRROR_BENCH")) {
                 ID3D11Texture2D* big = makeTex(4480, 3360, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, 0xFF808080);
