@@ -459,8 +459,47 @@ static bool RunUnknownControllerThroughLayer(std::vector<std::string>& sent, std
     return true;
 }
 
+// A layer in front of ours may ask for a function before our instance is made (Cheeky DLSS did, and the game crashed).
+// Must run before any test creates an instance through the DLL.
+static bool AskForFunctionBeforeInstance(XrResult& result, PFN_xrVoidFunction& fn, std::string& why) {
+    wchar_t exe[MAX_PATH];
+    GetModuleFileNameW(nullptr, exe, MAX_PATH);
+    std::wstring dir = exe;
+    dir = dir.substr(0, dir.find_last_of(L"\\/"));
+    HMODULE dll = LoadLibraryW((dir + L"\\OpenXRCompanion.dll").c_str());
+    if (!dll) {
+        why = "OpenXRCompanion.dll not found next to the tests";
+        return false;
+    }
+    auto negotiate = (PFN_xrNegotiateLoaderApiLayerInterface)GetProcAddress(dll, "xrNegotiateLoaderApiLayerInterface");
+    XrNegotiateLoaderInfo li{ XR_LOADER_INTERFACE_STRUCT_LOADER_INFO,
+                              XR_LOADER_INFO_STRUCT_VERSION,
+                              sizeof(XrNegotiateLoaderInfo),
+                              XR_CURRENT_LOADER_API_LAYER_VERSION,
+                              XR_CURRENT_LOADER_API_LAYER_VERSION,
+                              XR_CURRENT_API_VERSION,
+                              XR_CURRENT_API_VERSION };
+    XrNegotiateApiLayerRequest rq{ XR_LOADER_INTERFACE_STRUCT_API_LAYER_REQUEST, XR_API_LAYER_INFO_STRUCT_VERSION,
+                                   sizeof(XrNegotiateApiLayerRequest) };
+    if (!negotiate || XR_FAILED(negotiate(&li, nullptr, &rq))) {
+        why = "negotiation failed";
+        return false;
+    }
+    fn = (PFN_xrVoidFunction)1; // must be cleared
+    result = rq.getInstanceProcAddr(XR_NULL_HANDLE, "xrEnumerateInstanceExtensionProperties", &fn);
+    return true;
+}
+
 int main(int argc, char** argv) {
     setvbuf(stdout, nullptr, _IONBF, 0); // every line reaches the console, even if a test crashes
+    {
+        XrResult r = XR_SUCCESS;
+        PFN_xrVoidFunction fn = nullptr;
+        std::string why;
+        bool ran = AskForFunctionBeforeInstance(r, fn, why);
+        CHECK(ran, ("asking before the instance exists: " + why).c_str());
+        CHECK(ran && XR_FAILED(r) && fn == nullptr, "asking for a function before our instance exists fails cleanly, no crash");
+    }
     // Always the app's built-in default profile, never the user's own bindings.
     std::string err;
     auto p = ParseProfileText(DefaultProfileJson(), err);

@@ -968,6 +968,12 @@ static XrResult XRAPI_CALL Hook_xrEndFrame(XrSession s, const XrFrameEndInfo* fi
 
 // ---------------------------------------------------------------- dispatch
 static XrResult XRAPI_CALL Hook_xrGetInstanceProcAddr(XrInstance inst, const char* name, PFN_xrVoidFunction* fn) {
+    // A layer in front of us (Cheeky foveated DLSS in Bannerlord) can ask for functions before our instance exists,
+    // so we have no next layer to ask yet. Answer "not available" instead of calling a null pointer.
+    if (!gNextGipa) {
+        if (fn) *fn = nullptr;
+        return inst == XR_NULL_HANDLE ? XR_ERROR_HANDLE_INVALID : XR_ERROR_FUNCTION_UNSUPPORTED;
+    }
     XrResult r = gNextGipa(inst, name, fn);
     if (XR_FAILED(r) || !name) return r;
     std::string n = name;
