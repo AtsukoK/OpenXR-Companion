@@ -2352,8 +2352,8 @@ int main(int argc, char** argv) {
                     return m.grabbed[(size_t)y * W + x] & 0xFFFFFF;
                 };
                 // quad: 0.2 m wide at 0.5 m with 45 degree half-angles -> 20% of the eye's width either side of the centre
-                // steadying (on by default) crops to 1 - 2 * (12% side margin + 7% headroom) of the eye's width
-                float cw = m.smoothing > 0.001f ? 1.f - 2 * (0.12f + 0.07f) : 1.f;
+                // steadying (on by default) crops to 1 - 2 * (12% side margin + 4% headroom) of the eye's width
+                float cw = m.smoothing > 0.001f ? 1.f - 2 * (0.12f + 0.04f) : 1.f;
                 int qx = (int)(W * 0.1f / cw);
                 CHECK(at(W / 2, Hh / 2) == 0xFF0000, "mirror: the panel shows in the middle, in front of the game");
                 CHECK(at(W / 2 + qx - 6, Hh / 2) == 0xFF0000 && at(W / 2 + qx + 6, Hh / 2) == 0x0000FF,

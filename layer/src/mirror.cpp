@@ -574,9 +574,10 @@ void HeadsetMirror::Frame(ID3D11Device* d, ID3D11DeviceContext* ctx, const std::
     bool steady = smoothing > 0.001f;
     float sideM = std::max(m, kSideMargin);
     if (steady) { // leave headroom round the crop so the steadied camera can lag without showing the picture's edges
-        // sideways around where the eye looks (cu), past the side margins; up and down past the small margin
-        const float hr = 0.07f;
-        float maxcx = std::max(0.2f, 2 * (std::min(cu, 1.f - cu) - sideM - hr)), maxcy = 1.f - 2 * (m + hr);
+        // Sideways only a little (the side margins are already wide): where the view sits off-centre the lag is
+        // limited on that side instead (below), so it stops at the margin rather than zooming everything in.
+        const float hr = 0.07f, hrSide = 0.04f;
+        float maxcx = 1.f - 2 * (sideM + hrSide), maxcy = 1.f - 2 * (m + hr);
         float s = std::min({ 1.f, maxcx / cw, maxcy / ch });
         cw *= s;
         ch *= s;
