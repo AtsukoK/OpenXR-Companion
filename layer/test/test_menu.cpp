@@ -104,6 +104,14 @@ void TestInGameMenu() {
               std::fabs(liveR.stickY - 0.8f) < 0.01f,
           "menu: the test page shows what is pressed, touched and pushed right now");
     SaveMenuPicture(e, *p, L"menu_test_controllers.png");
+    // The same page with Steam Frame controllers: right X and left D-pad up pressed too.
+    f.h[0].kind = f.h[1].kind = ControllerKind::SteamFrame;
+    f.h[1].more[C_BTN3] = f.h[0].more[C_DPAD_UP] = true;
+    d.Step(0.15);
+    CHECK(e.menuView.live[1].press[C_BTN3] && e.menuView.live[0].press[C_DPAD_UP], "menu: the test page shows the Frame's X and D-pad");
+    SaveMenuPicture(e, *p, L"menu_test_frame.png");
+    f.h[0].kind = f.h[1].kind = ControllerKind::Unknown;
+    f.h[1].more[C_BTN3] = f.h[0].more[C_DPAD_UP] = false;
     f.h[1].b1 = false;
     f.h[0].b2t = false;
     f.h[0].trig = 0.f;
