@@ -371,6 +371,10 @@ static class Tracer
         // be flipped to put the stick toward the middle, which is wrong: a right Quest controller has its thumbstick
         // on the right of A / B, as the model says and the real one shows.)
         bool rightHand = hand == "right";
+        // The Index's view across the controller comes out mirrored (its stick ended up left of A / B on the right
+        // controller; on the real one it is right of them, like the Quest's): flip it.
+        if (topFromSide)
+            topView.FlipX();
         // side view: the trigger at the front, on the left for the right hand (mirrored for the left)
         float TriggerX(View v) => v.PartBoxes.TryGetValue("trigger", out var b) ? b.X + b.Width / 2 : 0;
         float BodyX(View v) => v.Body.SelectMany(l => l).Average(p => p.X);

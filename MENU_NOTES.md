@@ -14,7 +14,7 @@ G:/Claude/VR Radial Overlay/dist2. Nothing below tested in a headset yet.
 - Steam Frame: own ControllerKind, comps C_BTN3..C_DPAD_RIGHT, opt-in steam_frame.json native mode (see BUTTONS_NOTES),
   outlines from Valve CAD (CC BY-NC-SA, credited).
 - Controller pictures fixed 2026-11-22: face view no longer flipped (right Quest: stick RIGHT of A/B, user confirmed with
-  the real controller). Index picture unchanged. Fallback drawings (ControllerLayouts top parts, controller_art kTouch)
+  the real controller). Index view flipped too (user confirmed: right Index stick right of A/B). Fallback drawings (ControllerLayouts top parts, controller_art kTouch)
   still have the old mirrored layout but are only used without a silhouette.
 - Open ideas: overview pictures could be bigger (spare height); long tag text gets cut; highlight the part on PartPage.
 - Pictures: layer/menu_overview.png, menu_part.png, menu_binding.png, keyboard_binding.png, menu_test_frame.png (tests).
