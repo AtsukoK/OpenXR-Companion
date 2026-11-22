@@ -17,7 +17,8 @@ constexpr int C_FRAME_FIRST = C_BTN3, C_FRAME_LAST = C_DPAD_RIGHT;
 // The names of the parts in profiles ("right.a", "left.dpad_up"), per hand: [hand][comp].
 extern const char* const kCompNames[2][C_COUNT];
 // How the part is read. PRESS = click or analog over threshold.
-enum Feat { F_PRESS, F_TOUCH, F_UP, F_DOWN, F_LEFT, F_RIGHT, F_COUNT };
+// FULL: the click at the end of a dual-stage trigger or grip (Steam Frame grips and triggers, the Index trigger).
+enum Feat { F_PRESS, F_TOUCH, F_UP, F_DOWN, F_LEFT, F_RIGHT, F_FULL, F_COUNT };
 
 struct InputId {
     int hand = -1, comp = -1, feat = F_PRESS;

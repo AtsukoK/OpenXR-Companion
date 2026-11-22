@@ -89,6 +89,9 @@ enum OA {
     A_PAD,      // the Index trackpad / WMR touchpad: position
     A_PADPRESS, // force (Index) or click (WMR)
     A_PADT,
+    A_TRIGC,  // dual-stage clicks
+    A_GRIPC,
+    A_GRIPT,  // grip touch (Steam Frame)
     A_COUNT
 };
 static_assert(A_DPAD_RIGHTT - A_BTN3T == C_FRAME_LAST - C_FRAME_FIRST, "the Frame's touches follow the Comp order");
@@ -115,6 +118,8 @@ static const struct {
     { "vro_dpad_right_touch", XR_ACTION_TYPE_BOOLEAN_INPUT },
     { "vro_pad", XR_ACTION_TYPE_VECTOR2F_INPUT },        { "vro_pad_press", XR_ACTION_TYPE_FLOAT_INPUT },
     { "vro_pad_touch", XR_ACTION_TYPE_BOOLEAN_INPUT },
+    { "vro_trigger_click", XR_ACTION_TYPE_BOOLEAN_INPUT }, { "vro_grip_click", XR_ACTION_TYPE_BOOLEAN_INPUT },
+    { "vro_grip_touch", XR_ACTION_TYPE_BOOLEAN_INPUT },
 };
 struct PB {
     int act;
@@ -156,6 +161,7 @@ static const PB kIndex[] = {
     { A_PAD, "input/trackpad", 3 },
     { A_PADPRESS, "input/trackpad/force", 3 },
     { A_PADT, "input/trackpad/touch", 3 },
+    { A_TRIGC, "input/trigger/click", 3 },
 };
 static const PB kWmr[] = {
     { A_MENU, "input/menu/click", 3 },  { A_GRIP, "input/squeeze/click", 3 },      { A_TRIG, "input/trigger/value", 3 },
@@ -182,6 +188,7 @@ static const PB kSteamFrame[] = {
     { A_BTN3T, "input/x/touch", 2 },        { A_BTN4T, "input/y/touch", 2 },       { A_BUMPERT, "input/bumper/touch", 3 },
     { A_DPAD_UPT, "input/dpad_up/touch", 1 }, { A_DPAD_DOWNT, "input/dpad_down/touch", 1 },
     { A_DPAD_LEFTT, "input/dpad_left/touch", 1 }, { A_DPAD_RIGHTT, "input/dpad_right/touch", 1 },
+    { A_TRIGC, "input/trigger/click", 3 },  { A_GRIPC, "input/squeeze/click", 3 }, { A_GRIPT, "input/squeeze/touch", 3 },
     { A_TRIG, "input/trigger/value", 3 },   { A_TRIGT, "input/trigger/touch", 3 }, { A_GRIP, "input/squeeze/value", 3 },
     { A_STICK, "input/thumbstick", 3 },     { A_STICKC, "input/thumbstick/click", 3 }, { A_STICKT, "input/thumbstick/touch", 3 },
 };
@@ -504,6 +511,9 @@ static void ReadHand(int h, HandRaw& r) {
     in.Vector(A_PAD, r.padX, r.padY);
     r.padPress = in.Float(A_PADPRESS);
     r.padTouch = in.Bool(A_PADT);
+    r.trigClick = in.Bool(A_TRIGC);
+    r.gripClick = in.Bool(A_GRIPC);
+    r.gripTouch = in.Bool(A_GRIPT);
     r.gripValid = Locate(gSession.gripSpace[h], gSession.local, r.gripPose);
     r.aimValid = Locate(gSession.aimSpace[h], gSession.local, r.aimPose);
     r.touchCtl = gSession.touchController[h];

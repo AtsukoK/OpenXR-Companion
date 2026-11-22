@@ -20,6 +20,9 @@ G:/Claude/VR Radial Overlay/dist2. Nothing below tested in a headset yet.
   (click): press, touch, swipe directions (touched toward an edge past stick_on). Vive's trackpad stays its STICK; a
   block on the Vive stick also blocks the game's trackpad bindings. Profiles that wrote "trackpad" for the Vive stick
   now mean C_TRACKPAD (none of ours did). Steam Frame: touch read for X / Y, bumpers and D-pad too.
+- Dual-stage (2026-11-22): feature F_FULL ("right.grip.full", "right.trigger.full") = the click at the end: Frame
+  grips + triggers (squeeze/click, trigger/click), Index trigger (trigger/click). Frame grip touch (squeeze/touch) read too.
+  Game paths squeeze/click and trigger/click still count as the grip / trigger for blocking.
 - Open ideas: overview pictures could be bigger (spare height); long tag text gets cut; highlight the part on PartPage.
 - Pictures: layer/menu_overview.png, menu_part.png, menu_binding.png, keyboard_binding.png, menu_test_frame.png (tests).
 

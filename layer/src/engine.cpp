@@ -112,7 +112,9 @@ void Engine::ComputeDown() {
         hyst(C_TRIGGER, F_PRESS, r.trig > p.pressOn, r.trig > p.pressOff);
         cur[h][C_TRIGGER][F_TOUCH] = r.trigT || cur[h][C_TRIGGER][F_PRESS];
         hyst(C_GRIP, F_PRESS, r.grip > p.pressOn, r.grip > p.pressOff);
-        cur[h][C_GRIP][F_TOUCH] = cur[h][C_GRIP][F_PRESS];
+        cur[h][C_GRIP][F_TOUCH] = r.gripTouch || cur[h][C_GRIP][F_PRESS];
+        cur[h][C_GRIP][F_FULL] = r.gripClick;    // the click at the end of the squeeze
+        cur[h][C_TRIGGER][F_FULL] = r.trigClick; // and of the pull
         cur[h][C_STICK][F_PRESS] = r.sc;
         cur[h][C_STICK][F_TOUCH] = r.st || r.sc;
         // A direction also has to be within the hand's direction zone (when one is set), so a forward push that
@@ -178,6 +180,7 @@ Override Engine::MakeOv(const InputId& t) {
     o.on = true;
     switch (t.feat) {
     case F_PRESS:
+    case F_FULL:
         o.press = true;
         o.touch = true;
         o.value = 1;

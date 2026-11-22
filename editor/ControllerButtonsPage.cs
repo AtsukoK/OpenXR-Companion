@@ -259,6 +259,7 @@ public class ControllerButtonsPage : UserControl
     static string WayWord(ControllerPart part, string way) => way switch
     {
         "touch" => "Touch",
+        "full" => part.Comp == "grip" ? "Full squeeze" : "Full pull",
         "up" => "Up",
         "down" => "Down",
         "left" => "Left",
@@ -273,6 +274,7 @@ public class ControllerButtonsPage : UserControl
         string wayWord = way switch
         {
             "touch" => "Touch",
+            "full" => part.Comp == "grip" ? "Full squeeze" : "Full pull",
             "up" => "Up",
             "down" => "Down",
             "left" => "Left",

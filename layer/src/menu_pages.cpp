@@ -27,6 +27,8 @@ std::string InputWords(const InputId& id) {
         return s + ": left";
     case F_RIGHT:
         return s + ": right";
+    case F_FULL:
+        return s + (id.comp == C_GRIP ? " (full squeeze)" : " (full pull)");
     default:
         return s;
     }
@@ -208,7 +210,7 @@ struct PartWay {
     Gesture gesture;
     const char* name;
 };
-static std::vector<PartWay> WaysOf(int comp) {
+static std::vector<PartWay> WaysOf(int comp, ControllerKind kind) {
     if (comp == C_TRACKPAD)
         return { { F_PRESS, Gesture::Press, "Press" },   { F_TOUCH, Gesture::Press, "Touch" },       { F_UP, Gesture::Press, "Swipe up" },
                  { F_DOWN, Gesture::Press, "Swipe down" }, { F_LEFT, Gesture::Press, "Swipe left" }, { F_RIGHT, Gesture::Press, "Swipe right" } };
@@ -217,12 +219,17 @@ static std::vector<PartWay> WaysOf(int comp) {
                  { F_LEFT, Gesture::Press, "Push left" }, { F_RIGHT, Gesture::Press, "Push right" }, { F_TOUCH, Gesture::Press, "Touch" } };
     if (comp == C_THUMBREST) return { { F_TOUCH, Gesture::Press, "Touch" }, { F_TOUCH, Gesture::DoubleTap, "Double-tap" } };
     const char* press = comp == C_TRIGGER ? "Pull" : comp == C_GRIP ? "Squeeze" : "Press";
+    bool frame = kind == ControllerKind::SteamFrame;
     std::vector<PartWay> w = { { F_PRESS, Gesture::Press, press },
                                { F_PRESS, Gesture::Tap, "Quick tap" },
                                { F_PRESS, Gesture::Hold, "Hold" },
                                { F_PRESS, Gesture::DoubleTap, "Double-tap" } };
     if (comp == C_BTN1 || comp == C_BTN2 || comp == C_TRIGGER || (comp >= C_FRAME_FIRST && comp <= C_FRAME_LAST))
         w.push_back({ F_TOUCH, Gesture::Press, "Touch" }); // the Steam Frame senses touch on all its buttons
+    if (comp == C_GRIP && frame) w.push_back({ F_TOUCH, Gesture::Press, "Touch" });
+    // the click at the end of a dual-stage pull: the Frame's grips and triggers, the Index trigger
+    if ((comp == C_GRIP && frame) || (comp == C_TRIGGER && (frame || kind == ControllerKind::Index)))
+        w.push_back({ F_FULL, Gesture::Press, comp == C_GRIP ? "Full squeeze" : "Full pull" });
     return w;
 }
 
@@ -238,7 +245,7 @@ MenuPage PartPage(Engine& e, InGameMenu& m, int hand, int comp) {
                                    game.empty() ? "The game's own name for its control isn't known" : "What the game itself does with this button"));
     p.rows.push_back(MenuRow::Heading("Bindings"));
     std::vector<bool> shown(e.prof->bindings.size(), false);
-    for (const PartWay& w : WaysOf(comp)) {
+    for (const PartWay& w : WaysOf(comp, kind)) {
         int found = -1;
         for (int i = 0; i < (int)e.prof->bindings.size() && found < 0; i++) {
             const Binding& b = e.prof->bindings[i];

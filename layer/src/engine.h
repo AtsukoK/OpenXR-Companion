@@ -28,6 +28,7 @@ struct HandRaw {
     bool more[C_COUNT]{}, moreT[C_COUNT]{}; // pressed / touched: the Steam Frame's parts C_FRAME_FIRST .. C_FRAME_LAST
     float padX = 0, padY = 0, padPress = 0; // the Index trackpad / WMR touchpad: where it is touched, how hard pressed
     bool padTouch = false;
+    bool trigClick = false, gripClick = false, gripTouch = false; // dual-stage clicks (Frame, Index trigger), grip touch (Frame)
     bool gripValid = false, aimValid = false;
     bool touchCtl = false; // a Meta Touch controller (its aim ray needs correcting)
     ControllerKind kind = ControllerKind::Unknown; // from the runtime's interaction profile (the menu's pictures)

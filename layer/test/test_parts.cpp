@@ -497,4 +497,7 @@ void TestSteamFrame() {
           "trackpad: its own part, with swipe directions");
     CHECK(ParseGameInputPath("/user/hand/right/input/trackpad/force", hand, comp, f) && comp == C_TRACKPAD, "trackpad: the game's trackpad");
     CHECK(ParseInput("right.button3.touch", id) && id.comp == C_BTN3 && id.feat == F_TOUCH, "frame: X has touch");
+    CHECK(ParseInput("left.grip.full", id) && id.comp == C_GRIP && id.feat == F_FULL && InputName(id) == "left.grip.full",
+          "frame: the grip's click at the end (full squeeze)");
+    CHECK(!ParseInput("left.a.full", id), "frame: only triggers and grips have a full pull");
 }

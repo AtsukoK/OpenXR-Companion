@@ -84,9 +84,12 @@ bool ParseInput(const std::string& str, InputId& out) {
             r.feat = F_LEFT;
         else if (f == "right")
             r.feat = F_RIGHT;
+        else if (f == "full")
+            r.feat = F_FULL;
         else
             return false;
-        if (r.feat >= F_UP && r.comp != C_STICK && r.comp != C_TRACKPAD) return false; // directions: sticks and trackpads
+        if (r.feat >= F_UP && r.feat <= F_RIGHT && r.comp != C_STICK && r.comp != C_TRACKPAD) return false; // sticks, trackpads
+        if (r.feat == F_FULL && r.comp != C_TRIGGER && r.comp != C_GRIP) return false; // the click at the end of a pull
         if (r.comp == C_THUMBREST) r.feat = F_TOUCH;
     }
     out = r;
@@ -95,7 +98,7 @@ bool ParseInput(const std::string& str, InputId& out) {
 
 std::string InputName(const InputId& i) {
     if (!i.valid()) return "?";
-    static const char* feat[] = { "", ".touch", ".up", ".down", ".left", ".right" };
+    static const char* feat[] = { "", ".touch", ".up", ".down", ".left", ".right", ".full" };
     std::string s = i.hand == 0 ? "left." : "right.";
     s += kCompNames[i.hand == 0 ? 0 : 1][i.comp];
     if (!(i.comp == C_THUMBREST && i.feat == F_TOUCH)) s += feat[i.feat];

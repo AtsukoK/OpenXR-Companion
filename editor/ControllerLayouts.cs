@@ -43,6 +43,8 @@ public static class ControllerLayouts
     static readonly string[] StickNoTouch = { "", "up", "down", "left", "right" };
     // A trackpad (Index, WMR): pressed, touched, or swiped (touched toward an edge).
     static readonly string[] PadWays = { "", "touch", "up", "down", "left", "right" };
+    // Dual-stage: a click at the end of the pull / squeeze (Steam Frame grips and triggers, Index trigger).
+    static readonly string[] PressTouchFull = { "", "touch", "full" };
 
     const string SystemButton = "This button opens the headset's own menu, so games and OpenXR Companion never see it.";
 
@@ -168,8 +170,8 @@ public static class ControllerLayouts
                 new("menu", "Menu", "View", ControllerView.Top, PartShape.Pill, R(74, 42, 20, 8), Press),
                 new("system", "Steam button", null, ControllerView.Top, PartShape.Button, R(108, 104, 15, 15), Press, NotUsable: SystemButton),
                 new("bumper", "Bumper", null, ControllerView.Side, PartShape.Pill, R(12, 40, 30, 12), PressTouch, Turn: -30),
-                new("trigger", "Trigger", null, ControllerView.Side, PartShape.Trigger, R(8, 64, 26, 44), PressTouch),
-                new("grip", "Grip", null, ControllerView.Side, PartShape.Grip, R(32, 128, 24, 80), Press, Turn: -6),
+                new("trigger", "Trigger", null, ControllerView.Side, PartShape.Trigger, R(8, 64, 26, 44), PressTouchFull),
+                new("grip", "Grip", null, ControllerView.Side, PartShape.Grip, R(32, 128, 24, 80), PressTouchFull, Turn: -6),
             }),
         new("index", "Valve Index (and Index-style)", "Valve Index; Bigscreen, Pimax with Index-style controllers; Steam Frame without the Steam Frame setting", "index",
             new[]
@@ -188,7 +190,7 @@ public static class ControllerLayouts
                 new("primary", "A", null, ControllerView.Top, PartShape.Button, R(76, 96, 17, 17), PressTouch),
                 new("trackpad", "Trackpad", null, ControllerView.Top, PartShape.Pad, R(98, 68, 28, 66), PadWays),
                 new("system", "System", null, ControllerView.Top, PartShape.Button, R(93, 144, 13, 13), Press, NotUsable: SystemButton),
-                new("trigger", "Trigger", null, ControllerView.Side, PartShape.Trigger, R(8, 52, 26, 42), PressTouch),
+                new("trigger", "Trigger", null, ControllerView.Side, PartShape.Trigger, R(8, 52, 26, 42), PressTouchFull),
                 new("grip", "Grip (squeeze)", null, ControllerView.Side, PartShape.Grip, R(26, 106, 24, 132), Press, Turn: -6),
             }),
         new("vive", "HTC Vive wands", "HTC Vive, Vive Pro (wand controllers)", "vive",
@@ -267,6 +269,7 @@ public static class ControllerLayouts
                 _ => "Press",
             },
             "touch" => part.Comp == "thumbrest" ? "Touch" : "Touch (resting a finger, no press)",
+            "full" => part.Comp == "grip" ? "Full squeeze (the click at the end)" : "Full pull (the click at the end)",
             "up" => isPad ? "Thumb on the top of the pad" : "Push up",
             "down" => isPad ? "Thumb on the bottom of the pad" : "Push down",
             "left" => isPad ? "Thumb on the left of the pad" : "Push left",
