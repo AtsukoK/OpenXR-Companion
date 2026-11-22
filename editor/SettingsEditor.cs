@@ -495,33 +495,48 @@ public class SettingsEditor : EditorBase
                 var preset = new ChoiceBox(new Choice[] {
                     new("custom", "Custom"),
                     new("gaze", "Centred where you look (default)"),
-                    new("gaze_room", "Centred, steadying makes its own room"),
+                    new("gaze_room", "Centred, smoothing makes its own room"),
                     new("both", "Wide: both eyes, centred where you look"),
                     new("original", "Original: middle of the picture"),
-                    new("exact", "Exact headset view (no zoom, no steadying)") }, 300);
-                mir.AddRow("Preset", preset, "Sets zoom, steadying, centre, edge margin, steadying's own room and one / both eyes together (the side you picked stays). Change any of them afterwards and it shows Custom.");
+                    new("exact", "Exact headset view (no zoom, no smoothing)") }, 300);
+                mir.AddRow("Preset", preset, "Sets zoom, head camera smoothing, centre, edge margin, smoothing's own room and one / both eyes together (the side you picked stays). Change any of them afterwards and it shows Custom.");
                 var zoom = new NumericUpDown { Minimum = 1, Maximum = 3, Increment = 0.05m, DecimalPlaces = 2, Width = 90, Value = (decimal)Math.Round(Math.Clamp(HeadsetMirrorFile.Zoom, 1, 3), 2) };
                 zoom.ValueChanged += (o, e) => HeadsetMirrorFile.Zoom = (double)zoom.Value;
-                mir.AddRow("Zoom", zoom, "1 = the whole eye picture (very wide, blurry edges). 1.3 looks like a normal camera. The same with steadying on or off. It always fills the window; resize the window for a different shape.");
+                mir.AddRow("Zoom", zoom, "1 = the whole eye picture (very wide, blurry edges). 1.3 looks like a normal camera. The same with smoothing on or off. It always fills the window; resize the window for a different shape.");
                 var fps = new NumericUpDown { Minimum = 0, Maximum = 240, Increment = 5, Width = 90, Value = Math.Clamp(HeadsetMirrorFile.Fps, 0, 240) };
                 fps.ValueChanged += (o, e) => HeadsetMirrorFile.Fps = (int)fps.Value;
-                var st = new NumericUpDown { Minimum = 0, Maximum = 1, Increment = 0.05m, DecimalPlaces = 2, Width = 90, Value = (decimal)Math.Round(Math.Clamp(HeadsetMirrorFile.Smoothing, 0, 1), 2) };
-                st.ValueChanged += (o, e) => HeadsetMirrorFile.Smoothing = (double)st.Value;
-                mir.AddRow("Steady the picture", st, "Smooths small head shakes out of the window (like a camera stabiliser); real head turns still follow. 0 = off (the exact headset view), 0.5 = the default, 1 = strongest. It can only lag into the picture the zoom leaves out: at zoom 1 it barely works, from about 1.3 it works fully.");
+                // Saved as one value, "smoothing" (0 = off); the strength is kept while it is off.
+                bool smoothingWasOn = HeadsetMirrorFile.Smoothing > 0.001;
+                var smoothOn = new CheckBox { Text = "Head camera smoothing", AutoSize = true, Checked = smoothingWasOn };
+                var st = new NumericUpDown { Minimum = 0.05m, Maximum = 1, Increment = 0.05m, DecimalPlaces = 2, Width = 90,
+                    Value = (decimal)Math.Round(Math.Clamp(smoothingWasOn ? HeadsetMirrorFile.Smoothing : HeadsetMirrorFile.SmoothingStrength, 0.05, 1), 2), Enabled = smoothingWasOn };
+                smoothOn.CheckedChanged += (o, e) =>
+                {
+                    st.Enabled = smoothOn.Checked;
+                    HeadsetMirrorFile.Smoothing = smoothOn.Checked ? (double)st.Value : 0;
+                };
+                st.ValueChanged += (o, e) =>
+                {
+                    HeadsetMirrorFile.SmoothingStrength = (double)st.Value;
+                    if (smoothOn.Checked) HeadsetMirrorFile.Smoothing = (double)st.Value;
+                };
+                decimal SmoothingShown() => smoothOn.Checked ? st.Value : 0;
+                mir.AddRow("", smoothOn, "Smooths small head shakes out of the window, like a camera stabiliser; real head turns still follow. Off = the exact headset view. It can only drift into the picture the zoom leaves out: at zoom 1 it barely works, from about 1.3 it works fully (or turn on \"Smoothing makes its own room\").");
+                mir.AddRow("Smoothing strength", st, "How much head shake it takes out: 0.05 = a little, 0.5 = the default, 1 = the most (real turns follow later).");
                 var centre = new ChoiceBox(new Choice[] { new("gaze", "Where the eye looks"), new("middle", "Middle of the picture") }, 200) { Code = HeadsetMirrorFile.Center };
                 centre.SelectedIndexChanged += (o, e) => HeadsetMirrorFile.Center = centre.Code;
                 mir.AddRow("Centre the view on", centre, "Where the eye looks: what you aim at sits in the middle of the window. Middle of the picture: the older way, a little off to one side on Quest, but further from the black strip on the nose side.");
                 var margin = new NumericUpDown { Minimum = 0, Maximum = 0.3m, Increment = 0.01m, DecimalPlaces = 2, Width = 90, Value = (decimal)Math.Round(Math.Clamp(HeadsetMirrorFile.SideMargin, 0, 0.3), 2) };
                 margin.ValueChanged += (o, e) => HeadsetMirrorFile.SideMargin = (double)margin.Value;
                 mir.AddRow("Edge margin", margin, "How far the view stays from the eye picture's sides (0.12 = 12% of its width), to keep the black strip on the nose side out. Lower it if you see no strip, raise it if you do.");
-                var room = new CheckBox { Text = "Steadying makes its own room", AutoSize = true, Checked = HeadsetMirrorFile.SteadyRoom };
+                var room = new CheckBox { Text = "Smoothing makes its own room", AutoSize = true, Checked = HeadsetMirrorFile.SteadyRoom };
                 room.CheckedChanged += (o, e) => HeadsetMirrorFile.SteadyRoom = room.Checked;
-                mir.AddRow("", room, "Off: zoom means the same with steadying on or off, and steadying only uses the room the zoom leaves. On: steadying crops in around the centre by itself so it always works fully, so low zoom looks closer.");
+                mir.AddRow("", room, "Off: zoom means the same with smoothing on or off, and smoothing only uses the room the zoom leaves. On: smoothing crops in around the centre by itself so it always works fully, so low zoom looks closer.");
                 mir.AddRow("Frame rate cap (fps)", fps, "0 = every headset frame. 60 is smooth for recording and costs little. 30 halves the cost.");
                 var quality = new ChoiceBox(new Choice[] { new("light", "Light (cheaper, default)"), new("full", "Full (copy with mipmaps)") }, 200) { Code = HeadsetMirrorFile.Quality };
                 quality.SelectedIndexChanged += (o, e) => HeadsetMirrorFile.Quality = quality.Code;
                 mir.AddRow("Picture", quality, "Light draws straight from the game's picture: much cheaper, looks the same at normal window sizes. Full copies the picture and makes mipmaps first: smoother only when the window is much smaller than the headset picture (light switches to it by itself then).");
-                // zoom, steadying, centre, edge margin, own room, both eyes
+                // zoom, smoothing (0 = off), centre, edge margin, own room, both eyes
                 var presets = new Dictionary<string, (decimal zoom, decimal steady, string centre, decimal margin, bool room, bool both)>
                 {
                     ["gaze"] = (1.4m, 0.5m, "gaze", 0.12m, false, false),
@@ -534,7 +549,7 @@ public class SettingsEditor : EditorBase
                 string Matching()
                 {
                     foreach (var (key, v) in presets)
-                        if (zoom.Value == v.zoom && st.Value == v.steady && centre.Code == v.centre && margin.Value == v.margin &&
+                        if (zoom.Value == v.zoom && SmoothingShown() == v.steady && centre.Code == v.centre && margin.Value == v.margin &&
                             room.Checked == v.room && BothEyesShown() == v.both)
                             return key;
                     return "custom";
@@ -546,7 +561,8 @@ public class SettingsEditor : EditorBase
                     if (applying || !presets.TryGetValue(preset.Code ?? "", out var v)) return;
                     applying = true;
                     zoom.Value = v.zoom;
-                    st.Value = v.steady;
+                    if (v.steady > 0) st.Value = v.steady;
+                    smoothOn.Checked = v.steady > 0;
                     centre.Code = v.centre;
                     margin.Value = v.margin;
                     room.Checked = v.room;
@@ -557,6 +573,7 @@ public class SettingsEditor : EditorBase
                 EventHandler changed = (o, e) => { if (!applying) ShowMatching(); };
                 zoom.ValueChanged += changed;
                 st.ValueChanged += changed;
+                smoothOn.CheckedChanged += changed;
                 centre.SelectedIndexChanged += changed;
                 margin.ValueChanged += changed;
                 room.CheckedChanged += changed;
