@@ -167,7 +167,8 @@ public class ControllerButtonsPage : UserControl
             picture.Height = h;
     }
 
-    // What a part's tag lists, SteamVR style: one line per switched-on binding, normal ones first, layer ones after.
+    // What a part's tag lists, SteamVR style: every way of using it, with what it does or "unused"; then the bindings
+    // that only work in a layer.
     public static IReadOnlyList<TagLine> TagLinesOf(IEnumerable<BindingModel> bindings, int hand, ControllerPart part)
     {
         var lines = new List<TagLine>();
@@ -177,11 +178,25 @@ public class ControllerButtonsPage : UserControl
             foreach (var way in part.Ways)
             {
                 string input = ControllerLayouts.InputOf(hand, part, way);
-                foreach (var b in bindings.Where(b => b.Enabled && IsLayerOnly(b) == layerOnes && QuickBindings.FiredBy(b, input)))
+                var bound = bindings.Where(b => b.Enabled && IsLayerOnly(b) == layerOnes && QuickBindings.FiredBy(b, input)).ToList();
+                foreach (var b in bound)
                     lines.Add(new TagLine(ShortWhen(part, way, b), DoesText(b.Action), layerOnes ? b.Layers : null));
+                if (bound.Count == 0 && !layerOnes)
+                    lines.Add(new TagLine(WayWord(part, way), "unused", IsUnused: true));
             }
         return lines;
     }
+
+    // A way of using a part in one word: "Press", "Pull", "Squeeze", "Click", "Touch", "Up"...
+    static string WayWord(ControllerPart part, string way) => way switch
+    {
+        "touch" => "Touch",
+        "up" => "Up",
+        "down" => "Down",
+        "left" => "Left",
+        "right" => "Right",
+        _ => part.Comp switch { "trigger" => "Pull", "grip" => "Squeeze", "thumbrest" => "Touch", "thumbstick" => "Click", _ => "Press" },
+    };
 
     // "Press", "Hold", "Touch", "Up", "Up, hold", "Pull"...
     static string ShortWhen(ControllerPart part, string way, BindingModel b)
@@ -197,7 +212,7 @@ public class ControllerButtonsPage : UserControl
             _ => null,
         };
         if (wayWord == null && b.Gesture == GestureKind.Press)
-            return part.Comp switch { "trigger" => "Pull", "grip" => "Squeeze", "thumbrest" => "Touch", _ => gesture };
+            return WayWord(part, way);
         if (wayWord == null)
             return gesture;
         return b.Gesture == GestureKind.Press ? wayWord : wayWord + ", " + gesture.ToLowerInvariant();

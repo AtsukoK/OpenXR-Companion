@@ -6,8 +6,8 @@ namespace OpenXRCompanionEditor;
 public readonly record struct PartUse(int On, int Off);
 
 // One line in a part's tag: how it's used ("Press", "Hold", "Up") and what it does ("Space"); Layer when it only
-// works in a layer.
-public readonly record struct TagLine(string When, string Does, string Layer = null);
+// works in a layer; IsUnused for a way of using the part that does nothing yet (shown greyed, "unused").
+public readonly record struct TagLine(string When, string Does, string Layer = null, bool IsUnused = false);
 
 // Draws one controller (a ControllerLayout, for one hand) with a tag for each part that lists what the part does,
 // like SteamVR's binding screen, and says which part was clicked. The selected part is outlined.
@@ -18,7 +18,7 @@ public class ControllerPicture : Control
     // Tags grow with their lines, and the canvas grows taller when a column of tags needs it.
     const float LabelWidth = 158, Gap = 10, CanvasMargin = 14, TagGap = 5;
     const float NameHeight = 19, LineHeight = 14.5f, MinTagHeight = 38;
-    const int MaxLines = 4;
+    const int MaxLines = 8; // a stick has six ways to use it
     const float TopX = LabelWidth, MiddleX = TopX + ControllerLayouts.TopWidth + Gap;
     const float SideX = MiddleX + LabelWidth + Gap;
     const float CanvasWidth = SideX + ControllerLayouts.SideWidth + LabelWidth;
@@ -364,6 +364,7 @@ public class ControllerPicture : Control
         using var whenBrush = new SolidBrush(Theme.SubText);
         using var doesBrush = new SolidBrush(Theme.IsDark ? Color.FromArgb(140, 190, 255) : Color.FromArgb(30, 95, 200));
         using var doesFont = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+        using var unusedBrush = new SolidBrush(Theme.OffText);
         using var exact = (StringFormat)StringFormat.GenericTypographic.Clone();
         exact.FormatFlags |= StringFormatFlags.MeasureTrailingSpaces; // keep the space after "Press:"
         int shown = ShownLines(part);
@@ -380,7 +381,8 @@ public class ControllerPicture : Control
             string when = (line.Layer != null ? line.Layer + " · " : "") + line.When + ": ";
             float whenWidth = g.MeasureString(when, subFont, PointF.Empty, exact).Width;
             g.DrawString(when, subFont, whenBrush, new PointF(tag.X + 6, y), exact);
-            g.DrawString(line.Does, doesFont, doesBrush, new RectangleF(tag.X + 6 + whenWidth, y, tag.Width - 12 - whenWidth, 14), fmt);
+            g.DrawString(line.Does, line.IsUnused ? subFont : doesFont, line.IsUnused ? unusedBrush : doesBrush,
+                         new RectangleF(tag.X + 6 + whenWidth, y, tag.Width - 12 - whenWidth, 14), fmt);
         }
     }
 
