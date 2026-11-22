@@ -141,6 +141,8 @@ public class ControllerButtonsPage : UserControl
         card.Controls.Add(new Label { Text = "Stick options (saved with the profile, 0 = off)", AutoSize = true, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold) });
         var stick = StickOf(hand) ?? new StickModel();
         var form = new FormPanel { Dock = DockStyle.None };
+        var preview = new StickZonesPreview { BackColor = Theme.Card, Margin = new Padding(24, 0, 0, 0) };
+        void Redraw() => preview.ShowZones(stick.InnerDeadzone, stick.OuterDeadzone, stick.DirectionAngle, profile.Thresholds?.StickOn ?? 0.7f);
         NumericUpDown Number(decimal max, decimal value, Action<float> set)
         {
             var n = new NumericUpDown { Minimum = 0, Maximum = max, Increment = 1, Width = 80, Value = Math.Clamp(value, 0, max) };
@@ -148,6 +150,7 @@ public class ControllerButtonsPage : UserControl
             {
                 set((float)n.Value);
                 SaveStick(stick);
+                Redraw();
             };
             return n;
         }
@@ -157,7 +160,11 @@ public class ControllerButtonsPage : UserControl
                     "What the game sees: the last part toward the edge already counts as fully pushed, for sticks that never quite reach the edge. 5 to 10 is typical.");
         form.AddRow("Direction zone (°)", Number(45, (decimal)Math.Round(stick.DirectionAngle), v => stick.DirectionAngle = v),
                     "For your bindings on Up / Down / Left / Right: a direction only counts while the stick points within this many degrees of it, so pushing forward and leaning a little sideways doesn't also fire Left or Right. 45 = always the nearest direction. 30 leaves a gap between them.");
-        card.Controls.Add(form);
+        Redraw();
+        var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+        row.Controls.Add(form);
+        row.Controls.Add(preview);
+        card.Controls.Add(row);
         return card;
     }
 
