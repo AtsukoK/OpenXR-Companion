@@ -1,8 +1,17 @@
 # Changelog
 
-## Unreleased
+## v0.2.14-experimental (2026-11-23)
+
+An experimental build from the `experimental` branch: new and only lightly tested. The stable release stays v0.2.13.
 
 ### New
+- **In-game menu home**: the headset menu opens on big tiles: Controllers, Radial wheels, Wrist panels, Sticks, All bindings and More settings.
+- **Wheels in the headset**: every wheel shown as it looks in the game. Point at a slice to change that button: its label (typed on the VR keyboard), what it does (a key, mouse or controller button, a sub-wheel or a new wheel, the VR keyboard, desktop screen, headset mirror, offsets, adjust mode, back, close), move, duplicate, delete. Add buttons and wheels, rename and delete wheels, see what opens a wheel and add a button that opens it. Wheel look and picking: where it shows, size, text size, stick or laser, which hand, deadzone, what the game's buttons do while it is open.
+- **Wrist panels in the headset**: each forearm's panel and pages shown as their button grid. Turn a panel on or off, show the other arm's buttons, add, rename, delete and reorder pages and buttons, pick the page shown first, columns, size, side of the arm, poke or point, and when it shows.
+- **More settings in the headset**: laser steadying, the fingertip near wrist panels, the short guide laser, vibration and its strength, messages, controller offsets, adjust mode, headset mirror.
+- **Binding sheet** in the editor and the headset: 1 How, 2 Button, 3 What happens, with Details; How sets whether the game also gets the button.
+- **Tutorials** in the editor: a full tour, "How do I..." tours and a tour of each page.
+- Experimental builds look for experimental (prerelease) updates.
 - **Full squeeze / Full pull**: the click at the end of the Steam Frame's dual-stage grips and triggers (and the Index trigger) can be bound on its own. The Frame's grips can also be bound to touch.
 - The **Index trackpad** and the **WMR touchpad** can be bound: press, touch, and swipes (up / down / left / right). The Steam Frame's X / Y, bumpers and D-pad can be bound to touch, like A / B.
 - **Controller configuration overview** is now the first page of the in-game menu: both controllers from above and from the side, with a tag on every button showing its name and what it does: your bindings, or else the game's own controls under the game's own names (read from the game's actions). Point at a tag to open that button's page: what the game does with it and every way to use it (press, quick tap, hold, double-tap, touch, stick directions), assigned or not. **Edit bindings**, **Test controllers** and the sticks are under it. The overview panel is wider than the other pages.
@@ -20,6 +29,10 @@
 - The built-in profile no longer has the switched-off "Quick save (shift + A)" and "Quick load (shift + hold B)" examples. Quick save and quick load stay on the wrist panel and the wheel.
 
 ### Fixed
+- **Direction zone**: straightens the game's own stick too (pushing up and a little right is a plain up, so a jump on up doesn't also turn). It now also works when the game reads both sticks through one action and the sticks have different settings, and for games that read a stick direction as on / off (snap turn).
+- Choices made in the headset menu that open a wheel, the VR keyboard, the desktop screen or the menu were not saved to the profile.
+- Wrist panels and the keyboard now redraw after a profile reload.
+- Quest 3 / Pro controllers were drawn as Quest 2 in the headset.
 - **HP Reverb G2**: bindings on its X / Y / A / B buttons now work. They were read as on the first WMR controllers, which have no such buttons.
 
 ## v0.2.13 (2026-11-22)
