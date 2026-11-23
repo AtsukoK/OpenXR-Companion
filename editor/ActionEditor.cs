@@ -68,13 +68,20 @@ public class ActionEditor : FormPanel
         .Select(x => x.code == ActionType.None ? (x.code, x.option with { Does = "The item is shown but does nothing." }) : x)
         .ToArray();
 
+    // For a controller binding: no panel / wheel navigation; Nothing = the game just doesn't get the button.
+    static readonly (string code, PickOption option)[] BindingActions = WristActions
+        .Where(x => x.code is not (ActionType.Page or ActionType.Back or ActionType.Close))
+        .Select(x => x.code == ActionType.None ? (x.code, x.option with { Title = "Block it from the game", Does = "Nothing happens and the game doesn't get the button." })
+                   : x.code == ActionType.XrInput ? (x.code, x.option with { Title = "Act as another controller button" }) : x)
+        .ToArray();
+
     public static void WristPickerShot(string path) => OptionPicker.Shot(path, "What should this button do?", "Pick one; you can change it any time.", WristActions.Select(x => x.option).ToList());
 
     // The wrist action: a button with the current choice; clicking it opens the cards.
     Control WristPicker()
     {
-        var acts = inWrist ? WristActions : WheelActions;
-        string what = inWrist ? "this button" : "this item";
+        var acts = inWrist ? WristActions : inWheel ? WheelActions : BindingActions;
+        string what = inWrist ? "this button" : inWheel ? "this item" : "this binding";
         var b = new Button { AutoSize = true, MinimumSize = new Size(300, 36), FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, TextAlign = ContentAlignment.MiddleLeft,
                              Font = new Font("Segoe UI", 10f, FontStyle.Bold), BackColor = Theme.Button, ForeColor = Theme.Text, Tag = "swatch", Padding = new Padding(6, 0, 6, 0) };
         b.FlatAppearance.BorderColor = Theme.CardBorder;
@@ -108,7 +115,7 @@ public class ActionEditor : FormPanel
             types.Insert(3, new Choice("page", "Wrist panel: open another page"));
         }
         type = new ChoiceBox(types.ToArray(), 360);
-        if (wrist != null || inWheel)
+        if (true) // every action editor: the grouped cards
             AddRow("What it does", WristPicker()); // big grouped cards instead of the long dropdown
         else
             AddRow("Action", type);
