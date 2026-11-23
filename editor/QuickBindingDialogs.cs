@@ -34,7 +34,10 @@ public static class QuickBindingDialogs
         return way.Length == 0 && part.Comp != "thumbstick" ? name : name + ": " + ControllerLayouts.WayName(part, way).ToLowerInvariant();
     }
 
-    // A dialog with one question and OK / Cancel; returns read() on OK, else null.
+    internal static Action<Form> BeforeShow; // screenshots: called with the dialog before it shows
+
+    // A dialog with one question and OK / Cancel; returns read() on OK, else null. Laid out in rows that size
+    // themselves, so the buttons always sit under the input, whatever its height.
     static string Ask(IWin32Window owner, string title, string question, Control input, Func<string> read)
     {
         using var dlg = new Form
@@ -45,21 +48,29 @@ public static class QuickBindingDialogs
             MinimizeBox = false,
             MaximizeBox = false,
             ShowInTaskbar = false,
-            ClientSize = new Size(520, 190),
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Font = new Font("Segoe UI", 10f),
+            Padding = new Padding(16),
         };
-        dlg.Controls.Add(new Label { Text = question, Location = new Point(16, 14), Size = new Size(488, 62) });
-        input.Location = new Point(16, 82);
-        dlg.Controls.Add(input);
-        var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, Size = new Size(96, 32), Location = new Point(300, 140) };
-        var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Size = new Size(96, 32), Location = new Point(408, 140) };
-        dlg.Controls.Add(ok);
-        dlg.Controls.Add(cancel);
+        var rows = new TableLayoutPanel { AutoSize = true, ColumnCount = 1, Dock = DockStyle.Fill };
+        rows.Controls.Add(new Label { Text = question, AutoSize = true, MaximumSize = new Size(520, 0), Margin = new Padding(0, 0, 0, 10) });
+        input.Margin = new Padding(0, 0, 0, 14);
+        rows.Controls.Add(input);
+        var buttons = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty };
+        var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Size = new Size(110, 36) };
+        var ok = new Button { Text = "OK, use this", DialogResult = DialogResult.OK, Size = new Size(130, 36), Font = new Font("Segoe UI", 10f, FontStyle.Bold), Margin = new Padding(0, 0, 8, 0) };
+        buttons.Controls.Add(cancel);
+        buttons.Controls.Add(ok);
+        rows.Controls.Add(buttons);
+        dlg.Controls.Add(rows);
+        dlg.MinimumSize = new Size(560, 0);
         if (input is not KeyBox) // Enter is a key to record there
             dlg.AcceptButton = ok;
         dlg.CancelButton = cancel;
         ThemeWalker.Apply(dlg);
         dlg.HandleCreated += (s, e) => ThemeWalker.TitleBar(dlg, Theme.IsDark);
+        BeforeShow?.Invoke(dlg);
         return dlg.ShowDialog(owner) == DialogResult.OK ? read() : null;
     }
 }
