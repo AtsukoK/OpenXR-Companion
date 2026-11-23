@@ -1,4 +1,4 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 
 namespace OpenXRCompanionEditor;
 
@@ -20,34 +20,68 @@ public class BindingEditor : EditorBase
     Label lReleaseAt;
     readonly Label lHold, lTap, lDbl, lPass, lPressAt;
 
+    readonly Label sentence = new();
+
+    // "Double-tap Right Thumbrest  →  Opens wheel 'right'"
+    void ShowSentence()
+    {
+        string how = b.Gesture switch
+        {
+            GestureKind.DoubleTap => "Double-tap", GestureKind.Hold or GestureKind.WhileHeld => "Hold", GestureKind.Tap => "Quick tap",
+            GestureKind.DoubleTapHold => "Double-tap and hold", _ => "Press",
+        };
+        sentence.Text = how + " " + InputText.Friendly(b.Input) + "   →   " + MainForm.Plain(b.Action) + (b.Enabled ? "" : "   (off)");
+        sentence.ForeColor = b.Enabled ? Theme.Text : Theme.OffText;
+    }
+
+    // a comfortable width, centred (the drawer is narrow: there it just uses its width)
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+        int side = Math.Max(12, (ClientSize.Width - 1500) / 2);
+        if (Padding.Left != side)
+            Padding = new Padding(side, 8, side, 8);
+    }
+
     static NumericUpDown Ms() => new() { Minimum = 50, Maximum = 5000, Increment = 50, Width = 90 };
 
     public BindingEditor(BindingModel model)
     {
         b = model;
         var when = new FormPanel();
-        when.AddRow("Name", name);
-        when.AddRow("", enabled);
-        when.AddRow("Input", chord, "For a combo, the button that fires goes last; the others must already be held.");
-        when.AddRow("Gesture", gesture);
+        when.AddRow("Button", chord, "For a combo, the button that fires goes last; the others must already be held.");
+        when.AddRow("How", gesture);
         lReleaseAt = when.AddRow("Keeps going until (%)", releaseAt, "Double flick on a stick: once it has started it keeps going while you steer, until you let the stick come back below this much from the middle. 30 = until you mostly let go. 0 = the old way: it stops as soon as the stick leaves the direction (the direction zone) or drops below the direction's release point.");
         lPressAt = when.AddRow("Press point (%)", pressAt, "How far the trigger or grip must go. 0 = usual, low = hair trigger, high = a long pull. For an Index full squeeze: how hard.");
         lHold = when.AddRow("Hold time (ms)", hold);
         lTap = when.AddRow("Tap shorter than (ms)", tap);
         lDbl = when.AddRow("Second tap within (ms)", dbl);
-        when.AddRow("Only in layer", layers, "Leave empty to work always. With a layer name, this binding only works while that layer is on.");
-        when.AddRow("Not in layer", notLayers);
+        when.AddRow("Only while layer", layers, "Leave empty to work always. With a layer name, this binding only works while that layer is on.");
+        when.AddRow("Not while layer", notLayers);
         when.AddRow("Pass input to game", block);
         lPass = when.AddRow("", passthrough);
         foreach (var (_, ctl, _) in when.Rows)
             if (ctl is ComboBox)
                 ctl.Width = 400; // same width as the action's dropdowns below
 
-        Stack(Title("Binding"),
-              FormPanel.Header("Do something when a controller button (or combo) is used."),
-              when,
-              FormPanel.Header("Action:"),
-              action);
+        // top: what it does in one sentence, then its name and the on/off switch
+        sentence.Font = new Font("Segoe UI", 16f, FontStyle.Bold);
+        sentence.AutoSize = true;
+        sentence.Dock = DockStyle.Top;
+        sentence.Padding = new Padding(0, 0, 0, 6);
+        var top = new FlowLayoutPanel { AutoSize = true, WrapContents = true, Dock = DockStyle.Top, Padding = new Padding(0, 0, 0, 10) };
+        top.Controls.Add(new Label { Text = "Name:", AutoSize = true, Margin = new Padding(0, 7, 6, 0) });
+        top.Controls.Add(name);
+        enabled.Margin = new Padding(16, 5, 0, 0);
+        enabled.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
+        top.Controls.Add(enabled);
+        Card C(string t, string glyph, Control body) =>
+            new(t, glyph, "Saved with profile", Theme.Saved, "Saved with this profile: changes take effect in the game when you press Save (Ctrl+S).", body) { Dock = DockStyle.None, Margin = new Padding(0, 0, 14, 14) };
+        var cards = new FlowLayoutPanel { AutoSize = true, WrapContents = true, Dock = DockStyle.Top, Margin = Padding.Empty };
+        cards.Controls.Add(C("When you use the button", "", when));
+        cards.Controls.Add(C("What it does", "", action));
+        Stack(sentence, top, cards);
+        Changed += ShowSentence;
 
         loading = true;
         name.Text = b.Name;
@@ -68,6 +102,7 @@ public class BindingEditor : EditorBase
         action.Bind(b.Action ??= new ActionModel());
         loading = false;
         Sync();
+        ShowSentence();
 
         name.TextChanged += (s, e) => { b.Name = name.Text; Fire(); };
         enabled.CheckedChanged += (s, e) => { b.Enabled = enabled.Checked; Fire(); };

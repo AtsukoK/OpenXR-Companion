@@ -140,6 +140,7 @@ public partial class MainForm
         }
         f.GoTo(BindingsPage);
         Snap("all_bindings");
+        if (f.Profile.Bindings.LastOrDefault() is BindingModel sb) { f.GoTo(sb); Snap("binding"); }
         f.GoTo("wrist0");
         Snap("wrist_left");
         if (f.currentEditor is SettingsEditor low)
