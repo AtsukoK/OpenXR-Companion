@@ -30,6 +30,13 @@ public partial class MainForm
         OfferTutorialOnFirstRun();
     }
 
+    // From the Controllers screen: the same "Your controllers" question, then the screen again with what changed.
+    internal void ChooseControllersFromScreen()
+    {
+        ChooseControllers(false);
+        GoTo(ControllersPage);
+    }
+
     void ChooseControllers(bool firstRun)
     {
         if (Profile == null)
