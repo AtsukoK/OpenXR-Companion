@@ -81,7 +81,9 @@ public class SettingsEditor : EditorBase
             pageTitle = wristHand == 1 ? "Right wrist panel" : "Left wrist panel";
             pageHelp = "Buttons on your forearm. They appear when you turn the forearm toward your eyes and look at it. Click a button in the picture below to change it right there.";
             pageControls.Add(C("Pages and buttons", "\uE80A", false, WristButtons()));
-            pageControls.Add(C("Panel", "\uE8A9", false, wrist));
+            // the panel and when it shows in one card
+            var showHead = new Label { Text = "When it shows", AutoSize = true, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold), ForeColor = Theme.Heading, Padding = new Padding(0, 14, 0, 4) };
+            pageControls.Add(C("Panel", "\uE8A9", false, wrist, showHead, wristShow));
             // on the arm: the settings with the arm picture beside them, the position numbers folded under them
             var armCol = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
             // the way back when a panel was put somewhere it can't be found: the built-in place on this arm, facing you
@@ -129,8 +131,19 @@ public class SettingsEditor : EditorBase
             var column = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, BackColor = Theme.Page, Margin = Padding.Empty };
             pagesCard.Dock = DockStyle.None; pagesCard.Margin = new Padding(0, 0, 14, 14);
             whole.Controls.Add(pagesCard);
-            foreach (var c in new Control[] { panelCard, C("On the arm", "\uE7FC", false, armRow), C("When it shows", "\uE890", false, wristShow) })
+            foreach (var c in new Control[] { panelCard, C("On the arm", "\uE7FC", false, armRow) })
             { c.Dock = DockStyle.None; c.Margin = new Padding(0, 0, 0, 14); column.Controls.Add(c); }
+            // the cards in the column all as wide as the widest one
+            bool sizing = false;
+            column.Layout += (s2, e2) =>
+            {
+                if (sizing) return;
+                sizing = true;
+                int w = column.Controls.Cast<Control>().Max(k => k.PreferredSize.Width);
+                foreach (Control k in column.Controls)
+                    if (k.MinimumSize.Width != w) k.MinimumSize = new Size(w, 0);
+                sizing = false;
+            };
             whole.Controls.Add(column);
             pageControls.Add(whole);
         }
@@ -774,7 +787,7 @@ public class SettingsEditor : EditorBase
             ShowPageRow?.Invoke();
         }
         // the chosen button's settings, right here beside the picture (no jump to another page)
-        var editHost = new Panel { Size = new Size(560, 470), Margin = new Padding(0, 4, 0, 0), BackColor = Theme.Card };
+        var editHost = new Panel { Size = new Size(560, 640), Margin = new Padding(0, 4, 0, 0), BackColor = Theme.Card };
         var editBar = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty, Visible = false };
         WheelItemModel editing = null;
         void Edit(WheelItemModel it)
@@ -930,8 +943,8 @@ public class SettingsEditor : EditorBase
             wristArm.AddRow("Side of the arm", Pick(new Choice[] { new("inner", "Inner side / underside (palm side)"), new("back", "Back of the wrist (like a watch)") }, wp.Face, v => wp.Face = v));
             var pose = new ArmPosePreview { Mode = wp.TextUp ?? "fingers", RightArm = wristHand == 1, Profile = p };
             Changed += () => pose.Invalidate(); // size, offsets, columns, side and mirror all show in the picture
-            wristArm.AddRow("Text direction", Pick(new Choice[] { new("fingers", "Top toward my fingers (hand held up, palm to face)"), new("between", "In between (arm half raised)"), new("along_arm", "Along the forearm (arm held across my body)"), new("custom", "Custom angle (set below, or by turning it in adjust mode)") }, wp.TextUp ?? "fingers", v => { wp.TextUp = v; pose.Mode = v; FormPanel.Show(lRot, v == "custom"); }));
-            lRot = wristArm.AddRow("Custom angle (deg)", Num(-180, 180, 5, 0, wp.RotateDeg, v => { wp.RotateDeg = v; pose.Invalidate(); }),
+            wristArm.AddRow("Text direction", Pick(new Choice[] { new("fingers", "Top toward my fingers (hand held up, palm to face)"), new("between", "In between (arm half raised)"), new("along_arm", "Along the forearm (arm held across my body)"), new("custom", "Custom angle (under Fine-tune, or turn it in adjust mode)") }, wp.TextUp ?? "fingers", v => { wp.TextUp = v; pose.Mode = v; FormPanel.Show(lRot, v == "custom"); }));
+            lRot = wristNums.AddRow("Custom angle (deg)", Num(-180, 180, 5, 0, wp.RotateDeg, v => { wp.RotateDeg = v; pose.Invalidate(); }),
                 "0 = text along the forearm. Or place the panel by hand in the headset (Adjust positions): grab it and turn your hand.");
             FormPanel.Show(lRot, wp.TextUp == "custom");
             wristPose = pose; // shown beside the arm settings
