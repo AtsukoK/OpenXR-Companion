@@ -47,6 +47,39 @@ only when the user says so.
   same facing, 6 mm x scale in front, width min(0.94 w, fits 0.8 h)), menu dimmed (MenuView.covered), no dock bar, not
   moved/saved/docked; closes with the menu. The trigger pull that presses a key doesn't reach the menu row under it
   (InGameMenu kbWasOnMenu_ / kbHeldTrigger_). Test: "the binding keyboard lies inside the menu's pane".
+- Editor hub screens (2026-11-23, built into G:/Claude/VR Radial Overlay/dist3): the editor opens on Home (editor/HubPages.cs:
+  HomeHub 2x2 tiles -> Controllers / Radial wheels / Wrist panels / Configure features). Hub tags "hub_*" (Hubs) have no
+  tree row: MainForm.ShowHub/OnSelect/GoTo/GoBack handle them; the left list is hidden (mainSplit.Panel1Collapsed) on hubs,
+  settings pages and the old Overview; BuildTree keeps a hub on screen (keepHub). ControllersHub = both ControllerPictures
+  with AddButtons (+ on each tag -> way picker cards -> ControllerButtonsPage.AddFor = the "+ Add..." cards). WheelsHub:
+  main / sub-wheels with picture, opener or "Not assigned". FeaturesHub = SettingsPage tiles + "What's on now".
+  Key dialog (QuickBindingDialogs.Ask) now auto-laid-out with "OK, use this" (buttons were cut off). Pictures:
+  editor --hub-shots <dir> (VRO_SHOTS_PROFILE for another profile), --keydlg-shot, --picker-shot.
+- From 2026-11-23 only dist2 is built (user): dist3 / branch controller-buttons is a finished design trial to take parts
+  from, not built anymore. Work happens on dist2-line (G:/Claude/OpenXR Companion - Dist2).
+- dist2 vs dist3 (2026-11-23): dist2 is built from branch dist2-line (worktree G:/Claude/OpenXR Companion - Dist2):
+  5ab37fa + key dialog fix + the list folding into section icons (MainForm.Rail.cs, list_folded.txt, --rail-shot).
+  dist3 = the hub redesign (branch controller-buttons). Don't copy controller-buttons editor builds into dist2.
+- Compact UI step 1 (2026-11-23, dist3): ControllersHub drawer (Dock Right, 42% width): click a button -> its ways
+  (ControllerButtonsPage onlyPart mode), click a binding -> BindingEditor in the drawer (Back / Delete / Close); + on a tag
+  finishes in the drawer. ChoiceBox card mode (ChoiceCards.Use: action type, gesture, pass-input) opens OptionPicker with
+  descriptions (3 columns above 8 choices). BindingEditor folds the layer rows under "More options". Previews:
+  previews/compact-ui-2026-11-23/, editor --actions-shot. Next ideas: drawer for wheels hub (wheel picture + item drawer),
+  breadcrumb, tip bars dismissable, toolbar "..." menu, collapse settings cards.
+- Compact UI complete (2026-11-23, dist3, previews/compact-ui-2026-11-23/10_..22_): the list is hidden on every screen
+  (MainForm.listShown; "List" button shows it, the tutorial turns it on; BuildTree never leaves a screen while hidden:
+  keepHub). Wheels / wrist pages / their items open in WheelStudio (Studios.cs: big WheelPreview, tools row, item drawer
+  with Move / Duplicate / Delete, wheel settings drawer, "Pick a button to open it" for unassigned wheels; wrist: on /
+  mirror switch + page tabs). DrawerPage base (HubPages.cs) shared by ControllersHub and WheelStudio. Configure Left/Right
+  controller = side by side (ControllerButtonsPage.SideBySide: stacked picture left, details right, bindings edit in the
+  right column). Breadcrumb in the nav bar (CrumbsFor/ShowCrumbs); Duplicate/Delete/Up/Down only with the list. Toolbar:
+  Profile, Save, "More" menu (new/delete/revert profile, controllers, tutorial, folders, install/uninstall layer). Tip
+  bars have an x (dismissed_tips.txt). Settings pages with > 2 cards fold all but the first (Card.MakeFoldable).
+- Double flick release (2026-11-23, dist2 + dist3, layer + editor + headset menu): Binding::releaseAt / JSON "release_at"
+  (0 = old: stops on leaving the direction zone / below stick_off). When > 0 and the double_tap_hold on a stick / trackpad
+  direction has fired, Engine::TrigDown uses the stick's distance from the middle (any direction). New double flicks
+  (editor quick add, headset menu) start at 0.3. Editor row "Keeps going until (%)", headset row "Keeps going until".
+  Test TestDoubleFlickRelease. The Dist2 worktree needed third_party/openxr-sdk copied in (a submodule, empty in a new worktree).
 - Open ideas: overview pictures could be bigger (spare height); long tag text gets cut; highlight the part on PartPage.
 - Pictures: layer/menu_overview.png, menu_part.png, menu_binding.png, keyboard_binding.png, menu_test_frame.png (tests).
 
