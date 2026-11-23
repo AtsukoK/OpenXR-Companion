@@ -428,7 +428,43 @@ void TestStickOptions() {
     CHECK(st.currentState.x == 0.2f, "sticks: the left stick (nothing set) passes through");
     st.currentState = { 0.2f, 0.f };
     gi.Filter(e, move, XR_NULL_PATH, 1, st, noRequery);
-    CHECK(st.currentState.x == 0.2f, "sticks: both hands asked at once with different settings: left alone");
+    CHECK(st.currentState.x == 0.2f, "sticks: both hands asked at once, the left stick pushed further (nothing set): left alone");
+    {   // A zone on the right stick only; the game reads one action from both sticks, and on/off actions on the axes.
+        std::string err2;
+        auto pz = ParseProfileText(R"JSON({ "sticks": { "right": { "direction_angle": 20 } } })JSON", err2);
+        Engine ez;
+        ez.SetProfile(pz);
+        GameInputFilter gz;
+        gz.SetHandPaths(101, 102);
+        XrAction both = (XrAction)(uintptr_t)91, turnX = (XrAction)(uintptr_t)92, jumpY = (XrAction)(uintptr_t)93;
+        gz.AddBinding(both, 0, C_STICK, InputFeature::Vector);
+        gz.AddBinding(both, 1, C_STICK, InputFeature::Vector);
+        gz.AddBinding(turnX, 1, C_STICK, InputFeature::X);
+        gz.AddBinding(jumpY, 1, C_STICK, InputFeature::Y);
+        ez.stickX[1] = 0.25f; // up and about 15 degrees right, on the right stick
+        ez.stickY[1] = 0.9f;
+        XrActionStateVector2f v{ XR_TYPE_ACTION_STATE_VECTOR2F };
+        v.isActive = XR_TRUE;
+        v.currentState = { 0.25f, 0.9f };
+        gz.NewSync();
+        gz.Filter(ez, both, XR_NULL_PATH, 1, v, noRequery);
+        CHECK(v.currentState.x == 0.f && v.currentState.y > 0.9f,
+              "sticks: one action on both sticks, asked for any hand: the right stick's zone straightens it (was skipped)");
+        auto noBool = [](XrPath, XrActionStateBoolean&) { return false; };
+        XrActionStateBoolean b{ XR_TYPE_ACTION_STATE_BOOLEAN };
+        b.isActive = XR_TRUE;
+        b.currentState = XR_TRUE; // what the runtime made of x = 0.25 (a turn on any push)
+        gz.Filter(ez, turnX, 102, 1, b, noBool);
+        CHECK(b.currentState == XR_FALSE, "sticks: an on/off turn on the stick's x is off while the push is straightened to up");
+        b.currentState = XR_TRUE;
+        gz.Filter(ez, jumpY, 102, 1, b, noBool);
+        CHECK(b.currentState == XR_TRUE, "sticks: the on/off jump on y still fires");
+        ez.stickX[1] = 0.7f; // a real diagonal: outside the zone, left as it is
+        ez.stickY[1] = 0.7f;
+        b.currentState = XR_TRUE;
+        gz.Filter(ez, turnX, 102, 1, b, noBool);
+        CHECK(b.currentState == XR_TRUE, "sticks: on a diagonal (outside the zone) the turn is left to the game");
+    }
 
     // Direction zones: none set, a diagonal is both up and right; with 30 degrees it is neither.
     Action upLayer, rightLayer, sprintLayer;

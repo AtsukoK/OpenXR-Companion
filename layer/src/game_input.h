@@ -63,8 +63,9 @@ private:
     };
 
     Verdict Evaluate(const Engine& eng, XrAction a, XrPath sub) const;
-    // Which hand's stick shaping applies to this action and query: -1 when it reads no stick, or both sticks with
-    // different shaping (then nothing is changed).
+    // Which hand's stick shaping applies to this action and query: -1 when it reads no stick. An action read from
+    // both sticks at once (one action, no hand asked) gets the shaping of the stick pushed further, the one the
+    // runtime reports.
     int StickHand(const Engine& eng, XrAction a, XrPath sub, InputFeature* axis = nullptr) const;
     int HandsMask(XrPath sub) const;
     bool CanRequery(XrAction a, int hand) const;
@@ -74,5 +75,7 @@ private:
     std::unordered_map<uint64_t, std::vector<Binding>> bindings_;  // action -> controller parts
     std::unordered_map<uint64_t, std::vector<XrPath>> subactions_; // action -> its subaction paths
     std::unordered_map<uint64_t, Track> track_;
+    std::unordered_map<uint64_t, bool> logged_; // stick actions already described in the log
+    void LogStickAction(XrAction a, XrPath sub, const char* type, int hand, InputFeature axis, bool shaped);
     uint64_t sync_ = 0;
 };

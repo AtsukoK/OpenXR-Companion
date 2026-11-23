@@ -72,6 +72,7 @@ void GameInputFilter::SetSubactionPaths(XrAction action, const XrPath* paths, ui
 }
 
 void GameInputFilter::Clear() {
+    logged_.clear();
     bindings_.clear();
     subactions_.clear();
 }
@@ -215,6 +216,20 @@ void GameInputFilter::Filter(const Engine& eng, XrAction a, XrPath sub, XrTime n
                              const Requery<XrActionStateBoolean>& requery) {
     Verdict e = Evaluate(eng, a, sub);
     if (!e.any) return;
+    // An on/off action on one stick axis (snap turn on x, jump on y): off while the push is straightened onto the
+    // other axis by the direction zone (up and a little right doesn't also turn).
+    if (!e.overridden && !e.blockedAll) {
+        InputFeature axis = InputFeature::Value;
+        if (int h = StickHand(eng, a, sub, &axis); h >= 0 && (axis == InputFeature::X || axis == InputFeature::Y)) {
+            const StickShape& sh = eng.StickShapeOf(h);
+            LogStickAction(a, sub, "on/off", h, axis, sh.directionAngleDeg > 0);
+            if (sh.directionAngleDeg > 0) {
+                float x = eng.stickX[h], y = eng.stickY[h];
+                ShapeStick(sh, x, y);
+                if ((axis == InputFeature::X ? x : y) == 0.f) st.currentState = XR_FALSE;
+            }
+        }
+    }
     FilterState<BoolValue>(
         e, sub, now, st, e.freeHand >= 0 ? handPath_[e.freeHand] : XR_NULL_PATH, requery, [&] { return CanRequery(a, e.freeHand); },
         [&](float v0, float v1) { return Changed(a, sub, v0, v1); });
@@ -232,11 +247,28 @@ int GameInputFilter::StickHand(const Engine& eng, XrAction a, XrPath sub, InputF
             if (axis) *axis = b.feature;
             continue;
         }
-        const StickShape &s0 = eng.StickShapeOf(found), &s1 = eng.StickShapeOf(b.hand);
-        bool same = s0.innerDeadzone == s1.innerDeadzone && s0.outerDeadzone == s1.outerDeadzone && s0.directionAngleDeg == s1.directionAngleDeg;
-        return same ? found : -1;
+        // both sticks feed it: the runtime reports the one pushed further, so its shaping applies
+        auto push = [&](int h) { return eng.stickX[h] * eng.stickX[h] + eng.stickY[h] * eng.stickY[h]; };
+        if (push(b.hand) > push(found)) {
+            found = b.hand;
+            if (axis) *axis = b.feature;
+        }
+        return found;
     }
     return found;
+}
+
+void GameInputFilter::LogStickAction(XrAction a, XrPath sub, const char* type, int hand, InputFeature axis, bool shaped) {
+    uint64_t key = (uint64_t)a * 31ull ^ (uint64_t)sub;
+    if (logged_[key]) return;
+    logged_[key] = true;
+    static const char* axes[] = { "value", "touch", "x+y", "x", "y" };
+    int bothHands = 0;
+    for (const auto& b : bindings_[(uint64_t)a])
+        if (b.comp == C_STICK) bothHands |= 1 << b.hand;
+    Log("game stick action %llx (%s, %s stick%s, reads %s, asked for %s): direction zone %s", (unsigned long long)a, type,
+        hand ? "right" : "left", bothHands == 3 ? ", bound to both sticks" : "", axes[(int)axis],
+        sub == XR_NULL_PATH ? "any hand" : sub == handPath_[0] ? "left" : sub == handPath_[1] ? "right" : "?", shaped ? "applied" : "off");
 }
 
 void GameInputFilter::Filter(const Engine& eng, XrAction a, XrPath sub, XrTime now, XrActionStateFloat& st,
@@ -249,6 +281,7 @@ void GameInputFilter::Filter(const Engine& eng, XrAction a, XrPath sub, XrTime n
         InputFeature axis = InputFeature::Value;
         if (int h = StickHand(eng, a, sub, &axis); h >= 0) {
             const StickShape& sh = eng.StickShapeOf(h);
+            LogStickAction(a, sub, "number", h, axis, sh.directionAngleDeg > 0);
             if (sh.directionAngleDeg > 0 && (axis == InputFeature::X || axis == InputFeature::Y)) {
                 // straightened with the whole stick: up and a little right gives this x axis 0, not a small turn
                 float x = eng.stickX[h], y = eng.stickY[h];
@@ -269,7 +302,10 @@ void GameInputFilter::Filter(const Engine& eng, XrAction a, XrPath sub, XrTime n
     if (!e.any) return;
     // The hand's stick deadzones (off unless set in the profile); a value a binding pushes in is left as it is.
     if (!e.overridden && !e.blockedAll)
-        if (int h = StickHand(eng, a, sub); h >= 0) ShapeStick(eng.StickShapeOf(h), st.currentState.x, st.currentState.y);
+        if (int h = StickHand(eng, a, sub); h >= 0) {
+            LogStickAction(a, sub, "x+y", h, InputFeature::Vector, eng.StickShapeOf(h).directionAngleDeg > 0);
+            ShapeStick(eng.StickShapeOf(h), st.currentState.x, st.currentState.y);
+        }
     FilterState<VectorValue>(
         e, sub, now, st, e.freeHand >= 0 ? handPath_[e.freeHand] : XR_NULL_PATH, requery, [&] { return CanRequery(a, e.freeHand); },
         [&](float v0, float v1) { return Changed(a, sub, v0, v1); });
