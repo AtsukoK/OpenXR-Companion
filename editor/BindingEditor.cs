@@ -9,7 +9,14 @@ public class BindingEditor : EditorBase
     readonly TextBox name = new() { Width = 360 };
     readonly CheckBox enabled = new() { Text = "Enabled", AutoSize = true };
     readonly ChordEditor chord = new();
-    readonly ChoiceBox gesture = new(Choices.Gestures, 420);
+    // the common ways first, the rare ones last
+    static readonly Choice[] Hows =
+    {
+        new(GestureKind.Press, "Press it"), new(GestureKind.Hold, "Hold it"), new(GestureKind.DoubleTap, "Double-tap it"),
+        new(GestureKind.DoubleTapHold, "Double-tap and hold  (stick: double flick)"),
+        new(GestureKind.Tap, "More: quick tap only"), new(GestureKind.WhileHeld, "More: while held (on until you let go)"),
+    };
+    readonly ChoiceBox gesture = new(Hows, 360);
     readonly NumericUpDown hold = Ms(), tap = Ms(), dbl = Ms();
     readonly ComboBox layers = new() { Width = 220 }, notLayers = new() { Width = 220 };
     readonly ChoiceBox block = new(Choices.Blocks, 360);
@@ -21,6 +28,51 @@ public class BindingEditor : EditorBase
     readonly Label lHold, lTap, lDbl, lPass, lPressAt;
 
     readonly Label sentence = new();
+    readonly Label howHint = new();
+    static bool detailsOpen = true; // kept between bindings while the editor runs
+    Action ShowFoldNow;
+
+    // the folded details in one line: "the game also gets the button . hold 400 ms . always"
+    string DetailsSummary()
+    {
+        var parts = new List<string> { b.Block == "none" ? "the game also gets the button" : "the game doesn't get the button" };
+        if (b.Gesture == GestureKind.Hold) parts.Add($"hold {b.HoldMs} ms");
+        if (b.Gesture is GestureKind.DoubleTap or GestureKind.DoubleTapHold) parts.Add($"second tap within {b.DoubleTapMs} ms");
+        parts.Add(string.IsNullOrWhiteSpace(b.Layers) ? "always" : "only in layer " + b.Layers);
+        if (!b.Enabled) parts.Add("off");
+        return string.Join("  \u00B7  ", parts);
+    }
+
+    // what the chosen How means, in a sentence
+    static string HowHint(string g) => g switch
+    {
+        GestureKind.Press => "Starts the moment you press it.",
+        GestureKind.Hold => "Hold it a moment (Details: how long). A quick tap can still reach the game.",
+        GestureKind.DoubleTap => "Two quick presses. A single press still reaches the game.",
+        GestureKind.DoubleTapHold => "Press twice and keep it down the second time; it lasts until you let go. On a stick direction: a double flick (sprint).",
+        GestureKind.Tap => "Only a short press counts, so a Hold on the same button can do something else.",
+        GestureKind.WhileHeld => "On while you hold it, off when you let go.",
+        _ => "",
+    };
+
+    // the sensible 'does the game still get it' for a How, set when the How changes (Details can change it again)
+    void DefaultsForHow()
+    {
+        string input = (b.Input ?? "").Split('+')[^1].Trim();
+        bool touch = input.EndsWith(".touch") || input.Contains(".thumbrest");
+        b.TapPassthrough = false;
+        if (touch || b.Gesture is GestureKind.DoubleTap or GestureKind.DoubleTapHold or GestureKind.Tap)
+            b.Block = "none";
+        else if (b.Gesture == GestureKind.Hold)
+        { b.Block = "trigger"; b.TapPassthrough = true; }
+        else
+            b.Block = "trigger";
+        bool was = loading;
+        loading = true;
+        block.Code = b.Block;
+        passthrough.Checked = b.TapPassthrough;
+        loading = was;
+    }
 
     // "Double-tap Right Thumbrest  →  Opens wheel 'right'"
     void ShowSentence()
@@ -48,40 +100,48 @@ public class BindingEditor : EditorBase
     public BindingEditor(BindingModel model)
     {
         b = model;
-        var when = new FormPanel();
-        when.AddRow("Button", chord, "For a combo, the button that fires goes last; the others must already be held.");
-        when.AddRow("How", gesture);
-        lReleaseAt = when.AddRow("Keeps going until (%)", releaseAt, "Double flick on a stick: once it has started it keeps going while you steer, until you let the stick come back below this much from the middle. 30 = until you mostly let go. 0 = the old way: it stops as soon as the stick leaves the direction (the direction zone) or drops below the direction's release point.");
-        lPressAt = when.AddRow("Press point (%)", pressAt, "How far the trigger or grip must go. 0 = usual, low = hair trigger, high = a long pull. For an Index full squeeze: how hard.");
-        lHold = when.AddRow("Hold time (ms)", hold);
-        lTap = when.AddRow("Tap shorter than (ms)", tap);
-        lDbl = when.AddRow("Second tap within (ms)", dbl);
-        when.AddRow("Only while layer", layers, "Leave empty to work always. With a layer name, this binding only works while that layer is on.");
-        when.AddRow("Not while layer", notLayers);
-        when.AddRow("Pass input to game", block);
-        lPass = when.AddRow("", passthrough);
-        foreach (var (_, ctl, _) in when.Rows)
+        // 1 How, 2 Button, 3 What happens; then the details, written as answers, open by default and foldable
+        var howPanel = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
+        gesture.Width = 360;
+        howPanel.Controls.Add(gesture);
+        howHint.AutoSize = true; howHint.MaximumSize = new Size(360, 0); howHint.ForeColor = Theme.SubText; howHint.Margin = new Padding(0, 6, 0, 0);
+        howPanel.Controls.Add(howHint);
+        var details = new FormPanel();
+        details.AddRow("Name", name);
+        details.AddRow("", enabled);
+        details.AddRow("The game also gets the button", block, "Set for you when you pick How: a plain press is taken from the game; hold and double-tap let a quick tap through; a touch always reaches the game.");
+        lPass = details.AddRow("", passthrough);
+        lHold = details.AddRow("Hold time (ms)", hold, "How long counts as a hold. 400 is the default.");
+        lTap = details.AddRow("Tap shorter than (ms)", tap);
+        lDbl = details.AddRow("Second tap within (ms)", dbl, "How quick the second tap (or flick) must be.");
+        lPressAt = details.AddRow("Press point (%)", pressAt, "How far the trigger or grip must go. 0 = usual, low = hair trigger, high = a long pull. For an Index full squeeze: how hard.");
+        lReleaseAt = details.AddRow("Keeps going until (%)", releaseAt, "Double flick on a stick: once it has started it keeps going while you steer, until you let the stick come back below this much from the middle. 30 = until you mostly let go. 0 = it stops as soon as the stick leaves the direction.");
+        details.AddRow("Only while layer", layers, "Leave empty to work always. With a layer name, this binding only works while that layer is on.");
+        details.AddRow("Not while layer", notLayers);
+        foreach (var (_, ctl, _) in details.Rows)
             if (ctl is ComboBox)
-                ctl.Width = 400; // same width as the action's dropdowns below
+                ctl.Width = 400;
 
-        // top: what it does in one sentence, then its name and the on/off switch
         sentence.Font = new Font("Segoe UI", 16f, FontStyle.Bold);
         sentence.AutoSize = true;
         sentence.Dock = DockStyle.Top;
-        sentence.Padding = new Padding(0, 0, 0, 6);
-        var top = new FlowLayoutPanel { AutoSize = true, WrapContents = true, Dock = DockStyle.Top, Padding = new Padding(0, 0, 0, 10) };
-        top.Controls.Add(new Label { Text = "Name:", AutoSize = true, Margin = new Padding(0, 7, 6, 0) });
-        top.Controls.Add(name);
-        enabled.Margin = new Padding(16, 5, 0, 0);
-        enabled.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
-        top.Controls.Add(enabled);
-        Card C(string t, string glyph, Control body) =>
-            new(t, glyph, "Saved with profile", Theme.Saved, "Saved with this profile: changes take effect in the game when you press Save (Ctrl+S).", body) { Dock = DockStyle.None, Margin = new Padding(0, 0, 14, 14) };
+        sentence.Padding = new Padding(0, 0, 0, 10);
+        Card C(string t, Control body) => new(t, null, null, Color.Empty, null, body) { Dock = DockStyle.None, Margin = new Padding(0, 0, 14, 14) };
         var cards = new FlowLayoutPanel { AutoSize = true, WrapContents = true, Dock = DockStyle.Top, Margin = Padding.Empty };
-        cards.Controls.Add(C("When you use the button", "", when));
-        cards.Controls.Add(C("What it does", "", action));
-        Stack(sentence, top, cards);
+        cards.Controls.Add(C("1   How", howPanel));
+        cards.Controls.Add(C("2   Button", chord));
+        cards.Controls.Add(C("3   What happens", action));
+        var fold = new LinkLabel { AutoSize = true, Dock = DockStyle.Top, LinkColor = Theme.Link, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold), Padding = new Padding(0, 4, 0, 6) };
+        var detailsHost = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Top, Margin = Padding.Empty };
+        detailsHost.Controls.Add(C("Details", details));
+        detailsHost.Visible = detailsOpen;
+        void ShowFold() => fold.Text = detailsOpen ? "Details \u25BE   (all set for you: change any)" : "Details \u25B8   " + DetailsSummary();
+        fold.LinkClicked += (s, e) => { detailsOpen = !detailsOpen; detailsHost.Visible = detailsOpen; ShowFold(); };
+        Stack(sentence, cards, fold, detailsHost);
         Changed += ShowSentence;
+        Changed += () => { if (!detailsOpen) ShowFold(); };
+        ShowFoldNow = ShowFold;
+        ShowFold();
 
         loading = true;
         name.Text = b.Name;
@@ -109,19 +169,21 @@ public class BindingEditor : EditorBase
         chord.Changed += () => { b.Input = chord.Value; Sync(); Fire(); };
         releaseAt.ValueChanged += (s, e) => { b.ReleaseAt = releaseAt.Value < 5 ? 0 : (double)releaseAt.Value / 100; Fire(); };
         pressAt.ValueChanged += (s, e) => { b.PressAt = pressAt.Value <= 1 ? 0 : (double)pressAt.Value / 100; Fire(); };
-        gesture.SelectedIndexChanged += (s, e) => { b.Gesture = gesture.Code; Sync(); Fire(); };
+        gesture.SelectedIndexChanged += (s, e) => { if (loading) return; b.Gesture = gesture.Code; DefaultsForHow(); Sync(); Fire(); };
         hold.ValueChanged += (s, e) => { b.HoldMs = (int)hold.Value; Fire(); };
         tap.ValueChanged += (s, e) => { b.TapMs = (int)tap.Value; Fire(); };
         dbl.ValueChanged += (s, e) => { b.DoubleTapMs = (int)dbl.Value; Fire(); };
         layers.TextChanged += (s, e) => { b.Layers = layers.Text.Trim(); Fire(); };
         notLayers.TextChanged += (s, e) => { b.NotLayers = notLayers.Text.Trim(); Fire(); };
-        block.SelectedIndexChanged += (s, e) => { b.Block = block.Code; Fire(); };
-        passthrough.CheckedChanged += (s, e) => { b.TapPassthrough = passthrough.Checked; Fire(); };
+        block.SelectedIndexChanged += (s, e) => { if (loading) return; b.Block = block.Code; Fire(); };
+        passthrough.CheckedChanged += (s, e) => { if (loading) return; b.TapPassthrough = passthrough.Checked; Fire(); };
         action.Changed += Fire;
     }
 
     void Sync()
     {
+        howHint.Text = HowHint(b.Gesture);
+        ShowFoldNow?.Invoke();
         FormPanel.Show(lHold, b.Gesture == GestureKind.Hold);
         FormPanel.Show(lPass, b.Gesture == GestureKind.Hold);
         FormPanel.Show(lTap, b.Gesture == GestureKind.Tap);

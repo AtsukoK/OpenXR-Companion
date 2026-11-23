@@ -253,6 +253,21 @@ public class ControllerButtonsPage : UserControl
         var addBtn = AddMenuButton(part, way);
         addBtn.Margin = new Padding(0, 2, 0, 2);
         head.Controls.Add(addBtn);
+        if (!IsTouchOnly(part, way))
+        {
+            var swap = new Button { Text = "\u21C4 Swap with...", AutoSize = true, Height = 28, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(8, 2, 0, 2), BackColor = Theme.Button, ForeColor = Theme.Text };
+            swap.FlatAppearance.BorderColor = Theme.CardBorder;
+            FormPanel.Tips.SetToolTip(swap, "This button and the one you pick trade places in the game (two bindings, one on each).");
+            swap.Click += (s2, e2) =>
+            {
+                var made = Swap(FindForm(), profile, layout, hand, input, what);
+                if (made == null) return;
+                profile.Bindings.Add(made);
+                added(made, false);
+                ShowAll();
+            };
+            head.Controls.Add(swap);
+        }
         if (boundAll.Count > 0) // back to the game's own control: everything set on this way goes
         {
             var reset = new Button { Text = "↺ Reset to default", AutoSize = true, Height = 28, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(8, 2, 0, 2), BackColor = Theme.Button, ForeColor = Theme.Text };
@@ -554,25 +569,13 @@ public class ControllerButtonsPage : UserControl
     {
         string input = ControllerLayouts.InputOf(hand, part, way);
         string what = QuickBindingDialogs.NameOf(layout, hand, part, way);
-        var options = AddOptions(IsTouchOnly(part, way), way is "up" or "down" or "left" or "right");
-        int pick = OptionPicker.Show(owner, "Add to " + what, $"What should {what} do? Pick one; you can change it afterwards.", options.Select(o => o.option).ToList());
-        if (pick < 0)
-            return null;
-        var kind = options[pick].kind;
-        BindingModel made = kind switch
-        {
-            AddKind.Key or AddKind.HoldKey => QuickBindingDialogs.AskKey(owner, what) is string keys ? QuickBindings.Key(input, what, keys) : null,
-            AddKind.Remap or AddKind.HoldRemap => Swap(owner, profile, layout, hand, input, what),
-            AddKind.Off => QuickBindings.OffInGame(input, what),
-            AddKind.DoubleFlick => QuickBindingDialogs.AskKey(owner, what) is string k2 ? QuickBindings.DoubleFlickKey(input, what, k2) : null,
-            _ => QuickBindings.Blank(input, what),
-        };
-        if (made == null)
-            return null;
-        if (kind is AddKind.HoldKey or AddKind.HoldRemap)
-            QuickBindings.OnlyWhenHeld(made, touch: IsTouchOnly(part, way));
+        // no menu of quick choices any more: a starter binding that does nothing yet, opened in the binding sheet
+        // (How / Button / What happens / Details), where everything is chosen
+        _ = owner; _ = layout;
+        var made = QuickBindings.Blank(input, what);
+        bool finish = true;
         profile.Bindings.Add(made);
-        return (made, kind == AddKind.Other);
+        return (made, finish);
     }
 
     enum AddKind { Key, Remap, Off, HoldKey, HoldRemap, DoubleFlick, Other }

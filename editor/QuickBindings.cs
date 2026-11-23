@@ -46,8 +46,8 @@ public static class QuickBindings
         Name = partName,
         Input = input,
         Gesture = GestureKind.Press,
-        Block = BlockFor(input),
-        Action = new ActionModel { Type = ActionType.Key, Keys = "F1" },
+        Block = "none",
+        Action = new ActionModel { Type = ActionType.None },
     };
 
     public const int DefaultHoldMs = 400, DoubleFlickMs = 350;

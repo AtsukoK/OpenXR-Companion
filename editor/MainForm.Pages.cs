@@ -63,7 +63,7 @@ public partial class MainForm
             "bindings_left" or "bindings_right" => "Tip: click a button on the picture to change what it does; the + on a tag adds something to it.",
             "wheels" => "Tip: click a wheel to open it. On its page, '+ Add sub-wheel' makes a submenu that is linked to it automatically.",
             "wrist0" or "wrist1" => "Tip: turn your wrist toward your face and look at it to show the panel. Poke a button with your other hand's finger, or point at it and pull the trigger.",
-            BindingModel => "Tip: pick the controller button and gesture first, then what it does. 'Record key' then press a key on your keyboard to bind it.",
+            BindingModel => "Tip: 1 How you press it, 2 the Button, 3 What happens. The Details are set for you; 'Record key' binds a key from your keyboard.",
             WheelModel when wrist => "Tip: click a button in the panel picture or the list on the right to change it. '+ Add page' makes a page with a 'Next page' button to it.",
             WheelModel => "Tip: click an item in the wheel or the list on the right to change it; drag \u2261 to reorder. The tabs at the top go to its sub-wheels.",
             WheelItemModel => "Tip: click any other " + (wrist ? "button" : "item") + " in the picture or the list to change it. Del deletes, Ctrl+D duplicates, Alt+arrows move it.",

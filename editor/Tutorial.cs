@@ -240,7 +240,7 @@ public partial class MainForm
             }.Concat(OpenWheelSteps(() => tWheel)).Concat(new List<TourStep>
             {
                 S("Sub-wheels", "Too many items? '+ Add sub-wheel' makes a second wheel with a Back item, and puts a 'More' item on this one that opens it. The tabs at the top go between them.", () => T("+ Add sub-wheel")),
-                S("Controllers", "Both controllers, with what each button does. Click a button (or its tag) to see and change it; the + on a tag adds something: press a key, swap with another button, a second job on hold, a double flick...",
+                S("Controllers", "Both controllers, with what each button does. Click a button (or its tag) to see and change it. The + on a tag makes a new binding for it and opens it: pick How you press it, the Button, and What happens.",
                   Pic, () => GoTo(ControllersPage)),
                 S("All bindings", "Everything you made, in one list: controller bindings, wheel items and wrist buttons. Switch any of them off and on, copy or delete them, or search.", Page, () => GoTo(BindingsPage)),
                 S("Wrist panels", "Buttons on your forearm. They show when you turn your wrist toward your face and look at it; press them by poking with your other hand.\n\nThe list on the right switches buttons on and off; 'Advanced settings' places the panel on your arm.", Page, () => GoTo("wrist0")),
@@ -263,28 +263,28 @@ public partial class MainForm
             {
                 S("Sprint with a double flick", "Flick the left stick forward twice quickly and keep pushing: your sprint key is held while you push. The game still gets the stick as usual, so you walk as normal.",
                   Pic, () => GoTo(ControllersPage)),
-                S("Your turn: the left stick", "On the LEFT controller, click the + on the 'Thumbstick' tag. Pick 'Up', then 'Double flick: press a key', then 'Record key' and press your game's sprint key (often Left Shift).",
+                S("Your turn: the left stick", "On the LEFT controller, click the + on the 'Thumbstick' tag and pick 'Up'. In the binding that opens: How = 'Double-tap and hold (stick: double flick)', What happens = 'Press a key', then 'Record key' and press your game's sprint key (often Left Shift).",
                   Pic, () => tCount = Profile.Bindings.Count(b => b.Gesture == GestureKind.DoubleTapHold),
                   () => Profile.Bindings.Count(b => b.Gesture == GestureKind.DoubleTapHold) > tCount,
                   () => { Profile.Bindings.Add(QuickBindings.DoubleFlickKey("left.thumbstick.up", "Left thumbstick: push up", "LShift")); MarkDirty(); Refresh(ControllersPage); }),
-                S("Fine-tuning", "Click the Thumbstick tag again: the side panel shows your double flick. Click it for 'Keeps going until (%)': how far you can let the stick come back before sprinting stops (30 = until you mostly let go).\n\nThe same works on Down, Left and Right (a dodge, say).",
+                S("Fine-tuning", "Under Details: 'Keeps going until (%)' is how far you can let the stick come back before sprinting stops (30 = until you mostly let go). The game still gets the stick, so you walk as normal.\n\nThe same works on Down, Left and Right (a dodge, say).",
                   Pic),
             },
 
             "hold" => new List<TourStep>
             {
                 S("A second job on hold", "A quick press of the button still does what the game normally does; holding it a moment presses a key you choose instead.", Pic, () => GoTo(ControllersPage)),
-                S("Your turn", "Click the + on a button's tag (for example B on the right controller). Pick 'Hold: press a key', then 'Record key' and press the key (for example M for the map).",
+                S("Your turn", "Click the + on a button's tag (for example B on the right controller). In the binding that opens: How = 'Hold it', What happens = 'Press a key', then 'Record key' and press the key (for example M for the map).",
                   Pic, () => tCount = Profile.Bindings.Count(b => b.Gesture == GestureKind.Hold),
                   () => Profile.Bindings.Count(b => b.Gesture == GestureKind.Hold) > tCount,
                   () => { Profile.Bindings.Add(QuickBindings.OnlyWhenHeld(QuickBindings.Key("right.secondary", "Right B", "M"))); MarkDirty(); Refresh(ControllersPage); }),
-                S("How long is a hold?", "Click the tag again and then the new line: 'Hold time (ms)' sets how long counts as a hold. 'If I let go early, the game still gets a normal tap' keeps the quick press for the game.", Pic),
+                S("How long is a hold?", "Under Details: 'Hold time (ms)' sets how long counts as a hold, and 'If I let go early, the game still gets a normal tap' (set for you) keeps the quick press for the game.", Pic),
             },
 
             "swap" => new List<TourStep>
             {
                 S("Swap two buttons", "Two buttons trade places in the game: each does what the other one did.", Pic, () => GoTo(ControllersPage)),
-                S("Your turn", "Click the + on a button's tag, pick 'Swap with another button', then choose the other button.",
+                S("Your turn", "Click a button's tag; in the side panel click '⇄ Swap with...' next to '+ Add...', then choose the other button.",
                   Pic, () => tCount = Profile.Bindings.Count(b => b.Action?.Type == ActionType.XrInput),
                   () => Profile.Bindings.Count(b => b.Action?.Type == ActionType.XrInput) >= tCount + 2,
                   () => { Profile.Bindings.Add(QuickBindings.GameButton("right.primary", "Right A", "right.secondary", "Right B")); Profile.Bindings.Add(QuickBindings.GameButton("right.secondary", "Right B", "right.primary", "Right A")); MarkDirty(); Refresh(ControllersPage); }),
@@ -338,7 +338,7 @@ public partial class MainForm
             "sec_controllers" => new List<TourStep>
             {
                 S("Controllers", "Your controllers from above and from the side, with a tag on each button: blue = your bindings, grey 'Default' = the game's own control.", Pic, () => GoTo(ControllersPage)),
-                S("The + on a tag", "Adds something to that button: press a key, swap with another button, a second job on hold, a double flick or double-tap, or anything else.", Pic),
+                S("The + on a tag", "Makes a new binding for that button and opens it: 1 How you press it, 2 the Button, 3 What happens, and the Details (all set for you).", Pic),
                 S("The side panel", "Click a button or its tag: the side panel lists each way of using it (press, touch, up...). There the circle switches a binding on or off, ⧉ copies, ✕ deletes, and 'Reset to default' gives the button back to the game.", Pic),
                 S("Controller model", "Pick your controllers here. 'Apply a controller preset...' sets the usual buttons that open your wheels; 'Controller offsets' fixes how hands and guns point.", () => T("Apply a controller preset")),
             },
@@ -370,10 +370,10 @@ public partial class MainForm
             },
             "sec_binding" => new List<TourStep>
             {
-                S("A binding", "The line at the top says it in one sentence: what you do with which button, and what happens.", Page,
+                S("A binding", "The line at the top says it in one sentence. Below: 1 How you press it, 2 the Button, 3 What happens. That's all a binding needs.", Page,
                   () => { if (lastTag is not BindingModel && Profile.Bindings.FirstOrDefault() is BindingModel b) GoTo(b); }),
-                S("When you use the button", "The button (add another to make a combo), how you press it (press, hold, double-tap, double flick...), its timing, and whether the game still gets the button.", () => T("When you use the button")),
-                S("What it does", "Click the button next to 'What it does' for the choices; the settings for the one you pick show below it.", () => T("What it does")),
+                S("Details", "Set for you from How: whether the game still gets the button, timings, layers, the name and the on/off switch. Change any; the Details link folds them away.", () => T("Details")),
+                S("What happens", "Click the button next to 'What it does' for the choices; the settings for the one you pick show below it.", () => T("What it does")),
             },
             _ => null,
         };

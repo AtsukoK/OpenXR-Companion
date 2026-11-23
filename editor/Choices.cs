@@ -1,4 +1,4 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 
 namespace OpenXRCompanionEditor;
 
@@ -70,8 +70,8 @@ public static class Choices
     };
     public static readonly Choice[] Blocks =
     {
-        new("none", "Yes, the game also receives the button"), new("trigger", "No, block the button from the game"),
-        new("all", "No, block every button of the combo from the game"),
+        new("none", "Yes, the game gets it too"), new("trigger", "No, only this binding gets it"),
+        new("all", "No, and not the combo's other buttons either"),
     };
     public static readonly Choice[] ActionTypes =
     {

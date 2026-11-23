@@ -71,7 +71,7 @@ public class ActionEditor : FormPanel
     // For a controller binding: no panel / wheel navigation; Nothing = the game just doesn't get the button.
     static readonly (string code, PickOption option)[] BindingActions = WristActions
         .Where(x => x.code is not (ActionType.Page or ActionType.Back or ActionType.Close))
-        .Select(x => x.code == ActionType.None ? (x.code, x.option with { Title = "Block it from the game", Does = "Nothing happens and the game doesn't get the button." })
+        .Select(x => x.code == ActionType.None ? (x.code, x.option with { Title = "Nothing", Does = "Does nothing itself. Details decides whether the game still gets the button (No = the button is blocked)." })
                    : x.code == ActionType.XrInput ? (x.code, x.option with { Title = "Act as another controller button" }) : x)
         .ToArray();
 
