@@ -253,6 +253,21 @@ public class ControllerButtonsPage : UserControl
         var addBtn = AddMenuButton(part, way);
         addBtn.Margin = new Padding(0, 2, 0, 2);
         head.Controls.Add(addBtn);
+        if (boundAll.Count > 0) // back to the game's own control: everything set on this way goes
+        {
+            var reset = new Button { Text = "↺ Reset to default", AutoSize = true, Height = 28, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(8, 2, 0, 2), BackColor = Theme.Button, ForeColor = Theme.Text };
+            reset.FlatAppearance.BorderColor = Theme.CardBorder;
+            FormPanel.Tips.SetToolTip(reset, "Removes everything set on " + what + ", so the game gets it as usual.");
+            reset.Click += (s, e) =>
+            {
+                if (MessageBox.Show(FindForm(), $"Remove the {boundAll.Count} binding(s) on {what}?\n\nThe game then gets it as usual.", "Reset to default", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK)
+                    return;
+                foreach (var b in boundAll) profile.Bindings.Remove(b);
+                added(boundAll[0], false);
+                ShowAll();
+            };
+            head.Controls.Add(reset);
+        }
         card.Controls.Add(head);
         if (BindingEditor.IsAnalog(input) && boundAll.Count > 0) // the press point only matters once something is set
             card.Controls.Add(PressPointRow(input, boundAll));
@@ -458,6 +473,18 @@ public class ControllerButtonsPage : UserControl
         string extra = (b.Block == "none" && b.Action?.Type != ActionType.None ? "game also gets the button · " : "") + (isOn ? "" : "off · ");
         row.Controls.Add(new Label { Text = extra + b.Name, AutoSize = true, MaximumSize = new Size(240, 0), ForeColor = Theme.OffText, Margin = new Padding(0, 3, 0, 0) });
         FormPanel.Tips.SetToolTip(does, "Click to edit '" + b.Name + "'");
+        var del = new Button { Text = "✕", Width = 28, Height = 24, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(8, 0, 0, 0), BackColor = Color.FromArgb(170, 50, 50), ForeColor = Color.White };
+        del.FlatAppearance.BorderSize = 0;
+        FormPanel.Tips.SetToolTip(del, "Delete '" + b.Name + "'");
+        del.Click += (s, e) =>
+        {
+            if (MessageBox.Show(FindForm(), $"Delete '{b.Name}'?", "Delete binding", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK)
+                return;
+            profile.Bindings.Remove(b);
+            added(b, false);
+            ShowAll();
+        };
+        row.Controls.Add(del);
         return row;
     }
 
