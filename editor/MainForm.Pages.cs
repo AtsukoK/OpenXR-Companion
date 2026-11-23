@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -58,13 +58,13 @@ public partial class MainForm
         {
             "overview" => "Tip: the switches on each card turn things on or off right here. The blue buttons jump to where you edit them.",
             ProfileModel or SettingsPage => "Tip: cards tagged 'Saved with profile' take effect when you save (Ctrl+S); 'Applies straight away' ones work at once. Hover or click \u24D8 for help on a setting.",
-            "bindings_left" or "bindings_right" => "Tip: click a button on the picture to change what it does. In the list, the round dot at the right of a binding switches it on or off; right-click a row to duplicate, delete or move it.",
-            "wheels" => "Tip: a wheel opened by a controller binding is a main wheel. Use '+ Add sub-wheel' under a wheel to make a submenu that is linked to it automatically.",
+            "bindings_left" or "bindings_right" => "Tip: click a button on the picture to change what it does; the + on a tag adds something to it.",
+            "wheels" => "Tip: click a wheel to open it. On its page, '+ Add sub-wheel' makes a submenu that is linked to it automatically.",
             "wrist0" or "wrist1" => "Tip: turn your wrist toward your face and look at it to show the panel. Poke a button with your other hand's finger, or point at it and pull the trigger.",
             BindingModel => "Tip: pick the controller button and gesture first, then what it does. 'Record key' then press a key on your keyboard to bind it.",
-            WheelModel when wrist => "Tip: click a button in the panel picture to edit it. '+ Add sub-page' in the list makes a page that a button here opens.",
-            WheelModel => "Tip: click a segment in the wheel picture to edit or rebind that item. Drag items in the list to reorder them.",
-            WheelItemModel => "Tip: click any other " + (wrist ? "button" : "segment") + " in the picture to jump to it. 'Record key' then press a key to bind it.",
+            WheelModel when wrist => "Tip: click a button in the panel picture or the list on the right to change it. '+ Add page' makes a page with a 'Next page' button to it.",
+            WheelModel => "Tip: click an item in the wheel or the list on the right to change it; drag \u2261 to reorder. The tabs at the top go to its sub-wheels.",
+            WheelItemModel => "Tip: click any other " + (wrist ? "button" : "item") + " in the picture or the list to change it. Del deletes, Ctrl+D duplicates, Alt+arrows move it.",
             _ => null,
         };
     }

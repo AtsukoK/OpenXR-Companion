@@ -15,7 +15,7 @@ public class WheelPageEditor : EditorBase
     WheelItemModel editing, dragged;
     internal Action EditFirstItem, ShowOpeners, ShowLibrary; // screenshots
 
-    public WheelPageEditor(ProfileModel profile, WheelModel wheel, Action<string, string> renamed)
+    public WheelPageEditor(ProfileModel profile, WheelModel wheel, Action<string, string> renamed, WheelItemModel select = null)
     {
         p = profile;
         w = wheel;
@@ -167,7 +167,7 @@ public class WheelPageEditor : EditorBase
         EditFirstItem = () => { if (w.Items.Count > 0) Edit(w.Items[0]); };
         RefreshItems();
         RefreshOpeners();
-        Edit(null);
+        Edit(select != null && w.Items.Contains(select) ? select : null);
     }
 
     // ---- items
@@ -336,8 +336,7 @@ public class WheelPageEditor : EditorBase
             foreach (var part in layout.PartsFor(h).Where(x => x.IsUsable))
                 foreach (var way in part.Ways)
                     choices.Add(new Choice(ControllerLayouts.InputOf(h, part, way), QuickBindingDialogs.NameOf(layout, h, part, way)));
-        var gestures = new[] { GestureKind.DoubleTap, GestureKind.Hold, GestureKind.Press, GestureKind.DoubleTapHold }
-                       .Select(g => new Choice(g, GestureWord(g))).ToArray();
+        var gestures = OpenerGestures.Select(g => new Choice(g, GestureWord(g))).ToArray();
         var button = new ChoiceBox(choices, 380);
         var gesture = new ChoiceBox(gestures, 380);
         var box = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
@@ -350,6 +349,15 @@ public class WheelPageEditor : EditorBase
         if (answer == null) return;
         var parts = answer.Split('|');
         string input = parts[0], g = parts[1];
+        p.Bindings.Add(Opener(w, input, g));
+        Fire(); MainForm.Current?.RebuildList(); RefreshOpeners();
+    }
+
+    internal static readonly string[] OpenerGestures = { GestureKind.DoubleTap, GestureKind.Hold, GestureKind.Press, GestureKind.DoubleTapHold };
+
+    // A binding that opens wheel w from this input with this gesture. Hold / double-tap leave a normal press for the game.
+    internal static BindingModel Opener(WheelModel w, string input, string g)
+    {
         bool touch = input.EndsWith(".touch") || input.Contains(".thumbrest");
         var made = new BindingModel
         {
@@ -360,8 +368,7 @@ public class WheelPageEditor : EditorBase
             Action = new ActionModel { Type = ActionType.Wheel, Wheel = w.Name },
         };
         if (g == GestureKind.Hold && !touch) { made.TapPassthrough = true; made.Block = "trigger"; }
-        p.Bindings.Add(made);
-        Fire(); MainForm.Current?.RebuildList(); RefreshOpeners();
+        return made;
     }
 
     // ---- bits

@@ -124,7 +124,7 @@ public class OverviewEditor : EditorBase
             foreach (var b in openers)
                 c.Go(openers.Count > 1 ? $"Edit binding '{b.Name}'" : "Edit the button that opens it", () => go(b));
             if (openers.Count == 0)
-                c.Go("Go to Bindings", () => go("bindings"));
+                c.Go("All bindings", () => go(MainForm.BindingsPage));
         }
 
         // Wrist panels
@@ -158,7 +158,7 @@ public class OverviewEditor : EditorBase
             string tag = h == 0 ? "wrist0" : "wrist1";
             c.Go("Panel settings (size, side, text)", () => go(tag));
             if (src.Pages.TryGetValue(src.Start ?? "", out var fp))
-                c.Go(wm.Mirror ? $"Edit the {other} panel's buttons" : "Edit its buttons", () => go(fp));
+                c.Go(wm.Mirror ? $"Edit the {other} panel's buttons" : "Edit its buttons", () => go(wm.Mirror ? (h == 0 ? "wrist1" : "wrist0") : tag));
         }
 
         // Keyboard

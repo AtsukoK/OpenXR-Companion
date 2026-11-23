@@ -762,6 +762,8 @@ public class SettingsEditor : EditorBase
     // The panel's pages as tabs and the chosen page's buttons as a picture: click a button to edit it, or add one.
     // (With a mirrored panel these are the other panel's pages.)
     internal Action EditFirstButton;
+    internal static WheelModel OpenPage;     // set before opening a wrist page: show this page first
+    internal static WheelItemModel OpenItem; // ... with this button chosen
     internal Action ShowAdvanced;
     Action ShowPageRow;
     Action<int> ColumnsChanged; // the page picture follows the Columns setting
@@ -784,7 +786,10 @@ public class SettingsEditor : EditorBase
         var tabs = new FlowLayoutPanel { AutoSize = true, WrapContents = true, MaximumSize = new Size(880, 0), Margin = new Padding(0, 0, 0, 8) };
         var preview = new WheelPreview { IsWristPage = true, GridColumns = p.WristFor(wristHand).Columns, Size = new Size(300, 260), Margin = new Padding(0, 0, 16, 0) };
         preview.HandleCreated += (o, e) => preview.BackColor = Theme.Card; // the card's colour around the page (not white)
-        WheelModel shown = owner.Pages.GetValueOrDefault(owner.Start ?? "") ?? owner.Pages.Values.FirstOrDefault();
+        WheelModel shown = (OpenPage != null && owner.Pages.Values.Contains(OpenPage) ? OpenPage : null)
+                           ?? owner.Pages.GetValueOrDefault(owner.Start ?? "") ?? owner.Pages.Values.FirstOrDefault();
+        var openItem = OpenItem;
+        OpenPage = null; OpenItem = null;
         Button Btn(string text, Action click, bool primary = false)
         {
             var b = new Button { Text = text, AutoSize = true, Height = 34, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(0, 0, 8, 8),
@@ -1066,6 +1071,7 @@ public class SettingsEditor : EditorBase
             rows.ResumeLayout();
         };
         refreshList();
+        if (openItem != null && shown != null && shown.Items.Contains(openItem)) Edit(openItem);
         WristList = list;
         WristLibrary = ItemLists.Library(p, () => shown, it => { Structure(); Edit(it); }, "the page shown on the left");
         return box;

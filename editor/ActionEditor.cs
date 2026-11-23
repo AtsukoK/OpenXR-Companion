@@ -75,6 +75,17 @@ public class ActionEditor : FormPanel
                    : x.code == ActionType.XrInput ? (x.code, x.option with { Title = "Act as another controller button" }) : x)
         .ToArray();
 
+    internal static IEnumerable<string> PickerCodes(string kind) => (kind == "wrist" ? WristActions : kind == "wheel" ? WheelActions : BindingActions).Select(x => x.code);
+    // What picking this card leaves in the action (same path as a click: the type box's handler fills the defaults).
+    internal static ActionModel ActionAfterPick(string kind, string code, WristModel wrist)
+    {
+        var a = new ActionModel();
+        using var ed = new ActionEditor(kind != "binding", kind == "wrist" ? wrist : null);
+        ed.Bind(a);
+        ed.Pick(code);
+        return a;
+    }
+
     public static void WristPickerShot(string path) => OptionPicker.Shot(path, "What should this button do?", "Pick one; you can change it any time.", WristActions.Select(x => x.option).ToList());
 
     // The wrist action: a button with the current choice; clicking it opens the cards.
@@ -91,7 +102,7 @@ public class ActionEditor : FormPanel
         {
             int i = OptionPicker.Show(FindForm(), $"What should {what} do?", "Pick one; you can change it any time.", acts.Select(x => x.option).ToList());
             if (i >= 0)
-                type.Code = acts[i].code; // the type box's own handler sets the action up
+                Pick(acts[i].code);
         };
         Show();
         return b;
@@ -163,6 +174,18 @@ public class ActionEditor : FormPanel
         target.Changed += () => { if (!loading) { a.Target = target.Value.Split('+').Last(); Fire(); } };
     }
     void Fire() { if (!loading) Changed?.Invoke(); }
+
+    // A card was picked: set the action up for it. The type box's handler does that when the type changes; picking
+    // the type it already shows (a new action starts as 'Press a key') must still fill in its defaults.
+    void Pick(string code)
+    {
+        if (type.Code != code) { type.Code = code; return; }
+        if (a == null) return;
+        a.Type = code;
+        Defaults();
+        Sync();
+        Fire();
+    }
 
     void Defaults()
     {

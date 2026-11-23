@@ -20,6 +20,13 @@ public partial class MainForm
         Control ed;
         void Changed()
         { MarkDirty(); RefreshNodeTexts(); }
+        Control WristPage(int h)
+        {
+            var se = new SettingsEditor(Profile, h);
+            (bool, bool) lastMirror = (Profile.WristLeft.Mirror, Profile.WristRight.Mirror);
+            se.Changed += () => { Changed(); var m = (Profile.WristLeft.Mirror, Profile.WristRight.Mirror); if (m != lastMirror) { lastMirror = m; BuildTree(); } };
+            return se;
+        }
         switch (n?.Tag)
         {
             case ControllersPage:
@@ -50,7 +57,8 @@ public partial class MainForm
                 { var be = new BindingEditor(b); be.Changed += Changed; ed = be; break; }
             case "wrist0":
             case "wrist1":
-                { var se = new SettingsEditor(Profile, (string)n.Tag == "wrist1" ? 1 : 0); (bool, bool) lastMirror = (Profile.WristLeft.Mirror, Profile.WristRight.Mirror); se.Changed += () => { Changed(); var m = (Profile.WristLeft.Mirror, Profile.WristRight.Mirror); if (m != lastMirror) { lastMirror = m; BuildTree(); } }; ed = se; break; }
+                ed = WristPage((string)n.Tag == "wrist1" ? 1 : 0);
+                break;
             case WheelModel w:
                 {
                     int wh = WristOf(n);
@@ -61,21 +69,28 @@ public partial class MainForm
                         ed = wp;
                         break;
                     }
-                    var we = wh >= 0 ? new WheelEditor(w, (a, b) => RenamePage(wh, a, b), Profile.WristPages(wh), Profile.WristFor(wh).Columns)
-                                     : new WheelEditor(w, RenameWheel);
-                    we.Changed += Changed;
-                    we.Preview.ItemClicked += it => tree.SelectedNode = Find(tree.Nodes, it);
-                    ed = we;
+                    // a wrist page: the wrist panel page, showing this page
+                    SettingsEditor.OpenPage = w;
+                    ed = WristPage(wh);
                     break;
                 }
             case WheelItemModel i:
                 {
+                    // an item or button: its wheel's page / its wrist page, with it chosen
                     var w2 = (WheelModel)n.Parent.Tag;
                     int ih = WristOf(n);
-                    var ie = ih >= 0 ? new ItemEditor(w2, i, Profile.WristPages(ih), Profile.WristFor(ih).Columns) : new ItemEditor(w2, i);
-                    ie.Changed += Changed;
-                    ie.Preview.ItemClicked += it => tree.SelectedNode = Find(tree.Nodes, it);
-                    ed = ie;
+                    if (ih >= 0)
+                    {
+                        SettingsEditor.OpenPage = w2;
+                        SettingsEditor.OpenItem = i;
+                        ed = WristPage(ih);
+                    }
+                    else
+                    {
+                        var wp2 = new WheelPageEditor(Profile, w2, RenameWheel, i);
+                        wp2.Changed += Changed;
+                        ed = wp2;
+                    }
                     break;
                 }
             case "wheels" when string.IsNullOrWhiteSpace(Q):

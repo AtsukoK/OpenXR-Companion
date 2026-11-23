@@ -164,6 +164,72 @@ public partial class MainForm
             if (err != null)
                 bad++;
         }
+        // ---- editor features added 2026-11-23: each must still give a profile the layer accepts
+        void Check(string what, bool ok, string detail = "")
+        { sb.AppendLine($"{what}: {(ok ? "OK" : "ERROR")} {detail}"); if (!ok) bad++; }
+        string Valid() => Native.Validate(f.Serialize());
+        {
+            // every card in the three "What it does" pickers
+            f.LoadFile(builtin);
+            var wrist = f.Profile.WristFor(0);
+            var page = wrist.Pages.Values.First();
+            var wheel = f.Profile.Wheels.Values.First();
+            int n = 0;
+            foreach (var kind in new[] { "wrist", "wheel", "binding" })
+                foreach (var code in ActionEditor.PickerCodes(kind))
+                {
+                    var a = ActionEditor.ActionAfterPick(kind, code, wrist);
+                    if (kind == "wrist") page.Items.Add(new WheelItemModel { Label = "t", Action = a, Enabled = false });
+                    else if (kind == "wheel") wheel.Items.Add(new WheelItemModel { Label = "t", Action = a, Enabled = false });
+                    else f.Profile.Bindings.Add(new BindingModel { Name = "t", Input = "right.primary", Gesture = GestureKind.Press, Action = a, Enabled = false });
+                    n++;
+                    var err = Valid();
+                    if (err != null) { Check($"picker {kind}/{code}", false, err); break; }
+                    if (kind != "binding") (kind == "wrist" ? page : wheel).Items.RemoveAt((kind == "wrist" ? page : wheel).Items.Count - 1);
+                }
+            Check("pickers (wrist, wheel, binding)", true, $"({n} cards)");
+        }
+        {
+            // touch holds, and "+ Add a button that opens it" for every input of every controller and every gesture
+            f.LoadFile(builtin);
+            var wheel = f.Profile.Wheels.Values.First();
+            int n = 0;
+            foreach (var layout in ControllerLayouts.All)
+                for (int hand = 0; hand < 2; hand++)
+                    foreach (var part in layout.PartsFor(hand).Where(p => p.IsUsable))
+                        foreach (var way in part.Ways)
+                        {
+                            string input = ControllerLayouts.InputOf(hand, part, way);
+                            f.Profile.Bindings.Add(QuickBindings.OnlyWhenHeld(QuickBindings.Key(input, "t", "F13"), touch: true));
+                            foreach (var g in WheelPageEditor.OpenerGestures)
+                                f.Profile.Bindings.Add(WheelPageEditor.Opener(wheel, input, g));
+                            n += 1 + WheelPageEditor.OpenerGestures.Length;
+                        }
+            var err = Valid();
+            Check("touch holds + wheel openers", err == null, $"({n} bindings) {err}");
+            var touch = QuickBindings.OnlyWhenHeld(QuickBindings.Key("left.thumbrest", "t", "F13"), touch: true);
+            Check("touch hold hides nothing", touch.Block == "none" && !touch.TapPassthrough && touch.Gesture == GestureKind.Hold);
+        }
+        {
+            // duplicate = a separate copy; sort puts switched-on first, keeping their order
+            f.LoadFile(builtin);
+            var b = f.Profile.Bindings.First();
+            var c = ItemLists.Clone(b);
+            c.Action.Keys = "changed"; c.Name = "copy";
+            Check("duplicate binding is a separate copy", b.Name != "copy" && b.Action?.Keys != "changed");
+            var page = f.Profile.WristFor(0).Pages.Values.First();
+            var pc = ItemLists.Clone(page);
+            pc.Items.Clear();
+            Check("duplicate page is a separate copy", page.Items.Count > 0);
+            var items = new List<WheelItemModel> { new() { Label = "a", Enabled = false }, new() { Label = "b" }, new() { Label = "c", Enabled = false }, new() { Label = "d" } };
+            int keep = ItemLists.Sort;
+            ItemLists.Sort = 1;
+            string order = string.Concat(ItemLists.Sorted(items).Select(i => i.Label));
+            ItemLists.Sort = 0;
+            string place = string.Concat(ItemLists.Sorted(items).Select(i => i.Label));
+            ItemLists.Sort = keep;
+            Check("sort on first / by place", order == "bdac" && place == "abcd", order + " " + place);
+        }
         sb.AppendLine("--- round-trip of default ---");
         f.LoadFile(def);
         sb.AppendLine(f.Serialize());
