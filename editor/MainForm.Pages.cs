@@ -56,6 +56,8 @@ public partial class MainForm
         bool wrist = n != null && WristOf(n) >= 0;
         return n?.Tag switch
         {
+            ControllersPage => "Tip: click a button on the picture (or its tag) to see and change what it does; the + on a tag adds something to it.",
+            BindingsPage => "Tip: everything in this profile. The circle switches one on or off; click a line for all its settings.",
             "overview" => "Tip: the switches on each card turn things on or off right here. The blue buttons jump to where you edit them.",
             ProfileModel or SettingsPage => "Tip: cards tagged 'Saved with profile' take effect when you save (Ctrl+S); 'Applies straight away' ones work at once. Hover or click \u24D8 for help on a setting.",
             "bindings_left" or "bindings_right" => "Tip: click a button on the picture to change what it does; the + on a tag adds something to it.",
@@ -69,10 +71,23 @@ public partial class MainForm
         };
     }
 
-    static Control TipBar(string text)
+    // The tip, and a "Show me this page" button that starts this page's short tour.
+    Control TipBar(string text, string tourId)
     {
-        var p = new Panel { Dock = DockStyle.Top, Height = text.Length > 300 ? 62 : 40, BackColor = Color.FromArgb(255, 248, 225), Padding = new Padding(14, 0, 14, 0) };
-        p.Controls.Add(new Label { Text = "💡  " + text, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.FromArgb(110, 80, 10), Font = new Font("Segoe UI", 9.5f) });
+        var p = new Panel { Dock = DockStyle.Top, Height = text.Length > 300 ? 62 : 44, BackColor = Color.FromArgb(255, 248, 225), Padding = new Padding(14, 0, 8, 0) };
+        p.Controls.Add(new Label { Text = text.Length > 0 ? "💡  " + text : "", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.FromArgb(110, 80, 10), Font = new Font("Segoe UI", 9.5f) });
+        if (tourId != null)
+        {
+            var b = new Button { Text = "🎓  Show me this page", AutoSize = true, Dock = DockStyle.Right, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Tag = "swatch",
+                                 BackColor = Color.FromArgb(240, 140, 30), ForeColor = Color.White, Font = new Font("Segoe UI", 10f, FontStyle.Bold), Padding = new Padding(10, 0, 10, 0) };
+            b.FlatAppearance.BorderSize = 0;
+            FormPanel.Tips.SetToolTip(b, "A short guided tour of this page. More tours (and how-tos like sprinting with a double flick): the Tutorial button at the top.");
+            b.Click += (s, e) => StartTutorial(tourId);
+            var wrap = new Panel { Dock = DockStyle.Right, Width = 230, Padding = new Padding(0, 6, 0, 6), BackColor = p.BackColor };
+            b.Dock = DockStyle.Fill;
+            wrap.Controls.Add(b);
+            p.Controls.Add(wrap);
+        }
         return p;
     }
 

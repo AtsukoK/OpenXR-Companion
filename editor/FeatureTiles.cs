@@ -1,4 +1,4 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 
 namespace OpenXRCompanionEditor;
 
@@ -11,6 +11,8 @@ public sealed class HubTile : Control
     public Color StatusColor = Color.Empty;
     public Color AccentColor = Color.FromArgb(40, 140, 255);
     bool hover;
+
+    public void PerformClick() => OnClick(EventArgs.Empty);
 
     public HubTile()
     {

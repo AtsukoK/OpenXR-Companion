@@ -119,8 +119,9 @@ public partial class MainForm
         ed.Dock = DockStyle.Fill;
         var parts = new List<Control> { ed };
         string tip = TipFor(n);
-        if (tip != null)
-            parts.Add(TipBar(tip));
+        string sectionTour = SectionTour(n?.Tag, n != null && WristOf(n) >= 0);
+        if (tip != null || sectionTour != null)
+            parts.Add(TipBar(tip ?? "", sectionTour));
         int stripHand = n?.Tag is WheelModel or WheelItemModel || n?.Tag as string is "wrist0" or "wrist1" ? WristOf(n) : -1;
         if (stripHand >= 0)
             parts.Add(PanelModeStrip(stripHand, () => { MarkDirty(); BuildTree(); }));

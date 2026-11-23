@@ -258,7 +258,7 @@ public partial class MainForm : Form
         ts.Items.Add(Btn("Delete profile", DeleteProfile));
         ts.Items.Add(new ToolStripSeparator());
         ts.Items.Add(Btn("Controllers", () => ChooseControllers(false)));
-        ts.Items.Add(Btn("Tutorial", StartTutorial));
+        ts.Items.Add(Btn("Tutorial", TutorialMenu));
         ts.Items.Add(new ToolStripSeparator());
         ts.Items.Add(Btn("Save (Ctrl+S)", () => Save()));
         ts.Items.Add(Btn("Revert", () => LoadFile(currentFile)));
