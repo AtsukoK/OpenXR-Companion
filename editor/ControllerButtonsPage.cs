@@ -229,21 +229,26 @@ public class ControllerButtonsPage : UserControl
             WrapContents = false,
             AutoSize = true,
             BackColor = Theme.Card,
-            Padding = new Padding(12, 8, 12, 8),
-            Margin = new Padding(0, 0, 0, 8),
+            Padding = new Padding(12, 5, 12, 5),
+            Margin = new Padding(0, 0, 0, 5),
             MinimumSize = new Size(720, 0),
         };
-        card.Controls.Add(new Label { Text = wayName, AutoSize = true, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold), Margin = new Padding(0, 0, 0, 2) });
+        // one compact row: the way, "Default" when nothing is set, and + Add at its end
         var boundAll = profile.Bindings.Where(b => QuickBindings.FiredBy(b, input)).ToList();
-        if (BindingEditor.IsAnalog(input))
+        var head = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+        head.Controls.Add(new Label { Text = wayName, AutoSize = true, MinimumSize = new Size(250, 0), Font = new Font("Segoe UI", 10.5f, FontStyle.Bold), Margin = new Padding(0, 8, 8, 0) });
+        head.Controls.Add(new Label { Text = boundAll.Count == 0 ? "Default (the game's own)" : "", AutoSize = true, MinimumSize = new Size(200, 0), ForeColor = Theme.SubText, Margin = new Padding(0, 9, 8, 0) });
+        var addBtn = AddMenuButton(part, way);
+        addBtn.Margin = new Padding(0, 2, 0, 2);
+        head.Controls.Add(addBtn);
+        card.Controls.Add(head);
+        if (BindingEditor.IsAnalog(input) && boundAll.Count > 0) // the press point only matters once something is set
             card.Controls.Add(PressPointRow(input, boundAll));
         // What the button normally does first; bindings that only work in a layer (shift...) after, then switched-off ones.
         var bound = profile.Bindings.Where(b => QuickBindings.FiredBy(b, input))
                                     .OrderBy(b => IsLayerOnly(b))
                                     .ThenBy(b => !b.Enabled)
                                     .ToList();
-        if (bound.Count == 0)
-            card.Controls.Add(Note("Nothing set: the game gets it as usual."));
         string shownLayer = null;
         foreach (var bd in bound)
         {
@@ -254,7 +259,6 @@ public class ControllerButtonsPage : UserControl
             }
             card.Controls.Add(BindingRow(bd));
         }
-        card.Controls.Add(AddMenuButton(part, way));
         return card;
     }
 

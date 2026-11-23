@@ -37,6 +37,7 @@ public sealed class ControllersHub : DrawerPage
             var cap = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0, 0, 0, 4) };
             cap.Controls.Add(new Label { Text = h == 0 ? "LEFT CONTROLLER" : "RIGHT CONTROLLER", AutoSize = true, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold), ForeColor = Theme.Heading, Margin = new Padding(0, 6, 14, 0) });
             grid.Controls.Add(cap, h, 0);
+            caps[h] = cap;
             var pic = new ControllerPicture { Dock = DockStyle.Fill, BackColor = Theme.Card, AddButtons = true, Stacked = true, Margin = new Padding(0, 0, h == 0 ? 10 : 0, 0) };
             pic.PartClicked += part => OpenPart(h, part.Comp); // in the drawer: the controllers stay in view
             pic.AddClicked += part => Add(h, part);
@@ -53,11 +54,12 @@ public sealed class ControllersHub : DrawerPage
             configure.FlatAppearance.BorderSize = 0;
             configure.Click += (s, e) => openPart(h, null);
             grid.Controls.Add(configure, h, 2);
+            configures[h] = configure;
         }
         Controls.Add(grid);
         this.grid = grid;
         BuildDrawer();
-        DrawerClosed += () => { foreach (var pic in pics) pic.Selected = null; FitPictures(); };
+        DrawerClosed += () => { foreach (var pic in pics) pic.Selected = null; ShowOnly(-1); };
         Resize += (s, e) => FitPictures();
         Controls.Add(new Label
         {
@@ -70,10 +72,28 @@ public sealed class ControllersHub : DrawerPage
 
     TableLayoutPanel grid;
     bool fitting;
+    readonly Control[] caps = new Control[2], configures = new Control[2];
+
+    // While the drawer is open only that hand's controller shows (big enough to read); -1 = both.
+    void ShowOnly(int hand)
+    {
+        if (grid == null)
+            return;
+        grid.SuspendLayout();
+        for (int h = 0; h < 2; h++)
+        {
+            bool show = hand < 0 || h == hand;
+            grid.ColumnStyles[h] = show ? new ColumnStyle(SizeType.Percent, hand < 0 ? 50 : 100) : new ColumnStyle(SizeType.Absolute, 0);
+            pics[h].Visible = caps[h].Visible = configures[h].Visible = show;
+        }
+        grid.ResumeLayout();
+        FitPictures();
+    }
 
     // One button of one controller: each way of using it, its bindings and + Add.
     public void OpenPart(int hand, string comp)
     {
+        ShowOnly(hand);
         drawerHand = hand;
         drawerComp = comp;
         foreach (int h in new[] { 0, 1 })
@@ -88,6 +108,7 @@ public sealed class ControllersHub : DrawerPage
     // One binding, edited in the drawer; Back returns to its button.
     internal void OpenBinding(int hand, string comp, BindingModel b)
     {
+        ShowOnly(hand);
         foreach (int h in new[] { 0, 1 })
             pics[h].Selected = h == hand ? comp : null;
         var ed = new BindingEditor(b);
@@ -176,7 +197,7 @@ public class DrawerPage : Panel
     protected readonly Panel drawer = new() { Dock = DockStyle.Right, Visible = false };
     protected readonly Panel drawerBody = new() { Dock = DockStyle.Fill };
     readonly Label drawerTitle = new() { AutoSize = true, Font = new Font("Segoe UI", 14f, FontStyle.Bold) };
-    readonly FlowLayoutPanel drawerHead = new() { Dock = DockStyle.Top, Height = 56, WrapContents = false, Padding = new Padding(14, 10, 10, 6) };
+    readonly FlowLayoutPanel drawerHead = new() { Dock = DockStyle.Top, Height = 62, WrapContents = false, Padding = new Padding(14, 10, 10, 6) };
 
     public bool DrawerOpen => drawer.Visible;
 
@@ -210,7 +231,13 @@ public class DrawerPage : Panel
         foreach (Control c in drawerHead.Controls.Cast<Control>().ToList())
             if (c != drawerTitle) c.Dispose();
         drawerHead.Controls.Clear();
-        drawerHead.Controls.Add(HeadButton("✕  Close", CloseDrawer));
+        // a big, bright Close: the way back to both controllers
+        var close = HeadButton("✕  Close", CloseDrawer, Color.FromArgb(225, 120, 30));
+        close.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
+        close.Height = 40;
+        close.Padding = new Padding(10, 0, 10, 0);
+        FormPanel.Tips.SetToolTip(close, "Close this panel and show both controllers again");
+        drawerHead.Controls.Add(close);
         foreach (var b in headButtons)
             drawerHead.Controls.Add(b);
         drawerTitle.Text = title;
