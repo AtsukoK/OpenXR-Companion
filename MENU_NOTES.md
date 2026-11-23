@@ -47,6 +47,16 @@ Next: the user tests dist2 (editor + headset), especially the items marked (!) b
 - Keys on wrist + wheel pages: Del, Ctrl+D, Alt+Left/Right on the chosen button / item.
 - Not done (user's call): "Move to another wheel/page" button.
 
+## Tutorials + release target (2026-11-23, late night)
+- Tutorial.cs rewritten: menu (toolbar Tutorial = OptionPicker): Start here (full tour, open a wheel from a button),
+  How do I... (sprint double flick, hold second job, swap, reuse, desktop on wrist, offsets), About each page (8).
+  "Show me this page" on every tip bar (SectionTour). Targets found by on-screen text (FindShown); --tourshots runs
+  all 16 tours with Auto actions: ALL TOURS FINISHED. Fixed: a done last step restarted itself.
+- --github-shots <dir>: README screenshots from the built-in default (1920x1040, PrintWindow). docs/images replaced +
+  new ones; README "Using the editor" rewritten.
+- RELEASE TARGET: the user wants the next GitHub release on a branch named **experimental** (prerelease), NOT main.
+  Local branch `experimental` created at this commit; nothing pushed. Push + release only after the user has tested.
+
 ## Open / asked
 - Wrist text-direction presets (fingers / between / along arm) are old and unchecked; user to choose: replace them,
   or place the panel per preset in the headset and measure. The arm drawing is gone.
