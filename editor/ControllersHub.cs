@@ -66,11 +66,13 @@ public sealed class ControllersHub : DrawerPage
         frameNative.Visible = layout.Id == "frame";
         chooser.SelectedIndexChanged += (s, e) =>
         {
-            layout = ControllerLayouts.ById(chooser.Code);
-            ControllerPictureChoice.Save(layout.Id);
-            titleLabel.Text = "Controllers  \u00B7  " + layout.Name;
-            models.Text = "For: " + layout.Models;
-            frameNative.Visible = layout.Id == "frame";
+            this.layout = ControllerLayouts.ById(chooser.Code); // the field: the constructor parameter "layout" hides it here
+            ControllerPictureChoice.Save(this.layout.Id);
+            titleLabel.Text = "Controllers  \u00B7  " + this.layout.Name;
+            models.Text = "For: " + this.layout.Models;
+            frameNative.Visible = this.layout.Id == "frame";
+            if (DrawerOpen)
+                CloseDrawer(); // its page was made for the old controllers
             Refresh2();
             FitPictures();
         };
