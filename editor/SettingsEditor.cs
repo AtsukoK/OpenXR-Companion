@@ -81,6 +81,25 @@ public class SettingsEditor : EditorBase
             pageTitle = wristHand == 1 ? "Right wrist panel" : "Left wrist panel";
             pageHelp = "Buttons on your forearm. They appear when you turn the forearm toward your eyes and look at it. Its pages are listed under this panel in the list on the left; select a page to add buttons.";
             pageControls.Add(C("Panel", "\uE8A9", false, wrist));
+            // on the arm: the settings with the arm picture beside them, the position numbers folded under them
+            var armCol = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
+            armCol.Controls.Add(wristArm);
+            var fold = new LinkLabel { Text = "Fine-tune the position with numbers \u25B8", AutoSize = true, LinkColor = Theme.Link, Margin = new Padding(6, 6, 0, 4) };
+            FormPanel.Tips.SetToolTip(fold, "Placing the panel by hand in the headset (Adjust positions) is easier and replaces these.");
+            wristNums.Visible = false;
+            fold.LinkClicked += (s2, e2) =>
+            {
+                wristNums.Visible = !wristNums.Visible;
+                fold.Text = wristNums.Visible ? "Hide the position numbers \u25BE" : "Fine-tune the position with numbers \u25B8";
+            };
+            armCol.Controls.Add(fold);
+            armCol.Controls.Add(wristNums);
+            var armRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+            armRow.Controls.Add(armCol);
+            if (wristPose != null)
+            { wristPose.Margin = new Padding(12, 4, 0, 0); wristPose.Size = new Size(330, 280); armRow.Controls.Add(wristPose); } // drawn to its size
+            pageControls.Add(C("On the arm", "\uE7FC", false, armRow));
+            pageControls.Add(C("When it shows", "\uE890", false, wristShow));
         }
         else
         {
@@ -657,6 +676,11 @@ public class SettingsEditor : EditorBase
     }
 
     // ---------------- wrist panel
+    // the wrist page in three cards: the panel, where it sits on the arm (numbers folded away: placing by hand does it),
+    // and when it shows
+    readonly FormPanel wristArm = new(), wristNums = new(), wristShow = new();
+    Control wristPose;
+
     FormPanel BuildWrist()
     {
         var wp = p.WristFor(Math.Max(0, wristHand));
@@ -677,26 +701,26 @@ public class SettingsEditor : EditorBase
             lFirst = wrist.AddRow("First page", Pick(pageChoices, wp.Start, v => wp.Start = v),
                 "The page shown when the panel appears. Its pages are listed under it on the left.");
             FormPanel.Show(lFirst, !(wristHand >= 0 && wp.Mirror));
-            wrist.AddRow("Side of the arm", Pick(new Choice[] { new("inner", "Inner side / underside (palm side)"), new("back", "Back of the wrist (like a watch)") }, wp.Face, v => wp.Face = v));
+            wristArm.AddRow("Side of the arm", Pick(new Choice[] { new("inner", "Inner side / underside (palm side)"), new("back", "Back of the wrist (like a watch)") }, wp.Face, v => wp.Face = v));
             var pose = new ArmPosePreview { Mode = wp.TextUp ?? "fingers", RightArm = wristHand == 1, Profile = p };
             Changed += () => pose.Invalidate(); // size, offsets, columns, side and mirror all show in the picture
-            wrist.AddRow("Text direction", Pick(new Choice[] { new("fingers", "Top toward my fingers (hand held up, palm to face)"), new("between", "In between (arm half raised)"), new("along_arm", "Along the forearm (arm held across my body)"), new("custom", "Custom angle (set below, or by turning it in adjust mode)") }, wp.TextUp ?? "fingers", v => { wp.TextUp = v; pose.Mode = v; FormPanel.Show(lRot, v == "custom"); }));
-            lRot = wrist.AddRow("Custom angle (deg)", Num(-180, 180, 5, 0, wp.RotateDeg, v => { wp.RotateDeg = v; pose.Invalidate(); }),
+            wristArm.AddRow("Text direction", Pick(new Choice[] { new("fingers", "Top toward my fingers (hand held up, palm to face)"), new("between", "In between (arm half raised)"), new("along_arm", "Along the forearm (arm held across my body)"), new("custom", "Custom angle (set below, or by turning it in adjust mode)") }, wp.TextUp ?? "fingers", v => { wp.TextUp = v; pose.Mode = v; FormPanel.Show(lRot, v == "custom"); }));
+            lRot = wristArm.AddRow("Custom angle (deg)", Num(-180, 180, 5, 0, wp.RotateDeg, v => { wp.RotateDeg = v; pose.Invalidate(); }),
                 "0 = text along the forearm. Or place the panel by hand in the headset (Adjust positions): grab it and turn your hand.");
             FormPanel.Show(lRot, wp.TextUp == "custom");
-            wrist.AddRow("", pose);
+            wristPose = pose; // shown beside the arm settings
             wrist.AddRow("Press buttons by", Pick(new Choice[] { new("both", "Poking or pointing + trigger"), new("poke", "Poking with the other controller"), new("point", "Pointing + trigger") }, wp.Press, v => wp.Press = v));
             wrist.AddRow("Columns", Int(1, 4, 1, wp.Columns, v => wp.Columns = v));
-            wrist.AddRow("Placed by hand", ResetPose(() => wp.Pose != null, () => wp.Pose = null),
+            wristArm.AddRow("Placed by hand", ResetPose(() => wp.Pose != null, () => wp.Pose = null),
                 "Adjust positions in the headset: grab the panel with your other hand's grip and put it anywhere on the arm, at any angle. That spot replaces side, text direction, toward the elbow, off the arm and sideways.");
-            wrist.AddRow("Panel size (m)", Num(0.05m, 0.4m, 0.01m, 2, wp.Size, v => wp.Size = v), "0.11 m is about the width of a large phone.");
-            wrist.AddRow("Toward the elbow (m)", Num(-0.1m, 0.3m, 0.01m, 2, wp.TowardElbow, v => wp.TowardElbow = v), "Distance back along the forearm from the controller.");
-            wrist.AddRow("Off the arm (m)", Num(-0.1m, 0.15m, 0.005m, 3, wp.Lift, v => wp.Lift = v));
-            wrist.AddRow("Sideways (m)", Num(-0.2m, 0.2m, 0.005m, 3, wp.Side, v => wp.Side = v), "Across the forearm. Easiest to set by hand: Adjust positions in the headset.");
-            wrist.AddRow("Arm must face me within (deg)", Num(5, 80, 1, 0, wp.FacingDeg, v => wp.FacingDeg = v), "Smaller = you must turn the arm more deliberately.");
-            wrist.AddRow("Must look within (deg)", Num(5, 60, 1, 0, wp.GazeDeg, v => wp.GazeDeg = v), "How close to the centre of your view the panel must be.");
-            wrist.AddRow("Show after looking (ms)", Int(0, 2000, 50, wp.ShowMs, v => wp.ShowMs = v));
-            wrist.AddRow("Hide after looking away (ms)", Int(0, 3000, 50, wp.HideMs, v => wp.HideMs = v));
+            wristArm.AddRow("Panel size (m)", Num(0.05m, 0.4m, 0.01m, 2, wp.Size, v => wp.Size = v), "0.11 m is about the width of a large phone.");
+            wristNums.AddRow("Toward the elbow (m)", Num(-0.1m, 0.3m, 0.01m, 2, wp.TowardElbow, v => wp.TowardElbow = v), "Distance back along the forearm from the controller.");
+            wristNums.AddRow("Off the arm (m)", Num(-0.1m, 0.15m, 0.005m, 3, wp.Lift, v => wp.Lift = v));
+            wristNums.AddRow("Sideways (m)", Num(-0.2m, 0.2m, 0.005m, 3, wp.Side, v => wp.Side = v), "Across the forearm. Easiest to set by hand: Adjust positions in the headset.");
+            wristShow.AddRow("Arm must face me within (deg)", Num(5, 80, 1, 0, wp.FacingDeg, v => wp.FacingDeg = v), "Smaller = you must turn the arm more deliberately.");
+            wristShow.AddRow("Must look within (deg)", Num(5, 60, 1, 0, wp.GazeDeg, v => wp.GazeDeg = v), "How close to the centre of your view the panel must be.");
+            wristShow.AddRow("Show after looking (ms)", Int(0, 2000, 50, wp.ShowMs, v => wp.ShowMs = v));
+            wristShow.AddRow("Hide after looking away (ms)", Int(0, 3000, 50, wp.HideMs, v => wp.HideMs = v));
 
         }
         return wrist;

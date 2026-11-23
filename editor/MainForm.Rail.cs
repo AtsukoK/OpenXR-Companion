@@ -130,6 +130,8 @@ public partial class MainForm
         Snap("settings_tiles");
         f.GoTo("overview");
         Snap("overview");
+        f.GoTo("wrist0");
+        Snap("wrist_left");
         f.GoTo(ControllersPage);
         Snap("controllers_folded");
         if (f.currentEditor is ControllersHub hub)
