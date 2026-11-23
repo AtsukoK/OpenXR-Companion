@@ -190,6 +190,16 @@ void Engine::EditBindings(const std::function<void(std::vector<Binding>&)>& edit
     bs.assign(prof->bindings.size(), BState{});
 }
 
+void Engine::EditProfile(const std::function<void(Profile&)>& edit) {
+    if (wr.open) CloseWheel();
+    for (int h = 0; h < 2; h++) {
+        wristPanels.Hide(h);
+        wristPanels.run_[h].stack.clear();
+        wrist[h].version++;
+    }
+    EditBindings([&](std::vector<Binding>&) { edit(*prof); });
+}
+
 Override Engine::MakeOv(const InputId& t) {
     Override o;
     o.on = true;

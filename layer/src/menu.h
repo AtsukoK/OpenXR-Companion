@@ -22,6 +22,7 @@ enum class MenuRowKind {
     Live,    // a live picture (a controller with what is pressed now, a stick with its zones), several rows tall
     Overview, // both controllers from above and the side, a tag on each part: what it does (pressing a tag opens it)
     Bar,      // a row of big buttons side by side
+    Tiles,    // a grid of big buttons, each with a title and a line under it (the hub pages)
 };
 
 // One part's tag on the overview: the part's name and what it does.
@@ -67,7 +68,9 @@ struct MenuRow {
     std::vector<MenuTag> tags;                      // Overview
     std::function<void(int hand, int comp)> openTag; // Overview: a tag was pressed
     std::vector<std::string> items;                 // Bar: the buttons' labels
-    std::vector<std::function<void()>> itemPress;   // Bar: what each does
+    std::vector<std::function<void()>> itemPress;   // Bar / Tiles: what each does
+    std::vector<std::string> itemDetails;           // Tiles: the line under each title
+    int cols = 2;                                   // Tiles: per row
 
     static MenuRow Heading(std::string label);
     static MenuRow Note(std::string label, std::string detail = "");
@@ -81,6 +84,9 @@ struct MenuRow {
     static MenuRow Live(LiveKind what, int hand, int span);
     static MenuRow Overview(std::vector<MenuTag> tags, std::function<void(int, int)> open, int span);
     static MenuRow Bar(std::vector<std::string> items, std::vector<std::function<void()>> presses);
+    // A grid of big buttons; span = rows of height it takes.
+    static MenuRow Tiles(std::vector<std::string> titles, std::vector<std::string> details, std::vector<std::function<void()>> presses,
+                         int cols, int span);
 
     // The value as shown on the right ("12 %", "off", "Hold", "ON").
     std::string ValueText() const;
@@ -109,7 +115,9 @@ struct MenuViewRow {
     LiveKind live = LiveKind::Controller;
     int liveHand = 1, span = 1;                   // Number: where the value sits between its min and max (0..1), for the slider
     std::vector<MenuTag> tags;      // Overview
-    std::vector<std::string> items; // Bar
+    std::vector<std::string> items; // Bar / Tiles
+    std::vector<std::string> itemDetails; // Tiles
+    int cols = 2;                         // Tiles
 };
 
 // The parts of the panel that can be pointed at.

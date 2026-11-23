@@ -18,7 +18,7 @@ bool InGameMenu::IsOpen() const {
 void InGameMenu::Open() {
     if (!e.fr.headValid || !e.prof) return;
     stack_.clear();
-    stack_.push_back([this] { return MenuPages::Overview(e, *this); });
+    stack_.push_back([this] { return MenuPages::Main(e, *this); });
     e.menuView = MenuView{};
     e.menuView.open = true;
     Place();
@@ -95,6 +95,8 @@ void InGameMenu::BuildView() {
         vr.span = r.span;
         vr.tags = r.tags;
         vr.items = r.items;
+        vr.itemDetails = r.itemDetails;
+        vr.cols = r.cols;
         if (r.kind == MenuRowKind::Toggle) vr.isOn = r.isOn && r.isOn();
         if (r.kind == MenuRowKind::Number && r.value) {
             float x = r.value();
@@ -109,12 +111,15 @@ void InGameMenu::BuildView() {
         }
         rows.push_back(std::move(vr));
     }
-    std::string status = run_.inputDone ? "Press the button you want, or push the stick (on either controller)" : "";
-    bool same = rows.size() == v.rows.size() && v.title == page_.title && v.status == status && v.canBack == (stack_.size() > 1);
+    std::string status = run_.inputDone ? "Press the button you want, or push the stick (on either controller)"
+                         : isTyping_    ? "Type, then Enter. Close the keyboard to cancel"
+                                        : "";
+    std::string title = isTyping_ ? typingWhat_ + ": " + typing_ + "_" : page_.title;
+    bool same = rows.size() == v.rows.size() && v.title == title && v.status == status && v.canBack == (stack_.size() > 1);
     for (size_t i = 0; same && i < rows.size(); i++) {
         const MenuViewRow &a = rows[i], &b = v.rows[i];
         same = a.label == b.label && a.detail == b.detail && a.value == b.value && a.isOn == b.isOn && a.canLess == b.canLess &&
-               a.canMore == b.canMore && a.kind == b.kind && a.fraction == b.fraction && a.tags == b.tags && a.items == b.items;
+               a.canMore == b.canMore && a.kind == b.kind && a.fraction == b.fraction && a.tags == b.tags && a.items == b.items && a.itemDetails == b.itemDetails;
     }
     float scale = page_.scale > 0 ? page_.scale : 1.f;
     float width = (page_.width > 0 ? page_.width : kMenuWidth) * scale;
@@ -126,7 +131,7 @@ void InGameMenu::BuildView() {
     v.scale = scale;
     v.stickFree = page_.stickFree;
     v.rows = std::move(rows);
-    v.title = page_.title;
+    v.title = title;
     v.status = status;
     v.canBack = stack_.size() > 1;
     v.first = std::clamp(v.first, 0, MenuMaxFirst(v));
@@ -195,7 +200,7 @@ void InGameMenu::Activate(const MenuHit& hit, bool repeat) {
             auto open = r.openTag;
             MenuTag tag = r.tags[hit.sub];
             open(tag.hand, tag.comp);
-        } else if (r.kind == MenuRowKind::Bar && hit.sub >= 0 && hit.sub < (int)r.itemPress.size() && r.itemPress[hit.sub]) {
+        } else if ((r.kind == MenuRowKind::Bar || r.kind == MenuRowKind::Tiles) && hit.sub >= 0 && hit.sub < (int)r.itemPress.size() && r.itemPress[hit.sub]) {
             auto press = r.itemPress[hit.sub];
             press();
         }
@@ -303,6 +308,31 @@ void InGameMenu::CaptureInput(std::function<void(const InputId&)> done) {
 
 void InGameMenu::CaptureKey(std::function<void(const std::string&)> done) {
     e.keyboard.CaptureNextKey(std::move(done));
+}
+
+void InGameMenu::AskText(const std::string& what, const std::string& start, std::function<void(const std::string&)> done) {
+    typing_ = start;
+    typingWhat_ = what;
+    isTyping_ = true;
+    BuildView();
+    e.keyboard.CaptureText([this, done = std::move(done)](int kind, const std::string& ch) {
+        if (kind == 0 && typing_.size() < 40)
+            typing_ += ch;
+        else if (kind == 1 && !typing_.empty()) {
+            do typing_.pop_back(); // a whole UTF-8 character
+            while (!typing_.empty() && ((unsigned char)typing_.back() & 0xC0) == 0x80);
+        }
+        if (kind >= 2) {
+            isTyping_ = false;
+            std::string text = typing_;
+            while (!text.empty() && text.back() == ' ')
+                text.pop_back();
+            if (kind == 2 && !text.empty()) done(text);
+            Refresh();
+            return;
+        }
+        BuildView();
+    });
 }
 
 void InGameMenu::CaptureAction(std::function<void(const std::string&)> key, std::function<void(const InputId&)> button) {

@@ -17,6 +17,7 @@ void TestDoubleFlickRelease();
 void TestReloadRedraws();
 void TestInGameMenu();
 void TestMenuSave();
+void TestMenuHub();
 
 // ---------------------------------------------------------------- a pretend OpenXR runtime under the real layer DLL
 #include <openxr/openxr_loader_negotiation.h>
@@ -2673,6 +2674,7 @@ int main(int argc, char** argv) {
     TestReloadRedraws();
     TestInGameMenu();
     TestMenuSave();
+    TestMenuHub();
     printf("\n%d failures\n", fails);
     Keys::Shutdown();
     DrawShutdown();

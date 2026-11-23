@@ -96,6 +96,18 @@ MenuRow MenuRow::Bar(std::vector<std::string> items, std::vector<std::function<v
     return r;
 }
 
+MenuRow MenuRow::Tiles(std::vector<std::string> titles, std::vector<std::string> details, std::vector<std::function<void()>> presses,
+                       int cols, int span) {
+    MenuRow r;
+    r.kind = MenuRowKind::Tiles;
+    r.items = std::move(titles);
+    r.itemDetails = std::move(details);
+    r.itemPress = std::move(presses);
+    r.cols = std::max(1, cols);
+    r.span = std::max(1, span);
+    return r;
+}
+
 bool LiveHand::operator==(const LiveHand& o) const {
     auto isClose = [](float a, float b) { return std::fabs(a - b) < 0.01f; }; // tiny tremble doesn't redraw
     for (int c = 0; c < C_COUNT; c++)
@@ -291,6 +303,14 @@ void MenuLayout(const MenuView& view, std::vector<MenuBox>& out) {
             float gapU = 0.015f, bw = (1 - 2 * pad - gapU * (n - 1)) / n;
             for (int k = 0; k < (int)r.items.size(); k++)
                 out.push_back({ pad + k * (bw + gapU), y + h * 0.12f, bw, h * 0.76f, { MenuPart::Row, i, k } });
+            break;
+        }
+        case MenuRowKind::Tiles: {
+            int n = (int)r.items.size(), cols = std::max(1, r.cols), lines = std::max(1, (n + cols - 1) / cols);
+            float gapU = 0.02f, gapV = 0.025f;
+            float tw = (1 - 2 * pad - gapU * (cols - 1)) / cols, th = (h - gapV * (lines + 1)) / lines;
+            for (int k = 0; k < n; k++)
+                out.push_back({ pad + (k % cols) * (tw + gapU), y + gapV + (k / cols) * (th + gapV), tw, th, { MenuPart::Row, i, k } });
             break;
         }
         default:

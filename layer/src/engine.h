@@ -265,6 +265,11 @@ public:
     // Change the profile's bindings (the in-game menu): whatever a binding is doing is ended first, and the
     // per-binding state is rebuilt after, so a held key or layer never sticks.
     void EditBindings(const std::function<void(std::vector<Binding>&)>& edit);
+    // Change wheels, wrist panel pages or other profile settings (the in-game menu): an open wheel closes and the
+    // wrist panels hide first (they point into the wheels and pages), bindings are ended and rebuilt like EditBindings.
+    void EditProfile(const std::function<void(Profile&)>& edit);
+    // Run an action from the in-game menu (adjust mode, headset mirror...), as if a button had fired it.
+    void MenuRunAction(const Action& a) { RunAction(a, 1, -1, false); }
 
 private:
     WristPanels wristPanels{ *this };

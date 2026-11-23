@@ -131,26 +131,53 @@ void VrKeyboard::CaptureNextKey(std::function<void(const std::string&)> done, st
     float uw, uh;
     KbLayout(uw, uh, true);
     e.kb.heightM = e.kb.widthM * uh / uw;
-    if (e.menuView.open) { // inside the settings menu: on its pane, just in front of it, so the two don't cut through each other
-        MenuView& m = e.menuView;
-        float w = std::min(m.w * 0.94f, m.h * 0.8f * uw / uh);
-        e.kb.widthM = w;
-        e.kb.heightM = w * uh / uw;
-        Vec3 nrm = Rotate(m.pose.orientation, { 0, 0, 1 }), up = Rotate(m.pose.orientation, { 0, 1, 0 });
-        float shift = -m.h * 0.04f; // a little below the middle, under the title
-        e.kb.pose = { m.pose.orientation, X(V(m.pose.position) + nrm * (0.006f * m.scale) + up * shift) };
-        e.kb.inMenu = true;
-        e.kb.barLabels.clear();
-        e.kb.barVersion++;
-        m.covered = true;
-        m.version++;
-    }
+    if (e.menuView.open) LayOnMenu();
     e.kb.hover[0] = e.kb.hover[1] = -1;
     e.kb.version++;
     e.Toast(run_.captureController ? "Pick a key, a mouse button, or Controller button" : "Press the key you want on the keyboard", 3.0);
 }
 
+void VrKeyboard::LayOnMenu() {
+    float uw, uh;
+    KbLayout(uw, uh, e.kb.binding);
+    MenuView& m = e.menuView;
+    float w = std::min(m.w * 0.94f, m.h * 0.8f * uw / uh);
+    e.kb.widthM = w;
+    e.kb.heightM = w * uh / uw;
+    Vec3 nrm = Rotate(m.pose.orientation, { 0, 0, 1 }), up = Rotate(m.pose.orientation, { 0, 1, 0 });
+    float shift = -m.h * 0.04f; // a little below the middle, under the title
+    e.kb.pose = { m.pose.orientation, X(V(m.pose.position) + nrm * (0.006f * m.scale) + up * shift) };
+    e.kb.inMenu = true;
+    e.kb.barLabels.clear();
+    e.kb.barVersion++;
+    m.covered = true;
+    m.version++;
+}
+
+void VrKeyboard::CaptureText(std::function<void(int, const std::string&)> onKey) {
+    if (!e.kb.visible) Open(-1);
+    run_.capture = nullptr;
+    run_.captureController = nullptr;
+    run_.text = std::move(onKey);
+    e.kb.binding = false; // the typing layout
+    float uw, uh;
+    KbLayout(uw, uh, false);
+    e.kb.heightM = e.kb.widthM * uh / uw;
+    if (e.menuView.open) {
+        LayOnMenu();
+        e.menuView.covered = false; // the name being typed shows on the menu above the keys
+        e.menuView.version++;
+    }
+    e.kb.hover[0] = e.kb.hover[1] = -1;
+    e.kb.version++;
+    e.Toast("Type the name, then Enter", 3.0);
+}
+
 void VrKeyboard::Close() {
+    if (auto text = std::move(run_.text)) {
+        run_.text = nullptr;
+        text(3, "");
+    }
     run_.capture = nullptr;
     run_.captureController = nullptr;
     e.kb.binding = false;
@@ -233,6 +260,25 @@ void VrKeyboard::Press(int i, int hand) {
         bool upper = k.letter ? (e.kb.shift != e.kb.caps) : e.kb.shift;
         if (upper) combo += "Shift+";
         combo += k.combo;
+        if (run_.text) { // typing a name for the menu
+            bool upperCase = k.letter ? (e.kb.shift != e.kb.caps) : e.kb.shift;
+            std::string ch = k.combo == "Space" ? " " : (upperCase ? k.shiftLabel : k.label);
+            int kind = k.combo == "Backspace" ? 1 : k.combo == "Enter" ? 2 : 0;
+            bool printable = kind != 0 || k.combo == "Space" || (ch.size() == 1 && (unsigned char)ch[0] >= 32);
+            e.kb.shift = false;
+            e.kb.version++;
+            if (!printable) break; // Esc, Tab, F-keys: nothing to type
+            if (kind == 2) { // Enter: done, the keyboard goes
+                auto text = std::move(run_.text);
+                run_.text = nullptr;
+                Close();
+                text(2, "");
+                return;
+            }
+            auto text = run_.text;
+            text(kind, ch);
+            return;
+        }
         if (run_.capture) { // asked for by the menu: hand it over instead of typing it
             auto done = std::move(run_.capture);
             run_.capture = nullptr;

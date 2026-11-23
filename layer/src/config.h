@@ -214,6 +214,7 @@ struct WheelItem {
     bool hasColor = false;
     uint32_t color = 0;
     Action action;
+    int sourceIndex = -1; // its place in the file's item list (-1: made in the headset)
 };
 struct Wheel {
     std::string name, title;
@@ -393,7 +394,9 @@ bool SaveScreenChoice(const Profile& p, std::string& err);
 // Controller offsets changed in the headset: write the controller_offsets section.
 bool SaveOffsets(const Profile& p, std::string& err);
 // What the in-game menu changes: the bindings (each keeps the fields the menu doesn't touch), the stick options and
-// the stick direction threshold. Afterwards each binding's sourceIndex is its new place in the file.
+// the stick direction threshold, the wheels and wrist panel pages (items keep their other fields; items switched off
+// in the editor stay in the file), the wrist panel, wheel and pointer settings the menu shows.
+// Afterwards each binding's and item's sourceIndex is its new place in the file.
 bool SaveMenuEdits(Profile& p, std::string& err);
 // Headset mirror window: app-wide (not per profile), in %LOCALAPPDATA%\OpenXRCompanion\headset_mirror.json,
 // shared with the editor's toolbar button.

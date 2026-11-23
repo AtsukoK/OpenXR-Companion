@@ -462,6 +462,7 @@ static Wheel ParseItemList(const std::string& name, const json& w, const std::st
             continue;
         }
         WheelItem I;
+        I.sourceIndex = idx;
         Get(it, "label", I.label);
         Get(it, "description", I.description);
         Get(it, "icon", I.icon);
@@ -910,6 +911,87 @@ bool SaveOffsets(const Profile& p, std::string& err) {
     }
 }
 
+// An action as the file holds it. The original is kept (its other fields stay) when it is the same type, else replaced.
+static json ActionJson(const Action& a, const json& original) {
+    static const EnumName<ActType> types[] = {
+        { ActType::None, "none" },         { ActType::Key, "key" },         { ActType::Sequence, "sequence" },
+        { ActType::XrInput, "xr_input" },  { ActType::Wheel, "wheel" },     { ActType::Back, "back" },
+        { ActType::Close, "close" },       { ActType::Layer, "layer" },     { ActType::Reload, "reload" },
+        { ActType::Keyboard, "keyboard" }, { ActType::Page, "page" },       { ActType::Adjust, "adjust" },
+        { ActType::Screen, "screen" },     { ActType::Offsets, "controller_offsets" },
+        { ActType::Mirror, "headset_mirror" }, { ActType::Menu, "settings_menu" } };
+    json o = original.is_object() ? original : json::object();
+    Action was;
+    try {
+        if (!o.empty()) was = ParseAction(o, "");
+    } catch (...) {
+        o = json::object();
+    }
+    if (o.empty() || was.type != a.type) o = json::object();
+    o["type"] = EnumKey(types, a.type);
+    switch (a.type) {
+    case ActType::Key:
+        o["keys"] = a.keys;
+        o["mode"] = ActModeKey(a.mode);
+        break;
+    case ActType::XrInput:
+        o["target"] = InputName(a.target);
+        o["mode"] = ActModeKey(a.mode);
+        break;
+    case ActType::Sequence:
+        o["steps"] = a.steps;
+        break;
+    case ActType::Wheel:
+        o["wheel"] = a.wheel;
+        break;
+    case ActType::Layer:
+        o["layer"] = a.layer;
+        o["mode"] = ActModeKey(a.mode);
+        break;
+    case ActType::Page:
+        o["page"] = a.page;
+        break;
+    case ActType::Screen:
+    case ActType::Mirror:
+    case ActType::Offsets:
+        o["mode"] = ActModeKey(a.mode);
+        if (a.type == ActType::Screen) {
+            if (a.place)
+                o["place"] = ScreenPlaceKey(*a.place);
+            else
+                o.erase("place");
+        }
+        break;
+    default:
+        break;
+    }
+    return o;
+}
+
+// A wheel or wrist page's items as the file holds them: each from its original entry (other fields kept: color,
+// icon...), then the items switched off in the editor (not loaded, so not shown in the headset) at the end.
+static json ItemListJson(const Wheel& w, const json& originalList) {
+    json out = originalList.is_object() ? originalList : json::object();
+    json old = out.contains("items") && out["items"].is_array() ? out["items"] : json::array();
+    json items = json::array();
+    for (const WheelItem& it : w.items) {
+        bool hasOriginal = it.sourceIndex >= 0 && it.sourceIndex < (int)old.size() && old[it.sourceIndex].is_object();
+        json o = hasOriginal ? old[it.sourceIndex] : json::object();
+        o["label"] = it.label;
+        if (!it.description.empty())
+            o["description"] = it.description;
+        else
+            o.erase("description");
+        o["action"] = ActionJson(it.action, o.value("action", json::object()));
+        items.push_back(o);
+    }
+    for (auto& o : old)
+        if (o.is_object() && !o.value("enabled", true)) items.push_back(o);
+    out["title"] = w.title;
+    out["items"] = items;
+    return out;
+}
+
 // One binding as the file holds it: the original entry (keeps fields the menu doesn't edit) with the menu's fields set.
 static json MenuBindingJson(const Binding& b, const json& original) {
     json o = original.is_object() ? original : json::object();
@@ -923,22 +1005,11 @@ static json MenuBindingJson(const Binding& b, const json& original) {
     if (b.releaseAt > 0) o["release_at"] = std::round(b.releaseAt * 100) / 100;
     else o.erase("release_at");
     o["block"] = EnumKey(kBindingBlockNames, b.block);
-    // A key or a controller button (the two the menu can set): the original action is kept when it was already that
-    // kind (its other fields stay), else it is replaced.
-    bool isKey = b.action.type == ActType::Key, isButton = b.action.type == ActType::XrInput;
-    if (isKey || isButton) {
-        json a = o.contains("action") && o["action"].is_object() ? o["action"] : json::object();
-        std::string was = a.contains("type") && a["type"].is_string() ? a["type"].get<std::string>() : "";
-        bool sameKind = isKey ? (was == "key" || was == "keys") : (was == "xr_input" || was == "button");
-        if (!sameKind) a = json::object();
-        a["type"] = isKey ? "key" : "xr_input";
-        if (isKey)
-            a["keys"] = b.action.keys;
-        else
-            a["target"] = InputName(b.action.target);
-        a["mode"] = ActModeKey(b.action.mode);
-        o["action"] = a;
-    }
+    if (b.tapPassthrough)
+        o["tap_passthrough"] = true;
+    else
+        o.erase("tap_passthrough");
+    o["action"] = ActionJson(b.action, o.value("action", json::object()));
     return o;
 }
 
@@ -976,12 +1047,74 @@ bool SaveMenuEdits(Profile& p, std::string& err) {
             list.push_back(MenuBindingJson(b, hasOriginal ? old[b.sourceIndex] : json()));
         }
         j["bindings"] = list;
+        // wheels: each from its original (other fields kept); deleted ones go
+        {
+            json oldWheels = j.contains("wheels") && j["wheels"].is_object() ? j["wheels"] : json::object();
+            json wheels = json::object();
+            for (const auto& [name, w] : p.wheels)
+                wheels[name] = ItemListJson(w, oldWheels.contains(name) ? oldWheels[name] : json());
+            j["wheels"] = wheels;
+        }
+        // wrist panels: pages and the settings the menu shows
+        const char* wk[2] = { "wrist_left", "wrist_right" };
+        for (int h = 0; h < 2; h++) {
+            const WristStyle& W = p.wrist[h];
+            json& w = j[wk[h]];
+            if (!w.is_object()) w = json::object();
+            json oldPages = w.contains("pages") && w["pages"].is_object() ? w["pages"] : json::object();
+            json pages = json::object();
+            for (const auto& [name, pg] : W.pages)
+                pages[name] = ItemListJson(pg, oldPages.contains(name) ? oldPages[name] : json());
+            w["pages"] = pages;
+            w.erase("wheel"); // older profiles: the pages replace it
+            w["enabled"] = W.enabled;
+            w["mirror"] = W.mirror;
+            w["start_page"] = W.start;
+            w["columns"] = W.columns;
+            w["size_m"] = std::round(W.size * 1000.f) / 1000.f;
+            w["face"] = EnumKey(kArmSideNames, W.face);
+            w["press"] = EnumKey(kPressMethodNames, W.press);
+            w["facing_deg"] = std::round(W.facingDeg);
+            w["gaze_deg"] = std::round(W.gazeDeg);
+            w["show_ms"] = W.showMs;
+            w["hide_ms"] = W.hideMs;
+        }
+        if (j.contains("wrist_panel")) j.erase("wrist_panel"); // older profiles: now wrist_left / wrist_right
+        {
+            json& st = j["style"];
+            st["anchor"] = EnumKey(kWheelAnchorNames, p.style.anchor);
+            st["radius_m"] = std::round(p.style.radius * 1000.f) / 1000.f;
+            st["font_scale"] = r2(p.style.fontScale);
+            json& se = j["selection"];
+            se["method"] = EnumKey(kSelectMethodNames, p.sel.method);
+            se["hand"] = EnumKey(kSelectHandNames, p.sel.hand);
+            se["deadzone"] = r2(p.sel.deadzone);
+            se["close_after_select"] = p.sel.closeAfterSelect;
+            j["block_while_open"] = EnumKey(kBlockWhileOpenNames, p.blockWhileOpen);
+            j["haptics"] = p.haptics;
+            j["haptic_strength"] = r2(p.hapticAmp);
+            j["notifications"] = p.notifications;
+            json& pt = j["pointer"];
+            pt["smoothing"] = r2(p.pointer.smoothing);
+            pt["finger"] = p.pointer.finger;
+            pt["guide_laser"] = p.pointer.guide;
+        }
         if (!WriteFileAtomic(path, j.dump(2))) {
             err = "cannot write " + WToUtf8(path);
             return false;
         }
         for (int i = 0; i < (int)p.bindings.size(); i++)
             p.bindings[i].sourceIndex = i;
+        // the items' places in the file now: in order, the switched-off ones after them
+        auto renumber = [](Wheel& w) {
+            for (int i = 0; i < (int)w.items.size(); i++)
+                w.items[i].sourceIndex = i;
+        };
+        for (auto& [n, w] : p.wheels)
+            renumber(w);
+        for (auto& W : p.wrist)
+            for (auto& [n, pg] : W.pages)
+                renumber(pg);
         return true;
     } catch (const std::exception& e) {
         err = e.what();

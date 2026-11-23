@@ -26,12 +26,16 @@ public:
     // The next key pressed is handed to done instead of typed. With controllerButton, the keyboard shows the binding
     // layout (mouse buttons, more keys) and its "Controller button" key calls controllerButton instead.
     void CaptureNextKey(std::function<void(const std::string&)> done, std::function<void()> controllerButton = nullptr);
+    // Typing a name for the menu: every key goes to onKey instead of the game, the keyboard stays open.
+    // kind 0 = a character (ch), 1 = Backspace, 2 = Enter (done), 3 = the keyboard was closed (cancelled).
+    void CaptureText(std::function<void(int kind, const std::string& ch)> onKey);
     void UpdatePlacing();
     void UpdateBar();
     void Update();
 
 private:
     friend class Engine;
+    void LayOnMenu(); // inside the settings menu: on its pane, just in front of it
     Engine& e;
 
     struct Run {
@@ -43,5 +47,6 @@ private:
         XrPosef frame{ { 0, 0, 0, 1 }, { 0, 0, 0 } }; // the head (turned like the head) when it opened
         std::function<void(const std::string&)> capture; // set while a key is asked for
         std::function<void()> captureController;         // set while a binding is picked: its "Controller button" key
+        std::function<void(int, const std::string&)> text; // set while the menu asks for a name (CaptureText)
     } run_;
 };

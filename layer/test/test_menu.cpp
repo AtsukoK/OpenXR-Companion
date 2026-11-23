@@ -102,8 +102,10 @@ void TestInGameMenu() {
     d.Step();
     f.h[0].menu = false;
     d.Step(0.15);
-    CHECK(e.menuView.open && e.menuView.title == "Controller configuration" && e.menuView.w > kMenuWidth,
-          "menu: a settings_menu binding opens it on the overview, a wider panel");
+    CHECK(e.menuView.open && e.menuView.title.rfind("OpenXR Companion", 0) == 0, "menu: a settings_menu binding opens it on the home tiles");
+    SaveMenuPicture(e, *p, L"menu_main.png");
+    CHECK(d.PressItem("Controllers") && e.menuView.title == "Controller configuration" && e.menuView.w > kMenuWidth,
+          "menu: the Controllers tile opens the overview, a wider panel");
     int overview = -1;
     for (int i = 0; i < (int)e.menuView.rows.size(); i++)
         if (e.menuView.rows[i].kind == MenuRowKind::Overview) overview = i;
@@ -300,6 +302,88 @@ void TestInGameMenu() {
     CHECK(d.Press(MenuPart::Close) && !e.menuView.open, "menu: the X closes it");
 }
 
+// The hub pages: wheels, wrist panels, sticks, more settings. Pictures of each for review (layer/build/menu_hub_*.png).
+void TestMenuHub() {
+    std::string err;
+    auto p = ParseProfileText(DefaultProfileJson(), err);
+    CHECK(p != nullptr, "hub: the built-in profile reads");
+    if (!p) return;
+    Engine e;
+    e.SetProfile(p);
+    Frame f;
+    double t = 0;
+    f.headValid = true;
+    f.head.position = { 0, 1.6f, 0 };
+    MenuDriver d{ e, f, t };
+    d.Step();
+    Action open;
+    open.type = ActType::Menu;
+    e.MenuRunAction(open);
+    d.Step(0.15);
+    CHECK(e.menuView.open && d.PressItem("Radial wheels") && e.menuView.title == "Radial wheels", "hub: the wheels tile");
+    SaveMenuPicture(e, *p, L"menu_hub_1_wheels.png");
+    size_t wheelsBefore = p->wheels.size();
+    CHECK(d.PressItem("+ New wheel") && p->wheels.size() == wheelsBefore + 1 && e.menuView.title == "Wheel: New wheel",
+          "hub: + New wheel makes one and opens it");
+    CHECK(d.PressRow("+ Add a button") && e.menuView.title == "What it does", "hub: + Add a button goes to What it does");
+    SaveMenuPicture(e, *p, L"menu_hub_3_what_it_does.png");
+    // the keyboard row is further down: scroll to it
+    for (int i = 0; i < 20 && d.Row("VR keyboard") >= 0 && d.Row("VR keyboard") >= e.menuView.first + 7; i++)
+        d.Press(MenuPart::ScrollDown);
+    CHECK(d.PressRow("VR keyboard") && e.menuView.title == "Button: Keyboard", "hub: picking an action names a new button after it");
+    SaveMenuPicture(e, *p, L"menu_hub_4_button.png");
+    CHECK(d.PressRow("1  Label") && e.kb.visible && e.kb.inMenu, "hub: Label opens the keyboard on the menu");
+    float uw, uh;
+    const auto& keys = KbLayout(uw, uh, false);
+    auto typeKey = [&](const std::string& combo) {
+        for (int i = 0; i < (int)keys.size(); i++)
+            if (keys[i].combo == combo) {
+                float u = (keys[i].x + keys[i].w / 2) / uw, v = (keys[i].y + keys[i].h / 2) / uh;
+                d.AimAt(e.kb.pose, e.kb.widthM, e.kb.heightM, u, v);
+                d.Step(0.3);
+                d.PullTrigger();
+                d.Step(0.1);
+                return;
+            }
+    };
+    for (int i = 0; i < 8; i++)
+        typeKey("Backspace");
+    typeKey("k");
+    typeKey("b");
+    SaveMenuPicture(e, *p, L"menu_hub_5_typing.png");
+    typeKey("Enter");
+    d.Step(0.3);
+    Wheel* made = nullptr;
+    for (auto& [n, w] : p->wheels)
+        if (w.title == "New wheel") made = &w;
+    std::string label = made && !made->items.empty() ? made->items[0].label : "none";
+    CHECK(!e.kb.visible && label == "kb", ("hub: typing renames the button (now '" + label + "')").c_str());
+    d.Step(0.3);
+    CHECK(d.Press(MenuPart::Back) && e.menuView.title == "Wheel: New wheel", "hub: back to the wheel");
+    SaveMenuPicture(e, *p, L"menu_hub_2_wheel.png");
+    CHECK(d.Press(MenuPart::Back) && d.PressRow("Look and how you pick"), "hub: wheel look page");
+    SaveMenuPicture(e, *p, L"menu_hub_6_wheel_look.png");
+    d.Press(MenuPart::Back);
+    d.Press(MenuPart::Back);
+    CHECK(d.PressItem("Wrist panels") && e.menuView.title == "Wrist panels", "hub: wrist panels tile");
+    SaveMenuPicture(e, *p, L"menu_hub_7_wrist.png");
+    CHECK(d.PressItem("Left forearm") && e.menuView.title == "Left forearm panel", "hub: left forearm page");
+    SaveMenuPicture(e, *p, L"menu_hub_8_wrist_left.png");
+    int pageRow = -1;
+    for (int i = 0; i < (int)e.menuView.rows.size(); i++)
+        if (e.menuView.rows[i].label.find("(shown first)") != std::string::npos) pageRow = i;
+    CHECK(pageRow >= 0 && d.Press(MenuPart::Row, pageRow) && e.menuView.title.rfind("Left wrist: ", 0) == 0, "hub: a wrist page");
+    SaveMenuPicture(e, *p, L"menu_hub_9_wrist_page.png");
+    d.Press(MenuPart::Back);
+    d.Press(MenuPart::Back);
+    d.Press(MenuPart::Back);
+    CHECK(d.PressItem("Sticks") && e.menuView.title == "Sticks", "hub: sticks tile");
+    SaveMenuPicture(e, *p, L"menu_hub_10_sticks.png");
+    d.Press(MenuPart::Back);
+    CHECK(d.PressItem("More settings") && e.menuView.title == "More settings", "hub: more settings tile");
+    SaveMenuPicture(e, *p, L"menu_hub_11_more.png");
+}
+
 // What the menu saves: the menu's own fields, and every other field of a binding left as it was.
 void TestMenuSave() {
     wchar_t tmp[MAX_PATH];
@@ -355,6 +439,50 @@ void TestMenuSave() {
           "menu save: a binding made a controller button saves as xr_input with its target (no key left over)");
     CHECK(q->sticks[1].innerDeadzone == 0.12f && q->sticks[0].innerDeadzone == 0.f, "menu save: stick options saved per hand");
     CHECK(p->bindings[1].sourceIndex == 1, "menu save: after saving, the new binding knows its place in the file");
+    back.close();
+    {
+        std::ofstream o(file, std::ios::binary);
+        o << R"JSON({ "bindings": [ { "name": "W", "input": "right.b", "action": { "type": "key", "keys": "F" } } ],
+          "wheels": { "main": { "title": "Main", "items": [
+            { "label": "Off one", "enabled": false, "action": { "type": "key", "keys": "1" } },
+            { "label": "Jump", "color": "#FF0000", "action": { "type": "key", "keys": "Space", "tap_ms": 77 } } ] } } })JSON";
+    }
+    std::ifstream in2(file, std::ios::binary);
+    std::stringstream s2;
+    s2 << in2.rdbuf();
+    in2.close();
+    auto r = ParseProfileText(s2.str(), err);
+    CHECK(r != nullptr, "menu save: wheel profile reads");
+    if (!r) return;
+    r->sourceName = "menu_test.json";
+    r->wheels["main"].items[0].label = "Hop";
+    Wheel nw;
+    nw.name = "wheel_1";
+    nw.title = "Tools";
+    WheelItem kbItem;
+    kbItem.label = "Keyboard";
+    kbItem.action.type = ActType::Keyboard;
+    nw.items.push_back(kbItem);
+    r->wheels["wheel_1"] = nw;
+    r->bindings[0].action = Action{};
+    r->bindings[0].action.type = ActType::Wheel;
+    r->bindings[0].action.wheel = "wheel_1";
+    r->wrist[0].columns = 2;
+    ok = SaveMenuEdits(*r, err);
+    std::ifstream back2(file, std::ios::binary);
+    std::stringstream b2;
+    b2 << back2.rdbuf();
+    back2.close();
+    std::string saved = b2.str();
+    auto q2 = ParseProfileText(saved, err);
+    CHECK(ok && q2 && q2->wheels.count("wheel_1") && q2->wheels["wheel_1"].items[0].action.type == ActType::Keyboard,
+          ("menu save: a wheel made in the headset is written " + err).c_str());
+    CHECK(q2 && q2->bindings[0].action.type == ActType::Wheel && q2->bindings[0].action.wheel == "wheel_1",
+          "menu save: a binding set to open a wheel saves as a wheel action (was lost before)");
+    CHECK(q2 && q2->wheels["main"].items.size() == 1 && q2->wheels["main"].items[0].label == "Hop" &&
+              q2->wheels["main"].items[0].action.tapMs == 77 && saved.find("Off one") != std::string::npos && saved.find("FF0000") != std::string::npos,
+          "menu save: wheel items keep their other fields, and switched-off items stay in the file");
+    CHECK(q2 && q2->wrist[0].columns == 2, "menu save: wrist panel settings saved");
     _wputenv_s(L"OPENXR_COMPANION_TEST_DATA", L"");
     std::filesystem::remove_all(dir, fec);
 }

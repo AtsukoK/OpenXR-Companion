@@ -33,6 +33,10 @@ public:
     // key, its "Controller button" key asks for a controller button (pressed) that goes to button.
     void CaptureAction(std::function<void(const std::string&)> key, std::function<void(const InputId&)> button);
 
+    // Ask for a name: the VR keyboard lies on the menu and the page's title shows what is typed. Enter calls done
+    // with the text (not when empty); closing the keyboard cancels. The menu stays on the page it was on.
+    void AskText(const std::string& what, const std::string& start, std::function<void(const std::string&)> done);
+
     int PointingHand() const { return run_.uiHand; } // the hand using the menu, -1 when none (its trigger and stick are ours)
     bool IsCapturingInput() const { return static_cast<bool>(run_.inputDone); }
 
@@ -54,6 +58,9 @@ private:
     bool kbWasOnMenu_ = false, kbHeldTrigger_ = false; // the menu's keyboard: its closing pull doesn't reach the menu
     std::vector<MenuPageBuilder> stack_;
     MenuPage page_;
+    std::string typing_;       // AskText: what is being typed (shown in the title)
+    std::string typingWhat_;   // AskText: "Name", "Label"
+    bool isTyping_ = false;
     struct Run {
         int uiHand = -1;
         MenuHit repeatHit;

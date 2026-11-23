@@ -1,3 +1,24 @@
+# RESUME HERE (2026-11-23, day) -- in-game menu hub (dist2-line, NOT built into dist2 yet)
+User asked: bring the editor's wheel / wrist / binding features into the headset menu, easy to use in VR, with overview
+windows. Built (layer only, tests pass, pictures in previews/ingame-hub-2026-11-23/, waiting for the user's review):
+- Menu opens on **Main** (MenuPages::Main, menu_pages_hub.cpp): 6 tiles (new row kind MenuRowKind::Tiles) -> Controllers
+  (old overview), Radial wheels, Wrist panels, Sticks, All bindings (old Home), More settings.
+- Wheels: tile per wheel (+ New wheel), WheelPage (buttons, Opened by + "Add a button that opens it", Rename, Delete),
+  ItemPage (Label typed, What it does, Tap/Toggle, Move earlier/later, Duplicate, Delete), ItemAction (key/mouse/
+  controller, sub-wheel or new wheel, wrist page or new page, keyboard, screen, menu, mirror, offsets, adjust, back,
+  close, nothing), WheelLook (anchor, radius, text size, pick with, hand, deadzone, close after, game controls while open).
+- Wrist: hub tiles L/R, WristPanel (on, mirror, pages, + page, columns, size, side, press by, facing/gaze, show/hide ms),
+  WristPage (buttons, rename, show first, delete). More settings: laser steadying, fingertip, guide laser, vibration,
+  messages, offsets / adjust / mirror.
+- Typing names: VrKeyboard::CaptureText + InGameMenu::AskText (title shows "Label: text_").
+- Engine::EditProfile (closes wheel, hides wrist panels, then edits), Engine::MenuRunAction.
+- Save: SaveMenuEdits now also writes wheels, wrist pages + settings, style/selection/pointer/haptics; ActionJson writes
+  every action type. FIX: before, a binding set in the headset to open a wheel / keyboard / screen / menu was NOT saved.
+  WheelItem::sourceIndex keeps items' other fields; editor-disabled items stay in the file (moved to the end).
+- Tests: TestMenuHub (walks every page, types a label), TestMenuSave extended. quick_test 0 failures.
+Next: user reviews the pictures; then build both layers into dist2 (build32 too) and headset test.
+Known: Bar's first button is always blue (looks like the main choice on Move earlier); many wheels (>6) make small tiles.
+
 # RESUME HERE (2026-11-23, morning) -- dist2 only, release target: branch experimental
 Branch **dist2-line** (= local branch **experimental**, last afdb57e + this notes commit), built into
 G:/Claude/VR Radial Overlay/dist2: editor, 64-bit layer AND dist2/x86 32-bit layer (Fallout NV / TTWVR uses x86: always

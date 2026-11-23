@@ -1092,6 +1092,30 @@ void DrawMenu(std::vector<uint32_t>& out, int W, int H, const MenuView& v, const
             g.DrawString(Utf8ToW(r.items[k]).c_str(), -1, valueFont.get(), RectF(x, y, w, h), &oneLine, &textB);
             continue;
         }
+        if (r.kind == MenuRowKind::Tiles) { // a big button with a title and a line under it
+            int k = b.hit.sub;
+            if (k < 0 || k >= (int)r.items.size()) continue;
+            GraphicsPath tile;
+            roundRect(tile, x, y, w, h, std::min(w, h) * 0.18f);
+            bool hover = isHover(b.hit), pressed = isPressed(b.hit);
+            SolidBrush fill{ Color(pressed ? Pressed : hover ? 0xFF3A4350 : 0xFF2C333C) };
+            g.FillPath(&fill, &tile);
+            Pen ring(Color(hover && !pressed ? Accent : 0xFF3C4550), hover ? 3.f : 1.5f);
+            g.DrawPath(&ring, &tile);
+            SolidBrush bar{ Color(Accent) };
+            g.FillRectangle(&bar, x + w * 0.08f, y + h * 0.16f, w * 0.12f, std::max(3.f, h * 0.025f)); // a short accent line
+            const float tin = w * 0.08f;
+            bool hasDetail = k < (int)r.itemDetails.size() && !r.itemDetails[k].empty();
+            StringFormat wrap;
+            wrap.SetTrimming(StringTrimmingEllipsisWord);
+            auto tileFont = MakeFont(st, std::min(headerH * 0.34f, h * 0.16f) * st.fontScale, FontStyleBold);
+            g.DrawString(Utf8ToW(r.items[k]).c_str(), -1, tileFont.get(), RectF(x + tin, y + h * 0.22f, w - 2 * tin, h * 0.3f), &left,
+                         pressed ? (Brush*)&knobB : (Brush*)&textB);
+            if (hasDetail)
+                g.DrawString(Utf8ToW(r.itemDetails[k]).c_str(), -1, detailFont.get(), RectF(x + tin, y + h * 0.54f, w - 2 * tin, h * 0.42f),
+                             &wrap, pressed ? (Brush*)&knobB : (Brush*)&subB);
+            continue;
+        }
         if (r.kind == MenuRowKind::Live) { // a live picture across the row
             RectF area(inset, y + h * 0.04f, W - 2 * inset, h * 0.9f);
             if (r.live == LiveKind::Stick)
