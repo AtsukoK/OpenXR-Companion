@@ -22,6 +22,12 @@ public partial class MainForm
         { MarkDirty(); RefreshNodeTexts(); }
         switch (n?.Tag)
         {
+            case ControllersPage:
+                ed = new ControllersHub(Profile, ControllerLayouts.ById(ControllerPictureChoice.Load(Profile)),
+                                        (hand, comp) => { if (comp != null) ControllerButtonsPage.StartWith(hand, comp); GoTo(hand == 0 ? "bindings_left" : "bindings_right"); },
+                                        (b, openIt) => Later(() => { if (openIt) Rebuild(b); else { MarkDirty(); BuildTree(); } }),
+                                        Changed, () => { MarkDirty(); BuildTree(); });
+                break;
             case "overview":
                 {
                     var ov = new OverviewEditor(Profile, GoTo);

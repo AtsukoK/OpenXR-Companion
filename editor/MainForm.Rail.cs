@@ -31,8 +31,7 @@ public partial class MainForm
         RailButton("»", "Show the full list", () => SetFolded(false), null);
         RailButton("", "Overview", () => GoTo("overview"), () => "overview");
         RailButton("", "Settings", () => GoTo(Profile), () => Profile);
-        RailButton("", "Right controller", () => GoTo("bindings_right"), () => "bindings_right", "R");
-        RailButton("", "Left controller", () => GoTo("bindings_left"), () => "bindings_left", "L");
+        RailButton("", "Controllers", () => GoTo(ControllersPage), () => ControllersPage);
         RailButton("", "Wheels", () => GoTo("wheels"), () => "wheels");
         RailButton("", "Left wrist panel", () => GoTo("wrist0"), () => "wrist0", "L");
         RailButton("", "Right wrist panel", () => GoTo("wrist1"), () => "wrist1", "R");
@@ -94,7 +93,8 @@ public partial class MainForm
         var n = tree.SelectedNode;
         while (n?.Parent != null && n.Parent.Tag is not ProfileModel)
             n = n.Parent;
-        object section = n?.Tag is SettingsPage ? Profile : n?.Tag;
+        object section = lastTag as string == ControllersPage || n?.Tag as string is "bindings_left" or "bindings_right" ? ControllersPage
+                       : n?.Tag is SettingsPage ? Profile : n?.Tag;
         foreach (var (b, tag) in railButtons)
         {
             bool on = tag != null && Equals(tag(), section);
@@ -108,7 +108,7 @@ public partial class MainForm
     {
         Directory.CreateDirectory(dir);
         string before = File.Exists(RailFile) ? File.ReadAllText(RailFile) : null;
-        var f = new MainForm { StartPosition = FormStartPosition.Manual, Location = new Point(0, 0), Size = new Size(1500, 950) };
+        var f = new MainForm { StartPosition = FormStartPosition.Manual, Location = new Point(0, 0), Size = new Size(1920, 1040) };
         f.Show();
         var builtin = Path.Combine(Path.GetTempPath(), "vro_builtin_default.json");
         File.WriteAllText(builtin, Native.DefaultProfile() ?? "{}");
@@ -126,6 +126,12 @@ public partial class MainForm
         Snap("list_open");
         f.SetFolded(true);
         Snap("list_folded");
+        f.GoTo(ControllersPage);
+        Snap("controllers_folded");
+        if (f.currentEditor is ControllersHub hub)
+        { hub.OpenPart(1, "trigger"); Snap("controllers_drawer"); }
+        f.SetFolded(false);
+        Snap("controllers_list");
         f.Close();
         if (before == null) File.Delete(RailFile); else File.WriteAllText(RailFile, before);
     }

@@ -38,8 +38,9 @@ public static class OptionPicker
             BackColor = Theme.Page,
             ForeColor = Theme.Text,
         };
-        const int cardW = 400, gap = 12, cols = 2, pad = 20;
-        const int innerW = cols * cardW + (cols - 1) * gap;
+        const int cardW = 400, gap = 12, pad = 20;
+        int cols = options.Count > 8 ? 3 : 2; // long lists: three across, less scrolling
+        int innerW = cols * cardW + (cols - 1) * gap;
         int picked = -1;
         // placed by hand: intro, then each group's heading and its cards two by two, the cards of a row equally tall
         var body = new Panel { Location = new Point(0, 0), AutoScroll = true, BackColor = Theme.Page };

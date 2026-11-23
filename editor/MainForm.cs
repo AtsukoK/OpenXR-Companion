@@ -176,23 +176,56 @@ public partial class MainForm : Form
         if (homeBtn != null)
             homeBtn.Enabled = lastTag as string != "overview";
     }
+    public const string ControllersPage = "controllers"; // both controllers: a page without a row in the list
+    bool keepPage; // the list is being rebuilt while that page shows: it stays on screen
+
+    void OnSelect(TreeNode n)
+    {
+        if (!navigatingBack && lastTag != null && !ReferenceEquals(lastTag, n?.Tag))
+        { history.Push(lastTag); if (history.Count > 50) history = new Stack<object>(history.Take(50).Reverse()); }
+        lastTag = n?.Tag;
+        ShowEditor(n);
+        tree.Invalidate();
+        UpdateNav();
+    }
+
     public void GoTo(object tag)
     {
+        if (tag as string == ControllersPage)
+        { OnSelect(new TreeNode { Tag = ControllersPage }); return; }
         var n = Find(tree.Nodes, tag);
-        if (n != null)
-        { tree.SelectedNode = n; n.EnsureVisible(); }
+        if (n == null)
+            return;
+        if (tree.SelectedNode == n) // already selected (we were on the controllers page)
+            OnSelect(n);
+        else
+            tree.SelectedNode = n;
+        n.EnsureVisible();
     }
     void GoBack()
     {
         while (history.Count > 0)
         {
             var tag = history.Pop();
+            if (tag as string == ControllersPage)
+            {
+                navigatingBack = true;
+                try { OnSelect(new TreeNode { Tag = ControllersPage }); }
+                finally { navigatingBack = false; }
+                break;
+            }
             var n = Find(tree.Nodes, tag);
             if (n == null)
                 continue; // deleted since
             navigatingBack = true;
             try
-            { tree.SelectedNode = n; n.EnsureVisible(); }
+            {
+                if (tree.SelectedNode == n)
+                    OnSelect(n);
+                else
+                    tree.SelectedNode = n;
+                n.EnsureVisible();
+            }
             finally { navigatingBack = false; }
             break;
         }
@@ -301,13 +334,8 @@ public partial class MainForm : Form
 
         tree.AfterSelect += (s, e) =>
         {
-            // Remember where we came from so Back can return there.
-            if (!navigatingBack && lastTag != null && !ReferenceEquals(lastTag, e.Node?.Tag))
-            { history.Push(lastTag); if (history.Count > 50) history = new Stack<object>(history.Take(50).Reverse()); }
-            lastTag = e.Node?.Tag;
-            ShowEditor(e.Node);
-            tree.Invalidate();
-            UpdateNav();
+            if (!keepPage)
+                OnSelect(e.Node);
         };
         SetupTreeLook();
         tree.KeyDown += (s, e) =>

@@ -9,7 +9,7 @@ public class ControllerButtonsPage : UserControl
 
     readonly ProfileModel profile;
     readonly int hand;
-    readonly Action<BindingModel> open;
+    Action<BindingModel> open;
     readonly Action<BindingModel, bool> added;
     readonly Action changed; // a profile setting on this page changed (stick options)
     readonly Func<string> loadLayoutId;
@@ -23,7 +23,7 @@ public class ControllerButtonsPage : UserControl
     // open: show a binding in its editor. added: a new binding was put in the profile (true = show it in its editor).
     // The owner updates the list after this page's click is done, so the page may be rebuilt then.
     public ControllerButtonsPage(ProfileModel profile, int hand, Action<BindingModel> open, Action<BindingModel, bool> added,
-                                 Action changed, Func<string> loadLayoutId, Action<string> saveLayoutId)
+                                 Action changed, Func<string> loadLayoutId, Action<string> saveLayoutId, string onlyPart = null)
     {
         this.changed = changed;
         this.profile = profile;
@@ -59,6 +59,34 @@ public class ControllerButtonsPage : UserControl
             ShowDetails();
         };
 
+        if (onlyPart != null) // just this part's ways (the drawer on the controllers overview): no picture, no chooser
+        {
+            lastSelected[hand] = onlyPart;
+            Padding = new Padding(16, 4, 16, 8);
+            Controls.Add(details);
+            ShowAll();
+            return;
+        }
+        if (SideBySide) // a wide window: the picture on the left, the chosen button's settings on the right
+        {
+            AutoScroll = false;
+            picture.Stacked = true; // top and side views stacked: uses the height of the window
+            right = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(16, 0, 0, 0) };
+            right.Controls.Add(details);
+            var listOpen = this.open;
+            this.open = b => ShowBinding(b); // a binding opens in the right column, the picture stays
+            picture.PartClicked += _ => { if (bindingOpen) { bindingOpen = false; ClearRight(); right.Controls.Add(details); } };
+            sideLeft = new Panel { Dock = DockStyle.Left, Width = 900 };
+            sideLeft.Controls.Add(picture);
+            sideLeft.Controls.Add(chooserRow);
+            sideLeft.Controls.Add(new Label { Text = (hand == 0 ? "Left" : "Right") + " controller", AutoSize = true, Dock = DockStyle.Top, Font = new Font("Segoe UI", 18f, FontStyle.Bold), Padding = new Padding(0, 0, 0, 4) });
+            Controls.Add(right);
+            Controls.Add(sideLeft);
+            Resize += (s, e) => { sideLeft.Width = Math.Max(500, ClientSize.Width * 55 / 100); FitPictureHeight(); };
+            sideLeft.Width = Math.Max(500, ClientSize.Width * 55 / 100);
+            ShowAll();
+            return;
+        }
         // Docked to the top in reverse order: the last added sits highest.
         Controls.Add(details);
         Controls.Add(picture);
@@ -226,7 +254,7 @@ public class ControllerButtonsPage : UserControl
             }
             card.Controls.Add(BindingRow(bd));
         }
-        card.Controls.Add(AddMenuButton(input, what, IsTouchOnly(part, way), way is "up" or "down" or "left" or "right"));
+        card.Controls.Add(AddMenuButton(part, way));
         return card;
     }
 
@@ -257,9 +285,47 @@ public class ControllerButtonsPage : UserControl
     }
 
     // The picture grows with its tags (a tag lists what its part does).
+    Panel sideLeft, right;
+    bool bindingOpen;
+    public static bool SideBySide;
+
+    void ClearRight()
+    {
+        foreach (Control c in right.Controls.Cast<Control>().ToList())
+            if (c != details) c.Dispose();
+        right.Controls.Clear();
+    }
+
+    // Side by side: a binding edited in the right column, with Back (to the button) and Delete.
+    void ShowBinding(BindingModel b)
+    {
+        ClearRight();
+        bindingOpen = true;
+        var bar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = false, Padding = new Padding(0, 4, 0, 8) };
+        Button B(string t, Action a, Color? back = null)
+        {
+            var x = new Button { Text = t, AutoSize = true, Height = 34, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                                 BackColor = back ?? Theme.Button, ForeColor = back != null ? Color.White : Theme.Text, Margin = new Padding(0, 0, 8, 0) };
+            x.FlatAppearance.BorderColor = Theme.CardBorder;
+            x.Click += (s, e) => a();
+            return x;
+        }
+        void BackToButton() { bindingOpen = false; ClearRight(); ShowAll(); right.Controls.Add(details); }
+        bar.Controls.Add(B("◀  Back to " + (SelectedPart?.LabelFor(hand) ?? "the button"), BackToButton));
+        bar.Controls.Add(B("Delete binding", () => { profile.Bindings.Remove(b); added(b, false); BackToButton(); }, Color.FromArgb(170, 50, 50)));
+        var ed = new BindingEditor(b) { Dock = DockStyle.Fill };
+        ed.Changed += () => { changed(); picture.Invalidate(); };
+        if (Theme.IsDark)
+        { ThemeWalker.Apply(ed); ThemeWalker.Apply(bar); }
+        right.Controls.Add(ed);
+        right.Controls.Add(bar);
+    } // set by the editor while every screen uses the whole window
+
     void FitPictureHeight()
     {
         int h = picture.HeightFor(Math.Max(picture.Width, 1));
+        if (sideLeft != null) // side by side: no taller than the window
+            h = Math.Max(260, Math.Min(h, sideLeft.ClientSize.Height - picture.Top - 8));
         if (picture.Width > 0 && picture.Height != h)
             picture.Height = h;
     }
@@ -317,7 +383,7 @@ public class ControllerButtonsPage : UserControl
         return b.Gesture == GestureKind.Press ? wayWord : wayWord + ", " + gesture.ToLowerInvariant();
     }
 
-    static bool IsTouchOnly(ControllerPart part, string way) => way == "touch" || part.Comp == "thumbrest";
+    internal static bool IsTouchOnly(ControllerPart part, string way) => way == "touch" || part.Comp == "thumbrest";
 
     static bool IsLayerOnly(BindingModel b) => !string.IsNullOrWhiteSpace(b.Layers);
 
@@ -380,38 +446,56 @@ public class ControllerButtonsPage : UserControl
     }
 
     // One "+ Add" button per way of using a button; its menu holds the quick choices.
-    Control AddMenuButton(string input, string what, bool isTouchOnly, bool isStickDirection)
+    Control AddMenuButton(ControllerPart part, string way)
     {
         var add = new Button { Text = "+ Add…", AutoSize = true, Height = 28, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(0, 6, 0, 0), BackColor = Theme.Button, ForeColor = Theme.Text };
         add.FlatAppearance.BorderColor = Theme.CardBorder;
-        BindingModel Key() => QuickBindingDialogs.AskKey(FindForm(), what) is string keys ? QuickBindings.Key(input, what, keys) : null;
-        BindingModel Remap() => QuickBindingDialogs.AskGameButton(FindForm(), what, layout, hand) is var (target, name) ? QuickBindings.GameButton(input, what, target, name) : null;
-        var options = AddOptions(isTouchOnly, isStickDirection);
         add.Click += (s, e) =>
         {
-            int pick = OptionPicker.Show(FindForm(), "Add to " + what, $"What should {what} do? Pick one; you can change it afterwards.", options.Select(o => o.option).ToList());
-            if (pick < 0)
-                return;
-            var kind = options[pick].kind;
-            BindingModel made = kind switch
-            {
-                AddKind.Key or AddKind.HoldKey => Key(),
-                AddKind.Remap or AddKind.HoldRemap => Remap(),
-                AddKind.Off => QuickBindings.OffInGame(input, what),
-                AddKind.DoubleFlick => QuickBindingDialogs.AskKey(FindForm(), what) is string keys ? QuickBindings.DoubleFlickKey(input, what, keys) : null,
-                _ => QuickBindings.Blank(input, what),
-            };
+            var made = AddFor(FindForm(), profile, layout, hand, part, way);
             if (made == null)
                 return;
-            if (kind is AddKind.HoldKey or AddKind.HoldRemap)
-                QuickBindings.OnlyWhenHeld(made);
-            bool finish = kind == AddKind.Other; // finished in the binding editor
-            profile.Bindings.Add(made);
-            added(made, finish);
+            bool finish = made.Value.finishInEditor;
+            if (SideBySide && right != null) // finish it in the right column
+            {
+                added(made.Value.binding, false);
+                ShowAll();
+                if (finish)
+                    ShowBinding(made.Value.binding);
+                return;
+            }
+            added(made.Value.binding, finish);
             if (!finish)
                 ShowAll();
         };
         return add;
+    }
+
+    // "+ Add..." for one way of using a part: the popup of choices, then the key or button it asks for. The new binding
+    // is already in the profile; finishInEditor = "Something else" (open it in the binding editor). Null when cancelled.
+    internal static (BindingModel binding, bool finishInEditor)? AddFor(IWin32Window owner, ProfileModel profile, ControllerLayout layout, int hand, ControllerPart part, string way)
+    {
+        string input = ControllerLayouts.InputOf(hand, part, way);
+        string what = QuickBindingDialogs.NameOf(layout, hand, part, way);
+        var options = AddOptions(IsTouchOnly(part, way), way is "up" or "down" or "left" or "right");
+        int pick = OptionPicker.Show(owner, "Add to " + what, $"What should {what} do? Pick one; you can change it afterwards.", options.Select(o => o.option).ToList());
+        if (pick < 0)
+            return null;
+        var kind = options[pick].kind;
+        BindingModel made = kind switch
+        {
+            AddKind.Key or AddKind.HoldKey => QuickBindingDialogs.AskKey(owner, what) is string keys ? QuickBindings.Key(input, what, keys) : null,
+            AddKind.Remap or AddKind.HoldRemap => QuickBindingDialogs.AskGameButton(owner, what, layout, hand) is var (target, name) ? QuickBindings.GameButton(input, what, target, name) : null,
+            AddKind.Off => QuickBindings.OffInGame(input, what),
+            AddKind.DoubleFlick => QuickBindingDialogs.AskKey(owner, what) is string k2 ? QuickBindings.DoubleFlickKey(input, what, k2) : null,
+            _ => QuickBindings.Blank(input, what),
+        };
+        if (made == null)
+            return null;
+        if (kind is AddKind.HoldKey or AddKind.HoldRemap)
+            QuickBindings.OnlyWhenHeld(made);
+        profile.Bindings.Add(made);
+        return (made, kind == AddKind.Other);
     }
 
     enum AddKind { Key, Remap, Off, HoldKey, HoldRemap, DoubleFlick, Other }

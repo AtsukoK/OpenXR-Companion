@@ -33,6 +33,18 @@ public class ControllerPicture : Control
     readonly List<(ControllerPart part, GraphicsPath shape, RectangleF tag)> hits = new();
 
     public event Action<ControllerPart> PartClicked;
+    // The side view under the view from above (a tall picture: [tags][views][tags]) instead of beside it.
+    public bool Stacked;
+    float CanvasW => Stacked ? MiddleX + LabelWidth : CanvasWidth;
+    float ViewsH => Stacked ? 2 * ViewsHeight : ViewsHeight;
+    float ViewX(ControllerView view) => view == ControllerView.Top ? TopX
+                                      : Stacked ? TopX + (ControllerLayouts.TopWidth - ControllerLayouts.SideWidth) / 2 : SideX;
+    float ViewY(ControllerView view) => Stacked && view == ControllerView.Side ? ViewsHeight : 0;
+    // A "+" on each tag (the controller overview): clicked = add something to that part.
+    public bool AddButtons;
+    public event Action<ControllerPart> AddClicked;
+    bool addHovered;
+    static RectangleF AddBox(RectangleF tag) => new(tag.Right - 22, tag.Y + 3, 18, 15);
 
     public ControllerPicture()
     {
@@ -54,7 +66,7 @@ public class ControllerPicture : Control
     }
 
     // The height that shows the whole picture at this width.
-    public int HeightFor(int width) => (int)Math.Ceiling(width * CanvasHeight() / CanvasWidth);
+    public int HeightFor(int width) => (int)Math.Ceiling(width * CanvasHeight() / CanvasW);
 
     public string Selected
     {
@@ -78,15 +90,15 @@ public class ControllerPicture : Control
     float CanvasHeight()
     {
         var tags = TagBoxes(ShownParts());
-        return Math.Max(ViewsHeight, tags.Count == 0 ? 0 : tags.Values.Max(t => t.Bottom) + CanvasMargin);
+        return Math.Max(ViewsH, tags.Count == 0 ? 0 : tags.Values.Max(t => t.Bottom) + CanvasMargin);
     }
 
     Matrix CanvasToScreen()
     {
         float canvasHeight = CanvasHeight();
-        float s = Math.Min(Width / CanvasWidth, Height / canvasHeight);
+        float s = Math.Min(Width / CanvasW, Height / canvasHeight);
         var m = new Matrix();
-        m.Translate((Width - CanvasWidth * s) / 2, 0);
+        m.Translate((Width - CanvasW * s) / 2, 0);
         m.Scale(s, s);
         return m;
     }
@@ -94,10 +106,10 @@ public class ControllerPicture : Control
     // A box given for the right hand, placed on the canvas (mirrored inside its view for the left hand).
     RectangleF Place(ControllerView view, RectangleF box)
     {
-        float viewX = view == ControllerView.Top ? TopX : SideX;
+        float viewX = ViewX(view);
         float viewWidth = view == ControllerView.Top ? ControllerLayouts.TopWidth : ControllerLayouts.SideWidth;
         float x = hand == 0 ? viewWidth - box.Right : box.X;
-        return new RectangleF(viewX + x, CanvasMargin + box.Y, box.Width, box.Height);
+        return new RectangleF(viewX + x, ViewY(view) + CanvasMargin + box.Y, box.Width, box.Height);
     }
 
     float TurnFor(float turn) => hand == 0 ? -turn : turn;
@@ -134,13 +146,13 @@ public class ControllerPicture : Control
     // Traced loops placed in a view (already for this hand: no mirroring).
     GraphicsPath LoopsPath(ControllerView view, float[][] loops)
     {
-        float viewX = view == ControllerView.Top ? TopX : SideX;
+        float viewX = ViewX(view), viewY = ViewY(view);
         var p = new GraphicsPath(FillMode.Alternate);
         foreach (var loop in loops)
         {
             var pts = new PointF[loop.Length / 2];
             for (int i = 0; i < pts.Length; i++)
-                pts[i] = new PointF(viewX + loop[2 * i], CanvasMargin + loop[2 * i + 1]);
+                pts[i] = new PointF(viewX + loop[2 * i], viewY + CanvasMargin + loop[2 * i + 1]);
             if (pts.Length >= 3)
                 p.AddPolygon(pts);
         }
@@ -223,16 +235,16 @@ public class ControllerPicture : Control
     TagColumn ColumnOf(ControllerPart part)
     {
         if (part.View == ControllerView.Side)
-            return TagColumn.Right;
+            return Stacked ? TagColumn.Middle : TagColumn.Right; // stacked: the column right of the views, under the top's tags
         var box = PartBounds(part);
         return box.X + box.Width / 2 < TopX + ControllerLayouts.TopWidth / 2 ? TagColumn.Left : TagColumn.Middle;
     }
 
-    static float ColumnX(TagColumn column) => column switch
+    float ColumnX(TagColumn column) => column switch
     {
         TagColumn.Left => 0,
         TagColumn.Middle => MiddleX,
-        _ => CanvasWidth - LabelWidth + 6,
+        _ => CanvasW - LabelWidth + 6,
     };
 
     // Lines shown in a tag: up to MaxLines, the last saying how many more when there are more.
@@ -288,6 +300,8 @@ public class ControllerPicture : Control
             DrawLeader(g, part, shape, tags[part]);
             DrawPart(g, part, shape);
             DrawTag(g, part, tags[part]);
+            if (AddButtons && part.IsUsable)
+                DrawAdd(g, AddBox(tags[part]), part.Comp == hovered && addHovered);
             hits.Add((part, shape, tags[part]));
         }
     }
@@ -304,7 +318,8 @@ public class ControllerPicture : Control
         using var b = new SolidBrush(Theme.SubText);
         var center = new StringFormat { Alignment = StringAlignment.Center };
         g.DrawString("Buttons (from above)", f, b, new RectangleF(TopX, ViewsHeight - CanvasMargin + 1, ControllerLayouts.TopWidth, 14), center);
-        g.DrawString("Trigger and grip (side)", f, b, new RectangleF(SideX - 10, ViewsHeight - CanvasMargin + 1, ControllerLayouts.SideWidth + 20, 14), center);
+        float sx = ViewX(ControllerView.Side), sy = ViewY(ControllerView.Side);
+        g.DrawString("Trigger and grip (side)", f, b, new RectangleF(sx - 10, sy + ViewsHeight - CanvasMargin + 1, ControllerLayouts.SideWidth + 20, 14), center);
     }
 
     void DrawBody(Graphics g)
@@ -416,7 +431,7 @@ public class ControllerPicture : Control
         using var text = new SolidBrush(part.IsUsable ? Theme.Text : Theme.OffText);
         using var sub = new SolidBrush(count > 0 ? Accent : Theme.SubText);
         var fmt = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
-        g.DrawString(part.LabelFor(hand), nameFont, text, new RectangleF(tag.X + 6, tag.Y + 2, tag.Width - 10, 16), fmt);
+        g.DrawString(part.LabelFor(hand), nameFont, text, new RectangleF(tag.X + 6, tag.Y + 2, tag.Width - (AddButtons && part.IsUsable ? 30 : 10), 16), fmt);
         var lines = part.IsUsable ? linesOf(part) : Array.Empty<TagLine>();
         if (lines.Count == 0)
         {
@@ -452,6 +467,38 @@ public class ControllerPicture : Control
         }
     }
 
+    static void DrawAdd(Graphics g, RectangleF r, bool hot)
+    {
+        using var path = new GraphicsPath();
+        path.AddEllipse(r.X + (r.Width - r.Height) / 2, r.Y, r.Height, r.Height);
+        using var fill = new SolidBrush(hot ? Accent : Color.FromArgb(Theme.IsDark ? 70 : 225, Accent));
+        g.FillPath(fill, path);
+        using var pen = new Pen(hot ? Color.White : Accent, 1.6f);
+        float cx = r.X + r.Width / 2, cy = r.Y + r.Height / 2, a = r.Height * 0.28f;
+        g.DrawLine(pen, cx - a, cy, cx + a, cy);
+        g.DrawLine(pen, cx, cy - a, cx, cy + a);
+    }
+
+    // Is the screen point on the "+" of a part's tag?
+    bool OnAdd(Point screen, out ControllerPart part)
+    {
+        part = null;
+        if (!AddButtons)
+            return false;
+        using var m = CanvasToScreen();
+        m.Invert();
+        var pts = new[] { new PointF(screen.X, screen.Y) };
+        m.TransformPoints(pts);
+        foreach (var h in hits)
+        {
+            var box = AddBox(h.tag);
+            box.Inflate(3, 3); // a little easier to hit
+            if (h.part.IsUsable && box.Contains(pts[0]))
+            { part = h.part; return true; }
+        }
+        return false;
+    }
+
     // ------------------------------------------------------------ mouse
     ControllerPart PartAt(Point screen)
     {
@@ -470,9 +517,13 @@ public class ControllerPicture : Control
     {
         base.OnMouseMove(e);
         string now = PartAt(e.Location)?.Comp;
-        if (now == hovered)
+        bool onAdd = OnAdd(e.Location, out _);
+        if (now == hovered && onAdd == addHovered)
             return;
         hovered = now;
+        addHovered = onAdd;
+        if (AddButtons)
+            FormPanel.Tips.SetToolTip(this, onAdd ? "Add something to this button" : null);
         Cursor = now == null ? Cursors.Default : Cursors.Hand;
         Invalidate();
     }
@@ -487,6 +538,11 @@ public class ControllerPicture : Control
     protected override void OnMouseClick(MouseEventArgs e)
     {
         base.OnMouseClick(e);
+        if (OnAdd(e.Location, out var addTo))
+        {
+            AddClicked?.Invoke(addTo);
+            return;
+        }
         var part = PartAt(e.Location);
         if (part == null)
             return;
