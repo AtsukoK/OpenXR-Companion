@@ -1,4 +1,4 @@
-namespace OpenXRCompanionEditor;
+﻿namespace OpenXRCompanionEditor;
 
 // The Right / Left controller page: a picture of the controller, and for the button clicked on it, what each way
 // of using it does (press, touch, stick directions) with quick choices to change that, like SteamVR's controller
@@ -524,7 +524,7 @@ public class ControllerButtonsPage : UserControl
         if (made == null)
             return null;
         if (kind is AddKind.HoldKey or AddKind.HoldRemap)
-            QuickBindings.OnlyWhenHeld(made);
+            QuickBindings.OnlyWhenHeld(made, touch: IsTouchOnly(part, way));
         profile.Bindings.Add(made);
         return (made, kind == AddKind.Other);
     }
@@ -553,6 +553,15 @@ public class ControllerButtonsPage : UserControl
                                  : "Tap twice quickly and keep holding the second time: the key is held until you let go.",
                 isStickDirection ? "sprinting with a double flick forward, or a dodge on a double flick sideways."
                                  : "a second hold action on a button that already has a tap and a hold.", AddKind.DoubleFlick);
+        }
+        else // touching: hold and double-tap still work, the game just keeps its own touch use
+        {
+            Opt("Hold it", "Hold: press a key",
+                "Keep your finger on it for a moment and the key is pressed, until you lift it. A quick touch does nothing.",
+                "a key you want on purpose only, like resting the thumb for the map.", AddKind.HoldKey);
+            Opt("Tap it twice", "Double-tap and hold: press a key",
+                "Touch twice quickly and keep it there the second time: the key is held until you lift your finger.",
+                "a second touch action that a resting thumb won't set off by accident.", AddKind.DoubleFlick);
         }
         Opt("More", "Something else",
             "Opens the full binding editor: radial wheels, key sequences (macros), layers, the screen mirror and every other action and timing setting.",

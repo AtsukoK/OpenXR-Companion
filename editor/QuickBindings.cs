@@ -1,4 +1,4 @@
-namespace OpenXRCompanionEditor;
+﻿namespace OpenXRCompanionEditor;
 
 // Ready-made bindings for one way of using a controller button, like the choices SteamVR's controller bindings
 // offer: press a key, act as another of the game's buttons, or turn the button off for the game.
@@ -67,12 +67,13 @@ public static class QuickBindings
 
     // Only when held for a moment, like the Bannerlord VR radial menu: the game never sees the button while you hold it,
     // and a quick tap still reaches the game as a normal press of the button. The action starts once it has been held.
-    public static BindingModel OnlyWhenHeld(BindingModel b)
+    // touch: nothing is hidden from the game and there is no tap to pass on (a touch can't be hidden without its presses)
+    public static BindingModel OnlyWhenHeld(BindingModel b, bool touch = false)
     {
         b.Gesture = GestureKind.Hold;
         b.HoldMs = DefaultHoldMs;
-        b.TapPassthrough = true;
-        b.Block = "trigger";
+        b.TapPassthrough = !touch;
+        b.Block = touch ? "none" : "trigger";
         b.Name += " (hold)";
         return b;
     }
