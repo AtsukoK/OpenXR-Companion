@@ -52,6 +52,12 @@ public partial class MainForm
     }
 
     // A profile's text as the editor's model (no wrist migration). Throws on text that isn't a profile.
+    internal static WristModel DefaultWrist(int hand)
+    {
+        var d = ProfileFromText(Native.DefaultProfile() ?? "{}");
+        return d.WristFor(hand) ?? new WristModel();
+    }
+
     static ProfileModel ProfileFromText(string text)
     {
         var root = JsonNode.Parse(text, documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });

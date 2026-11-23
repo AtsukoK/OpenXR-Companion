@@ -83,6 +83,29 @@ public class SettingsEditor : EditorBase
             pageControls.Add(C("Panel", "\uE8A9", false, wrist));
             // on the arm: the settings with the arm picture beside them, the position numbers folded under them
             var armCol = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
+            // the way back when a panel was put somewhere it can't be found: the built-in place on this arm, facing you
+            var reset = new Button
+            {
+                Text = "\u21BA  Reset wrist panel location", AutoSize = true, Height = 40, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+                Font = new Font("Segoe UI", 11f, FontStyle.Bold), BackColor = Color.FromArgb(200, 110, 30), ForeColor = Color.White,
+                Margin = new Padding(6, 0, 0, 10), Padding = new Padding(10, 0, 10, 0), Tag = "swatch",
+            };
+            reset.FlatAppearance.BorderSize = 0;
+            FormPanel.Tips.SetToolTip(reset, "Lost the panel? This puts it back where it starts out: on this arm at the controller, screen facing you. Forgets the spot set by hand. Save (Ctrl+S) to send it to the game.");
+            reset.Click += (s2, e2) =>
+            {
+                if (MessageBox.Show(FindForm(), "Put the " + (wristHand == 1 ? "right" : "left") + " wrist panel back in its starting place?\n\nThe spot you set by hand in the headset is forgotten. Save afterwards (Ctrl+S) to send it to the game.",
+                                    "Reset wrist panel location", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK)
+                    return;
+                var d = MainForm.DefaultWrist(wristHand);
+                var w = p.WristFor(wristHand);
+                w.Pose = null;
+                w.Face = d.Face; w.TextUp = d.TextUp; w.RotateDeg = d.RotateDeg; w.Size = d.Size;
+                w.TowardElbow = d.TowardElbow; w.Lift = d.Lift; w.Side = d.Side;
+                Fire();
+                MainForm.Current?.GoTo(wristHand == 1 ? "wrist1" : "wrist0"); // the page again, with the numbers it now has
+            };
+            armCol.Controls.Add(reset);
             armCol.Controls.Add(wristArm);
             var fold = new LinkLabel { Text = "Fine-tune the position with numbers \u25B8", AutoSize = true, LinkColor = Theme.Link, Margin = new Padding(6, 6, 0, 4) };
             FormPanel.Tips.SetToolTip(fold, "Placing the panel by hand in the headset (Adjust positions) is easier and replaces these.");
