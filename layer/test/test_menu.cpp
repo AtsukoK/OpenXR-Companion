@@ -191,6 +191,14 @@ void TestInGameMenu() {
     d.Step();
     CHECK(p->bindings.size() == bindingsBefore + 1 && InputName(p->bindings.back().chord.back()) == "right.a",
           "menu: the next button press becomes the new binding's button");
+    CHECK(e.menuView.title == "What happens" && !e.kb.visible, "menu: then 'What happens' opens for the new binding");
+    {
+        int W = 1100, H = (int)(1100 * e.menuView.h / e.menuView.w);
+        std::vector<uint32_t> px;
+        DrawMenu(px, W, H, e.menuView, p->style);
+        SavePng(px, W, H, L"menu_what_happens.png");
+    }
+    d.PressRow("Press a key or mouse button");
     CHECK(e.kb.visible && e.menuView.title == "New binding", "menu: then the VR keyboard opens for its key, on the binding's page");
     float uw, uh;
     const auto& keys = KbLayout(uw, uh, true);
@@ -210,7 +218,7 @@ void TestInGameMenu() {
     d.Step();
     d.PullTrigger();
     CHECK(p->bindings.back().action.keys == "q" && !e.kb.visible, "menu: the key pressed on the VR keyboard becomes the binding's key, not typed");
-    CHECK(d.Row("Action: Key: q (hold)") >= 0 && p->bindings.back().name == "Right A: q", "menu: the page and the name show the new key");
+    CHECK(d.Row("3  What happens: Key: q (hold)") >= 0 && p->bindings.back().name == "Right A: q", "menu: the page and the name show the new key");
 
     // What it does, again: a mouse button, then a controller button the game should see.
     auto pressKey = [&](const char* combo, int kind) {
@@ -225,10 +233,12 @@ void TestInGameMenu() {
         d.PullTrigger();
         return true;
     };
-    CHECK(d.PressRow("Action: Key: q (hold)") && e.kb.visible && e.kb.binding, "menu: Does opens the binding keyboard");
+    CHECK(d.PressRow("3  What happens: Key: q (hold)") && e.menuView.title == "What happens" && d.PressRow("Press a key or mouse button") && e.kb.visible && e.kb.binding,
+          "menu: What happens > Press a key opens the binding keyboard");
     CHECK(pressKey("rmb", KB_KEY) && p->bindings.back().action.keys == "rmb" && p->bindings.back().action.type == ActType::Key,
           "menu: a mouse button on the binding keyboard becomes what it does");
-    d.PressRow("Action: Key: rmb (hold)");
+    d.PressRow("3  What happens: Key: rmb (hold)");
+    d.PressRow("Press a key or mouse button");
     {
         // the keyboard lies on the menu's pane: same facing, just in front, inside its edges; the menu is dimmed under it
         Vec3 off = RotateInv(e.menuView.pose.orientation, V(e.kb.pose.position) - V(e.menuView.pose.position));
@@ -244,15 +254,28 @@ void TestInGameMenu() {
     d.Step();
     const Binding& asButton = p->bindings.back();
     CHECK(asButton.action.type == ActType::XrInput && InputName(asButton.action.target) == "right.b" && asButton.action.mode == ActMode::Hold &&
-              d.Row("Action: Controller: Right B (hold)") >= 0,
+              d.Row("3  What happens: Controller: Right B (hold)") >= 0,
           "menu: the pressed controller button becomes what the game sees");
 
-    int way = d.Row("Activation");
+    int way = d.Row("Press or touch");
     CHECK(way >= 0 && !e.menuView.rows[way].canLess && e.menuView.rows[way].canMore && e.menuView.rows[way].value == "Press",
           "menu: a choice on its first option: - greyed, + not");
-    int when = d.Row("Gesture");
+    int when = d.Row("1  How");
     d.Press(MenuPart::More, when);
-    CHECK(p->bindings.back().gesture == Gesture::Tap, "menu: > on 'When' steps to the next way (quick tap)");
+    CHECK(p->bindings.back().gesture == Gesture::Hold && p->bindings.back().block == BindingBlock::Trigger && p->bindings.back().tapPassthrough,
+          "menu: > on How steps to Hold, and a quick tap is let through to the game (set for you)");
+    d.Press(MenuPart::More, d.Row("1  How"));
+    CHECK(p->bindings.back().gesture == Gesture::DoubleTap && p->bindings.back().block == BindingBlock::None,
+          "menu: Double-tap leaves the button to the game too");
+    if (!p->wheels.empty())
+    {
+        const auto& [wname, wh] = *p->wheels.begin();
+        std::string title = wh.title.empty() ? wname : wh.title;
+        d.PressRow("3  What happens: " + std::string("Controller: Right B (hold)"));
+        CHECK(e.menuView.title == "What happens" && d.PressRow("Wheel '" + title + "'") && p->bindings.back().action.type == ActType::Wheel &&
+                  p->bindings.back().action.wheel == wname && e.menuView.title != "What happens",
+              "menu: What happens > a wheel makes the binding open it, and goes back");
+    }
     d.PressRow("Enabled");
     CHECK(!p->bindings.back().enabled, "menu: the On switch turns the binding off");
 
