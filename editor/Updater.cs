@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO.Compression;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -38,9 +38,9 @@ public static class Updater
     {
         using var http = Http(TimeSpan.FromSeconds(10));
         http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
-        using var doc = JsonDocument.Parse(await http.GetStringAsync("https://api.github.com/repos/AtsukoK/OpenXR-Companion/releases/latest"));
-        var r = new Release { Tag = doc.RootElement.GetProperty("tag_name").GetString() ?? "" };
-        foreach (var a in doc.RootElement.GetProperty("assets").EnumerateArray())
+        var rel = await MainForm.PickReleaseAsync(http) ?? throw new Exception("no release found");
+        var r = new Release { Tag = rel.GetProperty("tag_name").GetString() ?? "" };
+        foreach (var a in rel.GetProperty("assets").EnumerateArray())
         {
             string name = a.GetProperty("name").GetString() ?? "";
             if (!name.StartsWith("OpenXRCompanion-", StringComparison.OrdinalIgnoreCase) || !name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))

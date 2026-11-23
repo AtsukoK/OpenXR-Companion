@@ -247,6 +247,8 @@ public partial class MainForm : Form
         Current = this;
         Text = "OpenXR Companion - Profile Editor";
         Size = new Size(1150, 760);
+        if (Environment.GetCommandLineArgs().Length <= 1) // a normal start (not tests or screenshots): use the whole screen
+            WindowState = FormWindowState.Maximized;
         Font = new Font("Segoe UI", 10.5f);
         Directory.CreateDirectory(ProfilesDir);
 

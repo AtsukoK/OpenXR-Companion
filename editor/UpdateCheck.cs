@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Drawing;
 using System.Net.Http;
 using System.Reflection;
@@ -12,7 +12,7 @@ namespace OpenXRCompanionEditor;
 public partial class MainForm
 {
     const string RepoApi = "https://api.github.com/repos/AtsukoK/OpenXR-Companion/releases/latest";
-    const string ReleasesPage = "https://github.com/AtsukoK/OpenXR-Companion/releases/latest";
+    static string ReleasesPage => IsExperimental ? "https://github.com/AtsukoK/OpenXR-Companion/releases" : "https://github.com/AtsukoK/OpenXR-Companion/releases/latest";
     static string NoUpdateFlag => Path.Combine(DataDir, "no_update_check");
     public static bool UpdateCheckOn
     {
@@ -21,6 +21,36 @@ public partial class MainForm
     }
 
     readonly ToolStripButton updateBtn = new() { Visible = false, Alignment = ToolStripItemAlignment.Right };
+
+    // An experimental build (version "x.y.z-experimental", from the experimental branch) is offered prereleases too.
+    public static bool IsExperimental =>
+        (Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "").Contains("-experimental");
+
+    // The release an update would install: stable builds only look at the latest stable release; experimental builds
+    // take the newest of all releases, prerelease or not. Null when there is none.
+    internal static async Task<JsonElement?> PickReleaseAsync(HttpClient http)
+    {
+        const string api = "https://api.github.com/repos/AtsukoK/OpenXR-Companion/releases";
+        if (!IsExperimental)
+        {
+            using var doc = JsonDocument.Parse(await http.GetStringAsync(api + "/latest"));
+            return doc.RootElement.Clone();
+        }
+        using var all = JsonDocument.Parse(await http.GetStringAsync(api + "?per_page=30"));
+        JsonElement? best = null;
+        Version bestVer = null;
+        foreach (var r in all.RootElement.EnumerateArray())
+        {
+            if (r.TryGetProperty("draft", out var d) && d.GetBoolean())
+                continue;
+            string tag = r.GetProperty("tag_name").GetString() ?? "";
+            if (!Version.TryParse(tag.TrimStart('v', 'V').Split('-')[0], out var v))
+                continue;
+            if (bestVer == null || v > bestVer)
+            { bestVer = v; best = r.Clone(); }
+        }
+        return best;
+    }
 
     public static Version AppVersion
     {
@@ -118,8 +148,9 @@ public partial class MainForm
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
             http.DefaultRequestHeaders.UserAgent.ParseAdd("OpenXRCompanion-Editor/" + AppVersion.ToString(3));
             http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
-            using var doc = JsonDocument.Parse(await http.GetStringAsync(RepoApi));
-            string tag = doc.RootElement.GetProperty("tag_name").GetString() ?? "";
+            if (await PickReleaseAsync(http) is not JsonElement rel)
+                return null;
+            string tag = rel.GetProperty("tag_name").GetString() ?? "";
             return Version.TryParse(tag.TrimStart('v', 'V').Split('-')[0], out var v) ? (v, tag) : null;
         }
         catch { return null; }

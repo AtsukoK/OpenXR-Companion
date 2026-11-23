@@ -36,9 +36,11 @@ public partial class MainForm
         RailButton("", "Wheels", () => GoTo("wheels"), () => "wheels");
         RailButton("", "Left wrist panel", () => GoTo("wrist0"), () => "wrist0", "L");
         RailButton("", "Right wrist panel", () => GoTo("wrist1"), () => "wrist1", "R");
+        RailButton("", "Tutorials: the full tour, how-tos and a tour of each page", TutorialMenu, null);
         RailButton("", "Search everything", () => { GoTo(BindingsPage); if (currentEditor is AllBindingsPage ab) ab.FocusSearch(); }, null);
 
-        try { listFolded = File.Exists(RailFile) && File.ReadAllText(RailFile).Trim() == "1"; } catch (IOException) { }
+        listFolded = true; // the icon bar is the default; the full list only when the user unfolded it last time
+        try { if (File.Exists(RailFile) && File.ReadAllText(RailFile).Trim() == "0") listFolded = false; } catch (IOException) { }
         if (listFolded)
             Shown += (s, e) => SetFolded(true);
     }

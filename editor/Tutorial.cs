@@ -226,7 +226,7 @@ public partial class MainForm
                 S("Welcome!", "This tour takes about five minutes. You'll make a radial wheel, put something on it, pick the controller button that opens it, and see every page.\n\nThe orange frame shows where to look. Steps marked 'Your turn' wait until you've done them.",
                   enter: () => { SetFolded(true); GoTo("overview"); }),
                 S("The Overview", "What is on right now: the wheels on each controller, the wrist panels, the VR keyboard. The switches work right here; the blue buttons jump to where you edit each thing.", Page, () => GoTo("overview")),
-                S("The icon bar", "Every page is one click away: Overview, Settings, Controllers, All bindings, Wheels, the left and right wrist panels (L, R), and Search.\n\n» at the top unfolds the full list, if you like it.", () => Rect(rail)),
+                S("The icon bar", "Every page is one click away: Overview, Settings, Controllers, All bindings, Wheels, the left and right wrist panels (L, R), Tutorials (the cap) and Search.\n\n» at the top unfolds the full list, if you like it.", () => Rect(rail)),
                 S("Your turn: make a wheel", "A wheel is a radial menu you open in VR. This page shows your wheels.\n\nClick the 'New wheel' card.",
                   () => T("New wheel"), () => { GoTo("wheels"); tCount = Profile.Wheels.Count; },
                   () => { if (Profile.Wheels.Count <= tCount) return false; tWheel = Profile.Wheels.Values.Last(); return true; },
@@ -245,7 +245,7 @@ public partial class MainForm
                 S("All bindings", "Everything you made, in one list: controller bindings, wheel items and wrist buttons. Switch any of them off and on, copy or delete them, or search.", Page, () => GoTo(BindingsPage)),
                 S("Wrist panels", "Buttons on your forearm. They show when you turn your wrist toward your face and look at it; press them by poking with your other hand.\n\nThe list on the right switches buttons on and off; 'Advanced settings' places the panel on your arm.", Page, () => GoTo("wrist0")),
                 S("Settings", "How wheels look and how you pick items, pointing, the VR keyboard, the screen mirror, controller offsets...", Page, () => GoTo(Profile)),
-                S("Help on every page", "Each page's yellow tip bar has a 'Show me this page' button for a short tour of it. The 'Tutorial' button at the top has this tour again, and how-tos like sprinting with a double flick.", () => ToolItemRect("Tutorial")),
+                S("Help on every page", "Each page's yellow tip bar has a 'Show me this page' button for a short tour of it. The Tutorials icon (the cap, on the left) and the 'Tutorial' button at the top have this tour again, and how-tos like sprinting with a double flick.", () => ToolItemRect("Tutorial")),
                 S("Save", "Changes reach the game when you save (Ctrl+S). A running game picks them up within a second.\n\nThat's it! Click Finish.", () => ToolItemRect("Save")),
             }).ToList(),
 
