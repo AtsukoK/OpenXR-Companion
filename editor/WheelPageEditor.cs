@@ -72,9 +72,52 @@ public class WheelPageEditor : EditorBase
         var pic = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
         pic.Controls.Add(preview);
         pic.Controls.Add(editCol);
+        // the wheel and its sub-wheels as tabs, in the order you go through them (like the wrist panel's pages)
+        WheelModel ParentOf(WheelModel x) => p.Wheels.Values.FirstOrDefault(o => !ReferenceEquals(o, x) && o.Items.Any(i => i.Action?.Type == ActionType.Wheel && i.Action.Wheel == x.Name));
+        var root = w;
+        for (int guard = 0; guard < 16 && ParentOf(root) is WheelModel up && !ReferenceEquals(up, w); guard++)
+            root = up;
+        var family = new List<WheelModel>();
+        void Visit(WheelModel x)
+        {
+            if (x == null || family.Contains(x)) return;
+            family.Add(x);
+            foreach (var i in x.Items)
+                if (i.Action?.Type == ActionType.Wheel && i.Action.Wheel != null)
+                    Visit(p.Wheels.GetValueOrDefault(i.Action.Wheel));
+        }
+        Visit(root);
+        var tabs = new FlowLayoutPanel { AutoSize = true, WrapContents = true, MaximumSize = new Size(900, 0), Margin = new Padding(0, 0, 0, 8) };
+        foreach (var x in family)
+        {
+            if (tabs.Controls.Count > 0)
+                tabs.Controls.Add(new Label { Text = "→", AutoSize = true, Font = new Font("Segoe UI", 14f, FontStyle.Bold), ForeColor = Theme.SubText, Margin = new Padding(0, 2, 8, 0) });
+            var target = x;
+            var t = Btn((string.IsNullOrWhiteSpace(x.Title) ? x.Name : x.Title) + (ReferenceEquals(x, root) ? "  (main)" : ""), () => { if (!ReferenceEquals(target, w)) MainForm.Current?.GoTo(target); });
+            if (ReferenceEquals(x, w)) { t.BackColor = Color.FromArgb(30, 130, 110); t.ForeColor = Color.White; t.FlatAppearance.BorderSize = 0; }
+            tabs.Controls.Add(t);
+        }
+        var addSub = Btn("+ Add sub-wheel", () =>
+        {
+            if (w.Items.Count >= 16) { MessageBox.Show(FindForm(), "This wheel is full (16 items): remove one first."); return; }
+            string n = w.Name + " sub-wheel";
+            for (int k = 2; p.Wheels.ContainsKey(n); k++) n = w.Name + " sub-wheel " + k;
+            var sub = new WheelModel { Name = n, Title = "More" };
+            sub.Items.Add(new WheelItemModel { Label = "Back", Action = new ActionModel { Type = ActionType.Back } });
+            p.Wheels[n] = sub;
+            w.Items.Add(new WheelItemModel { Label = "More", Action = new ActionModel { Type = ActionType.Wheel, Wheel = n } });
+            Fire();
+            MainForm.Current?.RebuildList();
+            MainForm.Current?.GoTo(sub); // the new sub-wheel, its tab lit
+        });
+        FormPanel.Tips.SetToolTip(addSub, "Makes a new wheel with a Back item, and puts a 'More' item on this wheel that opens it.");
+        var addRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+        addRow.Controls.Add(add);
+        addRow.Controls.Add(addSub);
         var leftBody = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
+        leftBody.Controls.Add(tabs);
         leftBody.Controls.Add(names);
-        leftBody.Controls.Add(add);
+        leftBody.Controls.Add(addRow);
         leftBody.Controls.Add(pic);
         var leftCard = Card("Wheel", "", leftBody);
 
