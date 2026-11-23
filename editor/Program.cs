@@ -12,7 +12,7 @@ static class Program
         if (args.Length == 2 && args[0] == "--controller-pics")
         { MainForm.ControllerPics(args[1]); return 0; }
         if (args.Length == 2 && args[0] == "--picker-shot")
-        { Theme.Set(true); ControllerButtonsPage.AddPickerShot(args[1]); return 0; }
+        { Theme.Set(true); ControllerButtonsPage.AddPickerShot(args[1]); ActionEditor.WristPickerShot(Path.ChangeExtension(args[1], null) + "_wrist.png"); return 0; }
         if (args.Length == 2 && args[0] == "--rail-shot")
         { MainForm.RailShot(args[1]); return 0; }
         if (args.Length == 2 && args[0] == "--shots")

@@ -1,4 +1,4 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 
 namespace OpenXRCompanionEditor;
 
@@ -33,6 +33,47 @@ public class ActionEditor : FormPanel
     Label lMirMode;
     readonly Label lKeys, lKeyMode, lSteps, lWheel, lConfirm, lLayer, lLayerMode, lTarget, lScreenMode, lScreenPlace, lScreenMon, lScreenWin;
 
+    // What a wrist button can do, in groups, worded short. Same picker as the controllers' "+ Add".
+    static readonly (string code, PickOption option)[] WristActions =
+    {
+        (ActionType.Key, new("Keys", "Press a key", "A keyboard key, key combo or mouse button.", "quick save, map, push-to-talk.")),
+        (ActionType.Sequence, new("Keys", "Type a few keys in a row", "Several keys one after another, with waits if needed (a macro).", "copy-paste, a chat command.")),
+        (ActionType.XrInput, new("Keys", "Press a controller button", "The game thinks one of its controller buttons is pressed.", "a game action that has no keyboard key.")),
+        (ActionType.Page, new("This panel", "Go to another page", "Shows another page of this wrist panel.", "a 'Next page' button.")),
+        (ActionType.Back, new("This panel", "Go back a page", "Back to the page before. On the first page it hides the panel.", null)),
+        (ActionType.Close, new("This panel", "Hide the panel", "Hides it until you look away from your arm.", null)),
+        (ActionType.Keyboard, new("Open", "VR keyboard", "Opens the keyboard you type on in the headset.", "chat, names, searching.")),
+        (ActionType.Screen, new("Open", "Desktop screen", "Shows a monitor or window in the headset, or switches which one.", "Discord, a guide, a video.")),
+        (ActionType.Wheel, new("Open", "Radial wheel", "Opens one of your radial wheels.", null)),
+        (ActionType.SettingsMenu, new("Open", "Settings menu", "Change bindings and sticks inside the headset.", null)),
+        (ActionType.Adjust, new("Set up", "Move panels and wheels", "Grab wrist panels and wheels and put them where you like.", null)),
+        (ActionType.ControllerOffsets, new("Set up", "Fix hand / gun aim", "Opens the controller offsets, for games whose hands point wrong.", null)),
+        (ActionType.HeadsetMirror, new("Set up", "Headset view on the desktop", "A window on the monitor showing what the headset shows.", "streaming or showing someone.")),
+        (ActionType.Reload, new("Set up", "Reload profile", "Loads the profile again after you saved changes.", null)),
+        (ActionType.Layer, new("Advanced", "Switch a layer", "Changes what other buttons do while the layer is on.", null)),
+        (ActionType.None, new("Advanced", "Nothing", "The button is shown but does nothing.", null)),
+    };
+
+    public static void WristPickerShot(string path) => OptionPicker.Shot(path, "What should this button do?", "Pick one; you can change it any time.", WristActions.Select(x => x.option).ToList());
+
+    // The wrist action: a button with the current choice; clicking it opens the cards.
+    Control WristPicker()
+    {
+        var b = new Button { AutoSize = true, MinimumSize = new Size(300, 36), FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, TextAlign = ContentAlignment.MiddleLeft,
+                             Font = new Font("Segoe UI", 10f, FontStyle.Bold), BackColor = Theme.Button, ForeColor = Theme.Text, Tag = "swatch", Padding = new Padding(6, 0, 6, 0) };
+        b.FlatAppearance.BorderColor = Theme.CardBorder;
+        void Show() => b.Text = (WristActions.FirstOrDefault(x => x.code == type.Code).option?.Title ?? type.Text) + "   ▾  change";
+        type.SelectedIndexChanged += (s, e) => Show();
+        b.Click += (s, e) =>
+        {
+            int i = OptionPicker.Show(FindForm(), "What should this button do?", "Pick one; you can change it any time.", WristActions.Select(x => x.option).ToList());
+            if (i >= 0)
+                type.Code = WristActions[i].code; // the type box's own handler sets the action up
+        };
+        Show();
+        return b;
+    }
+
     public ActionEditor(bool inWheel, WristModel wrist = null)
     {
         this.inWheel = inWheel;
@@ -51,7 +92,10 @@ public class ActionEditor : FormPanel
             types.Insert(3, new Choice("page", "Wrist panel: open another page"));
         }
         type = new ChoiceBox(types.ToArray(), 360);
-        AddRow("Action", type);
+        if (wrist != null)
+            AddRow("What it does", WristPicker()); // big grouped cards instead of the long dropdown
+        else
+            AddRow("Action", type);
         lKeys = AddRow("Key", keys, "Click Record key, then press the key or combo on your keyboard. Or pick a mouse button.");
         lKeyMode = AddRow("Key behavior", keyMode);
         lSteps = AddRow("Macro steps", steps, "One step per line or split with ;  e.g.\nCtrl+C\nwait 100\nCtrl+V\ndown W / up W to hold a key");
