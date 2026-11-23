@@ -11,6 +11,8 @@ public class AllBindingsPage : EditorBase
     static int sort; // 0 = by hand and button, 1 = on first, 2 = name
     static string show = "all"; // all, controller, wheels, wrist
 
+    public void FocusSearch() { search.Focus(); }
+
     public AllBindingsPage(ProfileModel profile)
     {
         p = profile;
@@ -83,6 +85,28 @@ public class AllBindingsPage : EditorBase
         }
         foreach (var b in list.Where(OnPicture)) rows.Controls.Add(Row(b, false));
         int shown = list.Count;
+        if (q.Length > 1 && show == "all") // settings pages with that word: on top, they open with it lit
+        {
+            var hits = SettingsPage.All.Where(sp => SettingsEditor.WordsOf(p, sp.Key).Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (hits.Count > 0)
+            {
+                var head = Heading("Settings", null);
+                rows.Controls.Add(head);
+                rows.Controls.SetChildIndex(head, 0);
+                int at = 1;
+                foreach (var sp in hits)
+                {
+                    var b = new Button { Text = sp.Title + "   ·   " + sp.Sub, Width = 1100, Height = 40, TextAlign = ContentAlignment.MiddleLeft, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+                                         Margin = new Padding(0, 0, 0, 4), BackColor = Theme.Button, ForeColor = Theme.Text, Font = new Font("Segoe UI", 10f, FontStyle.Bold), Tag = "swatch", Padding = new Padding(10, 0, 0, 0) };
+                    b.FlatAppearance.BorderSize = 0;
+                    var page = sp;
+                    b.Click += (s, e) => MainForm.Current?.GoTo(page);
+                    rows.Controls.Add(b);
+                    rows.Controls.SetChildIndex(b, at++);
+                    shown++;
+                }
+            }
+        }
         bool Match(WheelItemModel i, string from) => q.Length == 0 || $"{i.Label} {MainForm.Plain(i.Action)} {from}".Contains(q, StringComparison.OrdinalIgnoreCase);
         IEnumerable<WheelItemModel> Order(IEnumerable<WheelItemModel> items) => sort switch
         {

@@ -36,7 +36,7 @@ public partial class MainForm
         RailButton("", "Wheels", () => GoTo("wheels"), () => "wheels");
         RailButton("", "Left wrist panel", () => GoTo("wrist0"), () => "wrist0", "L");
         RailButton("", "Right wrist panel", () => GoTo("wrist1"), () => "wrist1", "R");
-        RailButton("", "Search", () => { SetFolded(false); search.Focus(); }, null);
+        RailButton("", "Search everything", () => { GoTo(BindingsPage); if (currentEditor is AllBindingsPage ab) ab.FocusSearch(); }, null);
 
         try { listFolded = File.Exists(RailFile) && File.ReadAllText(RailFile).Trim() == "1"; } catch (IOException) { }
         if (listFolded)
