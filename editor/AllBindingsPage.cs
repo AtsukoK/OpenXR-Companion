@@ -72,14 +72,14 @@ public class AllBindingsPage : EditorBase
         foreach (Control c in rows.Controls.Cast<Control>().ToList()) c.Dispose();
         rows.Controls.Clear();
         if (show is not ("all" or "controller")) list.Clear();
-        else if (show == "all" && list.Count > 0) rows.Controls.Add(Heading("Controller bindings", null));
+        else if (show == "all" && list.Count > 0) rows.Controls.Add(Heading("What your controller buttons do", null));
         var off = list.Where(b => !OnPicture(b)).ToList();
         if (off.Count > 0)
         {
             rows.Controls.Add(Heading($"Not on the {layout.Name} picture ({off.Count})",
                 "Made for another controller, or an input this controller doesn't have. They still work wherever the input exists."));
             foreach (var b in off) rows.Controls.Add(Row(b, true));
-            rows.Controls.Add(Heading("On this controller", null));
+            rows.Controls.Add(Heading("What your controller buttons do", null));
         }
         foreach (var b in list.Where(OnPicture)) rows.Controls.Add(Row(b, false));
         int shown = list.Count;
@@ -132,7 +132,7 @@ public class AllBindingsPage : EditorBase
     {
         var r = new TableLayoutPanel { ColumnCount = 6, RowCount = 1, Width = 1100, Height = 44, Margin = new Padding(0, 0, 0, 4), Cursor = Cursors.Hand,
                                        BackColor = lost ? Color.FromArgb(70, 60, 40) : Theme.Button };
-        foreach (var w in new[] { 44f, 250f, 100f, 0f, 40f, 40f })
+        foreach (var w in new[] { 44f, 400f, 36f, 0f, 40f, 40f })
             r.ColumnStyles.Add(w == 0 ? new ColumnStyle(SizeType.Percent, 100) : new ColumnStyle(SizeType.Absolute, w));
         r.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         Color text = b.Enabled ? Theme.Text : Theme.OffText, sub = b.Enabled ? Theme.SubText : Theme.OffText;
@@ -141,9 +141,10 @@ public class AllBindingsPage : EditorBase
         var onOff = L(b.Enabled ? "✔" : "○", b.Enabled ? Color.FromArgb(60, 190, 110) : Theme.SubText, new Font("Segoe UI", 14f, FontStyle.Bold), ContentAlignment.MiddleCenter);
         FormPanel.Tips.SetToolTip(onOff, b.Enabled ? "On: click to switch it off (kept here)" : "Off: click to switch it on");
         onOff.Click += (s, e) => { b.Enabled = !b.Enabled; Changed(); };
-        var where = L(InputText.Friendly(b.Input), text, new Font("Segoe UI", 10f, b.Enabled ? FontStyle.Bold : FontStyle.Italic));
-        var how = L(Gesture(b.Gesture), sub);
-        var what = L(b.Name + "  ·  " + MainForm.Plain(b.Action), sub);
+        var where = L((b.Gesture == GestureKind.WhileHeld ? "Hold" : Gesture(b.Gesture)) + " " + InputText.Friendly(b.Input) + (b.Enabled ? "" : "   (off)"), text, new Font("Segoe UI", 10f, b.Enabled ? FontStyle.Bold : FontStyle.Italic));
+        var how = L("→", sub, new Font("Segoe UI", 12f, FontStyle.Bold), ContentAlignment.MiddleCenter);
+        var what = L(MainForm.Plain(b.Action), text);
+        foreach (var c in new Control[] { where, what }) FormPanel.Tips.SetToolTip(c, b.Name + "  (click for all its settings)");
         var dup = L("⧉", Theme.Text, new Font("Segoe UI", 13f), ContentAlignment.MiddleCenter);
         FormPanel.Tips.SetToolTip(dup, "Duplicate (a copy right below it, switched off)");
         dup.Click += (s, e) =>
