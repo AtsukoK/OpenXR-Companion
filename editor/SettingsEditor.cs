@@ -120,13 +120,19 @@ public class SettingsEditor : EditorBase
             armCol.Controls.Add(wristNums);
             var armRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
             armRow.Controls.Add(armCol);
-            // the three smaller cards side by side when the window is wide enough, stacked when it isn't
-            var lower = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, BackColor = Theme.Page, Margin = Padding.Empty };
-            var panelCard = pageControls[^1];
-            pageControls.RemoveAt(pageControls.Count - 1);
+            // pages and buttons on the left, the three smaller cards in a column beside it when the window is wide
+            // enough (they drop below it when it isn't)
+            var whole = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, BackColor = Theme.Page, Margin = Padding.Empty };
+            var pagesCard = pageControls[0];
+            var panelCard = pageControls[1];
+            pageControls.Clear();
+            var column = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, BackColor = Theme.Page, Margin = Padding.Empty };
+            pagesCard.Dock = DockStyle.None; pagesCard.Margin = new Padding(0, 0, 14, 14);
+            whole.Controls.Add(pagesCard);
             foreach (var c in new Control[] { panelCard, C("On the arm", "\uE7FC", false, armRow), C("When it shows", "\uE890", false, wristShow) })
-            { c.Dock = DockStyle.None; c.Margin = new Padding(0, 0, 14, 14); lower.Controls.Add(c); }
-            pageControls.Add(lower);
+            { c.Dock = DockStyle.None; c.Margin = new Padding(0, 0, 0, 14); column.Controls.Add(c); }
+            whole.Controls.Add(column);
+            pageControls.Add(whole);
         }
         else
         {
@@ -985,7 +991,7 @@ public class SettingsEditor : EditorBase
     {
         base.OnResize(e);
         // wrist pages go wider: their smaller cards sit side by side when there is room
-        int side = Math.Max(12, (ClientSize.Width - (wristHand >= 0 ? 1760 : 940)) / 2);
+        int side = Math.Max(12, (ClientSize.Width - (wristHand >= 0 ? 1800 : 940)) / 2);
         if (Padding.Left != side)
             Padding = new Padding(side, 8, side, 8);
     }
