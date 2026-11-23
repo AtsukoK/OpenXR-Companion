@@ -12,6 +12,7 @@ public class AllBindingsPage : EditorBase
     static string show = "all"; // all, controller, wheels, wrist
 
     public void FocusSearch() { search.Focus(); }
+    internal void SetSearch(string q) { search.Text = q; }
 
     public AllBindingsPage(ProfileModel profile)
     {

@@ -159,4 +159,58 @@ public partial class MainForm
         f.Close();
         if (before == null) File.Delete(RailFile); else File.WriteAllText(RailFile, before);
     }
+
+    // The README's screenshots (docs/images): the built-in default profile, list folded, a readable window size.
+    public static void GithubShots(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        string before = File.Exists(RailFile) ? File.ReadAllText(RailFile) : null;
+        var f = new MainForm { StartPosition = FormStartPosition.Manual, Location = new Point(0, 0), Size = new Size(1920, 1040) };
+        f.Show();
+        var shotDir = Path.Combine(Path.GetTempPath(), "vro_github_shots");
+        Directory.CreateDirectory(shotDir);
+        var builtin = Path.Combine(shotDir, "default.json"); // shows as "Profile: default"
+        File.WriteAllText(builtin, Native.DefaultProfile() ?? "{}");
+        f.LoadFile(builtin);
+        f.SetFolded(true);
+        void Snap(string name)
+        {
+            for (int i = 0; i < 12; i++)
+                Application.DoEvents();
+            using var bmp = new Bitmap(f.Width, f.Height); // PrintWindow: overlapping parts (the tour's card) come out right
+            using (var g = Graphics.FromImage(bmp)) { var dc = g.GetHdc(); PrintWindow(f.Handle, dc, 2); g.ReleaseHdc(dc); }
+            bmp.Save(Path.Combine(dir, name + ".png"));
+        }
+        var p = f.Profile;
+        f.GoTo("overview"); Snap("editor-overview");
+        f.GoTo(p); Snap("editor-settings");
+        f.GoTo(ControllersPage); Snap("editor-controllers");
+        if (f.currentEditor is ControllersHub hub) { hub.OpenPart(1, "thumbrest"); Snap("editor-controller-buttons"); }
+        f.GoTo(BindingsPage); Snap("editor-all-bindings");
+        if (f.currentEditor is AllBindingsPage ab) { ab.SetSearch("mirror"); Snap("editor-search"); }
+        var opened = p.Bindings.FirstOrDefault(b => b.Enabled && b.Action?.Type == ActionType.Wheel);
+        if (opened != null) { f.GoTo(opened); Snap("editor-binding"); }
+        var wheel = opened != null ? p.Wheels.GetValueOrDefault(opened.Action.Wheel ?? "") : p.Wheels.Values.FirstOrDefault();
+        if (wheel != null)
+        {
+            f.GoTo(wheel);
+            if (f.currentEditor is WheelPageEditor wpe) { wpe.EditFirstItem(); Snap("editor-wheel"); wpe.ShowOpeners(); Snap("editor-wheel-opened-by"); wpe.ShowLibrary(); Snap("editor-all-buttons"); }
+        }
+        f.GoTo("wheels"); Snap("editor-wheels");
+        f.GoTo("wrist0");
+        if (f.currentEditor is SettingsEditor se) { se.EditFirstButton?.Invoke(); Snap("editor-wrist-panel"); se.ShowAdvanced?.Invoke(); Snap("editor-wrist-advanced"); }
+        var monitor = p.WristFor(0).Pages.Values.SelectMany(pg => pg.Items.Select(it => (pg, it))).FirstOrDefault(x => x.it.Action?.Type == ActionType.Screen);
+        if (monitor.it != null) { f.GoTo("wrist1"); SettingsEditor.OpenPage = monitor.pg; SettingsEditor.OpenItem = monitor.it; f.GoTo("wrist0"); Snap("editor-screen-button"); }
+        foreach (var (key, name) in new[] { ("mirror", "editor-headset-mirror"), ("offsets", "editor-controller-offsets"), ("experimental", "editor-experimental") })
+        { f.GoTo(SettingsPage.ByKey(key)); Snap(name); }
+        f.GoTo("overview");
+        f.StartTutorial("main");
+        for (int i = 0; i < 9; i++) { f.TourTick(); if (i == 8) break; f.TourGo(Math.Min(f.tourAt + 1, f.tour.Count - 1)); if (f.tour[f.tourAt].Done != null) break; }
+        Snap("editor-tutorial");
+        f.tourSnapshot = f.Serialize();
+        f.EndTutorial(false);
+        f.dirty = false;
+        f.Close();
+        if (before == null) File.Delete(RailFile); else File.WriteAllText(RailFile, before);
+    }
 }

@@ -82,33 +82,55 @@ Older profiles keep their own panels; add any of these buttons in the editor.
 
 ## Using the editor
 
-The editor opens on the **Overview**: one card per feature, with a switch to turn it on or off and a blue button that jumps to its settings. The list on the left holds everything in the profile, grouped by controller, wheels and wrist panels.
+The editor opens on the **Overview**: one card per feature, with a switch to turn it on or off and a blue button that jumps to its settings. The **icon bar** on the left goes to every page: Overview, Settings, Controllers, All bindings, Wheels, the left and right wrist panels, and Search (» unfolds the full list if you prefer it).
 
-![Editor overview: a list of bindings, wheels and wrist panels on the left, cards with on/off switches on the right](docs/images/editor-overview.png)
+![Editor overview: the icon bar on the left, cards with on/off switches for the master switch, VR keyboard, both wheels and both wrist panels](docs/images/editor-overview.png)
 
-**Bindings** decide what a controller button does. Pick the hand and button, how it's used (press, hold, double tap...), and what happens. You can open a wheel, press a key (**Record key** captures it from your keyboard), run a macro, open the VR keyboard, and more. "+ add another button" makes a combo.
+### Tutorials
 
-![Binding page: button, gesture, layer conditions and the action](docs/images/editor-binding.png)
+New here? The **Tutorial** button at the top opens a menu of tours:
+
+- **Start here**: the full tour (make a wheel, put something on it, pick the controller button that opens it, see every page), and **Open a wheel from a controller button** on its own.
+- **How do I...**: sprint with a double flick, give a button a second job on hold, swap two buttons, reuse a button you made somewhere else, show your desktop on your wrist, fix how hands and guns point.
+- **About each page**: a short tour of each page. Every page also has a **Show me this page** button on its yellow tip bar.
+
+A tour frames what to look at, waits for you on the "your turn" steps, and offers to throw away what you made at the end.
+
+![The full tour on the Wheels page: the New wheel card framed in orange and a "Your turn: make a wheel" card](docs/images/editor-tutorial.png)
+
+### Wheels and the button that opens them
+
+**Wheels** shows a card per wheel and what opens it; **New wheel** makes one. A wheel's page has its picture (click an item to edit it, drag one onto another to swap them) and, on the right, three tabs:
+
+- **Items on this wheel**: drag ≡ to reorder, the circle switches an item on or off, sort by place or on-first.
+- **Opened by**: the controller buttons that open this wheel. **+ Add a button that opens it** picks the button and how you press it (double-tap, hold, press, double-tap and hold).
+- **All buttons**: everything you made, with a search box; **+ Add here** puts a copy on this wheel.
+
+The tabs at the top go between a wheel and its sub-wheels; **+ Add sub-wheel** makes one with a Back item and a More item that opens it. With an item chosen, Del deletes it, Ctrl+D copies it and Alt+←/→ move it.
+
+![Wheel page: the right-hand wheel picture, the chosen item's settings, and the list of its items](docs/images/editor-wheel.png)
+
+![The Opened by tab: the binding that opens the wheel and "+ Add a button that opens it"](docs/images/editor-wheel-opened-by.png)
+
+What an item, wrist button or binding does is picked from cards in groups (Keys, This wheel / This panel, Open, Set up, Advanced) instead of a long list. **Record key** captures a key from your keyboard.
 
 ### Controller buttons
 
-Click **Right controller** or **Left controller** in the list to see a drawing of your controller. Pick your controller type at the top (Quest 3 / 3S, Quest 2 / Rift S, Quest Pro, Pico 4, Valve Index and Index-style controllers such as the Steam Frame's, Vive wands, Windows Mixed Reality, HP Reverb G2). Buttons that already do something show a blue number.
+**Controllers** shows both of your controllers from above and from the side, with a tag on each button: blue = your bindings, grey "Default" = the game's own control. Pick your controller type at the top (Quest 3 / 3S, Quest 2 / Rift S, Quest Pro, Pico 4, Valve Index and Index-style controllers such as the Steam Frame's, Vive wands, Windows Mixed Reality, HP Reverb G2). **Apply a controller preset...** sets the usual buttons that open your wheels; **Controller offsets** fixes how the game's hands and guns point.
 
-Click a button to see each way of using it: pressing it, just touching it (resting a finger on it, where the controller can feel that), pushing the stick up, down, left or right. Each lists what it does now (normal bindings first, then those that only work in a layer such as shift), and **+ Add…** offers:
+![Controllers page: both Quest 3 controllers from above and from the side, with a tag per button](docs/images/editor-controllers.png)
 
-- **+ Press a key**: holds a keyboard key or mouse button down while you use it.
-- **+ Act as another button**: the game sees another of its buttons instead, for as long as you hold it (like remapping in SteamVR).
-- **Turn off in the game**: the game no longer sees that button.
-- **+ Something else**: any other action (a wheel, a macro, a layer...) in the binding editor.
-- **Double flick** (stick directions; double-tap and hold on buttons): press a key held for as long as you keep pushing after a quick second flick, like sprinting on a double flick forward. The game still gets the stick.
+The **+** on a tag adds something to that button:
 
-Click the **thumbstick** for its **stick options** (saved with the profile, all off at 0): an **inner deadzone** and **outer deadzone** for what the game sees from the stick, and a **direction zone** so a forward push that leans a little sideways doesn't also count as left or right for your bindings.
+- **Press a key**: holds a keyboard key or mouse button down while you use it.
+- **Swap with another button**: the two buttons trade places in the game.
+- **Hold: press a key**: a quick tap still reaches the game as a normal press; holding (0.4 s) presses your key. Works on touch inputs too (the thumbrest).
+- **Double flick** (stick directions) / **double-tap and hold** (buttons): a key held for as long as you keep pushing after a quick second flick, like sprinting on a double flick forward. The game still gets the stick.
+- **Something else**: any other action (a wheel, a macro, a layer...) in the binding editor.
 
-The **Hold:** choices keep the button's normal use in the game: your choice starts only when you hold the button (0.4 s), the game doesn't see it while you hold, and a quick tap still reaches the game as a normal press. Like the Bannerlord VR radial menu on a held button.
+Click a button or its tag for the side panel: each way of using it (press, touch, up, down...), with a switch, copy and delete on every binding, and **Reset to default** to give the button back to the game. Click the **thumbstick** for its stick options (inner and outer deadzone, direction zone). Parts OpenXR Companion can't read are shown greyed out.
 
-These make ordinary bindings, listed under the controller, so you can change or switch them off later. A touch binding never hides the button's presses from the game. Parts OpenXR Companion can't read (system buttons, the Index trackpad, the WMR touchpad) are shown greyed out.
-
-![Controller page: a Quest 3 controller with its buttons named, A selected, and what pressing or touching A does](docs/images/editor-controller-buttons.png)
+![Controllers page with the side panel open on the right thumbrest](docs/images/editor-controller-buttons.png)
 
 <details><summary>All controller pictures</summary>
 
@@ -116,17 +138,29 @@ These make ordinary bindings, listed under the controller, so you can change or 
 
 </details>
 
-**Wheels** show a live picture. Click a segment to edit that item, use "+ Add item" or "+ Add sub-wheel" under a wheel in the list, and drag items to reorder them.
+A binding's own page says it in one sentence at the top ("Double-tap Right Thumbrest → Opens wheel 'right'"), then **When you use the button** (button, combo, how, timing, layers, pass to the game) and **What it does**.
 
-![Wheel page with a clickable picture of the right-hand wheel](docs/images/editor-wheel.png)
+![Binding page: a one-line summary, then the When you use the button and What it does cards](docs/images/editor-binding.png)
 
-**Wrist panels** can be off, have their own pages, or mirror the other arm. Set the side of the arm, the text direction and the size here, or move them by hand in the headset with **Adjust positions**.
+### All bindings and search
 
-**Settings** is split into short pages in the list: General, Wheel look and picking, Pointing, VR keyboard, Screen mirror, Controller offsets, Headset mirror and Advanced. Each section is a card tagged **Saved with profile** (press Save) or **Applies straight away**. Hover or click an (i) icon for help. The search box at the top finds settings as well as items. The button on the right of the toolbar switches between **Dark** (the default), **Light** and **Auto** (follows Windows).
+**All bindings** lists everything in the profile: what your controller buttons do, every wheel item and every wrist button. The circle switches one on or off, ⧉ copies it, ✕ deletes it, and a click opens it. Bindings for buttons your controller picture doesn't have are listed first, so none get lost. The **Search** icon opens this page with the cursor in its search box; matching Settings pages are listed on top.
 
-![Search: typing "zoom" lists only the Headset mirror page and highlights its matching settings](docs/images/editor-search.png)
+![All bindings: controller bindings as sentences, then each wheel's items, with switches, copy and delete](docs/images/editor-all-bindings.png)
 
-![Wrist panel page: off / own pages / mirror, first page, side of the arm and text direction](docs/images/editor-wrist-panel.png)
+![Search: typing "mirror" lists the matching settings pages and buttons](docs/images/editor-search.png)
+
+### Wrist panels
+
+**Wrist panels** can be off, have their own pages, or mirror the other arm. The page tabs follow the order you go through them; **+ Add page** makes one with a Next page button to it. Click a button in the picture or the list to edit it, drag one onto another to swap them, and use the circle in the list to switch buttons on or off. **Advanced settings** holds where the panel sits on the arm, its size, when it shows, and **Reset wrist panel location**. Or move it by hand in the headset with **Adjust positions**.
+
+![Wrist panel page: pages, the panel picture, the chosen button's settings and the list of buttons](docs/images/editor-wrist-panel.png)
+
+### Settings
+
+**Settings** is a page of tiles: General, Wheel look and picking, Pointing, VR keyboard, Screen mirror, Controller offsets, Headset mirror, Experimental and Advanced. Each section is a card tagged **Saved with profile** (press Save) or **Applies straight away**. Hover or click an (i) icon for help. The button on the right of the toolbar switches between **Dark** (the default), **Light** and **Auto** (follows Windows). Profiles can be made, renamed and deleted from the toolbar; the build's version is at the bottom right.
+
+![Settings: one tile per feature](docs/images/editor-settings.png)
 
 ## In-game settings menu
 
@@ -149,7 +183,7 @@ Shows one of your monitors, or a single window (a browser, Discord, a video, a T
 
 ### Getting started
 
-1. Turn it on with a **Screen** button. The default left wrist panel has **Monitor** on its first page and a page of screen buttons under **More > Screen options**. You can also add a button with the action **Mirror a monitor** to any wheel or wrist panel.
+1. Turn it on with a **Screen** button. The default left wrist panel has **Monitor** on its first page and a page of screen buttons under **More > Screen options**. You can also add a button with the action **Desktop screen** to any wheel or wrist panel.
 2. Point at the screen. A button bar appears under it.
 3. Press **Choose...** and pick a monitor or window from the list.
 
@@ -159,15 +193,17 @@ The screen starts on your main monitor. Whatever you pick in the headset is save
 
 ### Add a screen button to a wrist panel
 
-1. Open the editor. In the list on the left, unfold your **Left wrist panel** (or right) and select the page you want it on, for example the first page.
-2. Click **+ Add** and give the new button a name, for example "Monitor".
-3. Under **When pressed**, set **What happens** to **Mirror a monitor**, and **Screen** to **Show / hide it**.
+1. Open the editor and click the **L** (or **R**) wrist panel icon. Pick the page tab you want it on, for example the first page.
+2. Click **+ Add button** and give the new button a label, for example "Monitor".
+3. Click the button next to **What it does**, pick **Desktop screen**, and set **Screen** to **Show / hide it**.
 4. Leave **Monitor** on **Keep the current one** and **Or a window** empty, so the button keeps whatever you pick with **Choose...** in the headset. Optionally set **Show it** to the wrist or place you want.
 5. Save (Ctrl+S). A running game picks it up within a second.
 
-![Editor: a "Monitor" button on the left wrist panel set to Mirror a monitor, Show / hide it](docs/images/editor-screen-button.png)
+The **Show my desktop on my wrist** tutorial (Tutorial button) walks you through it.
 
-The same works on a wheel: add an item to any wheel and pick **Mirror a monitor**. Other choices for the button are **Open the list of monitors and windows** (Choose), next / previous monitor or window, next frame rate, and move.
+![Editor: a "Monitor" button on the left wrist panel set to Desktop screen, Show / hide it](docs/images/editor-screen-button.png)
+
+The same works on a wheel: add an item to any wheel and pick **Desktop screen**. Other choices for the button are **Open the list of monitors and windows** (Choose), next / previous monitor or window, next frame rate, and move.
 
 ### The button bar
 
