@@ -1,3 +1,45 @@
+# RESUME HERE (2026-11-23, night) -- dist2 only
+Work happens on branch **dist2-line** in this worktree (G:/Claude/OpenXR Companion - Dist2), built into
+G:/Claude/VR Radial Overlay/dist2 (layer + editor, last full build 9fe1050). All committed locally, NOT pushed, nothing
+merged to main. dist3 (branch controller-buttons, worktree "OpenXR Companion - Buttons") is a retired editor design
+trial: take parts from it when asked, don't build it. Nothing from tonight is tested in a headset; most editor screens
+were only checked with screenshots (editor --rail-shot <dir>, VRO_SHOTS_PROFILE = a copy of a profile, nothing saved).
+
+Next: the user tests dist2 (editor + headset), especially the items marked (!) below. Merge / release only when they say so.
+
+## In dist2 now (on top of 5ab37fa, the binding keyboard on the menu pane)
+- Key dialog auto-layout with "OK, use this" (QuickBindingDialogs.Ask).
+- Left list folds into an icon bar (MainForm.Rail.cs, list_folded.txt): Overview, Settings, Controllers, Wheels,
+  L / R wrist, Search; section lit.
+- Controllers screen (ControllersHub.cs, tag "controllers", from dist3): both controllers stacked top + side, + on every
+  tag (way cards -> action cards), side drawer with the button's ways / binding editor, only that hand shown while the
+  drawer is open, big orange Close, Controller model dropdown + "Apply a controller preset..." (= Your controllers);
+  no Configure buttons. (!) the dropdown fix (it assigned the ctor parameter, not the field).
+- Settings (cog) = feature tiles (FeatureTiles.cs, from dist3). Wheels = wheel gallery cards (WheelsGallery.cs).
+- Overview: two columns of pairs (Master switch | VR keyboard, wheels L | R, wrists L | R, other | tools), big
+  "Profile: ..." button top middle (switch profile), "Master switch" (was Overlay for this game).
+- + Add cards: Press a key, Swap with another button (two bindings A<->B), Hold: press a key (tap passthrough),
+  Double flick / double-tap-hold, Something else. Removed: turn off in game, hold: act as another button.
+- Compact way cards (+ Add on the same row, press point only once bound). Stick options: "Direction counts at (%)".
+- Double flick "Keeps going until (%)": Binding::releaseAt / "release_at" (layer, editor, headset menu); new double
+  flicks 0.3; test TestDoubleFlickRelease. (!)
+- Wrist panel page (SettingsEditor wrist): cards Pages and buttons (tabs, page title / shown first / delete page,
+  + Add button / + Add page, click a button -> its ItemEditor beside the picture with Move / Delete; no page jump: the
+  list rebuilds quietly, keepPage) | Panel | On the arm (big orange "Reset wrist panel location" = built-in place from
+  the default profile, numbers folded under "Fine-tune the position with numbers") | When it shows (WristCones.cs view
+  cones). Arm drawing removed. Page picture follows Columns.
+- (!) Layer fix: wrist panels and the keyboard redraw after a profile reload (Engine::Reset kept version numbers
+  counting; they restarted at 0, so an old picture / old columns could stay while pointing used the new layout).
+  Test TestReloadRedraws.
+- Layer tests: sh quick_test.sh (0 failures). This worktree needed third_party/openxr-sdk copied in (submodule).
+
+## Open / asked
+- Wrist text-direction presets (fingers / between / along arm) are old and unchecked; user to choose: replace them,
+  or place the panel per preset in the headset and measure. The arm drawing is gone.
+- editor controller_picture.txt said "questpro" (changed 2026-11-23 01:58, cause unknown); user can set Quest 3 again
+  with the Controllers screen dropdown (the in-headset menu draws whatever it says).
+- Page internal name (for "open another page") only renamable via the list.
+
 # RESUME HERE (2026-11-22, late)
 Branch controller-buttons (worktree "OpenXR Companion - Buttons"), all committed locally (last 416c417 + this notes
 commit), NOT pushed; dist2 (G:/Claude/VR Radial Overlay/dist2) matches it. Nothing below tested in a headset yet.
