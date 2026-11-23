@@ -706,6 +706,7 @@ public class SettingsEditor : EditorBase
     // The panel's pages as tabs and the chosen page's buttons as a picture: click a button to edit it, or add one.
     // (With a mirrored panel these are the other panel's pages.)
     internal Action EditFirstButton;
+    Action ShowPageRow;
 
     Control WristButtons()
     {
@@ -744,6 +745,7 @@ public class SettingsEditor : EditorBase
             tabs.ResumeLayout();
             preview.Wheel = shown;
             preview.Invalidate();
+            ShowPageRow?.Invoke();
         }
         // the chosen button's settings, right here beside the picture (no jump to another page)
         var editHost = new Panel { Size = new Size(560, 470), Margin = new Padding(0, 4, 0, 0), BackColor = Theme.Card };
@@ -805,13 +807,61 @@ public class SettingsEditor : EditorBase
         {
             string name = "page" + (owner.Pages.Count + 1);
             while (owner.Pages.ContainsKey(name)) name += "_";
-            var np = new WheelModel { Name = name, Title = name };
+            var np = new WheelModel { Name = name, Title = "Page " + (owner.Pages.Count + 1) };
             owner.Pages[name] = np;
-            Fire();
-            main?.RebuildList();
-            main?.GoTo(np);
+            Structure();
+            shown = np;
+            ShowTabs();
+            Edit(null);
         }));
-        side.Controls.Add(Btn("Edit this page (name, title) \u25B6", () => { if (shown != null) main?.GoTo(shown); }));
+        var pageRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0, 0, 0, 8) };
+        pageRow.Controls.Add(new Label { Text = "Page title:", AutoSize = true, ForeColor = Theme.Text, Margin = new Padding(0, 8, 6, 0) });
+        var title = new TextBox { Width = 220, Margin = new Padding(0, 4, 12, 0) };
+        title.TextChanged += (o, e) =>
+        {
+            if (shown == null || title.Text == (shown.Title ?? "")) return;
+            shown.Title = title.Text;
+            preview.Invalidate();
+            Fire();
+        };
+        title.Leave += (o, e) => ShowTabs(); // the tab shows the new title
+        pageRow.Controls.Add(title);
+        var first = new CheckBox { Text = "Shown first", AutoSize = true, ForeColor = Theme.Text, Margin = new Padding(0, 7, 12, 0) };
+        first.CheckedChanged += (o, e) =>
+        {
+            if (shown == null || !first.Checked || owner.Start == shown.Name) return;
+            owner.Start = shown.Name;
+            Fire();
+            ShowTabs();
+        };
+        pageRow.Controls.Add(first);
+        var delPage = Btn("Delete page", () =>
+        {
+            if (shown == null) return;
+            if (owner.Pages.Count <= 1)
+            { MessageBox.Show(FindForm(), "A panel needs at least one page. Switch the panel off instead."); return; }
+            if (MessageBox.Show(FindForm(), $"Delete the page '{shown.Title ?? shown.Name}' and its {shown.Items.Count} buttons?\n\nButtons on other pages that opened it are removed too.", "Delete page", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK)
+                return;
+            string gone = shown.Name;
+            owner.Pages.Remove(gone);
+            foreach (var pg in owner.Pages.Values) // nothing may open a page that isn't there
+                pg.Items.RemoveAll(i => i.Action?.Type == ActionType.Page && i.Action.Page == gone);
+            if (owner.Start == gone)
+                owner.Start = owner.Pages.Keys.First();
+            shown = owner.Pages.GetValueOrDefault(owner.Start) ?? owner.Pages.Values.First();
+            Structure();
+            ShowTabs();
+            Edit(null);
+        });
+        delPage.BackColor = Color.FromArgb(170, 50, 50); delPage.ForeColor = Color.White; delPage.FlatAppearance.BorderSize = 0;
+        delPage.Margin = new Padding(0, 0, 0, 0);
+        pageRow.Controls.Add(delPage);
+        ShowPageRow = () =>
+        {
+            title.Text = shown?.Title ?? "";
+            first.Checked = shown != null && owner.Start == shown.Name;
+            first.Enabled = !first.Checked; // a page stops being first when another one is made first
+        };
         var editCol = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
         editCol.Controls.Add(editBar);
         editCol.Controls.Add(editHost);
@@ -819,6 +869,7 @@ public class SettingsEditor : EditorBase
         row.Controls.Add(preview);
         row.Controls.Add(editCol);
         box.Controls.Add(tabs);
+        box.Controls.Add(pageRow);
         box.Controls.Add(side);
         box.Controls.Add(row);
         ShowTabs();
