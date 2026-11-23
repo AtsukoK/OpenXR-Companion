@@ -122,6 +122,8 @@ public partial class MainForm
             bmp.Save(Path.Combine(dir, name + ".png"));
         }
         f.GoTo("wheels");
+        f.SetFolded(true);
+        Snap("wheels_folded");
         f.SetFolded(false);
         Snap("list_open");
         f.SetFolded(true);

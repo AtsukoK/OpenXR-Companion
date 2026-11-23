@@ -75,6 +75,9 @@ public partial class MainForm
                                                Changed,
                                                () => ControllerPictureChoice.Load(Profile), ControllerPictureChoice.Save);
                 break;
+            case "wheels" when string.IsNullOrWhiteSpace(Q):
+                ed = new WheelsHub(Profile, GoTo, () => Add()); // the wheels as cards; "New wheel" adds one here (the Wheels row is selected)
+                break;
             case "wheels":
                 ed = InfoWithPic(n, "Wheels", "A wheel is a radial menu. A controller binding opens a main wheel; an item on a wheel can open a sub-wheel.\n\nTo make a wheel, click '+ Add' on the WHEELS bar in the list. To add items or a sub-wheel, unfold WHEELS (the arrow on its left) and use the '+ Add item' / '+ Add sub-wheel' row under a wheel.");
                 break;
