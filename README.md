@@ -6,6 +6,8 @@ Hand tools for any OpenXR game: radial wheels, wrist panels, button combos, a VR
 
 **[Download the latest release](https://github.com/AtsukoK/OpenXR-Companion/releases/latest)** · **[My other work and support on Patreon](https://www.patreon.com/cw/AtsukoK)** · **[Buy me a coffee on Ko-fi](https://ko-fi.com/atsukok)**
 
+> **Try the new editor:** a redesigned editor (icon bar, controller pictures you click, wheel and wrist pages with drag and drop, an All bindings list, guided tutorials for every page) is being tested on the **[experimental branch](https://github.com/AtsukoK/OpenXR-Companion/tree/experimental)**. See **[its README](https://github.com/AtsukoK/OpenXR-Companion/blob/experimental/README.md)** for what's new and its prerelease downloads. This page describes the current release.
+
 ## What it does
 
 | Feature | In short |
