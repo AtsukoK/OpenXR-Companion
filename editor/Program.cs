@@ -13,6 +13,8 @@ static class Program
         { MainForm.ControllerPics(args[1]); return 0; }
         if (args.Length == 2 && args[0] == "--picker-shot")
         { Theme.Set(true); ControllerButtonsPage.AddPickerShot(args[1]); return 0; }
+        if (args.Length == 2 && args[0] == "--rail-shot")
+        { MainForm.RailShot(args[1]); return 0; }
         if (args.Length == 2 && args[0] == "--shots")
         { MainForm.Shots(args[1]); return 0; }
         if (args.Length == 3 && args[0] == "--perf")

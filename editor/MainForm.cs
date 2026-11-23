@@ -172,6 +172,7 @@ public partial class MainForm : Form
         }
         if (backBtn != null)
             backBtn.Enabled = history.Count > 0;
+        UpdateRail();
         if (homeBtn != null)
             homeBtn.Enabled = lastTag as string != "overview";
     }
@@ -279,6 +280,7 @@ public partial class MainForm : Form
         split.Panel1.Controls.Add(left);
         split.Panel2.Controls.Add(editorHost);
         split.Panel2.Controls.Add(BuildNavBar());
+        SetupRail(split, left, searchWrap);
 
         status.Items.Add(statusText);
         {   // credit, bottom right on every page
