@@ -427,7 +427,7 @@ static std::string EditorControllerPicture() {
     if (readAt >= 0 && now - readAt < 2.0) return pick;
     readAt = now;
     pick.clear();
-    std::ifstream f(DataDir() + L"\controller_picture.txt");
+    std::ifstream f(DataDir() + L"\\controller_picture.txt"); // "\\": a lone "\c" is no escape and drops the backslash
     std::getline(f, pick);
     pick.erase(pick.find_last_not_of(" \r\n\t") + 1);
     return pick;
