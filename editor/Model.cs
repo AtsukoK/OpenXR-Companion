@@ -468,6 +468,8 @@ public class BindingModel
     [Category("2 Timing")][JsonPropertyName("double_tap_ms")] public int DoubleTapMs { get; set; } = 350;
     [Category("2 Timing"), Description("Trigger, grip, Index trackpad press and Index grip full squeeze: how far it must go to count, 0.02..0.98. 0 = the usual point. Low = hair trigger, high = a long pull.")]
     [JsonPropertyName("press_at"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public double PressAt { get; set; }
+    [Category("2 Timing"), Description("Double flick on a stick: once going, it lasts until the stick comes back below this distance from the middle (0.05..0.9), in any direction. 0 = stop when the stick leaves the direction.")]
+    [JsonPropertyName("release_at"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public double ReleaseAt { get; set; }
     [Category("3 Conditions"), TypeConverter(typeof(LayerConv)), Description("Only active while ALL these layers are on (comma separated). This is how a chord or toggle changes what normal buttons do.")]
     [JsonPropertyName("layers")] public string Layers { get; set; } = "";
     [Category("3 Conditions"), TypeConverter(typeof(LayerConv)), Description("Not active while any of these layers is on (comma separated).")]

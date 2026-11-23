@@ -408,8 +408,19 @@ void Engine::UpdateBindingPressPoints() {
     }
 }
 
+// A running double flick with its own release point: the stick's distance from the middle, in any direction.
+static bool IsDirection(const InputId& t) {
+    return (t.comp == C_STICK || t.comp == C_TRACKPAD) && (t.feat == F_UP || t.feat == F_DOWN || t.feat == F_LEFT || t.feat == F_RIGHT);
+}
+
 bool Engine::TrigDown(int i) const {
     const Binding& b = prof->bindings[i];
+    if (b.gesture == Gesture::DoubleTapHold && b.releaseAt > 0 && bs[i].fired && IsDirection(b.chord.back())) {
+        const HandRaw& r = fr.h[b.chord.back().hand];
+        float x = b.chord.back().comp == C_STICK ? r.sx : r.padX, y = b.chord.back().comp == C_STICK ? r.sy : r.padY;
+        if (b.chord.back().comp == C_TRACKPAD && !r.padTouch) return false;
+        return std::sqrt(x * x + y * y) > b.releaseAt;
+    }
     if (b.pressAt > 0 && AnalogOf(b.chord.back()) >= 0) return bs[i].analogDown;
     return Down(b.chord.back());
 }

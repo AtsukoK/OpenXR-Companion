@@ -545,3 +545,39 @@ void TestPressPoints() { // a binding's own press point (hair trigger, long pull
     f.h[0].gripForce = 0.1f; step();
     CHECK(!on(2), "index full squeeze: easing off ends it");
 }
+
+void TestDoubleFlickRelease() { // a double flick with release_at: steer freely while it runs, stops when the stick comes back to the middle
+    std::string err;
+    auto p = ParseProfileText(R"({ "sticks": { "left": { "direction_angle": 30 } }, "bindings": [
+      { "name": "sprint", "input": "left.thumbstick.up", "gesture": "double_tap_hold", "double_tap_ms": 350, "release_at": 0.3, "block": "none",
+        "action": { "type": "layer", "layer": "sprint", "mode": "hold" } },
+      { "name": "old", "input": "left.thumbstick.down", "gesture": "double_tap_hold", "double_tap_ms": 350, "block": "none",
+        "action": { "type": "layer", "layer": "old", "mode": "hold" } } ] })", err);
+    CHECK(p && err.empty(), ("double flick: profile parses: " + err).c_str());
+    if (!p) return;
+    CHECK(std::fabs(p->bindings[0].releaseAt - 0.3f) < 1e-4f && p->bindings[1].releaseAt == 0, "double flick: release_at is read");
+    Engine e;
+    e.SetProfile(p);
+    Frame f;
+    f.headValid = true;
+    for (auto& h : f.h) { h.gripValid = h.aimValid = true; h.aimPose = h.gripPose = { { 0, 0, 0, 1 }, { 0, 1.f, -0.3f } }; }
+    double t = 1.0;
+    auto step = [&] { t += 0.02; f.t = t; e.Update(f); };
+    auto on = [&](int i) { return e.IsOn(p->bindings[i].action); };
+    auto flick = [&](float x, float y) { f.h[0].sx = x; f.h[0].sy = y; step(); f.h[0].sx = f.h[0].sy = 0; step(); };
+    step();
+    flick(0, 1);
+    f.h[0].sy = 1; step();
+    CHECK(on(0), "double flick: a second flick forward starts it");
+    f.h[0].sx = 0.9f; f.h[0].sy = 0.3f; step(); // steered well out of the 30 degree zone
+    CHECK(on(0), "double flick: steering sideways keeps it going");
+    f.h[0].sx = 0.2f; f.h[0].sy = 0.1f; step();
+    CHECK(!on(0), "double flick: letting the stick back toward the middle stops it");
+    f.h[0].sx = f.h[0].sy = 0; step(); step();
+    t += 1.0;
+    flick(0, -1);
+    f.h[0].sy = -1; step();
+    CHECK(on(1), "double flick (old way): starts");
+    f.h[0].sx = 0.9f; f.h[0].sy = -0.3f; step();
+    CHECK(!on(1), "double flick (old way): leaving the direction zone stops it");
+}

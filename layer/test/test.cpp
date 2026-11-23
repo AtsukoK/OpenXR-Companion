@@ -13,6 +13,7 @@ void TestHoldOnlyQuickBinding();
 void TestStickOptions();
 void TestSteamFrame();
 void TestPressPoints();
+void TestDoubleFlickRelease();
 void TestInGameMenu();
 void TestMenuSave();
 
@@ -2667,6 +2668,7 @@ int main(int argc, char** argv) {
     TestStickOptions();
     TestSteamFrame();
     TestPressPoints();
+    TestDoubleFlickRelease();
     TestInGameMenu();
     TestMenuSave();
     printf("\n%d failures\n", fails);

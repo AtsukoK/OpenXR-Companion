@@ -281,6 +281,7 @@ MenuPage PartPage(Engine& e, InGameMenu& m, int hand, int comp) {
                                              if (way.gesture == Gesture::DoubleTapHold) {
                                                  b.block = BindingBlock::None; // the game still gets the push (you keep walking)
                                                  b.doubleTapMs = 350;
+                                                 b.releaseAt = 0.3f; // keeps going while steering, until the stick is let go
                                              }
                                              b.action.type = ActType::Key;
                                              b.action.mode = ActMode::Hold;
@@ -438,6 +439,16 @@ MenuPage BindingDetail(Engine& e, InGameMenu& m, int index) {
         at.unit = "%";
         at.atMin = "Default";
         p.rows.push_back(at);
+    }
+    if (b.gesture == Gesture::DoubleTapHold && (firing.comp == C_STICK || firing.comp == C_TRACKPAD) && firing.feat != F_PRESS && firing.feat != F_TOUCH) {
+        // a double flick: once going, how far back toward the middle the stick may come before it stops
+        MenuRow rel = MenuRow::Number("Keeps going until", "Let go below this; steer freely meanwhile. Off: stops when it leaves the direction",
+                                      [get] { return get().releaseAt; },
+                                      [edit](float v) { edit([v](Binding& x) { x.releaseAt = v < 0.025f ? 0.f : v; }); }, 0, 0.9f, 0.05f);
+        rel.scale = 100;
+        rel.unit = "%";
+        rel.atMin = "off";
+        p.rows.push_back(rel);
     }
     p.rows.push_back(MenuRow::Choice("Gesture", "", kGestureWords, [get] { return GestureIndex(get().gesture); },
                                      [edit](int i) { edit([i](Binding& x) { x.gesture = kGestures[i]; }); }));

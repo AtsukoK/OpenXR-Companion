@@ -198,6 +198,10 @@ struct Binding {
     // How far an analog input (trigger, grip, trackpad force; the Index grip's full squeeze) must go to count, 0..1.
     // 0 = the profile's usual threshold. Low = hair trigger, high = a long pull. Released a little below it.
     float pressAt = 0;
+    // Double flick (double_tap_hold on a stick or trackpad direction): once going, it lasts until the stick comes back
+    // below this distance from the middle, whatever the direction (steer freely while it runs). 0 = off: it stops when
+    // the stick leaves the direction (its zone) or drops below the direction's release point.
+    float releaseAt = 0;
     std::vector<std::string> layers, notLayers;
     BindingBlock block = BindingBlock::Trigger;
     bool tapPassthrough = false;

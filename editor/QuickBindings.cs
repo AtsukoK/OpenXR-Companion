@@ -60,6 +60,7 @@ public static class QuickBindings
         Input = input,
         Gesture = GestureKind.DoubleTapHold,
         DoubleTapMs = DoubleFlickMs,
+        ReleaseAt = (input ?? "").EndsWith(".up") || (input ?? "").EndsWith(".down") || (input ?? "").EndsWith(".left") || (input ?? "").EndsWith(".right") ? 0.3 : 0,
         Block = "none",
         Action = new ActionModel { Type = ActionType.Key, Keys = keys, Mode = "hold" },
     };
