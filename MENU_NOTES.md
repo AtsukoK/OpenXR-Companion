@@ -36,8 +36,7 @@ Next: the user tests dist2 (editor + headset), especially the items marked (!) b
 ## Open / asked
 - Wrist text-direction presets (fingers / between / along arm) are old and unchecked; user to choose: replace them,
   or place the panel per preset in the headset and measure. The arm drawing is gone.
-- editor controller_picture.txt said "questpro" (changed 2026-11-23 01:58, cause unknown); user can set Quest 3 again
-  with the Controllers screen dropdown (the in-headset menu draws whatever it says).
+- editor controller_picture.txt is quest3 again (checked 2026-11-23; earlier it said "questpro", cause unknown).
 - Page internal name (for "open another page") only renamable via the list.
 
 # RESUME HERE (2026-11-22, late)
