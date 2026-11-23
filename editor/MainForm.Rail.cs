@@ -1,4 +1,4 @@
-namespace OpenXRCompanionEditor;
+﻿namespace OpenXRCompanionEditor;
 
 // The list on the left folds into a narrow bar of icons (« / »): one icon per section, a tooltip with its name, and
 // the section you are in lit up. Folded or not is remembered between runs.
@@ -137,7 +137,7 @@ public partial class MainForm
         if (f.currentEditor is SettingsEditor low)
         { low.AutoScrollPosition = new Point(0, 99999); Snap("wrist_left_lower"); low.AutoScrollPosition = new Point(0, 0); }
         if (f.currentEditor is SettingsEditor se && se.EditFirstButton != null)
-        { se.EditFirstButton(); Snap("wrist_left_editing"); }
+        { se.EditFirstButton(); Snap("wrist_left_editing"); se.ShowAdvanced?.Invoke(); Snap("wrist_left_advanced"); }
         using (var cones = new WristCones { GazeDeg = 20, FacingDeg = 35 })
         using (var bmp = new Bitmap(cones.Width, cones.Height))
         { cones.DrawToBitmap(bmp, new Rectangle(0, 0, cones.Width, cones.Height)); bmp.Save(Path.Combine(dir, "cones.png")); }

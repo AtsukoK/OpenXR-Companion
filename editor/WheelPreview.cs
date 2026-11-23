@@ -1,4 +1,4 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 
 namespace OpenXRCompanionEditor;
 
@@ -57,12 +57,45 @@ public class WheelPreview : Control
         float seg = 360f / n;
         return (int)(((ang + seg / 2 + 720) % 360) / seg) % n;
     }
-    protected override void OnMouseClick(MouseEventArgs e)
+    // Drag a button onto another to swap them (wrist pages); a click without dragging picks it.
+    public event Action<WheelItemModel, WheelItemModel> ItemDropped;
+    int downAt = -1, dropAt = -1;
+    Point downPos;
+    bool dragging;
+    protected override void OnMouseDown(MouseEventArgs e)
     {
-        int i = HitIndex(e.Location);
-        if (i >= 0)
-            ItemClicked?.Invoke(On[i]);
+        base.OnMouseDown(e);
+        if (e.Button != MouseButtons.Left) return;
+        downAt = HitIndex(e.Location);
+        downPos = e.Location;
+        dragging = false;
     }
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        if (downAt < 0 || e.Button != MouseButtons.Left || ItemDropped == null) return;
+        if (!dragging && Math.Abs(e.X - downPos.X) + Math.Abs(e.Y - downPos.Y) > 8)
+        { dragging = true; Cursor = Cursors.SizeAll; }
+        if (dragging)
+        {
+            int over = HitIndex(e.Location);
+            if (over != dropAt) { dropAt = over; Invalidate(); }
+        }
+    }
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        base.OnMouseUp(e);
+        var items = On;
+        int from = downAt, to = dropAt;
+        bool wasDrag = dragging;
+        downAt = dropAt = -1; dragging = false; Cursor = Cursors.Hand; Invalidate();
+        if (from < 0 || from >= items.Count) return;
+        if (!wasDrag)
+            ItemClicked?.Invoke(items[from]);
+        else if (to >= 0 && to != from && to < items.Count)
+            ItemDropped?.Invoke(items[from], items[to]);
+    }
+    internal int DropTarget => dragging ? dropAt : -1;
 
     protected override void OnPaint(PaintEventArgs e)
     {
@@ -142,6 +175,8 @@ public class WheelPreview : Control
             var it = items[i];
             var r = Px(cells[i]);
             using var gp = Round(r, r.Height * 0.22f);
+            if (i == DropTarget) // where a dragged button will land
+            { using var dp = new Pen(Color.FromArgb(255, 255, 170, 60), 3) { DashStyle = DashStyle.Dash }; g.DrawPath(dp, gp); }
             Brush br = ReferenceEquals(it, Highlight) ? hovB : segB;
             SolidBrush custom = null;
             if (!ReferenceEquals(it, Highlight) && TryColor(it.Color, out var col))

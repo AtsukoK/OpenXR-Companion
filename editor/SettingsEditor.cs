@@ -131,16 +131,43 @@ public class SettingsEditor : EditorBase
             var column = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, BackColor = Theme.Page, Margin = Padding.Empty };
             pagesCard.Dock = DockStyle.None; pagesCard.Margin = new Padding(0, 0, 14, 14);
             whole.Controls.Add(pagesCard);
-            foreach (var c in new Control[] { panelCard, C("On the arm", "\uE7FC", false, armRow) })
+            // the right column: this page's buttons, or (Advanced settings) the panel and where it sits on the arm
+            var listCard = C("Buttons on this page", "\uE8FD", false, WristList);
+            var armCard = C("On the arm", "\uE7FC", false, armRow);
+            var switcher = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0, 0, 0, 10), BackColor = Theme.Page };
+            Button Tab(string text)
+            {
+                var b = new Button { Text = text, AutoSize = true, Height = 38, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(0, 0, 8, 0), Padding = new Padding(8, 0, 8, 0),
+                                     Font = new Font("Segoe UI", 10.5f, FontStyle.Bold), Tag = "swatch" };
+                b.FlatAppearance.BorderSize = 0;
+                return b;
+            }
+            var tabButtons = Tab("\u2630  Buttons on this page");
+            var tabAdvanced = Tab("\u2699  Advanced settings");
+            void ShowRight(bool advanced)
+            {
+                listCard.Visible = !advanced;
+                panelCard.Visible = armCard.Visible = advanced;
+                foreach (var (b, on) in new[] { (tabButtons, !advanced), (tabAdvanced, advanced) })
+                { b.BackColor = on ? Color.FromArgb(40, 110, 200) : Theme.Button; b.ForeColor = on ? Color.White : Theme.Text; }
+            }
+            tabButtons.Click += (s2, e2) => ShowRight(false);
+            tabAdvanced.Click += (s2, e2) => ShowRight(true);
+            ShowAdvanced = () => ShowRight(true); // screenshots
+            switcher.Controls.Add(tabButtons);
+            switcher.Controls.Add(tabAdvanced);
+            column.Controls.Add(switcher);
+            foreach (var c in new Control[] { listCard, panelCard, armCard })
             { c.Dock = DockStyle.None; c.Margin = new Padding(0, 0, 0, 14); column.Controls.Add(c); }
+            ShowRight(false);
             // the cards in the column all as wide as the widest one
             bool sizing = false;
             column.Layout += (s2, e2) =>
             {
                 if (sizing) return;
                 sizing = true;
-                int w = column.Controls.Cast<Control>().Max(k => k.PreferredSize.Width);
-                foreach (Control k in column.Controls)
+                int w = column.Controls.OfType<Card>().Max(k => k.PreferredSize.Width);
+                foreach (Control k in column.Controls.OfType<Card>())
                     if (k.MinimumSize.Width != w) k.MinimumSize = new Size(w, 0);
                 sizing = false;
             };
@@ -730,8 +757,10 @@ public class SettingsEditor : EditorBase
     // The panel's pages as tabs and the chosen page's buttons as a picture: click a button to edit it, or add one.
     // (With a mirrored panel these are the other panel's pages.)
     internal Action EditFirstButton;
+    internal Action ShowAdvanced;
     Action ShowPageRow;
     Action<int> ColumnsChanged; // the page picture follows the Columns setting
+    Control WristList; // this page's buttons as a list (made by WristButtons, shown on the right)
 
     Control WristButtons()
     {
@@ -754,6 +783,7 @@ public class SettingsEditor : EditorBase
             b.Click += (o, e) => click();
             return b;
         }
+        Action refreshList = null; // the button list on the right (made at the end)
         void ShowTabs()
         {
             tabs.SuspendLayout();
@@ -785,6 +815,7 @@ public class SettingsEditor : EditorBase
             preview.Wheel = shown;
             preview.Invalidate();
             ShowPageRow?.Invoke();
+            refreshList?.Invoke();
         }
         // the chosen button's settings, right here beside the picture (no jump to another page)
         var editHost = new Panel { Size = new Size(560, 640), Margin = new Padding(0, 4, 0, 0), BackColor = Theme.Card };
@@ -793,6 +824,7 @@ public class SettingsEditor : EditorBase
         void Edit(WheelItemModel it)
         {
             editing = it;
+            refreshList?.Invoke();
             preview.Highlight = it;
             preview.Invalidate();
             foreach (Control c in editHost.Controls.Cast<Control>().ToList()) c.Dispose();
@@ -809,7 +841,7 @@ public class SettingsEditor : EditorBase
             if (Theme.IsDark) ThemeWalker.Apply(ie);
             editHost.Controls.Add(ie);
         }
-        void Structure() { Fire(); main?.RebuildList(); preview.Invalidate(); }
+        void Structure() { Fire(); main?.RebuildList(); preview.Invalidate(); refreshList?.Invoke(); }
         void Move(int by)
         {
             if (editing == null || shown == null) return;
@@ -831,6 +863,15 @@ public class SettingsEditor : EditorBase
         del.BackColor = Color.FromArgb(170, 50, 50); del.ForeColor = Color.White; del.FlatAppearance.BorderSize = 0;
         editBar.Controls.Add(del);
         preview.ItemClicked += it => Edit(it);
+        preview.ItemDropped += (a, b) => // dragged onto another button: they swap places
+        {
+            if (shown == null) return;
+            int i = shown.Items.IndexOf(a), j = shown.Items.IndexOf(b);
+            if (i < 0 || j < 0) return;
+            (shown.Items[i], shown.Items[j]) = (shown.Items[j], shown.Items[i]);
+            Structure();
+            Edit(a);
+        };
         var side = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, Margin = new Padding(0, 0, 0, 4) };
         side.Controls.Add(Btn("+ Add button", () =>
         {
@@ -917,6 +958,63 @@ public class SettingsEditor : EditorBase
         Edit(null);
         ColumnsChanged = cols => { preview.GridColumns = cols; preview.Invalidate(); if (editing != null) Edit(editing); };
         EditFirstButton = () => { if (shown?.Items.Count > 0) Edit(shown.Items[0]); }; // screenshots
+
+        // the list of this page's buttons, for the right of the page: on/off, pick, drag to reorder
+        var list = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
+        list.Controls.Add(new Label { Text = "Click one to change it. Drag \u2261 to reorder (or drag a button in the picture onto another to swap them). The circle switches it on or off: off = not on the panel, kept here.", AutoSize = true, MaximumSize = new Size(560, 0), ForeColor = Theme.SubText, Margin = new Padding(0, 0, 0, 8) });
+        var rows = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty, AllowDrop = true };
+        list.Controls.Add(rows);
+        WheelItemModel dragged = null;
+        Control Row(WheelItemModel it)
+        {
+            bool sel = ReferenceEquals(it, editing);
+            var r = new TableLayoutPanel { ColumnCount = 4, RowCount = 1, Width = 560, Height = 46, Margin = new Padding(0, 0, 0, 4), Cursor = Cursors.Hand, AllowDrop = true,
+                                           BackColor = sel ? Color.FromArgb(40, 90, 160) : Theme.Button };
+            r.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 34));
+            r.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            r.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230));
+            r.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 44));
+            r.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            var grip = new Label { Text = "\u2261", Font = new Font("Segoe UI", 15f), ForeColor = Theme.SubText, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Cursor = Cursors.SizeAll, Margin = Padding.Empty };
+            var name = new Label { Text = string.IsNullOrWhiteSpace(it.Label) ? "(no label)" : it.Label, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true, Margin = Padding.Empty,
+                                   Font = new Font("Segoe UI", 10f, it.Enabled ? FontStyle.Bold : FontStyle.Italic), ForeColor = sel ? Color.White : it.Enabled ? Theme.Text : Theme.OffText };
+            var does = new Label { Text = MainForm.Plain(it.Action), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true, Margin = Padding.Empty,
+                                   ForeColor = sel ? Color.FromArgb(220, 230, 255) : it.Enabled ? Theme.SubText : Theme.OffText };
+            var onOff = new Label { Text = it.Enabled ? "\u2714" : "\u25CB", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Cursor = Cursors.Hand, Margin = Padding.Empty,
+                                    Font = new Font("Segoe UI", 14f, FontStyle.Bold), ForeColor = it.Enabled ? Color.FromArgb(60, 190, 110) : Theme.SubText };
+            FormPanel.Tips.SetToolTip(onOff, it.Enabled ? "On: click to take it off the panel (kept in this list)" : "Off: click to put it back on the panel");
+            onOff.Click += (o, e) => { it.Enabled = !it.Enabled; Structure(); };
+            r.Controls.Add(grip, 0, 0); r.Controls.Add(name, 1, 0); r.Controls.Add(does, 2, 0); r.Controls.Add(onOff, 3, 0);
+            foreach (var c in new Control[] { r, name, does })
+                c.Click += (o, e) => Edit(it);
+            grip.MouseDown += (o, e) => { if (e.Button == MouseButtons.Left) { dragged = it; grip.DoDragDrop(it, DragDropEffects.Move); dragged = null; } };
+            void Over(object o, DragEventArgs e) => e.Effect = dragged != null ? DragDropEffects.Move : DragDropEffects.None;
+            void Drop(object o, DragEventArgs e)
+            {
+                var d = dragged; dragged = null;
+                if (d == null || ReferenceEquals(d, it) || shown == null) return;
+                int to = shown.Items.IndexOf(it);
+                shown.Items.Remove(d);
+                shown.Items.Insert(Math.Min(to, shown.Items.Count), d);
+                BeginInvoke(new Action(() => { Structure(); Edit(d); })); // after the drag has finished with these rows
+            }
+            foreach (var c in new Control[] { r, grip, name, does, onOff })
+            { c.AllowDrop = true; c.DragEnter += Over; c.DragOver += Over; c.DragDrop += Drop; }
+            return r;
+        }
+        refreshList = () =>
+        {
+            rows.SuspendLayout();
+            foreach (Control c in rows.Controls.Cast<Control>().ToList()) c.Dispose();
+            rows.Controls.Clear();
+            if (shown != null)
+                foreach (var it in shown.Items) rows.Controls.Add(Row(it));
+            if (shown == null || shown.Items.Count == 0)
+                rows.Controls.Add(new Label { Text = "No buttons yet: + Add button.", AutoSize = true, ForeColor = Theme.SubText });
+            rows.ResumeLayout();
+        };
+        refreshList();
+        WristList = list;
         return box;
     }
 
