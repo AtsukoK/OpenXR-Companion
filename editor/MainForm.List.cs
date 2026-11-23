@@ -60,7 +60,7 @@ public partial class MainForm
         TreeNode found = Find(tree.Nodes, sel);
         try
         {
-            keepPage = lastTag as string == ControllersPage; // on the controllers page: it stays, the list follows quietly
+            keepPage = lastTag as string is ControllersPage or "wrist0" or "wrist1"; // these pages stay, the list follows quietly
             try { tree.SelectedNode = found ?? overview; }
             finally { keepPage = false; }
             var rows = VisibleRows();

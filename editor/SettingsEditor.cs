@@ -79,7 +79,7 @@ public class SettingsEditor : EditorBase
         if (wristHand >= 0)
         {
             pageTitle = wristHand == 1 ? "Right wrist panel" : "Left wrist panel";
-            pageHelp = "Buttons on your forearm. They appear when you turn the forearm toward your eyes and look at it. Its pages are listed under this panel in the list on the left; select a page to add buttons.";
+            pageHelp = "Buttons on your forearm. They appear when you turn the forearm toward your eyes and look at it. Click a button in the picture below to change it right there.";
             pageControls.Add(C("Pages and buttons", "\uE80A", false, WristButtons()));
             pageControls.Add(C("Panel", "\uE8A9", false, wrist));
             // on the arm: the settings with the arm picture beside them, the position numbers folded under them
@@ -705,6 +705,8 @@ public class SettingsEditor : EditorBase
 
     // The panel's pages as tabs and the chosen page's buttons as a picture: click a button to edit it, or add one.
     // (With a mirrored panel these are the other panel's pages.)
+    internal Action EditFirstButton;
+
     Control WristButtons()
     {
         var owner = p.WristPages(wristHand);
@@ -734,7 +736,7 @@ public class SettingsEditor : EditorBase
             foreach (var pg in owner.Pages.Values.OrderBy(x => x.Name == owner.Start ? 0 : 1))
             {
                 var page = pg;
-                var b = Btn((string.IsNullOrWhiteSpace(page.Title) ? page.Name : page.Title) + (page.Name == owner.Start ? "  (first)" : ""), () => { shown = page; ShowTabs(); });
+                var b = Btn((string.IsNullOrWhiteSpace(page.Title) ? page.Name : page.Title) + (page.Name == owner.Start ? "  (first)" : ""), () => { shown = page; ShowTabs(); Edit(null); });
                 if (ReferenceEquals(page, shown))
                 { b.BackColor = Color.FromArgb(30, 130, 110); b.ForeColor = Color.White; b.FlatAppearance.BorderSize = 0; }
                 tabs.Controls.Add(b);
@@ -743,9 +745,52 @@ public class SettingsEditor : EditorBase
             preview.Wheel = shown;
             preview.Invalidate();
         }
-        preview.ItemClicked += it => main?.GoTo(it); // the button's own editor
-        var side = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
-        side.Controls.Add(new Label { Text = "Click a button in the picture to change what it does.", AutoSize = true, MaximumSize = new Size(300, 0), ForeColor = Theme.SubText, Margin = new Padding(0, 4, 0, 12) });
+        // the chosen button's settings, right here beside the picture (no jump to another page)
+        var editHost = new Panel { Size = new Size(560, 470), Margin = new Padding(0, 4, 0, 0), BackColor = Theme.Card };
+        var editBar = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty, Visible = false };
+        WheelItemModel editing = null;
+        void Edit(WheelItemModel it)
+        {
+            editing = it;
+            preview.Highlight = it;
+            preview.Invalidate();
+            foreach (Control c in editHost.Controls.Cast<Control>().ToList()) c.Dispose();
+            editHost.Controls.Clear();
+            editBar.Visible = it != null;
+            if (it == null || shown == null)
+            {
+                editHost.Controls.Add(new Label { Text = "Click a button in the picture to change it here.", AutoSize = true, ForeColor = Theme.SubText, Location = new Point(4, 8) });
+                return;
+            }
+            var ie = new ItemEditor(shown, it, owner, p.WristFor(wristHand).Columns) { Dock = DockStyle.Fill, Padding = new Padding(0) };
+            ie.Preview.Parent.Visible = false; // the picture is right next to it
+            ie.Changed += () => { preview.Invalidate(); Fire(); };
+            if (Theme.IsDark) ThemeWalker.Apply(ie);
+            editHost.Controls.Add(ie);
+        }
+        void Structure() { Fire(); main?.RebuildList(); preview.Invalidate(); }
+        void Move(int by)
+        {
+            if (editing == null || shown == null) return;
+            int i = shown.Items.IndexOf(editing), j = i + by;
+            if (i < 0 || j < 0 || j >= shown.Items.Count) return;
+            shown.Items.RemoveAt(i);
+            shown.Items.Insert(j, editing);
+            Structure();
+        }
+        editBar.Controls.Add(Btn("\u25C0 Move", () => Move(-1)));
+        editBar.Controls.Add(Btn("Move \u25B6", () => Move(1)));
+        var del = Btn("Delete button", () =>
+        {
+            if (editing == null || shown == null) return;
+            shown.Items.Remove(editing);
+            Structure();
+            Edit(null);
+        });
+        del.BackColor = Color.FromArgb(170, 50, 50); del.ForeColor = Color.White; del.FlatAppearance.BorderSize = 0;
+        editBar.Controls.Add(del);
+        preview.ItemClicked += it => Edit(it);
+        var side = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, Margin = new Padding(0, 0, 0, 4) };
         side.Controls.Add(Btn("+ Add button", () =>
         {
             if (shown == null) return;
@@ -753,9 +798,8 @@ public class SettingsEditor : EditorBase
             { MessageBox.Show(FindForm(), "A page holds at most 16 buttons. Add another page."); return; }
             var it = new WheelItemModel { Label = "New button", Action = new ActionModel { Type = ActionType.Key, Keys = "F1" } };
             shown.Items.Add(it);
-            Fire();
-            main?.RebuildList();
-            main?.GoTo(it);
+            Structure();
+            Edit(it); // its settings open right here
         }, primary: true));
         side.Controls.Add(Btn("+ Add page", () =>
         {
@@ -768,12 +812,18 @@ public class SettingsEditor : EditorBase
             main?.GoTo(np);
         }));
         side.Controls.Add(Btn("Edit this page (name, title) \u25B6", () => { if (shown != null) main?.GoTo(shown); }));
+        var editCol = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
+        editCol.Controls.Add(editBar);
+        editCol.Controls.Add(editHost);
         var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
         row.Controls.Add(preview);
-        row.Controls.Add(side);
+        row.Controls.Add(editCol);
         box.Controls.Add(tabs);
+        box.Controls.Add(side);
         box.Controls.Add(row);
         ShowTabs();
+        Edit(null);
+        EditFirstButton = () => { if (shown?.Items.Count > 0) Edit(shown.Items[0]); }; // screenshots
         return box;
     }
 
