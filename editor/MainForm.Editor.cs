@@ -35,6 +35,9 @@ public partial class MainForm
                     ed = ov;
                     break;
                 }
+            case ProfileModel p when string.IsNullOrWhiteSpace(Q):
+                ed = new FeaturesHub(p, GoTo); // the settings as big tiles; each opens its own page
+                break;
             case ProfileModel p:
                 { var se = new SettingsEditor(p, -1, "general", Q); se.Changed += Changed; ed = se; break; }
             case SettingsPage sp:
