@@ -80,6 +80,7 @@ public class SettingsEditor : EditorBase
         {
             pageTitle = wristHand == 1 ? "Right wrist panel" : "Left wrist panel";
             pageHelp = "Buttons on your forearm. They appear when you turn the forearm toward your eyes and look at it. Its pages are listed under this panel in the list on the left; select a page to add buttons.";
+            pageControls.Add(C("Pages and buttons", "\uE80A", false, WristButtons()));
             pageControls.Add(C("Panel", "\uE8A9", false, wrist));
             // on the arm: the settings with the arm picture beside them, the position numbers folded under them
             var armCol = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
@@ -119,8 +120,6 @@ public class SettingsEditor : EditorBase
             armCol.Controls.Add(wristNums);
             var armRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
             armRow.Controls.Add(armCol);
-            if (wristPose != null)
-            { wristPose.Margin = new Padding(12, 4, 0, 0); wristPose.Size = new Size(330, 280); armRow.Controls.Add(wristPose); } // drawn to its size
             pageControls.Add(C("On the arm", "\uE7FC", false, armRow));
             pageControls.Add(C("When it shows", "\uE890", false, wristShow));
         }
@@ -704,6 +703,80 @@ public class SettingsEditor : EditorBase
     readonly FormPanel wristArm = new(), wristNums = new(), wristShow = new();
     Control wristPose;
 
+    // The panel's pages as tabs and the chosen page's buttons as a picture: click a button to edit it, or add one.
+    // (With a mirrored panel these are the other panel's pages.)
+    Control WristButtons()
+    {
+        var owner = p.WristPages(wristHand);
+        var main = MainForm.Current;
+        var box = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
+        if (owner != p.WristFor(wristHand))
+            box.Controls.Add(new Label { Text = "This panel mirrors the " + (wristHand == 1 ? "left" : "right") + " panel: these are its pages.", AutoSize = true, ForeColor = Theme.SubText, Margin = new Padding(0, 0, 0, 6) });
+        var tabs = new FlowLayoutPanel { AutoSize = true, WrapContents = true, MaximumSize = new Size(880, 0), Margin = new Padding(0, 0, 0, 8) };
+        var preview = new WheelPreview { IsWristPage = true, GridColumns = p.WristFor(wristHand).Columns, Size = new Size(300, 260), Margin = new Padding(0, 0, 16, 0) };
+        preview.HandleCreated += (o, e) => preview.BackColor = Theme.Card; // the card's colour around the page (not white)
+        WheelModel shown = owner.Pages.GetValueOrDefault(owner.Start ?? "") ?? owner.Pages.Values.FirstOrDefault();
+        Button Btn(string text, Action click, bool primary = false)
+        {
+            var b = new Button { Text = text, AutoSize = true, Height = 34, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(0, 0, 8, 8),
+                                 Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), Tag = "swatch",
+                                 BackColor = primary ? Color.FromArgb(40, 110, 200) : Theme.Button, ForeColor = primary ? Color.White : Theme.Text };
+            b.FlatAppearance.BorderColor = Theme.CardBorder;
+            b.FlatAppearance.BorderSize = primary ? 0 : 1;
+            b.Click += (o, e) => click();
+            return b;
+        }
+        void ShowTabs()
+        {
+            tabs.SuspendLayout();
+            foreach (Control c in tabs.Controls.Cast<Control>().ToList()) c.Dispose();
+            tabs.Controls.Clear();
+            foreach (var pg in owner.Pages.Values.OrderBy(x => x.Name == owner.Start ? 0 : 1))
+            {
+                var page = pg;
+                var b = Btn((string.IsNullOrWhiteSpace(page.Title) ? page.Name : page.Title) + (page.Name == owner.Start ? "  (first)" : ""), () => { shown = page; ShowTabs(); });
+                if (ReferenceEquals(page, shown))
+                { b.BackColor = Color.FromArgb(30, 130, 110); b.ForeColor = Color.White; b.FlatAppearance.BorderSize = 0; }
+                tabs.Controls.Add(b);
+            }
+            tabs.ResumeLayout();
+            preview.Wheel = shown;
+            preview.Invalidate();
+        }
+        preview.ItemClicked += it => main?.GoTo(it); // the button's own editor
+        var side = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
+        side.Controls.Add(new Label { Text = "Click a button in the picture to change what it does.", AutoSize = true, MaximumSize = new Size(300, 0), ForeColor = Theme.SubText, Margin = new Padding(0, 4, 0, 12) });
+        side.Controls.Add(Btn("+ Add button", () =>
+        {
+            if (shown == null) return;
+            if (shown.Items.Count >= 16)
+            { MessageBox.Show(FindForm(), "A page holds at most 16 buttons. Add another page."); return; }
+            var it = new WheelItemModel { Label = "New button", Action = new ActionModel { Type = ActionType.Key, Keys = "F1" } };
+            shown.Items.Add(it);
+            Fire();
+            main?.RebuildList();
+            main?.GoTo(it);
+        }, primary: true));
+        side.Controls.Add(Btn("+ Add page", () =>
+        {
+            string name = "page" + (owner.Pages.Count + 1);
+            while (owner.Pages.ContainsKey(name)) name += "_";
+            var np = new WheelModel { Name = name, Title = name };
+            owner.Pages[name] = np;
+            Fire();
+            main?.RebuildList();
+            main?.GoTo(np);
+        }));
+        side.Controls.Add(Btn("Edit this page (name, title) \u25B6", () => { if (shown != null) main?.GoTo(shown); }));
+        var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+        row.Controls.Add(preview);
+        row.Controls.Add(side);
+        box.Controls.Add(tabs);
+        box.Controls.Add(row);
+        ShowTabs();
+        return box;
+    }
+
     FormPanel BuildWrist()
     {
         var wp = p.WristFor(Math.Max(0, wristHand));
@@ -740,8 +813,10 @@ public class SettingsEditor : EditorBase
             wristNums.AddRow("Toward the elbow (m)", Num(-0.1m, 0.3m, 0.01m, 2, wp.TowardElbow, v => wp.TowardElbow = v), "Distance back along the forearm from the controller.");
             wristNums.AddRow("Off the arm (m)", Num(-0.1m, 0.15m, 0.005m, 3, wp.Lift, v => wp.Lift = v));
             wristNums.AddRow("Sideways (m)", Num(-0.2m, 0.2m, 0.005m, 3, wp.Side, v => wp.Side = v), "Across the forearm. Easiest to set by hand: Adjust positions in the headset.");
-            wristShow.AddRow("Arm must face me within (deg)", Num(5, 80, 1, 0, wp.FacingDeg, v => wp.FacingDeg = v), "Smaller = you must turn the arm more deliberately.");
-            wristShow.AddRow("Must look within (deg)", Num(5, 60, 1, 0, wp.GazeDeg, v => wp.GazeDeg = v), "How close to the centre of your view the panel must be.");
+            var cones = new WristCones { GazeDeg = wp.GazeDeg, FacingDeg = wp.FacingDeg };
+            wristShow.AddRow("Must look within (deg)", Num(5, 60, 1, 0, wp.GazeDeg, v => { wp.GazeDeg = v; cones.GazeDeg = v; cones.Invalidate(); }), "How close to the centre of your view the panel must be.");
+            wristShow.AddRow("Arm must face me within (deg)", Num(5, 80, 1, 0, wp.FacingDeg, v => { wp.FacingDeg = v; cones.FacingDeg = v; cones.Invalidate(); }), "Smaller = you must turn the arm more deliberately.");
+            wristShow.AddRow("", cones);
             wristShow.AddRow("Show after looking (ms)", Int(0, 2000, 50, wp.ShowMs, v => wp.ShowMs = v));
             wristShow.AddRow("Hide after looking away (ms)", Int(0, 3000, 50, wp.HideMs, v => wp.HideMs = v));
 

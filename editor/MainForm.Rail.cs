@@ -132,6 +132,9 @@ public partial class MainForm
         Snap("overview");
         f.GoTo("wrist0");
         Snap("wrist_left");
+        using (var cones = new WristCones { GazeDeg = 20, FacingDeg = 35 })
+        using (var bmp = new Bitmap(cones.Width, cones.Height))
+        { cones.DrawToBitmap(bmp, new Rectangle(0, 0, cones.Width, cones.Height)); bmp.Save(Path.Combine(dir, "cones.png")); }
         f.GoTo(ControllersPage);
         Snap("controllers_folded");
         if (f.currentEditor is ControllersHub hub)
