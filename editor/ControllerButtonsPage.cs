@@ -191,6 +191,18 @@ public class ControllerButtonsPage : UserControl
                     "What the game sees: the last part toward the edge already counts as fully pushed, for sticks that never quite reach the edge. 5 to 10 is typical.");
         form.AddRow("Direction zone (°)", Number(45, (decimal)Math.Round(stick.DirectionAngle), v => stick.DirectionAngle = v),
                     "For your bindings on Up / Down / Left / Right: a direction only counts while the stick points within this many degrees of it, so pushing forward and leaning a little sideways doesn't also fire Left or Right. 45 = always the nearest direction. 30 leaves a gap between them.");
+        // how far the stick must be pushed for a direction to count (both sticks: a profile threshold)
+        var th = profile.Thresholds ??= new Thresholds();
+        var pushAt = new NumericUpDown { Minimum = 30, Maximum = 95, Increment = 5, Width = 80, Value = (decimal)Math.Clamp(Math.Round(th.StickOn * 100), 30, 95) };
+        pushAt.ValueChanged += (s, e) =>
+        {
+            th.StickOn = (float)pushAt.Value / 100f;
+            th.StickOff = Math.Max(0.1f, th.StickOn - 0.2f); // let go a little below it
+            changed();
+            Redraw();
+        };
+        form.AddRow("Direction counts at (%)", pushAt,
+                    "For your bindings on Up / Down / Left / Right: how far the stick has to be pushed before a direction counts (the outer ring in the picture). It lets go a little below it. The same for both sticks. 70 is the default; lower = a light push, higher = push it almost to the edge.");
         Redraw();
         var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
         row.Controls.Add(form);
