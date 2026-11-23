@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -23,6 +23,8 @@ public partial class MainForm
         switch (n?.Tag)
         {
             case ControllersPage:
+            case "bindings_left": // the list's Left / Right controller rows open the new Controllers screen too
+            case "bindings_right":
                 ed = new ControllersHub(Profile, ControllerLayouts.ById(ControllerPictureChoice.Load(Profile)),
                                         (hand, comp) => { if (comp != null) ControllerButtonsPage.StartWith(hand, comp); GoTo(hand == 0 ? "bindings_left" : "bindings_right"); },
                                         (b, openIt) => Later(() => { if (openIt) Rebuild(b); else { MarkDirty(); BuildTree(); } }),
@@ -67,14 +69,6 @@ public partial class MainForm
                     ed = ie;
                     break;
                 }
-            case "bindings_right":
-            case "bindings_left":
-                ed = new ControllerButtonsPage(Profile, (string)n.Tag == "bindings_left" ? 0 : 1,
-                                               b => tree.SelectedNode = Find(tree.Nodes, b),
-                                               (b, openIt) => Later(() => { if (openIt) Rebuild(b); else { MarkDirty(); BuildTree(); } }),
-                                               Changed,
-                                               () => ControllerPictureChoice.Load(Profile), ControllerPictureChoice.Save);
-                break;
             case "wheels" when string.IsNullOrWhiteSpace(Q):
                 ed = new WheelsHub(Profile, GoTo, () => Add()); // the wheels as cards; "New wheel" adds one here (the Wheels row is selected)
                 break;
