@@ -487,6 +487,21 @@ public class ControllerButtonsPage : UserControl
         return add;
     }
 
+    // Swap: this button acts as the one picked, and that one acts as this one (two bindings). Null when cancelled.
+    static BindingModel Swap(IWin32Window owner, ProfileModel profile, ControllerLayout layout, int hand, string input, string what)
+    {
+        if (QuickBindingDialogs.AskGameButton(owner, what, layout, hand) is not var (target, name))
+            return null;
+        if (target == input)
+            return null; // swapping a button with itself does nothing
+        var there = QuickBindings.GameButton(input, what, target, name);
+        there.Name = $"{what} \u21C4 {name}";
+        var back = QuickBindings.GameButton(target, name, input, what);
+        back.Name = $"{name} \u21C4 {what}";
+        profile.Bindings.Add(back); // the other half; the caller adds the first
+        return there;
+    }
+
     // "+ Add..." for one way of using a part: the popup of choices, then the key or button it asks for. The new binding
     // is already in the profile; finishInEditor = "Something else" (open it in the binding editor). Null when cancelled.
     internal static (BindingModel binding, bool finishInEditor)? AddFor(IWin32Window owner, ProfileModel profile, ControllerLayout layout, int hand, ControllerPart part, string way)
@@ -501,7 +516,7 @@ public class ControllerButtonsPage : UserControl
         BindingModel made = kind switch
         {
             AddKind.Key or AddKind.HoldKey => QuickBindingDialogs.AskKey(owner, what) is string keys ? QuickBindings.Key(input, what, keys) : null,
-            AddKind.Remap or AddKind.HoldRemap => QuickBindingDialogs.AskGameButton(owner, what, layout, hand) is var (target, name) ? QuickBindings.GameButton(input, what, target, name) : null,
+            AddKind.Remap or AddKind.HoldRemap => Swap(owner, profile, layout, hand, input, what),
             AddKind.Off => QuickBindings.OffInGame(input, what),
             AddKind.DoubleFlick => QuickBindingDialogs.AskKey(owner, what) is string k2 ? QuickBindings.DoubleFlickKey(input, what, k2) : null,
             _ => QuickBindings.Blank(input, what),
@@ -526,18 +541,12 @@ public class ControllerButtonsPage : UserControl
             "game functions that only have a keyboard key, like a map, inventory, quick save (F5) or push-to-talk.", AddKind.Key);
         if (!isTouchOnly) // touching can't stand in for another button or be hidden without hiding its presses
         {
-            Opt("When you use it", "Act as another button",
-                "The game sees a different controller button instead of this one, so you can move a game control to where it feels better.",
-                "swapping jump and crouch, or putting a hard-to-reach button on your other hand.", AddKind.Remap);
-            Opt("When you use it", "Turn off in the game",
-                "The game no longer sees this button at all. Your own bindings on it still work.",
-                "a button you keep pressing by accident, or one you want only for your own bindings.", AddKind.Off);
+            Opt("When you use it", "Swap with another button",
+                "This button and the one you pick trade places in the game: each does what the other one did. Both stay hidden from the game while you use them.",
+                "a jump or crouch that feels better on the other button, or moving a control to your other hand.", AddKind.Remap);
             Opt("Hold it", "Hold: press a key",
                 "Holding it for a moment presses a key. A quick tap still does what the game normally does, so you get two functions on one button.",
                 "keeping the game's tap action and adding a second one on hold, like hold B for the map.", AddKind.HoldKey);
-            Opt("Hold it", "Hold: act as another button",
-                "Holding it acts as another controller button. A quick tap still reaches the game as usual.",
-                "reaching a second game control without giving up the first one.", AddKind.HoldRemap);
             Opt(isStickDirection ? "Flick it twice" : "Tap it twice",
                 isStickDirection ? "Double flick: press a key" : "Double-tap and hold: press a key",
                 isStickDirection ? "Flick the stick this way twice quickly, then keep pushing: the key is held while you push. The game still gets the stick as usual."

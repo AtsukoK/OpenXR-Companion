@@ -20,7 +20,7 @@ public static class QuickBindingDialogs
                 foreach (var way in part.Ways)
                     choices.Add(new Choice(ControllerLayouts.InputOf(h, part, way), NameOf(layout, h, part, way)));
         var list = new ChoiceBox(choices, 380);
-        string input = Ask(owner, "Act as another button", $"{what}: which of the game's buttons should it be? While you use it, the game sees that button instead.", list, () => list.Code);
+        string input = Ask(owner, "Swap with another button", $"{what}: which button should it trade places with? Each then does what the other one did in the game.", list, () => list.Code);
         if (input == null)
             return null;
         return (input, choices.First(c => c.Code == input).Text);
