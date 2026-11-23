@@ -34,10 +34,18 @@ void Engine::SetProfile(std::shared_ptr<Profile> p) {
 
 void Engine::Reset() {
     if (wr.open) CloseWheel();
-    kb = KeyboardView{};
+    { // the views start over, but their version numbers keep counting up: the overlay redraws a panel only when its
+      // version differs from the one it drew, so a restart from 0 could leave an old picture (old columns) on screen
+        uint64_t v = kb.version, bv = kb.barVersion;
+        kb = KeyboardView{};
+        kb.version = v + 1;
+        kb.barVersion = bv + 1;
+    }
     keyboard.run_.repeatKey = keyboard.run_.repeatHand = -1;
     for (int h = 0; h < 2; h++) {
+        uint64_t wv = wrist[h].version;
         wrist[h] = WristView{};
+        wrist[h].version = wv + 1; // see above: always a new number after a reload
         wristPanels.run_[h] = {};
     }
     adjust = false;

@@ -14,6 +14,7 @@ void TestStickOptions();
 void TestSteamFrame();
 void TestPressPoints();
 void TestDoubleFlickRelease();
+void TestReloadRedraws();
 void TestInGameMenu();
 void TestMenuSave();
 
@@ -2669,6 +2670,7 @@ int main(int argc, char** argv) {
     TestSteamFrame();
     TestPressPoints();
     TestDoubleFlickRelease();
+    TestReloadRedraws();
     TestInGameMenu();
     TestMenuSave();
     printf("\n%d failures\n", fails);

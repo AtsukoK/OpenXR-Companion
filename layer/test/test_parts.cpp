@@ -581,3 +581,16 @@ void TestDoubleFlickRelease() { // a double flick with release_at: steer freely 
     f.h[0].sx = 0.9f; f.h[0].sy = -0.3f; step();
     CHECK(!on(1), "double flick (old way): leaving the direction zone stops it");
 }
+
+void TestReloadRedraws() { // after a profile reload the wrist panels and keyboard get new version numbers (so they are drawn again)
+    std::string err;
+    auto p = ParseProfileText(DefaultProfileJson(), err);
+    Engine e;
+    e.SetProfile(p);
+    e.wrist[0].version = 7;
+    e.wrist[1].version = 3;
+    e.kb.version = 5;
+    auto q = ParseProfileText(DefaultProfileJson(), err);
+    e.SetProfile(q);
+    CHECK(e.wrist[0].version > 7 && e.wrist[1].version > 3 && e.kb.version > 5, "reload: panel versions keep counting up (old pictures are redrawn)");
+}

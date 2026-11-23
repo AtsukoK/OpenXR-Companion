@@ -707,6 +707,7 @@ public class SettingsEditor : EditorBase
     // (With a mirrored panel these are the other panel's pages.)
     internal Action EditFirstButton;
     Action ShowPageRow;
+    Action<int> ColumnsChanged; // the page picture follows the Columns setting
 
     Control WristButtons()
     {
@@ -874,6 +875,7 @@ public class SettingsEditor : EditorBase
         box.Controls.Add(row);
         ShowTabs();
         Edit(null);
+        ColumnsChanged = cols => { preview.GridColumns = cols; preview.Invalidate(); if (editing != null) Edit(editing); };
         EditFirstButton = () => { if (shown?.Items.Count > 0) Edit(shown.Items[0]); }; // screenshots
         return box;
     }
@@ -907,7 +909,7 @@ public class SettingsEditor : EditorBase
             FormPanel.Show(lRot, wp.TextUp == "custom");
             wristPose = pose; // shown beside the arm settings
             wrist.AddRow("Press buttons by", Pick(new Choice[] { new("both", "Poking or pointing + trigger"), new("poke", "Poking with the other controller"), new("point", "Pointing + trigger") }, wp.Press, v => wp.Press = v));
-            wrist.AddRow("Columns", Int(1, 4, 1, wp.Columns, v => wp.Columns = v));
+            wrist.AddRow("Columns", Int(1, 4, 1, wp.Columns, v => { wp.Columns = v; ColumnsChanged?.Invoke(v); }));
             wristArm.AddRow("Placed by hand", ResetPose(() => wp.Pose != null, () => wp.Pose = null),
                 "Adjust positions in the headset: grab the panel with your other hand's grip and put it anywhere on the arm, at any angle. That spot replaces side, text direction, toward the elbow, off the arm and sideways.");
             wristArm.AddRow("Panel size (m)", Num(0.05m, 0.4m, 0.01m, 2, wp.Size, v => wp.Size = v), "0.11 m is about the width of a large phone.");
