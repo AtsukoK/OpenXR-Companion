@@ -1,3 +1,36 @@
+# RESUME HERE (2026-11-23, morning) -- dist2 only, release target: branch experimental
+Branch **dist2-line** (= local branch **experimental**, last afdb57e + this notes commit), built into
+G:/Claude/VR Radial Overlay/dist2: editor, 64-bit layer AND dist2/x86 32-bit layer (Fallout NV / TTWVR uses x86: always
+build32 + copy it too). Version **0.2.14-experimental**. Nothing pushed. Main (G:/Claude/VR Radial Overlay, branch main)
+has one local commit 764362b: README link to the experimental branch (push together with experimental).
+Tests: layer quick_test 0 failures; editor --selftest OK; --tourshots ALL TOURS FINISHED.
+
+Next: the user tests in the editor + headset; then push experimental, publish a PRERELEASE v0.2.14-experimental from it,
+push main's README link. Ask the user before pushing.
+
+## Done since the night notes (all untested by hand unless said)
+- Binding sheet (editor): 1 How / 2 Button / 3 What happens + foldable Details (open by default); How sets "the game
+  also gets the button" (press: no; hold: no + tap passthrough; double-tap / quick tap / touch: yes). "+" on a tag makes a
+  starter binding (does nothing, game keeps the button) and opens the sheet; "Swap with..." in the side panel.
+- Headset binding page matches: 1 How / 2 Button / 3 What happens / Details, same default rule; new "What happens" page:
+  key/mouse/controller (binding keyboard), any wheel, VR keyboard, desktop screen, settings menu, nothing.
+- Headset fixes: binding keyboard on the menu is drawn after the menu (was covered by the dimmed menu = grey);
+  controller_picture.txt was never read (path "\c" lost its backslash) -> Quest 3 now drawn as Quest 3 (user saw the ring).
+- **Direction zone now straightens the GAME's stick** (user's intent: jump on up must not turn): inside a zone the game
+  gets exactly up/down/left/right, diagonals untouched, 0 = off; single-axis game actions use the whole stick
+  (Engine::stickX/Y). Tests added. Headset degree sign fixed ("Â°").
+- Tutorials: menu (rail cap icon + toolbar), full tour, How-do-I tours, page tours, "Show me this page" on every tip bar.
+- Updater: experimental builds also look at prereleases (UpdateCheck.PickReleaseAsync).
+- Editor starts on the icon bar and maximized. README (experimental) rewritten + docs/images from --github-shots.
+- All bindings page (rail), wheel page (sub-wheel tabs, Opened by, All buttons), wrist page list/drag/Advanced, Overview fits one screen,
+  Rename profile, version bottom right.
+
+## To test in the headset (priority)
+1. Controller pictures: Quest 3 (no ring) in the in-game menu.
+2. Direction zone on the right stick: push up slightly right -> jump, no turn.
+3. In-game binding page: How changes "game also gets", What happens -> a wheel; binding keyboard bright.
+4. Editor: + on a tag -> sheet; Details fold; tutorials (full tour) end to end.
+
 # RESUME HERE (2026-11-23, night) -- dist2 only
 Work happens on branch **dist2-line** in this worktree (G:/Claude/OpenXR Companion - Dist2), built into
 G:/Claude/VR Radial Overlay/dist2 (layer + editor, last full build 9fe1050). All committed locally, NOT pushed, nothing
