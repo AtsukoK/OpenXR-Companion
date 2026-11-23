@@ -215,6 +215,7 @@ public:
     void SetProfile(std::shared_ptr<Profile> p);
     void Reset();
     void Update(const Frame& f);
+    float stickX[2]{}, stickY[2]{}; // each hand's stick this frame, as read (straightening a single-axis game action)
     bool Active() const { return prof && prof->enabled; }
     std::shared_ptr<Profile> prof;
 

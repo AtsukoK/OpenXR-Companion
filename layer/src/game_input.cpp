@@ -220,7 +220,7 @@ void GameInputFilter::Filter(const Engine& eng, XrAction a, XrPath sub, XrTime n
         [&](float v0, float v1) { return Changed(a, sub, v0, v1); });
 }
 
-int GameInputFilter::StickHand(const Engine& eng, XrAction a, XrPath sub) const {
+int GameInputFilter::StickHand(const Engine& eng, XrAction a, XrPath sub, InputFeature* axis) const {
     auto it = bindings_.find((uint64_t)a);
     if (it == bindings_.end()) return -1;
     int mask = HandsMask(sub), found = -1;
@@ -229,10 +229,11 @@ int GameInputFilter::StickHand(const Engine& eng, XrAction a, XrPath sub) const 
         if (!readsStick || !(mask & (1 << b.hand)) || b.hand == found) continue;
         if (found < 0) {
             found = b.hand;
+            if (axis) *axis = b.feature;
             continue;
         }
         const StickShape &s0 = eng.StickShapeOf(found), &s1 = eng.StickShapeOf(b.hand);
-        bool same = s0.innerDeadzone == s1.innerDeadzone && s0.outerDeadzone == s1.outerDeadzone;
+        bool same = s0.innerDeadzone == s1.innerDeadzone && s0.outerDeadzone == s1.outerDeadzone && s0.directionAngleDeg == s1.directionAngleDeg;
         return same ? found : -1;
     }
     return found;
@@ -244,7 +245,19 @@ void GameInputFilter::Filter(const Engine& eng, XrAction a, XrPath sub, XrTime n
     if (!e.any) return;
     // A stick axis read on its own: deadzones along that axis (before the changed check below).
     if (!e.overridden && !e.blockedAll)
-        if (int h = StickHand(eng, a, sub); h >= 0) st.currentState = ShapeStickAxis(eng.StickShapeOf(h), st.currentState);
+    {
+        InputFeature axis = InputFeature::Value;
+        if (int h = StickHand(eng, a, sub, &axis); h >= 0) {
+            const StickShape& sh = eng.StickShapeOf(h);
+            if (sh.directionAngleDeg > 0 && (axis == InputFeature::X || axis == InputFeature::Y)) {
+                // straightened with the whole stick: up and a little right gives this x axis 0, not a small turn
+                float x = eng.stickX[h], y = eng.stickY[h];
+                ShapeStick(sh, x, y);
+                st.currentState = axis == InputFeature::X ? x : y;
+            } else
+                st.currentState = ShapeStickAxis(sh, st.currentState);
+        }
+    }
     FilterState<FloatValue>(
         e, sub, now, st, e.freeHand >= 0 ? handPath_[e.freeHand] : XR_NULL_PATH, requery, [&] { return CanRequery(a, e.freeHand); },
         [&](float v0, float v1) { return Changed(a, sub, v0, v1); });

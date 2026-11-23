@@ -5,22 +5,36 @@
 //   the stick still reaches full at the edge.
 // - Outer deadzone: the last part toward the edge already counts as fully pushed.
 //   Both change what the GAME sees from the stick (its own stick and movement actions).
-// - Direction angle: for our bindings on stick directions (up / down / left / right), a direction only counts
-//   while the stick points within this many degrees of it. 0 = off: any push past the threshold counts, so a
-//   diagonal is both up and right. 45 = only the nearest direction. Smaller leaves a gap between directions,
-//   so pushing forward can't also fire left or right.
+// - Direction angle (direction zone): a push within this many degrees of up, down, left or right counts as exactly
+//   that direction, for the GAME too (the stick is straightened: up and a little right is plain up, so a jump on up
+//   doesn't also turn) and for our bindings on stick directions. Pushes outside every zone (diagonals) are left
+//   as they are for the game, and count as no direction for our bindings. 0 = off. 45 = every push snaps to the
+//   nearest of the four directions.
 #include <cmath>
 
 struct StickShape {
     float innerDeadzone = 0;     // 0 .. 0.9, share of the full push
     float outerDeadzone = 0;     // 0 .. 0.9
     float directionAngleDeg = 0; // 0 = off, else 5 .. 45
-    bool ChangesGame() const { return innerDeadzone > 0 || outerDeadzone > 0; }
+    bool ChangesGame() const { return innerDeadzone > 0 || outerDeadzone > 0 || directionAngleDeg > 0; }
 };
 
 // The stick as the game should see it: radial, so the direction never changes, only how far it is pushed.
+// Within the direction zone of an axis: straight along it, same length (the game sees a clean up / down / left / right).
+inline void SnapStick(const StickShape& s, float& x, float& y) {
+    if (s.directionAngleDeg <= 0) return;
+    float length = std::sqrt(x * x + y * y);
+    if (length <= 1e-6f) return;
+    bool vertical = std::fabs(y) >= std::fabs(x);
+    float cosToAxis = (vertical ? std::fabs(y) : std::fabs(x)) / length;
+    if (cosToAxis < std::cos(s.directionAngleDeg * 3.14159265f / 180.f)) return; // a diagonal: left alone
+    if (vertical) { y = y < 0 ? -length : length; x = 0; }
+    else { x = x < 0 ? -length : length; y = 0; }
+}
+
 inline void ShapeStick(const StickShape& s, float& x, float& y) {
     if (!s.ChangesGame()) return;
+    SnapStick(s, x, y);
     float length = std::sqrt(x * x + y * y);
     if (length <= 1e-6f) return;
     float inner = s.innerDeadzone, outer = 1.f - s.outerDeadzone;

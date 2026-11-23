@@ -604,9 +604,9 @@ static MenuPage StickDeadzones(Engine& e, int hand) {
 static MenuPage StickDirections(Engine& e, int hand) {
     MenuPage p = StickPage(hand ? "Right stick: directions" : "Left stick: directions", hand);
     StickShape* s = &e.prof->sticks[hand];
-    MenuRow zone = MenuRow::Number("Direction zone", "Directions only count close to straight",
+    MenuRow zone = MenuRow::Number("Direction zone", "Near-straight pushes count as straight, for the game too",
                                    [s] { return s->directionAngleDeg; }, [s](float v) { s->directionAngleDeg = v; }, 0, 45, 5);
-    zone.unit = "Â°";
+    zone.unit = "°"; // the degree sign, as bytes (the source file's encoding can't garble it)
     zone.atMin = "off";
     p.rows.push_back(zone);
     MenuRow pressAt = MenuRow::Number("Direction counts at", "How far to push (both sticks)", [&e] { return e.prof->stickOn; },
@@ -625,7 +625,7 @@ MenuPage StickOptions(Engine& e, InGameMenu& m, int hand) {
     MenuPage p = StickPage(hand ? "Right stick" : "Left stick", hand);
     p.rows.push_back(MenuRow::Link("Deadzones", "What the game sees: drift and the edge",
                                    [&e, &m, hand] { m.Push([&e, hand] { return StickDeadzones(e, hand); }); }));
-    p.rows.push_back(MenuRow::Link("Directions", "For your Up / Down / Left / Right bindings",
+    p.rows.push_back(MenuRow::Link("Directions", "Direction zone (straighten the stick) and how far a push counts",
                                    [&e, &m, hand] { m.Push([&e, hand] { return StickDirections(e, hand); }); }));
     p.rows.push_back(MenuRow::Link("Bindings", "Click, push, double flick...",
                                    [&e, &m, hand] { m.Push([&e, &m, hand] { return PartPage(e, m, hand, C_STICK); }); }));

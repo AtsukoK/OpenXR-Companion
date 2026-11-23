@@ -682,6 +682,7 @@ void Engine::ComputeBlocks() {
 }
 
 void Engine::Update(const Frame& f) {
+    for (int h = 0; h < 2; h++) { stickX[h] = f.h[h].sx; stickY[h] = f.h[h].sy; }
     if (!Active()) {
         memset(blockOut, 0, sizeof(blockOut));
         for (auto& h : ovOut)

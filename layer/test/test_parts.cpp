@@ -362,6 +362,19 @@ void TestHoldOnlyQuickBinding() {
 // double flick (double tap and hold) gesture.
 void TestStickOptions() {
     // Shaping alone.
+    {   // the direction zone straightens the game's stick: up and 15 degrees right is plain up; a diagonal is left alone
+        StickShape z;
+        z.directionAngleDeg = 30;
+        float x = std::sin(15 * 3.14159265f / 180), y = std::cos(15 * 3.14159265f / 180);
+        ShapeStick(z, x, y);
+        CHECK(std::fabs(x) < 1e-5f && std::fabs(y - 1) < 1e-4f, "stick: inside the up zone the game gets plain up (no turning)");
+        float dx = 0.7f, dy = 0.7f;
+        ShapeStick(z, dx, dy);
+        CHECK(std::fabs(dx - 0.7f) < 1e-5f && std::fabs(dy - 0.7f) < 1e-5f, "stick: a diagonal outside every zone is left as it is");
+        float rx = 0.9f, ry = -0.2f;
+        ShapeStick(z, rx, ry);
+        CHECK(std::fabs(ry) < 1e-5f && rx > 0.9f, "stick: right and a little down is plain right, same length");
+    }
     StickShape off;
     float x = 0.1f, y = 0.f;
     ShapeStick(off, x, y);

@@ -190,7 +190,7 @@ public class ControllerButtonsPage : UserControl
         form.AddRow("Outer deadzone (%)", Number(90, (decimal)Math.Round(stick.OuterDeadzone * 100), v => stick.OuterDeadzone = v / 100f),
                     "What the game sees: the last part toward the edge already counts as fully pushed, for sticks that never quite reach the edge. 5 to 10 is typical.");
         form.AddRow("Direction zone (°)", Number(45, (decimal)Math.Round(stick.DirectionAngle), v => stick.DirectionAngle = v),
-                    "For your bindings on Up / Down / Left / Right: a direction only counts while the stick points within this many degrees of it, so pushing forward and leaning a little sideways doesn't also fire Left or Right. 45 = always the nearest direction. 30 leaves a gap between them.");
+                    "A push within this many degrees of up, down, left or right counts as exactly that direction, for the game and for your bindings: up and a little right is plain up, so a jump on up doesn't also turn. Pushes in between (diagonals) are left as they are. 0 = off. 45 = every push snaps to the nearest of the four.");
         // how far the stick must be pushed for a direction to count (both sticks: a profile threshold)
         var th = profile.Thresholds ??= new Thresholds();
         var pushAt = new NumericUpDown { Minimum = 30, Maximum = 95, Increment = 5, Width = 80, Value = (decimal)Math.Clamp(Math.Round(th.StickOn * 100), 30, 95) };
