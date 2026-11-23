@@ -128,6 +128,8 @@ public partial class MainForm
         Snap("list_folded");
         f.GoTo(f.Profile);
         Snap("settings_tiles");
+        f.GoTo("overview");
+        Snap("overview");
         f.GoTo(ControllersPage);
         Snap("controllers_folded");
         if (f.currentEditor is ControllersHub hub)

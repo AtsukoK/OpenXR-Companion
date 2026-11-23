@@ -18,12 +18,51 @@ public class OverviewEditor : EditorBase
         Build();
     }
 
+    readonly Dictionary<string, CardPanel> made = new();
+    bool fitHooked;
+
+    // Two columns of matching pairs, left-hand things on the left: the window's width is used and the page is shorter.
+    void PlaceInPairs()
+    {
+        var pairs = new[]
+        {
+            ("Overlay for this game", "VR keyboard"),
+            ("Left controller wheel", "Right controller wheel"),
+            ("Left wrist panel", "Right wrist panel"),
+            ("Other bindings", "Tools on your menus"),
+        };
+        var grid = new TableLayoutPanel { ColumnCount = 2, AutoSize = true, Dock = DockStyle.Top, Margin = Padding.Empty, Padding = Padding.Empty };
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        int row = 0;
+        foreach (var (a, b) in pairs)
+        {
+            grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            foreach (var (title, col) in new[] { (a, 0), (b, 1) })
+                if (made.TryGetValue(title, out var c))
+                {
+                    c.MinimumSize = new Size(460, 0);
+                    c.Dock = DockStyle.Fill;
+                    c.Margin = new Padding(col == 0 ? 0 : 6, 0, col == 0 ? 6 : 0, 12);
+                    grid.Controls.Add(c, col, row);
+                }
+            row++;
+        }
+        cards.Controls.Add(grid);
+        // as wide as the page allows (the cards stretch with it)
+        // the cards' row is docked to the page's width: the grid follows it
+        grid.MinimumSize = new Size(Math.Max(940, cards.ClientSize.Width - 8), 0); // AutoSize: a minimum, not a width
+        if (!fitHooked)
+        { fitHooked = true; cards.SizeChanged += (s, e) => { foreach (Control k in cards.Controls) if (k is TableLayoutPanel t) t.MinimumSize = new Size(Math.Max(940, cards.ClientSize.Width - 8), 0); }; }
+    }
+
     static string Hand(BindingModel b) => (b.Input ?? "").Split('+').Last().Trim().StartsWith("left") ? "left" : "right";
 
     void Build()
     {
         cards.SuspendLayout();
         cards.Controls.Clear();
+        made.Clear();
 
         // Overlay master switch
         {
@@ -138,6 +177,7 @@ public class OverviewEditor : EditorBase
                     c.Body.Controls.Add(How("\u2022 " + w));
             }
         }
+        PlaceInPairs();
         cards.ResumeLayout();
         if (Theme.IsDark)
             ThemeWalker.Apply(cards); // rebuilt cards start in light colours
@@ -241,7 +281,7 @@ public class OverviewEditor : EditorBase
         card.Body = body;
         card.Buttons = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = true, AutoSize = true, MaximumSize = new Size(600, 0), Margin = new Padding(0, 6, 0, 0) };
         inner.Controls.Add(card.Buttons);
-        cards.Controls.Add(card);
+        made[title] = card;
         return card;
     }
 }
