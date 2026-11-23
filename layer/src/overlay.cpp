@@ -305,7 +305,9 @@ void OverlayRenderer::RenderKeyboard(const OverlayContext& c, LayerList& layers)
     const int h = (int)(kKeyboardPx * unitsH / unitsW);
     if (keyboard_.Ensure(c, kKeyboardPx, h))
         keyboard_.Redraw(c, kb.version, scratch_, [&](std::vector<uint32_t>& px) { DrawKeyboard(px, kKeyboardPx, h, kb, st); });
-    keyboard_.Submit(layers, c.local, kb.pose, { kb.widthM, kb.heightM });
+    // on the settings menu it must be drawn after the menu (layers draw in the order sent, not by distance):
+    // RenderMenu sends it then, else the dimmed menu covers it
+    if (!kb.inMenu) keyboard_.Submit(layers, c.local, kb.pose, { kb.widthM, kb.heightM });
 
     // the docking bar under it
     const int barH = std::max(40, (int)(kBarPx * kb.barH / kb.barW));
@@ -362,6 +364,9 @@ void OverlayRenderer::RenderMenu(const OverlayContext& c, LayerList& layers) {
     if (menu_.Ensure(c, w, h))
         menu_.Redraw(c, mv.version, scratch_, [&](std::vector<uint32_t>& px) { DrawMenu(px, w, h, mv, eng_.prof->style); });
     menu_.Submit(layers, c.local, mv.pose, { mv.w, mv.h });
+    const KeyboardView& kb = eng_.kb;
+    if (kb.visible && kb.inMenu && keyboard_.Exists()) // the binding keyboard lies on the menu: on top of it
+        keyboard_.Submit(layers, c.local, kb.pose, { kb.widthM, kb.heightM });
 }
 
 // ---------------------------------------------------------------- pointers, fingertips, toasts
