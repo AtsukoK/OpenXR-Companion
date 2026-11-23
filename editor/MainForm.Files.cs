@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -329,6 +329,37 @@ public partial class MainForm
         if (File.Exists(path))
         { MessageBox.Show(this, "A profile for " + name + " already exists."); RefreshProfileList(name + ".json"); return; }
         File.Copy(Path.Combine(ProfilesDir, dlg.CopyFrom ?? StartProfile), path);
+        RefreshProfileList(name + ".json");
+    }
+
+    void RenameProfile()
+    {
+        string file = Path.GetFileName(currentFile);
+        if (IsStandard(currentFile) || string.Equals(file, UserDefaultsFile, StringComparison.OrdinalIgnoreCase))
+        { MessageBox.Show(this, file + " has a fixed name (it is what games without their own profile use). Make a copy with 'New game profile...' instead."); return; }
+        if (!ConfirmDiscard())
+            return;
+        var box = new TextBox { Width = 320, Text = Path.GetFileNameWithoutExtension(file) };
+        string answer = QuickBindingDialogs.Ask(this, "Rename profile",
+            "New name for " + file + ".\n\nA game profile is named after the game's program (bannerlord.json is used by Bannerlord.exe): after renaming, it applies to the program with the new name.",
+            box, () => box.Text);
+        if (string.IsNullOrWhiteSpace(answer))
+            return;
+        string name = answer.Trim().ToLowerInvariant();
+        if (name.EndsWith(".json")) name = name[..^5];
+        if (name.EndsWith(".exe")) name = name[..^4];
+        if (name.Length == 0 || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        { MessageBox.Show(this, "That name can't be used for a file."); return; }
+        string to = Path.Combine(ProfilesDir, name + ".json");
+        if (string.Equals(to, currentFile, StringComparison.OrdinalIgnoreCase))
+            return;
+        if (File.Exists(to))
+        { MessageBox.Show(this, "A profile called " + name + " already exists."); return; }
+        bool wasActive = string.Equals(ActiveProfile, file, StringComparison.OrdinalIgnoreCase);
+        File.Move(currentFile, to);
+        if (wasActive)
+            ActiveProfile = name + ".json";
+        dirty = false;
         RefreshProfileList(name + ".json");
     }
 

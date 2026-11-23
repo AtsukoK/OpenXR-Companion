@@ -254,6 +254,7 @@ public partial class MainForm : Form
         ts.Items.Add(new ToolStripLabel("Profile:"));
         ts.Items.Add(profileBox);
         ts.Items.Add(Btn("New game profile...", NewProfile));
+        ts.Items.Add(Btn("Rename profile...", RenameProfile));
         ts.Items.Add(Btn("Delete profile", DeleteProfile));
         ts.Items.Add(new ToolStripSeparator());
         ts.Items.Add(Btn("Controllers", () => ChooseControllers(false)));
@@ -323,6 +324,11 @@ public partial class MainForm : Form
 
         status.Items.Add(statusText);
         {   // credit, bottom right on every page
+            var ver = typeof(MainForm).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                         .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion ?? AppVersion.ToString(3);
+            int plus = ver.IndexOf('+'); // "0.2.13+<commit>": the version and the build's short commit
+            string shown = plus < 0 ? "v" + ver : "v" + ver[..plus] + " (" + ver[(plus + 1)..Math.Min(ver.Length, plus + 8)] + ")";
+            status.Items.Add(new ToolStripStatusLabel(shown) { ForeColor = Color.Gray, ToolTipText = "This build: " + ver });
             var credit = new ToolStripStatusLabel("Created by Atsuko")
             {
                 IsLink = true,

@@ -1,4 +1,4 @@
-namespace OpenXRCompanionEditor;
+﻿namespace OpenXRCompanionEditor;
 
 // Start page: one card per feature with a clear ON / MIRRORED / OFF status and the switches for it.
 public class OverviewEditor : EditorBase
@@ -12,9 +12,7 @@ public class OverviewEditor : EditorBase
     {
         p = model;
         go = goTo;
-        Stack(ProfileBar(), Title("Overview"),
-              FormPanel.Header("What is switched on right now, and how you open it in the headset. Click Turn on / Turn off to switch it, or a blue button to jump to its details (Back returns here). Remember to Save (Ctrl+S)."),
-              cards);
+        Stack(ProfileBar(), cards); // the tip bar above says how it works: no title or help text, so it all fits on one screen
         Build();
     }
 
@@ -43,7 +41,7 @@ public class OverviewEditor : EditorBase
                 {
                     c.MinimumSize = new Size(460, 0);
                     c.Dock = DockStyle.Fill;
-                    c.Margin = new Padding(col == 0 ? 0 : 6, 0, col == 0 ? 6 : 0, 12);
+                    c.Margin = new Padding(col == 0 ? 0 : 6, 0, col == 0 ? 6 : 0, 8);
                     grid.Controls.Add(c, col, row);
                 }
             row++;
@@ -59,13 +57,13 @@ public class OverviewEditor : EditorBase
     // Top middle: a big button with the profile you are on (the one your games use); click it to switch.
     static Control ProfileBar()
     {
-        var bar = new Panel { Dock = DockStyle.Top, Height = 74 };
+        var bar = new Panel { Dock = DockStyle.Top, Height = 54 };
         var main = MainForm.Current;
         string name = main?.CurrentProfileName ?? "";
         var b = new Button
         {
-            Text = "Profile:  " + Path.GetFileNameWithoutExtension(name) + "   \u25BE", AutoSize = true, Height = 50, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
-            Font = new Font("Segoe UI", 15f, FontStyle.Bold), BackColor = Color.FromArgb(40, 110, 200), ForeColor = Color.White,
+            Text = "Profile:  " + Path.GetFileNameWithoutExtension(name) + "   \u25BE", AutoSize = true, Height = 40, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+            Font = new Font("Segoe UI", 12.5f, FontStyle.Bold), BackColor = Color.FromArgb(40, 110, 200), ForeColor = Color.White,
             Padding = new Padding(18, 0, 18, 0), Tag = "swatch",
         };
         b.FlatAppearance.BorderSize = 0;
@@ -85,7 +83,7 @@ public class OverviewEditor : EditorBase
             menu.Show(b, new Point(0, b.Height));
         };
         bar.Controls.Add(b);
-        void Center() { b.Location = new Point(Math.Max(0, (bar.ClientSize.Width - b.Width) / 2), 12); }
+        void Center() { b.Location = new Point(Math.Max(0, (bar.ClientSize.Width - b.Width) / 2), 4); }
         bar.Resize += (s, e) => Center();
         b.SizeChanged += (s, e) => Center();
         return bar;
@@ -102,7 +100,7 @@ public class OverviewEditor : EditorBase
         // Overlay master switch
         {
             var c = Card("Master switch", p.Enabled ? "ON" : "OFF", p.Enabled ? On : Off,
-                "Turns the whole OpenXR Companion layer on or off for this profile. Everything below only works while it is on.", null, MiniPics.Headset(96, 72, p.Enabled));
+                "Turns the whole OpenXR Companion layer on or off for this profile. Everything below only works while it is on.", null, MiniPics.Headset(72, 54, p.Enabled));
             c.Body.Controls.Add(Switch("Layer on for this profile", p.Enabled, v => p.Enabled = v));
             c.Go("Settings (look, picking items)", () => go(p));
         }
@@ -117,7 +115,7 @@ public class OverviewEditor : EditorBase
                 openers.Count == 0 ? $"No binding opens a wheel from the {hand} controller. Add one under Bindings (action: Open a wheel)."
                                    : "How to open it in the headset:",
                 openers.FirstOrDefault() ?? (object)"bindings",
-                MiniPics.Wheel(96, 72, hand == "left" ? 0 : 1, openers.Select(b => p.Wheels.GetValueOrDefault(b.Action.Wheel ?? "")).FirstOrDefault(w => w != null), any));
+                MiniPics.Wheel(72, 54, hand == "left" ? 0 : 1, openers.Select(b => p.Wheels.GetValueOrDefault(b.Action.Wheel ?? "")).FirstOrDefault(w => w != null), any));
             foreach (var b in openers)
                 c.Body.Controls.Add(Switch(HowTo(b), b.Enabled, v => b.Enabled = v, $"opens wheel '{b.Action.Wheel}'"));
             foreach (var wn in openers.Select(b => b.Action.Wheel).Distinct())
@@ -141,7 +139,7 @@ public class OverviewEditor : EditorBase
             string desc = !wm.Enabled ? $"Hidden. Turn it on to get buttons on your {side.ToLower()} forearm."
                 : wm.Mirror ? $"Shows the {other} panel's pages ({buttons} buttons on its first page). Pressed with your {other} hand."
                 : $"Own pages: {src.Pages.Count} page(s), {buttons} buttons on the first. Pressed with your {other} hand.";
-            var c = Card($"{side} wrist panel", state, col, desc, h == 0 ? "wrist0" : "wrist1", MiniPics.Wrist(96, 72, h, first, state));
+            var c = Card($"{side} wrist panel", state, col, desc, h == 0 ? "wrist0" : "wrist1", MiniPics.Wrist(72, 54, h, first, state));
             var mode = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 300 };
             mode.Items.AddRange(new object[] { "Off", "On, own pages", $"On, mirror the {other} panel" });
             mode.SelectedIndex = !wm.Enabled ? 0 : wm.Mirror ? 2 : 1;
@@ -171,11 +169,12 @@ public class OverviewEditor : EditorBase
             bool any = openers.Any(b => b.Enabled) || fromMenus > 0;
             var c = Card("VR keyboard", any ? "ON" : "OFF", any ? On : Off,
                 openers.Count + fromMenus > 0 ? "How to open it in the headset:" : "Nothing opens it yet. Add a Keyboard button to a wheel or wrist panel, or a binding.",
-                openers.FirstOrDefault() ?? (object)"bindings", MiniPics.Keyboard(96, 72, any));
+                openers.FirstOrDefault() ?? (object)"bindings", MiniPics.Keyboard(72, 54, any));
             foreach (var b in openers)
                 c.Body.Controls.Add(Switch(HowTo(b), b.Enabled, v => b.Enabled = v));
-            foreach (var where in MenuButtons("keyboard"))
-                c.Body.Controls.Add(How("\u2022 " + where));
+            var kb = MenuButtons("keyboard");
+            if (kb.Count > 0)
+                c.Body.Controls.Add(How("Also on: " + string.Join(" \u00B7 ", kb.Take(2)) + (kb.Count > 2 ? $"  (+{kb.Count - 2} more)" : "")));
             foreach (var b in openers)
                 c.Go("Edit the button that opens it", () => go(b));
             c.Go("Keyboard size and position", () => go(p));
@@ -186,10 +185,12 @@ public class OverviewEditor : EditorBase
             var rest = p.Bindings.Where(b => b.Action?.Type is not ("wheel" or "keyboard")).ToList();
             int on = rest.Count(b => b.Enabled);
             var c = Card("Other bindings", $"{on} of {rest.Count} on", on > 0 ? On : Off,
-                "Keys, macros, layers and game inputs on controller buttons.", rest.FirstOrDefault() ?? (object)"bindings", MiniPics.Controllers(96, 72, on > 0));
-            foreach (var b in rest)
-                c.Body.Controls.Add(Switch(b.Name, b.Enabled, v => b.Enabled = v, HowTo(b)));
-            c.Go("Go to Bindings", () => go("bindings"));
+                "Keys, macros, layers and game inputs on controller buttons.", rest.FirstOrDefault() ?? (object)"bindings", MiniPics.Controllers(72, 54, on > 0));
+            foreach (var b in rest.Take(3))
+                c.Body.Controls.Add(Switch(HowTo(b), b.Enabled, v => b.Enabled = v));
+            if (rest.Count > 3)
+                c.Body.Controls.Add(How($"+{rest.Count - 3} more"));
+            c.Go("All bindings", () => go(MainForm.BindingsPage));
         }
         // Tools on the menus (no switch: they are buttons on wheels and wrist panels)
         {
@@ -205,11 +206,10 @@ public class OverviewEditor : EditorBase
             foreach (var (type, name, match) in tools)
             {
                 var where = MenuButtons(type, match);
-                c.Body.Controls.Add(new Label { Text = name, AutoSize = true, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), Margin = new Padding(0, 6, 0, 0) });
-                if (where.Count == 0)
-                    c.Body.Controls.Add(How("not on any wheel or wrist panel yet (add a button with this action)"));
-                foreach (var w in where.Take(3))
-                    c.Body.Controls.Add(How("\u2022 " + w));
+                string at = where.Count == 0 ? "not on a wheel or wrist panel yet" : where[0] + (where.Count > 1 ? $"  (+{where.Count - 1})" : "");
+                var line = How(name + ":  " + at);
+                line.MaximumSize = new Size(820, 0);
+                c.Body.Controls.Add(line);
             }
         }
         PlaceInPairs();
@@ -260,12 +260,12 @@ public class OverviewEditor : EditorBase
     static readonly Color SwitchOn = Color.FromArgb(46, 158, 91), SwitchOff = Color.FromArgb(200, 60, 55);
     Control Switch(string text, bool value, Action<bool> set, string detail = null)
     {
-        var row = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, Margin = new Padding(0, 2, 0, 2) };
+        var row = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, Margin = new Padding(0, 1, 0, 1) };
         var b = new Button
         {
             Text = value ? "Turn off" : "Turn on",
             Width = 76,
-            Height = 26,
+            Height = 24,
             FlatStyle = FlatStyle.Flat,
             Cursor = Cursors.Hand,
             Tag = "swatch", // the theme leaves its colours alone
@@ -288,7 +288,7 @@ public class OverviewEditor : EditorBase
         public FlowLayoutPanel Body, Buttons;
         public void Go(string text, Action click)
         {
-            var b = new Button { Text = text + "  \u25B6", AutoSize = true, Height = 30, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(40, 90, 170), ForeColor = Color.White, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), Margin = new Padding(0, 0, 8, 4), Padding = new Padding(6, 0, 6, 0), Cursor = Cursors.Hand };
+            var b = new Button { Text = text + "  \u25B6", AutoSize = true, Height = 26, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(40, 90, 170), ForeColor = Color.White, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), Margin = new Padding(0, 0, 8, 4), Padding = new Padding(6, 0, 6, 0), Cursor = Cursors.Hand };
             b.FlatAppearance.BorderSize = 0;
             b.Click += (s, e) => click();
             Buttons.Controls.Add(b);
@@ -297,7 +297,7 @@ public class OverviewEditor : EditorBase
 
     CardPanel Card(string title, string state, Color color, string desc, object editTarget, Image pic = null)
     {
-        var card = new CardPanel { Width = 640, MinimumSize = new Size(640, 0), AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, BackColor = Color.White, Margin = new Padding(0, 0, 0, 10), Padding = new Padding(14, 8, 10, 10) };
+        var card = new CardPanel { Width = 640, MinimumSize = new Size(640, 0), AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, BackColor = Color.White, Margin = new Padding(0, 0, 0, 6), Padding = new Padding(10, 4, 8, 4) };
         var bar = new Panel { Dock = DockStyle.Left, Width = 6, BackColor = color };
         var inner = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Dock = DockStyle.Fill, Padding = new Padding(10, 0, 0, 0) };
         var head = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
@@ -306,7 +306,7 @@ public class OverviewEditor : EditorBase
             head.Controls.Add(new Label { Text = " " + state + " ", AutoSize = true, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), ForeColor = Color.White, BackColor = color, Margin = new Padding(0, 5, 10, 0), Padding = new Padding(4, 2, 4, 2) });
         _ = editTarget; // buttons are added per card below
         inner.Controls.Add(head);
-        inner.Controls.Add(new Label { Text = desc, AutoSize = true, MaximumSize = new Size(580, 0), ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 4, 0, 4) });
+        inner.Controls.Add(new Label { Text = desc, AutoSize = true, MaximumSize = new Size(580, 0), ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 1, 0, 2) });
         var body = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
         inner.Controls.Add(body);
         card.Controls.Add(inner);
@@ -314,7 +314,7 @@ public class OverviewEditor : EditorBase
             card.Controls.Add(new PictureBox { Image = pic, Dock = DockStyle.Left, Width = pic.Width + 14, SizeMode = PictureBoxSizeMode.Normal, Padding = new Padding(10, 4, 0, 0) });
         card.Controls.Add(bar);
         card.Body = body;
-        card.Buttons = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = true, AutoSize = true, MaximumSize = new Size(600, 0), Margin = new Padding(0, 6, 0, 0) };
+        card.Buttons = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = true, AutoSize = true, MaximumSize = new Size(600, 0), Margin = new Padding(0, 3, 0, 0) };
         inner.Controls.Add(card.Buttons);
         made[title] = card;
         return card;

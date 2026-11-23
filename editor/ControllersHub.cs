@@ -91,6 +91,17 @@ public sealed class ControllersHub : DrawerPage
         preset.Click += (s, e) => MainForm.Current?.ChooseControllersFromScreen();
         chooserRow.Controls.Add(preset);
         chooserRow.Controls.Add(new Label { Text = "sets which buttons open your wheels", AutoSize = true, ForeColor = Theme.SubText, Margin = new Padding(8, 8, 0, 0) });
+        // shortcut: how the game's hands and guns point belongs with the controllers too
+        var offsets = new Button
+        {
+            Text = "Controller offsets  ▶", AutoSize = true, Height = 32, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+            Font = new Font("Segoe UI", 10f, FontStyle.Bold), BackColor = Theme.Button, ForeColor = Theme.Text,
+            Margin = new Padding(18, 0, 0, 0), Padding = new Padding(8, 0, 8, 0), Tag = "swatch",
+        };
+        offsets.FlatAppearance.BorderColor = Theme.CardBorder;
+        FormPanel.Tips.SetToolTip(offsets, "Fix how the game's hands and guns point (Settings > Controller offsets).");
+        offsets.Click += (s, e) => MainForm.Current?.GoTo(SettingsPage.ByKey("offsets"));
+        chooserRow.Controls.Add(offsets);
         Controls.Add(chooserRow);
         titleLabel = new Label { Text = "Controllers  \u00B7  " + layout.Name, AutoSize = true, Dock = DockStyle.Top, Font = new Font("Segoe UI", 22f, FontStyle.Bold), ForeColor = Theme.Text, Padding = new Padding(0, 0, 0, 4) };
         Controls.Add(titleLabel);
