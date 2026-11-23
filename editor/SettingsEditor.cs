@@ -120,8 +120,13 @@ public class SettingsEditor : EditorBase
             armCol.Controls.Add(wristNums);
             var armRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
             armRow.Controls.Add(armCol);
-            pageControls.Add(C("On the arm", "\uE7FC", false, armRow));
-            pageControls.Add(C("When it shows", "\uE890", false, wristShow));
+            // the three smaller cards side by side when the window is wide enough, stacked when it isn't
+            var lower = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, BackColor = Theme.Page, Margin = Padding.Empty };
+            var panelCard = pageControls[^1];
+            pageControls.RemoveAt(pageControls.Count - 1);
+            foreach (var c in new Control[] { panelCard, C("On the arm", "\uE7FC", false, armRow), C("When it shows", "\uE890", false, wristShow) })
+            { c.Dock = DockStyle.None; c.Margin = new Padding(0, 0, 14, 14); lower.Controls.Add(c); }
+            pageControls.Add(lower);
         }
         else
         {
@@ -735,9 +740,23 @@ public class SettingsEditor : EditorBase
             tabs.SuspendLayout();
             foreach (Control c in tabs.Controls.Cast<Control>().ToList()) c.Dispose();
             tabs.Controls.Clear();
-            foreach (var pg in owner.Pages.Values.OrderBy(x => x.Name == owner.Start ? 0 : 1))
+            // the order you go through them: the first page, then each page a button opens, in button order
+            var order = new List<WheelModel>();
+            void Visit(WheelModel w)
+            {
+                if (w == null || order.Contains(w)) return;
+                order.Add(w);
+                foreach (var it in w.Items)
+                    if (it.Action?.Type == ActionType.Page && it.Action.Page != null)
+                        Visit(owner.Pages.GetValueOrDefault(it.Action.Page));
+            }
+            Visit(owner.Pages.GetValueOrDefault(owner.Start ?? ""));
+            foreach (var w in owner.Pages.Values) Visit(w); // pages nothing opens go last
+            foreach (var pg in order)
             {
                 var page = pg;
+                if (tabs.Controls.Count > 0)
+                    tabs.Controls.Add(new Label { Text = "→", AutoSize = true, Font = new Font("Segoe UI", 14f, FontStyle.Bold), ForeColor = Theme.SubText, Margin = new Padding(0, 2, 8, 0) });
                 var b = Btn((string.IsNullOrWhiteSpace(page.Title) ? page.Name : page.Title) + (page.Name == owner.Start ? "  (first)" : ""), () => { shown = page; ShowTabs(); Edit(null); });
                 if (ReferenceEquals(page, shown))
                 { b.BackColor = Color.FromArgb(30, 130, 110); b.ForeColor = Color.White; b.FlatAppearance.BorderSize = 0; }
@@ -810,6 +829,8 @@ public class SettingsEditor : EditorBase
             while (owner.Pages.ContainsKey(name)) name += "_";
             var np = new WheelModel { Name = name, Title = "Page " + (owner.Pages.Count + 1) };
             owner.Pages[name] = np;
+            if (shown != null && shown.Items.Count < 16) // a way to reach it from the page you were on
+                shown.Items.Add(new WheelItemModel { Label = "Next page", Action = new ActionModel { Type = ActionType.Page, Page = name } });
             Structure();
             shown = np;
             ShowTabs();
@@ -963,7 +984,8 @@ public class SettingsEditor : EditorBase
     protected override void OnResize(EventArgs e)
     {
         base.OnResize(e);
-        int side = Math.Max(12, (ClientSize.Width - 940) / 2);
+        // wrist pages go wider: their smaller cards sit side by side when there is room
+        int side = Math.Max(12, (ClientSize.Width - (wristHand >= 0 ? 1760 : 940)) / 2);
         if (Padding.Left != side)
             Padding = new Padding(side, 8, side, 8);
     }

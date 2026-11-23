@@ -244,7 +244,7 @@ public partial class MainForm
         dict[name] = sub;
         unfolded.Add(sub);
         unfolded.Add(w);
-        w.Items.Add(new WheelItemModel { Label = "More", Action = wrist ? new ActionModel { Type = ActionType.Page, Page = name } : new ActionModel { Type = ActionType.Wheel, Wheel = name } });
+        w.Items.Add(new WheelItemModel { Label = wrist ? "Next page" : "More", Action = wrist ? new ActionModel { Type = ActionType.Page, Page = name } : new ActionModel { Type = ActionType.Wheel, Wheel = name } });
         Rebuild(sub);
     }
 

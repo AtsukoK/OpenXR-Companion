@@ -1152,7 +1152,7 @@ const char* DefaultProfileJson() {
         { "label": "Pause", "action": { "type": "key", "keys": "Esc" } },
         { "label": "Monitor", "action": { "type": "screen", "mode": "toggle", "place": "wrist_left" } },
         { "label": "Keyboard", "action": { "type": "keyboard" } },
-        { "label": "More", "action": { "type": "page", "page": "Left hand more (sub-page)" } },
+        { "label": "Next page", "action": { "type": "page", "page": "Left hand more (sub-page)" } },
         { "label": "L-Ctrl toggle", "enabled": false, "action": { "type": "key", "keys": "LCtrl", "mode": "toggle" } },
         { "label": "L-Shift toggle", "enabled": false, "action": { "type": "key", "keys": "LShift", "mode": "toggle" } },
         { "label": "Right-click", "enabled": false, "action": { "type": "key", "keys": "RMB" } }

@@ -134,6 +134,8 @@ public partial class MainForm
         Snap("overview");
         f.GoTo("wrist0");
         Snap("wrist_left");
+        if (f.currentEditor is SettingsEditor low)
+        { low.AutoScrollPosition = new Point(0, 99999); Snap("wrist_left_lower"); low.AutoScrollPosition = new Point(0, 0); }
         if (f.currentEditor is SettingsEditor se && se.EditFirstButton != null)
         { se.EditFirstButton(); Snap("wrist_left_editing"); }
         using (var cones = new WristCones { GazeDeg = 20, FacingDeg = 35 })
