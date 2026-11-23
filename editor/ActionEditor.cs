@@ -54,21 +54,37 @@ public class ActionEditor : FormPanel
         (ActionType.None, new("Advanced", "Nothing", "The button is shown but does nothing.", null)),
     };
 
+    // The same for a radial wheel's items: "This wheel" instead of "This panel".
+    static readonly (string code, PickOption option)[] WheelActions = WristActions
+        .Where(x => x.code is not (ActionType.Page or ActionType.Back or ActionType.Close or ActionType.Wheel))
+        .SelectMany(x => x.code == ActionType.Keyboard
+            ? new[] {
+                (ActionType.Wheel, new PickOption("This wheel", "Open a sub-wheel", "Opens another wheel in its place (or any of your wheels).", "a 'More' item.")),
+                (ActionType.Back, new PickOption("This wheel", "Go back a level", "Back to the wheel before; on the first wheel it closes.", null)),
+                (ActionType.Close, new PickOption("This wheel", "Close the wheel", "Closes it without doing anything else.", null)),
+                x }
+            : new[] { x })
+        .Select(x => (code: x.Item1, option: x.Item2))
+        .Select(x => x.code == ActionType.None ? (x.code, x.option with { Does = "The item is shown but does nothing." }) : x)
+        .ToArray();
+
     public static void WristPickerShot(string path) => OptionPicker.Shot(path, "What should this button do?", "Pick one; you can change it any time.", WristActions.Select(x => x.option).ToList());
 
     // The wrist action: a button with the current choice; clicking it opens the cards.
     Control WristPicker()
     {
+        var acts = inWrist ? WristActions : WheelActions;
+        string what = inWrist ? "this button" : "this item";
         var b = new Button { AutoSize = true, MinimumSize = new Size(300, 36), FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, TextAlign = ContentAlignment.MiddleLeft,
                              Font = new Font("Segoe UI", 10f, FontStyle.Bold), BackColor = Theme.Button, ForeColor = Theme.Text, Tag = "swatch", Padding = new Padding(6, 0, 6, 0) };
         b.FlatAppearance.BorderColor = Theme.CardBorder;
-        void Show() => b.Text = (WristActions.FirstOrDefault(x => x.code == type.Code).option?.Title ?? type.Text) + "   ▾  change";
+        void Show() => b.Text = (acts.FirstOrDefault(x => x.code == type.Code).option?.Title ?? type.Text) + "   ▾  change";
         type.SelectedIndexChanged += (s, e) => Show();
         b.Click += (s, e) =>
         {
-            int i = OptionPicker.Show(FindForm(), "What should this button do?", "Pick one; you can change it any time.", WristActions.Select(x => x.option).ToList());
+            int i = OptionPicker.Show(FindForm(), $"What should {what} do?", "Pick one; you can change it any time.", acts.Select(x => x.option).ToList());
             if (i >= 0)
-                type.Code = WristActions[i].code; // the type box's own handler sets the action up
+                type.Code = acts[i].code; // the type box's own handler sets the action up
         };
         Show();
         return b;
@@ -92,7 +108,7 @@ public class ActionEditor : FormPanel
             types.Insert(3, new Choice("page", "Wrist panel: open another page"));
         }
         type = new ChoiceBox(types.ToArray(), 360);
-        if (wrist != null)
+        if (wrist != null || inWheel)
             AddRow("What it does", WristPicker()); // big grouped cards instead of the long dropdown
         else
             AddRow("Action", type);

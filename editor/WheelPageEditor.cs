@@ -1,4 +1,4 @@
-namespace OpenXRCompanionEditor;
+﻿namespace OpenXRCompanionEditor;
 
 // One radial wheel on one page: the wheel picture (click to edit an item, drag one onto another to swap them) with the
 // item's settings beside it, and on the right either the list of its items (on/off, drag to reorder) or the buttons
@@ -13,7 +13,7 @@ public class WheelPageEditor : EditorBase
     readonly FlowLayoutPanel itemRows = new() { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
     readonly FlowLayoutPanel openerRows = new() { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
     WheelItemModel editing, dragged;
-    internal Action EditFirstItem, ShowOpeners; // screenshots
+    internal Action EditFirstItem, ShowOpeners, ShowLibrary; // screenshots
 
     public WheelPageEditor(ProfileModel profile, WheelModel wheel, Action<string, string> renamed)
     {
@@ -81,6 +81,7 @@ public class WheelPageEditor : EditorBase
         // ---- right: items list | opened by
         var itemsBody = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
         itemsBody.Controls.Add(Note("Click one to change it. Drag ≡ to reorder (or drag an item in the picture onto another to swap them). The circle switches it on or off: off = not on the wheel, kept here."));
+        itemsBody.Controls.Add(ItemLists.SortBar(RefreshItems));
         itemsBody.Controls.Add(itemRows);
         var itemsCard = Card("Items on this wheel", "", itemsBody);
         var openBody = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
@@ -89,27 +90,34 @@ public class WheelPageEditor : EditorBase
         openBody.Controls.Add(Btn("+ Add a button that opens it", AddOpener, Color.FromArgb(40, 110, 200)));
         var openCard = Card("Opened by", "", openBody);
 
-        var tabItems = Tab("☰  Items on this wheel");
-        var tabOpen = Tab("◎  Opened by");
-        void ShowRight(bool openers)
+        var libCard = Card("All buttons and bindings", "\uE721", ItemLists.Library(p, () => w, it => { Structure(); Edit(it); }, "this wheel"));
+        var tabItems = Tab("\u2630  Items on this wheel");
+        var tabOpen = Tab("\u25CE  Opened by");
+        var tabLib = Tab("\uD83D\uDD0D  All buttons");
+        void ShowRight(int which)
         {
-            itemsCard.Visible = !openers;
-            openCard.Visible = openers;
-            foreach (var (b, on) in new[] { (tabItems, !openers), (tabOpen, openers) })
+            itemsCard.Visible = which == 0;
+            openCard.Visible = which == 1;
+            libCard.Visible = which == 2;
+            foreach (var (b, on) in new[] { (tabItems, which == 0), (tabOpen, which == 1), (tabLib, which == 2) })
             { b.BackColor = on ? Color.FromArgb(40, 110, 200) : Theme.Button; b.ForeColor = on ? Color.White : Theme.Text; }
         }
-        tabItems.Click += (s, e) => ShowRight(false);
-        tabOpen.Click += (s, e) => ShowRight(true);
-        ShowOpeners = () => ShowRight(true);
+        tabItems.Click += (s, e) => ShowRight(0);
+        tabOpen.Click += (s, e) => ShowRight(1);
+        tabLib.Click += (s, e) => ShowRight(2);
+        ShowOpeners = () => ShowRight(1);
+        ShowLibrary = () => ShowRight(2);
         var switcher = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0, 0, 0, 10) };
         switcher.Controls.Add(tabItems);
         switcher.Controls.Add(tabOpen);
+        switcher.Controls.Add(tabLib);
         var column = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
         column.Controls.Add(switcher);
         column.Controls.Add(itemsCard);
         column.Controls.Add(openCard);
-        itemsCard.Margin = openCard.Margin = new Padding(0, 0, 0, 14);
-        ShowRight(false);
+        column.Controls.Add(libCard);
+        itemsCard.Margin = openCard.Margin = libCard.Margin = new Padding(0, 0, 0, 14);
+        ShowRight(0);
 
         var whole = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, Margin = Padding.Empty };
         leftCard.Margin = new Padding(0, 0, 14, 14);
@@ -163,7 +171,7 @@ public class WheelPageEditor : EditorBase
         itemRows.SuspendLayout();
         foreach (Control c in itemRows.Controls.Cast<Control>().ToList()) c.Dispose();
         itemRows.Controls.Clear();
-        foreach (var it in w.Items) itemRows.Controls.Add(ItemRow(it));
+        foreach (var it in ItemLists.Sorted(w.Items)) itemRows.Controls.Add(ItemRow(it));
         if (w.Items.Count == 0)
             itemRows.Controls.Add(new Label { Text = "No items yet: + Add item.", AutoSize = true, ForeColor = Theme.SubText });
         itemRows.ResumeLayout();

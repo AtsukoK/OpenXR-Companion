@@ -135,7 +135,7 @@ public partial class MainForm
         if (f.Profile.Wheels.Values.FirstOrDefault() is WheelModel firstWheel)
         {
             f.GoTo(firstWheel);
-            if (f.currentEditor is WheelPageEditor wpe) { wpe.EditFirstItem(); Snap("wheel_page"); wpe.ShowOpeners(); Snap("wheel_openers"); }
+            if (f.currentEditor is WheelPageEditor wpe) { wpe.EditFirstItem(); Snap("wheel_page"); wpe.ShowOpeners(); Snap("wheel_openers"); wpe.ShowLibrary(); Snap("wheel_library"); }
         }
         f.GoTo("wrist0");
         Snap("wrist_left");

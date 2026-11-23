@@ -144,22 +144,27 @@ public class SettingsEditor : EditorBase
             }
             var tabButtons = Tab("\u2630  Buttons on this page");
             var tabAdvanced = Tab("\u2699  Advanced settings");
-            void ShowRight(bool advanced)
+            var tabLib = Tab("\uD83D\uDD0D  All buttons");
+            var libCard = C("All buttons and bindings", "\uE721", false, WristLibrary);
+            void ShowRight(int which)
             {
-                listCard.Visible = !advanced;
-                panelCard.Visible = armCard.Visible = advanced;
-                foreach (var (b, on) in new[] { (tabButtons, !advanced), (tabAdvanced, advanced) })
+                listCard.Visible = which == 0;
+                panelCard.Visible = armCard.Visible = which == 1;
+                libCard.Visible = which == 2;
+                foreach (var (b, on) in new[] { (tabButtons, which == 0), (tabAdvanced, which == 1), (tabLib, which == 2) })
                 { b.BackColor = on ? Color.FromArgb(40, 110, 200) : Theme.Button; b.ForeColor = on ? Color.White : Theme.Text; }
             }
-            tabButtons.Click += (s2, e2) => ShowRight(false);
-            tabAdvanced.Click += (s2, e2) => ShowRight(true);
-            ShowAdvanced = () => ShowRight(true); // screenshots
+            tabButtons.Click += (s2, e2) => ShowRight(0);
+            tabAdvanced.Click += (s2, e2) => ShowRight(1);
+            tabLib.Click += (s2, e2) => ShowRight(2);
+            ShowAdvanced = () => ShowRight(1); // screenshots
             switcher.Controls.Add(tabButtons);
+            switcher.Controls.Add(tabLib);
             switcher.Controls.Add(tabAdvanced);
             column.Controls.Add(switcher);
-            foreach (var c in new Control[] { listCard, panelCard, armCard })
+            foreach (var c in new Control[] { listCard, panelCard, armCard, libCard })
             { c.Dock = DockStyle.None; c.Margin = new Padding(0, 0, 0, 14); column.Controls.Add(c); }
-            ShowRight(false);
+            ShowRight(0);
             // the cards in the column all as wide as the widest one
             bool sizing = false;
             column.Layout += (s2, e2) =>
@@ -760,7 +765,7 @@ public class SettingsEditor : EditorBase
     internal Action ShowAdvanced;
     Action ShowPageRow;
     Action<int> ColumnsChanged; // the page picture follows the Columns setting
-    Control WristList; // this page's buttons as a list (made by WristButtons, shown on the right)
+    Control WristList, WristLibrary; // this page's buttons as a list (made by WristButtons, shown on the right)
 
     Control WristButtons()
     {
@@ -963,6 +968,7 @@ public class SettingsEditor : EditorBase
         var list = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
         list.Controls.Add(new Label { Text = "Click one to change it. Drag \u2261 to reorder (or drag a button in the picture onto another to swap them). The circle switches it on or off: off = not on the panel, kept here.", AutoSize = true, MaximumSize = new Size(560, 0), ForeColor = Theme.SubText, Margin = new Padding(0, 0, 0, 8) });
         var rows = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty, AllowDrop = true };
+        list.Controls.Add(ItemLists.SortBar(() => refreshList()));
         list.Controls.Add(rows);
         WheelItemModel dragged = null;
         Control Row(WheelItemModel it)
@@ -1008,13 +1014,14 @@ public class SettingsEditor : EditorBase
             foreach (Control c in rows.Controls.Cast<Control>().ToList()) c.Dispose();
             rows.Controls.Clear();
             if (shown != null)
-                foreach (var it in shown.Items) rows.Controls.Add(Row(it));
+                foreach (var it in ItemLists.Sorted(shown.Items)) rows.Controls.Add(Row(it));
             if (shown == null || shown.Items.Count == 0)
                 rows.Controls.Add(new Label { Text = "No buttons yet: + Add button.", AutoSize = true, ForeColor = Theme.SubText });
             rows.ResumeLayout();
         };
         refreshList();
         WristList = list;
+        WristLibrary = ItemLists.Library(p, () => shown, it => { Structure(); Edit(it); }, "the page shown on the left");
         return box;
     }
 
