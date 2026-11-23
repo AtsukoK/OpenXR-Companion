@@ -77,16 +77,6 @@ public sealed class ControllersHub : DrawerPage
         chooserRow.Controls.Add(chooser);
         chooserRow.Controls.Add(models);
         chooserRow.Controls.Add(frameNative);
-        var choose = new Button
-        {
-            Text = "Choose your controllers…", AutoSize = true, Height = 32, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
-            Font = new Font("Segoe UI", 10f, FontStyle.Bold), BackColor = Color.FromArgb(40, 110, 200), ForeColor = Color.White,
-            Margin = new Padding(18, 0, 0, 0), Padding = new Padding(8, 0, 8, 0),
-        };
-        choose.FlatAppearance.BorderSize = 0;
-        FormPanel.Tips.SetToolTip(choose, "Which controllers you use: sets the buttons that open your right and left hand wheels");
-        choose.Click += (s, e) => MainForm.Current?.ChooseControllersFromScreen();
-        chooserRow.Controls.Add(choose);
         Controls.Add(chooserRow);
         titleLabel = new Label { Text = "Controllers  \u00B7  " + layout.Name, AutoSize = true, Dock = DockStyle.Top, Font = new Font("Segoe UI", 22f, FontStyle.Bold), ForeColor = Theme.Text, Padding = new Padding(0, 0, 0, 4) };
         Controls.Add(titleLabel);
