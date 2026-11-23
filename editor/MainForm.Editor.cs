@@ -30,6 +30,8 @@ public partial class MainForm
                                         (b, openIt) => Later(() => { if (openIt) Rebuild(b); else { MarkDirty(); BuildTree(); } }),
                                         Changed, () => { MarkDirty(); BuildTree(); });
                 break;
+            case BindingsPage:
+                { var ab = new AllBindingsPage(Profile); ab.Changed += Changed; ed = ab; break; }
             case "overview":
                 {
                     var ov = new OverviewEditor(Profile, GoTo);

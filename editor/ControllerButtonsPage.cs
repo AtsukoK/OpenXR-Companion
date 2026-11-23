@@ -473,7 +473,26 @@ public class ControllerButtonsPage : UserControl
         string extra = (b.Block == "none" && b.Action?.Type != ActionType.None ? "game also gets the button · " : "") + (isOn ? "" : "off · ");
         row.Controls.Add(new Label { Text = extra + b.Name, AutoSize = true, MaximumSize = new Size(240, 0), ForeColor = Theme.OffText, Margin = new Padding(0, 3, 0, 0) });
         FormPanel.Tips.SetToolTip(does, "Click to edit '" + b.Name + "'");
-        var del = new Button { Text = "✕", Width = 28, Height = 24, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(8, 0, 0, 0), BackColor = Color.FromArgb(170, 50, 50), ForeColor = Color.White };
+        var sw = new Button { Text = isOn ? "\u2714" : "\u25CB", Width = 30, Height = 24, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(8, 0, 0, 0),
+                              BackColor = Theme.Button, ForeColor = isOn ? Color.FromArgb(60, 190, 110) : Theme.SubText, Font = new Font("Segoe UI", 10f, FontStyle.Bold) };
+        sw.FlatAppearance.BorderSize = 0;
+        FormPanel.Tips.SetToolTip(sw, isOn ? "On: click to switch it off (kept here)" : "Off: click to switch it on");
+        sw.Click += (s, e) => { b.Enabled = !b.Enabled; added(b, false); ShowAll(); };
+        row.Controls.Add(sw);
+        var dup = new Button { Text = "\u29C9", Width = 30, Height = 24, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(4, 0, 0, 0), BackColor = Theme.Button, ForeColor = Theme.Text };
+        dup.FlatAppearance.BorderSize = 0;
+        FormPanel.Tips.SetToolTip(dup, "Duplicate (a copy right below it, switched off)");
+        dup.Click += (s, e) =>
+        {
+            var c = ItemLists.Clone(b);
+            c.Name += " copy";
+            c.Enabled = false;
+            profile.Bindings.Insert(profile.Bindings.IndexOf(b) + 1, c);
+            added(c, false);
+            ShowAll();
+        };
+        row.Controls.Add(dup);
+        var del = new Button { Text = "\u2715", Width = 28, Height = 24, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(8, 0, 0, 0), BackColor = Color.FromArgb(170, 50, 50), ForeColor = Color.White };
         del.FlatAppearance.BorderSize = 0;
         FormPanel.Tips.SetToolTip(del, "Delete '" + b.Name + "'");
         del.Click += (s, e) =>

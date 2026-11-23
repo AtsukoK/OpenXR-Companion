@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -160,7 +160,8 @@ public partial class MainForm : Form
     {
         if (dupBtn != null)
         {
-            var tag = tree.SelectedNode?.Tag;
+            // pages without a row in the list (Controllers, All bindings): the list's selection is from before, so nothing to act on
+            var tag = lastTag as string is ControllersPage or BindingsPage ? null : tree.SelectedNode?.Tag;
             string what = tag switch
             {
                 BindingModel => "binding",
@@ -181,6 +182,7 @@ public partial class MainForm : Form
             homeBtn.Enabled = lastTag as string != "overview";
     }
     public const string ControllersPage = "controllers"; // both controllers: a page without a row in the list
+    public const string BindingsPage = "all_bindings"; // every controller binding as one list (also no row in the list)
     bool keepPage; // the list is being rebuilt while that page shows: it stays on screen
 
     void OnSelect(TreeNode n)
@@ -195,8 +197,8 @@ public partial class MainForm : Form
 
     public void GoTo(object tag)
     {
-        if (tag as string == ControllersPage)
-        { OnSelect(new TreeNode { Tag = ControllersPage }); return; }
+        if (tag as string is ControllersPage or BindingsPage)
+        { OnSelect(new TreeNode { Tag = tag }); return; }
         var n = Find(tree.Nodes, tag);
         if (n == null)
             return;
@@ -211,10 +213,10 @@ public partial class MainForm : Form
         while (history.Count > 0)
         {
             var tag = history.Pop();
-            if (tag as string == ControllersPage)
+            if (tag as string is ControllersPage or BindingsPage)
             {
                 navigatingBack = true;
-                try { OnSelect(new TreeNode { Tag = ControllersPage }); }
+                try { OnSelect(new TreeNode { Tag = tag }); }
                 finally { navigatingBack = false; }
                 break;
             }

@@ -32,6 +32,7 @@ public partial class MainForm
         RailButton("", "Overview", () => GoTo("overview"), () => "overview");
         RailButton("", "Settings", () => GoTo(Profile), () => Profile);
         RailButton("", "Controllers", () => GoTo(ControllersPage), () => ControllersPage);
+        RailButton("\uE8FD", "All bindings", () => GoTo(BindingsPage), () => BindingsPage);
         RailButton("", "Wheels", () => GoTo("wheels"), () => "wheels");
         RailButton("", "Left wrist panel", () => GoTo("wrist0"), () => "wrist0", "L");
         RailButton("", "Right wrist panel", () => GoTo("wrist1"), () => "wrist1", "R");
@@ -93,7 +94,7 @@ public partial class MainForm
         var n = tree.SelectedNode;
         while (n?.Parent != null && n.Parent.Tag is not ProfileModel)
             n = n.Parent;
-        object section = lastTag as string == ControllersPage || n?.Tag as string is "bindings_left" or "bindings_right" ? ControllersPage
+        object section = lastTag as string == BindingsPage ? BindingsPage : lastTag as string == ControllersPage || n?.Tag as string is "bindings_left" or "bindings_right" ? ControllersPage
                        : n?.Tag is SettingsPage ? Profile : n?.Tag;
         foreach (var (b, tag) in railButtons)
         {
@@ -137,6 +138,8 @@ public partial class MainForm
             f.GoTo(firstWheel);
             if (f.currentEditor is WheelPageEditor wpe) { wpe.EditFirstItem(); Snap("wheel_page"); wpe.ShowOpeners(); Snap("wheel_openers"); wpe.ShowLibrary(); Snap("wheel_library"); }
         }
+        f.GoTo(BindingsPage);
+        Snap("all_bindings");
         f.GoTo("wrist0");
         Snap("wrist_left");
         if (f.currentEditor is SettingsEditor low)

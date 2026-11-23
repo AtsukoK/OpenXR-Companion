@@ -765,7 +765,14 @@ public class SettingsEditor : EditorBase
     internal Action ShowAdvanced;
     Action ShowPageRow;
     Action<int> ColumnsChanged; // the page picture follows the Columns setting
-    Control WristList, WristLibrary; // this page's buttons as a list (made by WristButtons, shown on the right)
+    Control WristList, WristLibrary;
+    Func<Keys, bool> wristKeys; // Del, Ctrl+D, Alt+Left / Right on the chosen wrist button
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (wristKeys != null && ActiveControl is not (TextBoxBase or NumericUpDown or ComboBox) && !KeyBox.Recording && wristKeys(keyData))
+            return true;
+        return base.ProcessCmdKey(ref msg, keyData);
+    } // this page's buttons as a list (made by WristButtons, shown on the right)
 
     Control WristButtons()
     {
@@ -858,13 +865,36 @@ public class SettingsEditor : EditorBase
         }
         editBar.Controls.Add(Btn("\u25C0 Move", () => Move(-1)));
         editBar.Controls.Add(Btn("Move \u25B6", () => Move(1)));
-        var del = Btn("Delete button", () =>
+        void DupButton()
+        {
+            if (editing == null || shown == null) return;
+            if (shown.Items.Count >= 16) { MessageBox.Show(FindForm(), "A page holds at most 16 buttons."); return; }
+            var c = ItemLists.Clone(editing);
+            shown.Items.Insert(shown.Items.IndexOf(editing) + 1, c);
+            Structure();
+            Edit(c);
+        }
+        void DelButton()
         {
             if (editing == null || shown == null) return;
             shown.Items.Remove(editing);
             Structure();
             Edit(null);
-        });
+        }
+        editBar.Controls.Add(Btn("Duplicate", DupButton));
+        var del = Btn("Delete button", DelButton);
+        wristKeys = k =>
+        {
+            if (editing == null) return false;
+            switch (k)
+            {
+                case Keys.Delete: DelButton(); return true;
+                case Keys.Control | Keys.D: DupButton(); return true;
+                case Keys.Alt | Keys.Left: Move(-1); return true;
+                case Keys.Alt | Keys.Right: Move(1); return true;
+            }
+            return false;
+        };
         del.BackColor = Color.FromArgb(170, 50, 50); del.ForeColor = Color.White; del.FlatAppearance.BorderSize = 0;
         editBar.Controls.Add(del);
         preview.ItemClicked += it => Edit(it);
@@ -940,6 +970,22 @@ public class SettingsEditor : EditorBase
             ShowTabs();
             Edit(null);
         });
+        var dupPage = Btn("Duplicate page", () =>
+        {
+            if (shown == null) return;
+            var c = ItemLists.Clone(shown);
+            string n = shown.Name + " copy";
+            for (int k = 2; owner.Pages.ContainsKey(n); k++) n = shown.Name + " copy " + k;
+            c.Name = n;
+            c.Title = (shown.Title ?? shown.Name) + " copy";
+            owner.Pages[n] = c;
+            Structure();
+            shown = c;
+            ShowTabs();
+            Edit(null);
+        });
+        FormPanel.Tips.SetToolTip(dupPage, "A copy of this page with all its buttons. Nothing opens it yet: add a 'Go to another page' button for it.");
+        pageRow.Controls.Add(dupPage);
         delPage.BackColor = Color.FromArgb(170, 50, 50); delPage.ForeColor = Color.White; delPage.FlatAppearance.BorderSize = 0;
         delPage.Margin = new Padding(0, 0, 0, 0);
         pageRow.Controls.Add(delPage);

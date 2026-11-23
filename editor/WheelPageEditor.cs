@@ -59,13 +59,8 @@ public class WheelPageEditor : EditorBase
         }, Color.FromArgb(40, 110, 200));
         editBar.Controls.Add(Btn("◀ Move", () => Move(-1)));
         editBar.Controls.Add(Btn("Move ▶", () => Move(1)));
-        editBar.Controls.Add(Btn("Delete item", () =>
-        {
-            if (editing == null) return;
-            w.Items.Remove(editing);
-            Structure();
-            Edit(null);
-        }, Color.FromArgb(170, 50, 50)));
+        editBar.Controls.Add(Btn("Duplicate", Duplicate));
+        editBar.Controls.Add(Btn("Delete item", Delete, Color.FromArgb(170, 50, 50)));
         var editCol = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
         editCol.Controls.Add(editBar);
         editCol.Controls.Add(editHost);
@@ -195,6 +190,38 @@ public class WheelPageEditor : EditorBase
         ie.Changed += () => { preview.Invalidate(); RefreshItems(); Fire(); };
         if (Theme.IsDark) ThemeWalker.Apply(ie);
         editHost.Controls.Add(ie);
+    }
+
+    void Duplicate()
+    {
+        if (editing == null) return;
+        if (w.Items.Count >= 16) { MessageBox.Show(FindForm(), "A wheel holds at most 16 items."); return; }
+        var c = ItemLists.Clone(editing);
+        w.Items.Insert(w.Items.IndexOf(editing) + 1, c);
+        Structure();
+        Edit(c);
+    }
+
+    void Delete()
+    {
+        if (editing == null) return;
+        w.Items.Remove(editing);
+        Structure();
+        Edit(null);
+    }
+
+    // Del, Ctrl+D, Alt+Left / Right on the chosen item (not while typing in a box)
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (editing != null && ActiveControl is not (TextBoxBase or NumericUpDown or ComboBox) && !KeyBox.Recording)
+            switch (keyData)
+            {
+                case Keys.Delete: Delete(); return true;
+                case Keys.Control | Keys.D: Duplicate(); return true;
+                case Keys.Alt | Keys.Left: Move(-1); return true;
+                case Keys.Alt | Keys.Right: Move(1); return true;
+            }
+        return base.ProcessCmdKey(ref msg, keyData);
     }
 
     void Move(int by)

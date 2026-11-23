@@ -38,6 +38,7 @@ public static class ItemLists
     }
 
     static readonly JsonSerializerOptions Opts = new() { PropertyNameCaseInsensitive = true };
+    public static T Clone<T>(T o) => JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(o, Opts), Opts);
     static ActionModel Copy(ActionModel a) => a == null ? new ActionModel() : JsonSerializer.Deserialize<ActionModel>(JsonSerializer.Serialize(a, Opts), Opts);
 
     // Every button, item and controller binding, with a search box; "+ Add here" puts a copy on the shown page / wheel.

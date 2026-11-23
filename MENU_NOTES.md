@@ -33,6 +33,20 @@ Next: the user tests dist2 (editor + headset), especially the items marked (!) b
   Test TestReloadRedraws.
 - Layer tests: sh quick_test.sh (0 failures). This worktree needed third_party/openxr-sdk copied in (submodule).
 
+## Added later on 2026-11-23 night (all editor, screenshots only, untested by hand)
+- Wrist page: "Next page" instead of More (+ Add page adds one), page tabs in visit order with arrows, button list on the
+  right (on/off, drag reorder, sort, click = select), drag-swap in the picture, Duplicate button / Duplicate page,
+  tabs Buttons | All buttons | Advanced settings (Panel + When it shows, On the arm; custom angle under Fine-tune).
+- Wrist + wheel items: grouped card picker for "What it does" (ActionEditor WristActions / WheelActions).
+- Wheel page (WheelPageEditor.cs) replaces the old wheel editor: sub-wheel tabs + "+ Add sub-wheel", items list,
+  "Opened by" tab (switch/delete openers, + Add a button that opens it), All buttons tab (ItemLists.cs library + search).
+- Controllers: list's Left/Right rows open the new screen; drawer rows have on/off, duplicate, delete; Reset to default
+  per way; touch inputs get Hold / Double-tap-and-hold.
+- Rail icon "All bindings" (AllBindingsPage.cs): every binding, search, sort, on/off, duplicate, delete; bindings not
+  on the chosen controller's picture listed first. Toolbar acts on nothing on Controllers / All bindings pages.
+- Keys on wrist + wheel pages: Del, Ctrl+D, Alt+Left/Right on the chosen button / item.
+- Not done (user's call): "Move to another wheel/page" button.
+
 ## Open / asked
 - Wrist text-direction presets (fingers / between / along arm) are old and unchecked; user to choose: replace them,
   or place the panel per preset in the headset and measure. The arm drawing is gone.
