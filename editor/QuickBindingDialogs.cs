@@ -1,4 +1,4 @@
-namespace OpenXRCompanionEditor;
+﻿namespace OpenXRCompanionEditor;
 
 // The small questions the quick choices on the controller page ask: which key, which of the game's buttons.
 public static class QuickBindingDialogs
@@ -38,7 +38,7 @@ public static class QuickBindingDialogs
 
     // A dialog with one question and OK / Cancel; returns read() on OK, else null. Laid out in rows that size
     // themselves, so the buttons always sit under the input, whatever its height.
-    static string Ask(IWin32Window owner, string title, string question, Control input, Func<string> read)
+    internal static string Ask(IWin32Window owner, string title, string question, Control input, Func<string> read)
     {
         using var dlg = new Form
         {

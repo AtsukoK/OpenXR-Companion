@@ -52,6 +52,13 @@ public partial class MainForm
             case WheelModel w:
                 {
                     int wh = WristOf(n);
+                    if (wh < 0) // a radial wheel: its own page with the items and openers (the list on the left isn't needed)
+                    {
+                        var wp = new WheelPageEditor(Profile, w, RenameWheel);
+                        wp.Changed += Changed;
+                        ed = wp;
+                        break;
+                    }
                     var we = wh >= 0 ? new WheelEditor(w, (a, b) => RenamePage(wh, a, b), Profile.WristPages(wh), Profile.WristFor(wh).Columns)
                                      : new WheelEditor(w, RenameWheel);
                     we.Changed += Changed;

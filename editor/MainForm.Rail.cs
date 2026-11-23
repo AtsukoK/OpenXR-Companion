@@ -132,6 +132,11 @@ public partial class MainForm
         Snap("settings_tiles");
         f.GoTo("overview");
         Snap("overview");
+        if (f.Profile.Wheels.Values.FirstOrDefault() is WheelModel firstWheel)
+        {
+            f.GoTo(firstWheel);
+            if (f.currentEditor is WheelPageEditor wpe) { wpe.EditFirstItem(); Snap("wheel_page"); wpe.ShowOpeners(); Snap("wheel_openers"); }
+        }
         f.GoTo("wrist0");
         Snap("wrist_left");
         if (f.currentEditor is SettingsEditor low)
