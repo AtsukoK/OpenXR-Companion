@@ -4,7 +4,8 @@ namespace OpenXRCompanionEditor;
 public sealed class ControllersHub : DrawerPage
 {
     readonly ProfileModel p;
-    readonly ControllerLayout layout;
+    ControllerLayout layout;
+    Label titleLabel;
     readonly ControllerPicture[] pics = new ControllerPicture[2];
     readonly Action<int, string> openPart;
     readonly Action<BindingModel, bool> added;
@@ -28,7 +29,7 @@ public sealed class ControllersHub : DrawerPage
         AutoScroll = true;
         BackColor = Theme.Page;
         Padding = new Padding(28, 20, 20, 16);
-        var grid = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 2, RowCount = 3, AutoSize = true };
+        var grid = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 2, RowCount = 2, AutoSize = true };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         foreach (int hand in new[] { 0, 1 })
@@ -44,17 +45,7 @@ public sealed class ControllersHub : DrawerPage
             pic.SizeChanged += (s, e) => FitPictures();
             pics[h] = pic;
             grid.Controls.Add(pic, h, 1);
-            var configure = new Button
-            {
-                Text = h == 0 ? "Configure Left Controller" : "Configure Right Controller",
-                AutoSize = true, Height = 44, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Anchor = AnchorStyles.Top,
-                Font = new Font("Segoe UI", 11.5f, FontStyle.Bold), BackColor = Color.FromArgb(40, 110, 200), ForeColor = Color.White,
-                Padding = new Padding(24, 4, 24, 4), Margin = new Padding(0, 12, h == 0 ? 10 : 0, 0),
-            };
-            configure.FlatAppearance.BorderSize = 0;
-            configure.Click += (s, e) => openPart(h, null);
-            grid.Controls.Add(configure, h, 2);
-            configures[h] = configure;
+
         }
         Controls.Add(grid);
         this.grid = grid;
@@ -66,7 +57,29 @@ public sealed class ControllersHub : DrawerPage
             Text = "Click a button (or its tag) to change what it does. The + on a tag adds something to that button. Blue = your bindings, grey 'Default' = the game's own control.",
             AutoSize = true, MaximumSize = new Size(1000, 0), Dock = DockStyle.Top, ForeColor = Theme.SubText, Font = new Font("Segoe UI", 10.5f), Padding = new Padding(0, 0, 0, 12),
         });
-        Controls.Add(new Label { Text = "Controllers  ·  " + layout.Name, AutoSize = true, Dock = DockStyle.Top, Font = new Font("Segoe UI", 22f, FontStyle.Bold), ForeColor = Theme.Text, Padding = new Padding(0, 0, 0, 4) });
+        // which controllers are drawn (and the Steam Frame setting): the same choice the per-controller pages had
+        var chooserRow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = false, Padding = new Padding(0, 0, 0, 8) };
+        chooserRow.Controls.Add(new Label { Text = "Controller:", AutoSize = true, Margin = new Padding(0, 7, 8, 0), ForeColor = Theme.Text });
+        var chooser = new ChoiceBox(ControllerLayouts.All.Select(l => new Choice(l.Id, l.Name)), 330) { Code = layout.Id };
+        var models = new Label { AutoSize = true, Margin = new Padding(10, 7, 0, 0), ForeColor = Theme.SubText, Text = "For: " + layout.Models };
+        var frameNative = SteamFrameSetting.NewCheckBox();
+        frameNative.Visible = layout.Id == "frame";
+        chooser.SelectedIndexChanged += (s, e) =>
+        {
+            layout = ControllerLayouts.ById(chooser.Code);
+            ControllerPictureChoice.Save(layout.Id);
+            titleLabel.Text = "Controllers  \u00B7  " + layout.Name;
+            models.Text = "For: " + layout.Models;
+            frameNative.Visible = layout.Id == "frame";
+            Refresh2();
+            FitPictures();
+        };
+        chooserRow.Controls.Add(chooser);
+        chooserRow.Controls.Add(models);
+        chooserRow.Controls.Add(frameNative);
+        Controls.Add(chooserRow);
+        titleLabel = new Label { Text = "Controllers  \u00B7  " + layout.Name, AutoSize = true, Dock = DockStyle.Top, Font = new Font("Segoe UI", 22f, FontStyle.Bold), ForeColor = Theme.Text, Padding = new Padding(0, 0, 0, 4) };
+        Controls.Add(titleLabel);
         Refresh2();
     }
 
@@ -84,7 +97,7 @@ public sealed class ControllersHub : DrawerPage
         {
             bool show = hand < 0 || h == hand;
             grid.ColumnStyles[h] = show ? new ColumnStyle(SizeType.Percent, hand < 0 ? 50 : 100) : new ColumnStyle(SizeType.Absolute, 0);
-            pics[h].Visible = caps[h].Visible = configures[h].Visible = show;
+            pics[h].Visible = caps[h].Visible = show;
         }
         grid.ResumeLayout();
         FitPictures();
@@ -126,7 +139,7 @@ public sealed class ControllersHub : DrawerPage
         fitting = true;
         try
         {
-            int room = ClientSize.Height - grid.Top - 34 /*captions*/ - 70 /*buttons*/ - Padding.Bottom;
+            int room = ClientSize.Height - grid.Top - 34 /*captions*/ - 12 - Padding.Bottom;
             foreach (var pic in pics)
             {
                 if (pic == null || pic.Width <= 0)
