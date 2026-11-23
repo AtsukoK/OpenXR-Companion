@@ -97,6 +97,16 @@ void InGameMenu::BuildView() {
         vr.items = r.items;
         vr.itemDetails = r.itemDetails;
         vr.cols = r.cols;
+        vr.previews = r.previews;
+        vr.previewWrist = r.previewWrist;
+        vr.previewCols = r.previewCols;
+        vr.previewSelected = r.previewSelected;
+        for (const Wheel& w : r.previews) {
+            vr.previewSig += w.title + "|";
+            for (const WheelItem& it : w.items)
+                vr.previewSig += it.label + "/" + it.icon + "/" + std::to_string(it.color) + "/" + std::to_string((int)it.action.type) + ";";
+            vr.previewSig += "#";
+        }
         if (r.kind == MenuRowKind::Toggle) vr.isOn = r.isOn && r.isOn();
         if (r.kind == MenuRowKind::Number && r.value) {
             float x = r.value();
@@ -119,7 +129,7 @@ void InGameMenu::BuildView() {
     for (size_t i = 0; same && i < rows.size(); i++) {
         const MenuViewRow &a = rows[i], &b = v.rows[i];
         same = a.label == b.label && a.detail == b.detail && a.value == b.value && a.isOn == b.isOn && a.canLess == b.canLess &&
-               a.canMore == b.canMore && a.kind == b.kind && a.fraction == b.fraction && a.tags == b.tags && a.items == b.items && a.itemDetails == b.itemDetails;
+               a.canMore == b.canMore && a.kind == b.kind && a.fraction == b.fraction && a.tags == b.tags && a.items == b.items && a.itemDetails == b.itemDetails && a.previewSig == b.previewSig && a.previewSelected == b.previewSelected && a.previewCols == b.previewCols;
     }
     float scale = page_.scale > 0 ? page_.scale : 1.f;
     float width = (page_.width > 0 ? page_.width : kMenuWidth) * scale;
@@ -200,6 +210,14 @@ void InGameMenu::Activate(const MenuHit& hit, bool repeat) {
             auto open = r.openTag;
             MenuTag tag = r.tags[hit.sub];
             open(tag.hand, tag.comp);
+        } else if (r.kind == MenuRowKind::Preview && hit.sub >= 0) {
+            int n = r.previews.empty() ? 0 : (int)r.previews[0].items.size();
+            if (hit.sub < n) {
+                if (auto open = r.openItem) open(hit.sub);
+            } else if (hit.sub - n < (int)r.itemPress.size() && r.itemPress[hit.sub - n]) {
+                auto press = r.itemPress[hit.sub - n];
+                press();
+            }
         } else if ((r.kind == MenuRowKind::Bar || r.kind == MenuRowKind::Tiles) && hit.sub >= 0 && hit.sub < (int)r.itemPress.size() && r.itemPress[hit.sub]) {
             auto press = r.itemPress[hit.sub];
             press();

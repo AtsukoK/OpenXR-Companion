@@ -1,5 +1,6 @@
 // The in-game menu's rows and layout (no drawing, no input): see menu.h.
 #include "menu.h"
+#include "engine.h"
 #include "controller_silhouettes.h"
 #include <algorithm>
 #include <cmath>
@@ -106,6 +107,50 @@ MenuRow MenuRow::Tiles(std::vector<std::string> titles, std::vector<std::string>
     r.cols = std::max(1, cols);
     r.span = std::max(1, span);
     return r;
+}
+
+MenuRow MenuRow::Preview(Wheel w, bool wrist, int cols, std::function<void(int)> openItem, std::vector<std::string> side,
+                         std::vector<std::function<void()>> sidePress, int span) {
+    MenuRow r;
+    r.kind = MenuRowKind::Preview;
+    r.previews.push_back(std::move(w));
+    r.previewWrist = wrist;
+    r.previewCols = cols;
+    r.openItem = std::move(openItem);
+    r.items = std::move(side);
+    r.itemPress = std::move(sidePress);
+    r.span = std::max(2, span);
+    return r;
+}
+
+void PreviewLayout(const MenuView& view, const MenuViewRow& row, int rowIndex, float y, float h, PreviewPlaces& out) {
+    out = PreviewPlaces{};
+    const float pad = 0.02f, aspect = view.h > 0 ? view.w / view.h : 1.f;
+    float side = h * 0.96f, picW = side / aspect; // square on the panel
+    out.pic = { pad, y + h * 0.02f, picW, side, { MenuPart::None, rowIndex } };
+    int n = row.PreviewCount();
+    if (!row.previewWrist) {
+        const float kPi = 3.14159265f, R = 0.49f, ri = R * 0.34f + 0.01f, tr = (R * 0.97f + ri) / 2, box = (R - ri) * 0.7f;
+        float seg = n ? 2 * kPi / n : 0;
+        for (int i = 0; i < n; i++) {
+            float a = -kPi / 2 + i * seg, cx = 0.5f + std::cos(a) * tr, cy = 0.5f + std::sin(a) * tr;
+            out.items.push_back({ out.pic.x + (cx - box / 2) * picW, out.pic.y + (cy - box / 2) * side, box * picW, box * side,
+                                  { MenuPart::Row, rowIndex, i } });
+        }
+    } else {
+        std::vector<Cell> cells;
+        Cell head;
+        WristLayout(n, row.previewCols, cells, head);
+        for (int i = 0; i < (int)cells.size(); i++)
+            out.items.push_back({ out.pic.x + cells[i].x * picW, out.pic.y + cells[i].y * side, cells[i].w * picW, cells[i].h * side,
+                                  { MenuPart::Row, rowIndex, i } });
+    }
+    int k = (int)row.items.size();
+    float sx = out.pic.x + picW + 0.03f, sw = 1 - pad - sx;
+    float bh = std::min(0.1f, (h - 0.02f * (k + 1)) / std::max(1, k));
+    float top = y + (h - (bh * k + 0.02f * (k - 1))) / 2;
+    for (int i = 0; i < k; i++)
+        out.side.push_back({ sx, top + i * (bh + 0.02f), sw, bh, { MenuPart::Row, rowIndex, n + i } });
 }
 
 bool LiveHand::operator==(const LiveHand& o) const {
@@ -303,6 +348,16 @@ void MenuLayout(const MenuView& view, std::vector<MenuBox>& out) {
             float gapU = 0.015f, bw = (1 - 2 * pad - gapU * (n - 1)) / n;
             for (int k = 0; k < (int)r.items.size(); k++)
                 out.push_back({ pad + k * (bw + gapU), y + h * 0.12f, bw, h * 0.76f, { MenuPart::Row, i, k } });
+            break;
+        }
+        case MenuRowKind::Preview: {
+            PreviewPlaces pl;
+            PreviewLayout(view, r, i, y, h, pl);
+            out.push_back(pl.pic);
+            for (const MenuBox& b : pl.items)
+                out.push_back(b);
+            for (const MenuBox& b : pl.side)
+                out.push_back(b);
             break;
         }
         case MenuRowKind::Tiles: {

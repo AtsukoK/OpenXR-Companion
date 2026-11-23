@@ -964,6 +964,34 @@ static void DrawLiveStick(Graphics& g, const RectF& box, int hand, const LiveHan
     (void)hand;
 }
 
+// A wheel or a wrist page drawn by the in-game drawers into a box of the menu (hovered: that button lit).
+static void DrawPreviewPicture(Graphics& g, const RectF& box, const Wheel& w, bool wrist, int cols, int hovered, const Style& st) {
+    int S = std::max(64, (int)std::min(box.Width, box.Height));
+    std::vector<uint32_t> px;
+    Profile tmp;
+    tmp.style = st;
+    if (wrist) {
+        WristStyle ws;
+        ws.columns = cols;
+        WristView wv;
+        wv.wheel = &w;
+        wv.visible = true;
+        wv.hover = hovered;
+        DrawWrist(px, S, tmp, ws, wv);
+    } else {
+        WheelView wv;
+        wv.wheel = &w;
+        wv.visible = true;
+        wv.hovered = hovered;
+        wv.crumb = w.title;
+        DrawWheel(px, S, tmp, wv);
+    }
+    if (px.size() != (size_t)S * S) return;
+    Bitmap pic(S, S, S * 4, PixelFormat32bppPARGB, (BYTE*)px.data());
+    float side = std::min(box.Width, box.Height);
+    g.DrawImage(&pic, RectF(box.X + (box.Width - side) / 2, box.Y + (box.Height - side) / 2, side, side));
+}
+
 void DrawMenu(std::vector<uint32_t>& out, int W, int H, const MenuView& v, const Style& st) {
     using namespace MenuColors;
     EnsureGdi();
@@ -1048,6 +1076,38 @@ void DrawMenu(std::vector<uint32_t>& out, int W, int H, const MenuView& v, const
     for (const MenuBox& b : boxes) {
         if (b.hit.sub >= 0 && b.hit.row >= 0 && v.rows[b.hit.row].kind == MenuRowKind::Overview)
             continue; // the overview's tags: drawn with its pictures (these boxes are for pointing)
+        if (b.hit.row >= 0 && v.rows[b.hit.row].kind == MenuRowKind::Preview) {
+            const MenuViewRow& r = v.rows[b.hit.row];
+            int n = r.PreviewCount();
+            if (b.hit.sub < 0 && !r.previews.empty()) { // the picture
+                int hov = v.hover.row == b.hit.row && v.hover.sub >= 0 && v.hover.sub < n ? v.hover.sub : r.previewSelected;
+                SolidBrush well{ Color(0xFF181C22) };
+                GraphicsPath wp;
+                roundRect(wp, b.x * W, b.y * H, b.w * W, b.h * H, b.h * H * 0.06f);
+                g.FillPath(&well, &wp);
+                RectF in(b.x * W + 6, b.y * H + 6, b.w * W - 12, b.h * H - 12);
+                DrawPreviewPicture(g, in, r.previews[0], r.previewWrist, r.previewCols, hov, st);
+                if (n == 0)
+                    g.DrawString(L"No buttons yet", -1, detailFont.get(), RectF(b.x * W, b.y * H + b.h * H * 0.8f, b.w * W, b.h * H * 0.15f),
+                                 &oneLine, &subB);
+            } else if (b.hit.sub >= n) { // a side button
+                int k = b.hit.sub - n;
+                if (k >= (int)r.items.size()) continue;
+                float x = b.x * W, y = b.y * H, w = b.w * W, h = b.h * H;
+                GraphicsPath btn;
+                roundRect(btn, x, y, w, h, h * 0.35f);
+                bool hover = isHover(b.hit), pressed = isPressed(b.hit);
+                bool danger = r.items[k].rfind("Delete", 0) == 0;
+                SolidBrush fill{ Color(pressed ? Pressed : hover ? 0xFF3A4350 : 0xFF2C333C) };
+                g.FillPath(&fill, &btn);
+                Pen ring(Color(hover && !pressed ? Accent : 0xFF3C4550), hover ? 2.5f : 1.f);
+                g.DrawPath(&ring, &btn);
+                SolidBrush red{ Color(0xFFFF5A5F) };
+                g.DrawString(Utf8ToW(r.items[k]).c_str(), -1, valueFont.get(), RectF(x + 12, y, w - 24, h), &oneLine,
+                             danger ? (Brush*)&red : (Brush*)&textB);
+            }
+            continue; // the buttons in the picture are drawn by it (these boxes are for pointing)
+        }
         switch (b.hit.part) {
         case MenuPart::Back:
             iconButton(b, L"\x2039", true);
@@ -1103,8 +1163,17 @@ void DrawMenu(std::vector<uint32_t>& out, int W, int H, const MenuView& v, const
             Pen ring(Color(hover && !pressed ? Accent : 0xFF3C4550), hover ? 3.f : 1.5f);
             g.DrawPath(&ring, &tile);
             SolidBrush bar{ Color(Accent) };
-            g.FillRectangle(&bar, x + w * 0.08f, y + h * 0.16f, w * 0.12f, std::max(3.f, h * 0.025f)); // a short accent line
-            const float tin = w * 0.08f;
+            if (!(k < (int)r.previews.size() && !r.previews[k].name.empty()))
+                g.FillRectangle(&bar, x + w * 0.08f, y + h * 0.16f, w * 0.12f, std::max(3.f, h * 0.025f)); // a short accent line
+            float tin = w * 0.08f;
+            bool hasPic = k < (int)r.previews.size() && !r.previews[k].name.empty();
+            if (hasPic) { // a small picture of the wheel or page, the text to its right
+                float side = h * 0.84f;
+                DrawPreviewPicture(g, RectF(x + h * 0.08f, y + h * 0.08f, side, side), r.previews[k], r.previewWrist, r.previewCols, -1, st);
+                x += side + h * 0.08f;
+                w -= side + h * 0.08f;
+                tin = w * 0.06f;
+            }
             bool hasDetail = k < (int)r.itemDetails.size() && !r.itemDetails[k].empty();
             StringFormat wrap;
             wrap.SetTrimming(StringTrimmingEllipsisWord);

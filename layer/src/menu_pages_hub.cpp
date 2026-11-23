@@ -144,6 +144,10 @@ MenuRow Percent(const char* label, const char* detail, std::function<float()> ge
 }
 } // namespace
 
+static void AddItem(Engine& e, InGameMenu& m, const ItemListRef& ref);
+static MenuRow PreviewOf(Engine& e, InGameMenu& m, const ItemListRef& ref, std::vector<std::string> side,
+                         std::vector<std::function<void()>> press, int span, int selected = -1);
+
 // ------------------------------------------------------------------------------------------------ home
 MenuPage Main(Engine& e, InGameMenu& m) {
     MenuPage p;
@@ -187,7 +191,9 @@ MenuPage Wheels(Engine& e, InGameMenu& m) {
     // the wheels as tiles: name, how many buttons, what opens it
     std::vector<std::string> titles, details;
     std::vector<std::function<void()>> open;
+    std::vector<Wheel> pics;
     for (const auto& [name, w] : e.prof->wheels) {
+        pics.push_back(w);
         auto by = OpenersOf(e, name);
         titles.push_back(TitleOf(w));
         details.push_back(std::to_string(w.items.size()) + " buttons. " + (by.empty() ? "Nothing opens it" : "Opened by " + by[0]));
@@ -208,8 +214,12 @@ MenuPage Wheels(Engine& e, InGameMenu& m) {
         m.Changed();
         m.Push([&e, &m, name] { return WheelPage(e, m, name); });
     });
+    pics.push_back(Wheel{}); // "+ New wheel": no picture
     int lines = ((int)titles.size() + 1) / 2;
-    p.rows.push_back(MenuRow::Tiles(titles, details, open, 2, std::min(6, std::max(2, lines * 2))));
+    p.width = 0.62f;
+    MenuRow tiles = MenuRow::Tiles(titles, details, open, 2, std::min(7, std::max(3, lines * 2 + 1)));
+    tiles.previews = pics;
+    p.rows.push_back(tiles);
     p.rows.push_back(MenuRow::Link("Look and how you pick", "Where wheels show, size, stick or laser, which hand",
                                    [&e, &m] { m.Push([&e, &m] { return WheelLook(e, m); }); }));
     return p;
@@ -225,8 +235,24 @@ MenuPage WheelPage(Engine& e, InGameMenu& m, const std::string& name) {
         return p;
     }
     p.title = "Wheel: " + TitleOf(*w);
-    p.rows.push_back(MenuRow::Heading("Buttons (" + std::to_string(w->items.size()) + " of " + std::to_string(kMaxItems) + ")"));
-    AddItemRows(e, m, ref, p);
+    p.width = 0.62f;
+    p.rows.push_back(PreviewOf(e, m, ref, { "+ Add a button", "Rename", "Delete wheel" },
+                               { [&e, &m, ref] { AddItem(e, m, ref); },
+                                 [&e, &m, ref] {
+                                     Wheel* w = Find(e, ref);
+                                     if (!w) return;
+                                     m.AskText("Wheel name", TitleOf(*w),
+                                               [&e, &m, ref](const std::string& t) { EditList(e, m, ref, [&](Wheel& x) { x.title = t; }); });
+                                 },
+                                 [&e, &m, name] {
+                                     e.EditProfile([&](Profile& pr) {
+                                         pr.wheels.erase(name);
+                                         ForgetWheel(pr, name);
+                                     });
+                                     m.Changed();
+                                     m.Back();
+                                 } },
+                               5));
     p.rows.push_back(MenuRow::Heading("Opened by"));
     auto by = OpenersOf(e, name);
     for (const std::string& s : by)
@@ -252,23 +278,40 @@ MenuPage WheelPage(Engine& e, InGameMenu& m, const std::string& name) {
             m.Push([&e, &m, index] { return BindingDetail(e, m, index); });
         });
     }));
-    p.rows.push_back(MenuRow::Heading("Wheel"));
-    p.rows.push_back(MenuRow::Button("Rename", "Now: " + TitleOf(*w), [&e, &m, ref] {
-        Wheel* w = Find(e, ref);
-        if (!w) return;
-        m.AskText("Wheel name", TitleOf(*w), [&e, &m, ref](const std::string& t) { EditList(e, m, ref, [&](Wheel& x) { x.title = t; }); });
-    }));
-    MenuRow del = MenuRow::Button("Delete wheel", "Buttons that opened it will do nothing", [&e, &m, name] {
-        e.EditProfile([&](Profile& pr) {
-            pr.wheels.erase(name);
-            ForgetWheel(pr, name);
-        });
-        m.Changed();
-        m.Back();
-    });
-    del.isDanger = true;
-    p.rows.push_back(del);
+    p.rows.push_back(MenuRow::Heading("Buttons in order"));
+    AddItemRows(e, m, ref, p);
     return p;
+}
+
+// "+ Add a button": a new button, then its page and What it does.
+static void AddItem(Engine& e, InGameMenu& m, const ItemListRef& ref) {
+    Wheel* w = Find(e, ref);
+    if (!w || (int)w->items.size() >= kMaxItems) {
+        e.Toast("Full: 16 buttons. Put more on a sub-wheel or another page", 3.0);
+        return;
+    }
+    int index = -1;
+    EditList(e, m, ref, [&](Wheel& x) {
+        WheelItem it;
+        it.label = "New button";
+        x.items.push_back(it);
+        index = (int)x.items.size() - 1;
+    });
+    if (index < 0) return;
+    m.Push([&e, &m, ref, index] { return ItemPage(e, m, ref, index); });
+    m.Push([&e, &m, ref, index] { return ItemAction(e, m, ref, index); });
+}
+
+// The wheel or page drawn as in the game: point at a button to open it; big buttons beside it.
+static MenuRow PreviewOf(Engine& e, InGameMenu& m, const ItemListRef& ref, std::vector<std::string> side,
+                         std::vector<std::function<void()>> press, int span, int selected) {
+    Wheel* w = Find(e, ref);
+    int cols = ref.wrist ? e.prof->wrist[ref.hand].columns : 3;
+    MenuRow r = MenuRow::Preview(w ? *w : Wheel{}, ref.wrist, cols,
+                                 [&e, &m, ref](int i) { m.Push([&e, &m, ref, i] { return ItemPage(e, m, ref, i); }); }, std::move(side),
+                                 std::move(press), span);
+    r.previewSelected = selected;
+    return r;
 }
 
 // The button rows of a wheel or wrist page, and "+ Add a button".
@@ -281,18 +324,7 @@ void AddItemRows(Engine& e, InGameMenu& m, const ItemListRef& ref, MenuPage& p) 
                                        ItemWords(e, it.action, ref), [&e, &m, ref, i] { m.Push([&e, &m, ref, i] { return ItemPage(e, m, ref, i); }); }));
     }
     if ((int)w->items.size() < kMaxItems)
-        p.rows.push_back(MenuRow::Button("+ Add a button", "Then pick what it does", [&e, &m, ref] {
-            int index = -1;
-            EditList(e, m, ref, [&](Wheel& x) {
-                WheelItem it;
-                it.label = "New button";
-                x.items.push_back(it);
-                index = (int)x.items.size() - 1;
-            });
-            if (index < 0) return;
-            m.Push([&e, &m, ref, index] { return ItemPage(e, m, ref, index); });
-            m.Push([&e, &m, ref, index] { return ItemAction(e, m, ref, index); });
-        }));
+        p.rows.push_back(MenuRow::Button("+ Add a button", "Then pick what it does", [&e, &m, ref] { AddItem(e, m, ref); }));
     else
         p.rows.push_back(MenuRow::Note("Full: 16 buttons", "Put more on a sub-wheel or another page"));
 }
@@ -307,9 +339,39 @@ MenuPage ItemPage(Engine& e, InGameMenu& m, const ItemListRef& ref, int index) {
     }
     const WheelItem& it = w->items[index];
     p.title = "Button: " + it.label;
-    p.rows.push_back(MenuRow::Note(std::string(ref.wrist ? "On " : "On wheel ") + "'" + TitleOf(*w) + "'" +
-                                       (ref.wrist ? (ref.hand ? " (right wrist)" : " (left wrist)") : ""),
-                                   "Place " + std::to_string(index + 1) + " of " + std::to_string(w->items.size())));
+    p.width = 0.62f;
+    p.rows.push_back(PreviewOf(e, m, ref, { "Move earlier", "Move later", "Duplicate", "Delete button" },
+                               { [&e, &m, ref, index] {
+                                    if (index <= 0) return;
+                                    EditList(e, m, ref, [&](Wheel& x) { std::swap(x.items[index], x.items[index - 1]); });
+                                    m.Back();
+                                    m.Push([&e, &m, ref, index] { return ItemPage(e, m, ref, index - 1); });
+                                },
+                                 [&e, &m, ref, index] {
+                                     Wheel* w = Find(e, ref);
+                                     if (!w || index + 1 >= (int)w->items.size()) return;
+                                     EditList(e, m, ref, [&](Wheel& x) { std::swap(x.items[index], x.items[index + 1]); });
+                                     m.Back();
+                                     m.Push([&e, &m, ref, index] { return ItemPage(e, m, ref, index + 1); });
+                                 },
+                                 [&e, &m, ref, index] {
+                                     Wheel* w = Find(e, ref);
+                                     if (!w || (int)w->items.size() >= kMaxItems) return;
+                                     EditList(e, m, ref, [&](Wheel& x) {
+                                         WheelItem copy = x.items[index];
+                                         copy.sourceIndex = -1;
+                                         x.items.insert(x.items.begin() + index + 1, copy);
+                                     });
+                                     m.Back();
+                                     m.Push([&e, &m, ref, index] { return ItemPage(e, m, ref, index + 1); });
+                                 },
+                                 [&e, &m, ref, index] {
+                                     EditList(e, m, ref, [&](Wheel& x) {
+                                         if (index < (int)x.items.size()) x.items.erase(x.items.begin() + index);
+                                     });
+                                     m.Back();
+                                 } },
+                               4, index));
     p.rows.push_back(MenuRow::Button("1  Label: " + it.label, "Type a new one on the keyboard", [&e, &m, ref, index] {
         Wheel* w = Find(e, ref);
         if (!w || index >= (int)w->items.size()) return;
@@ -340,40 +402,6 @@ MenuPage ItemPage(Engine& e, InGameMenu& m, const ItemListRef& ref, int index) {
         p.rows.push_back(MenuRow::Link("Edit that page", "", [&e, &m, h = ref.hand, n = it.action.page] {
             m.Push([&e, &m, h, n] { return WristPage(e, m, h, n); });
         }));
-    p.rows.push_back(MenuRow::Heading("Arrange"));
-    p.rows.push_back(MenuRow::Bar({ "Move earlier", "Move later", "Duplicate" },
-                                  { [&e, &m, ref, index] {
-                                       if (index <= 0) return;
-                                       EditList(e, m, ref, [&](Wheel& x) { std::swap(x.items[index], x.items[index - 1]); });
-                                       m.Back();
-                                       m.Push([&e, &m, ref, index] { return ItemPage(e, m, ref, index - 1); });
-                                   },
-                                    [&e, &m, ref, index] {
-                                        Wheel* w = Find(e, ref);
-                                        if (!w || index + 1 >= (int)w->items.size()) return;
-                                        EditList(e, m, ref, [&](Wheel& x) { std::swap(x.items[index], x.items[index + 1]); });
-                                        m.Back();
-                                        m.Push([&e, &m, ref, index] { return ItemPage(e, m, ref, index + 1); });
-                                    },
-                                    [&e, &m, ref, index] {
-                                        Wheel* w = Find(e, ref);
-                                        if (!w || (int)w->items.size() >= kMaxItems) return;
-                                        EditList(e, m, ref, [&](Wheel& x) {
-                                            WheelItem copy = x.items[index];
-                                            copy.sourceIndex = -1;
-                                            x.items.insert(x.items.begin() + index + 1, copy);
-                                        });
-                                        m.Back();
-                                        m.Push([&e, &m, ref, index] { return ItemPage(e, m, ref, index + 1); });
-                                    } }));
-    MenuRow del = MenuRow::Button("Delete button", "", [&e, &m, ref, index] {
-        EditList(e, m, ref, [&](Wheel& x) {
-            if (index < (int)x.items.size()) x.items.erase(x.items.begin() + index);
-        });
-        m.Back();
-    });
-    del.isDanger = true;
-    p.rows.push_back(del);
     return p;
 }
 
@@ -573,7 +601,17 @@ MenuPage WristHub(Engine& e, InGameMenu& m) {
         details.push_back(d + ". Pressed with the " + (h ? "left" : "right") + " hand");
         open.push_back([&e, &m, h] { m.Push([&e, &m, h] { return WristPanel(e, m, h); }); });
     }
-    p.rows.push_back(MenuRow::Tiles(titles, details, open, 2, 3));
+    MenuRow tiles = MenuRow::Tiles(titles, details, open, 2, 4);
+    tiles.previewWrist = true;
+    for (int h : { 0, 1 }) {
+        const WristStyle& src = e.prof->WristPages(h);
+        auto it = src.pages.find(src.start);
+        Wheel pic = it != src.pages.end() && e.prof->wrist[h].enabled ? it->second : Wheel{};
+        tiles.previews.push_back(pic);
+        tiles.previewCols = e.prof->wrist[h].columns; // (both drawn with one count: the panels usually match)
+    }
+    p.width = 0.62f;
+    p.rows.push_back(tiles);
     p.rows.push_back(MenuRow::Note("Turn your forearm toward your eyes to see a panel.", "Poke a button with the other hand's finger, or point and pull the trigger"));
     p.rows.push_back(MenuRow::Link("Place them by hand", "Adjust mode: grab a panel with a grip and move it", [&e, &m] {
         m.Close();
@@ -589,6 +627,41 @@ MenuPage WristPanel(Engine& e, InGameMenu& m, int h) {
     MenuPage p;
     p.title = h ? "Right forearm panel" : "Left forearm panel";
     WristStyle* W = &e.prof->wrist[h];
+    p.width = 0.62f;
+    {
+        int owner = W->mirror ? 1 - h : h;
+        const WristStyle& src = e.prof->wrist[owner];
+        if (W->enabled && src.pages.count(src.start)) {
+            ItemListRef first{ true, owner, src.start };
+            p.rows.push_back(PreviewOf(e, m, first, { "Open this page", "+ Add a page", "Place it by hand" },
+                                       { [&e, &m, owner, n = src.start] { m.Push([&e, &m, owner, n] { return WristPage(e, m, owner, n); }); },
+                                         [&e, &m, owner] {
+                                             std::string name;
+                                             e.EditProfile([&](Profile& pr) {
+                                                 auto& pages = pr.wrist[owner].pages;
+                                                 name = FreeName(pages, "page");
+                                                 Wheel pg;
+                                                 pg.name = name;
+                                                 pg.title = "New page";
+                                                 WheelItem back;
+                                                 back.label = "Back";
+                                                 back.action.type = ActType::Back;
+                                                 pg.items.push_back(back);
+                                                 pages[name] = pg;
+                                             });
+                                             m.Changed();
+                                             m.Push([&e, &m, owner, name] { return WristPage(e, m, owner, name); });
+                                         },
+                                         [&e, &m] {
+                                             m.Close();
+                                             Action a;
+                                             a.type = ActType::Adjust;
+                                             a.mode = ActMode::Toggle;
+                                             e.MenuRunAction(a);
+                                         } },
+                                       4));
+        }
+    }
     auto edit = [&e, &m, h](std::function<void(WristStyle&)> f) {
         e.EditProfile([&](Profile& x) { f(x.wrist[h]); });
         m.Changed();
@@ -675,14 +748,19 @@ MenuPage WristPage(Engine& e, InGameMenu& m, int h, const std::string& name) {
     }
     WristStyle& W = e.prof->wrist[h];
     p.title = std::string(h ? "Right" : "Left") + " wrist: " + TitleOf(*pg);
-    p.rows.push_back(MenuRow::Heading("Buttons (" + std::to_string(pg->items.size()) + ")"));
+    p.width = 0.62f;
+    p.rows.push_back(PreviewOf(e, m, ref, { "+ Add a button", "Rename" },
+                               { [&e, &m, ref] { AddItem(e, m, ref); },
+                                 [&e, &m, ref] {
+                                     Wheel* w = Find(e, ref);
+                                     if (!w) return;
+                                     m.AskText("Page name", TitleOf(*w),
+                                               [&e, &m, ref](const std::string& t) { EditList(e, m, ref, [&](Wheel& x) { x.title = t; }); });
+                                 } },
+                               5));
+    p.rows.push_back(MenuRow::Heading("Buttons in order"));
     AddItemRows(e, m, ref, p);
     p.rows.push_back(MenuRow::Heading("Page"));
-    p.rows.push_back(MenuRow::Button("Rename", "Now: " + TitleOf(*pg), [&e, &m, ref] {
-        Wheel* w = Find(e, ref);
-        if (!w) return;
-        m.AskText("Page name", TitleOf(*w), [&e, &m, ref](const std::string& t) { EditList(e, m, ref, [&](Wheel& x) { x.title = t; }); });
-    }));
     if (W.start != name)
         p.rows.push_back(MenuRow::Button("Show this page first", "", [&e, &m, h, name] {
             e.EditProfile([&](Profile& pr) { pr.wrist[h].start = name; });

@@ -7,6 +7,7 @@
 // the menu: write a page builder (menu_pages.cpp) and link to it from the home page.
 #include "common.h"
 #include "controller_art.h"
+#include "config.h"
 #include <functional>
 #include <string>
 #include <vector>
@@ -22,7 +23,8 @@ enum class MenuRowKind {
     Live,    // a live picture (a controller with what is pressed now, a stick with its zones), several rows tall
     Overview, // both controllers from above and the side, a tag on each part: what it does (pressing a tag opens it)
     Bar,      // a row of big buttons side by side
-    Tiles,    // a grid of big buttons, each with a title and a line under it (the hub pages)
+    Tiles,    // a grid of big buttons, each with a title and a line under it (the hub pages); optionally a small picture
+    Preview,  // a wheel or wrist page drawn as it looks in the game (point at a button to open it), big buttons beside it
 };
 
 // One part's tag on the overview: the part's name and what it does.
@@ -71,6 +73,11 @@ struct MenuRow {
     std::vector<std::function<void()>> itemPress;   // Bar / Tiles: what each does
     std::vector<std::string> itemDetails;           // Tiles: the line under each title
     int cols = 2;                                   // Tiles: per row
+    std::vector<Wheel> previews;  // Preview: the wheel or page (one); Tiles: a small picture per tile (no items: none)
+    bool previewWrist = false;    // drawn as a wrist panel grid instead of a wheel
+    int previewCols = 3;          // wrist panel columns
+    std::function<void(int item)> openItem; // Preview: a button in the picture was pressed
+    int previewSelected = -1;               // Preview: this button drawn lit (the one being edited)
 
     static MenuRow Heading(std::string label);
     static MenuRow Note(std::string label, std::string detail = "");
@@ -85,6 +92,9 @@ struct MenuRow {
     static MenuRow Overview(std::vector<MenuTag> tags, std::function<void(int, int)> open, int span);
     static MenuRow Bar(std::vector<std::string> items, std::vector<std::function<void()>> presses);
     // A grid of big buttons; span = rows of height it takes.
+    // A wheel (or wrist page) as it looks, its buttons pressable; side = big buttons on its right.
+    static MenuRow Preview(Wheel w, bool wrist, int cols, std::function<void(int)> openItem, std::vector<std::string> side,
+                           std::vector<std::function<void()>> sidePress, int span);
     static MenuRow Tiles(std::vector<std::string> titles, std::vector<std::string> details, std::vector<std::function<void()>> presses,
                          int cols, int span);
 
@@ -118,6 +128,12 @@ struct MenuViewRow {
     std::vector<std::string> items; // Bar / Tiles
     std::vector<std::string> itemDetails; // Tiles
     int cols = 2;                         // Tiles
+    std::vector<Wheel> previews;          // Preview / Tiles (see MenuRow)
+    bool previewWrist = false;
+    int previewCols = 3;
+    int previewSelected = -1;
+    std::string previewSig;               // what the pictures show, to tell when they changed
+    int PreviewCount() const { return previews.empty() ? 0 : (int)previews[0].items.size(); }
 };
 
 // The parts of the panel that can be pointed at.
@@ -172,6 +188,12 @@ struct MenuBox {
 // Where everything sits on the panel: the header (back, title, close), the visible rows and their - / +, the
 // scroll arrows and the status line. Rows are drawn in the order given.
 void MenuLayout(const MenuView& view, std::vector<MenuBox>& out);
+// A Preview row's parts: the picture, a box per button in it (sub = item), and the side buttons (sub = items + k).
+struct PreviewPlaces {
+    MenuBox pic{};
+    std::vector<MenuBox> items, side;
+};
+void PreviewLayout(const MenuView& view, const MenuViewRow& row, int rowIndex, float y, float h, PreviewPlaces& out);
 // The fixed areas, for drawing: header and status bands (v from / to).
 constexpr float kMenuHeaderH = 0.12f, kMenuFooterH = 0.1f;
 // How much narrower (in u) a square part is on this panel than on the usual one (1 on the usual panel).

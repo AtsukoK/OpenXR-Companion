@@ -322,10 +322,19 @@ void TestMenuHub() {
     d.Step(0.15);
     CHECK(e.menuView.open && d.PressItem("Radial wheels") && e.menuView.title == "Radial wheels", "hub: the wheels tile");
     SaveMenuPicture(e, *p, L"menu_hub_1_wheels.png");
+    CHECK(d.PressItem("Right hand") && e.menuView.title == "Wheel: Right hand", "hub: a wheel tile opens its page with the picture");
+    SaveMenuPicture(e, *p, L"menu_hub_1b_wheel_right.png");
+    int pv = -1;
+    for (int i = 0; i < (int)e.menuView.rows.size(); i++)
+        if (e.menuView.rows[i].kind == MenuRowKind::Preview) pv = i;
+    CHECK(pv >= 0 && d.Press(MenuPart::Row, pv, 2) && e.menuView.title.rfind("Button: ", 0) == 0, "hub: pointing at a slice opens that button");
+    SaveMenuPicture(e, *p, L"menu_hub_1c_slice_button.png");
+    d.Press(MenuPart::Back);
+    d.Press(MenuPart::Back);
     size_t wheelsBefore = p->wheels.size();
     CHECK(d.PressItem("+ New wheel") && p->wheels.size() == wheelsBefore + 1 && e.menuView.title == "Wheel: New wheel",
           "hub: + New wheel makes one and opens it");
-    CHECK(d.PressRow("+ Add a button") && e.menuView.title == "What it does", "hub: + Add a button goes to What it does");
+    CHECK(d.PressItem("+ Add a button") && e.menuView.title == "What it does", "hub: + Add a button goes to What it does");
     SaveMenuPicture(e, *p, L"menu_hub_3_what_it_does.png");
     // the keyboard row is further down: scroll to it
     for (int i = 0; i < 20 && d.Row("VR keyboard") >= 0 && d.Row("VR keyboard") >= e.menuView.first + 7; i++)
