@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "game_input.h"
 
 // Where one of the game's Index / Touch inputs is on the Frame ("" when it has no place there).
@@ -304,7 +305,29 @@ void GameInputFilter::Filter(const Engine& eng, XrAction a, XrPath sub, XrTime n
     if (!e.overridden && !e.blockedAll)
         if (int h = StickHand(eng, a, sub); h >= 0) {
             LogStickAction(a, sub, "x+y", h, InputFeature::Vector, eng.StickShapeOf(h).directionAngleDeg > 0);
+            float rx = st.currentState.x, ry = st.currentState.y;
             ShapeStick(eng.StickShapeOf(h), st.currentState.x, st.currentState.y);
+            // 10 s summary per hand: does the game read this stick, and does the zone straighten it?
+            static XrTime since[2] = { 0, 0 };
+            static int reads[2], pushed[2], straightened[2];
+            static float maxSide[2]; // largest sideways part we took away
+            if (!st.isActive) {} else {
+                reads[h]++;
+                if (rx * rx + ry * ry > 0.04f) pushed[h]++;
+                if (rx != st.currentState.x || ry != st.currentState.y) {
+                    if (st.currentState.x == 0.f && rx != 0.f) { straightened[h]++; maxSide[h] = std::max(maxSide[h], std::fabs(rx)); }
+                    else if (st.currentState.y == 0.f && ry != 0.f) { straightened[h]++; maxSide[h] = std::max(maxSide[h], std::fabs(ry)); }
+                }
+            }
+            if (since[h] == 0) since[h] = now;
+            if (now - since[h] > 10000000000LL) {
+                if (pushed[h] > 0)
+                    Log("game stick %s 10 s: %d reads, %d pushed, %d straightened by the direction zone (%.0f deg, largest side part removed %.2f)",
+                        h ? "right" : "left", reads[h], pushed[h], straightened[h], eng.StickShapeOf(h).directionAngleDeg, maxSide[h]);
+                since[h] = now;
+                reads[h] = pushed[h] = straightened[h] = 0;
+                maxSide[h] = 0;
+            }
         }
     FilterState<VectorValue>(
         e, sub, now, st, e.freeHand >= 0 ? handPath_[e.freeHand] : XR_NULL_PATH, requery, [&] { return CanRequery(a, e.freeHand); },
