@@ -58,6 +58,10 @@ static class Native
 public partial class MainForm : Form
 {
     public static MainForm Current;
+    // the profile shown (and used by games), for the big profile button on the overview
+    internal string CurrentProfileName => Path.GetFileName(currentFile ?? "");
+    internal IReadOnlyList<string> ProfileFiles => profileBox.Items.Cast<string>().ToList();
+    internal void PickProfile(string file) { if (profileBox.Items.Contains(file)) profileBox.SelectedItem = file; }
     public ProfileModel Profile;
 
     const string LayerJson = "XR_APILAYER_NOVENDOR_openxr_companion.json";

@@ -12,7 +12,7 @@ public class OverviewEditor : EditorBase
     {
         p = model;
         go = goTo;
-        Stack(Title("Overview"),
+        Stack(ProfileBar(), Title("Overview"),
               FormPanel.Header("What is switched on right now, and how you open it in the headset. Click Turn on / Turn off to switch it, or a blue button to jump to its details (Back returns here). Remember to Save (Ctrl+S)."),
               cards);
         Build();
@@ -26,7 +26,7 @@ public class OverviewEditor : EditorBase
     {
         var pairs = new[]
         {
-            ("Overlay for this game", "VR keyboard"),
+            ("Master switch", "VR keyboard"),
             ("Left controller wheel", "Right controller wheel"),
             ("Left wrist panel", "Right wrist panel"),
             ("Other bindings", "Tools on your menus"),
@@ -56,6 +56,41 @@ public class OverviewEditor : EditorBase
         { fitHooked = true; cards.SizeChanged += (s, e) => { foreach (Control k in cards.Controls) if (k is TableLayoutPanel t) t.MinimumSize = new Size(Math.Max(940, cards.ClientSize.Width - 8), 0); }; }
     }
 
+    // Top middle: a big button with the profile you are on (the one your games use); click it to switch.
+    static Control ProfileBar()
+    {
+        var bar = new Panel { Dock = DockStyle.Top, Height = 74 };
+        var main = MainForm.Current;
+        string name = main?.CurrentProfileName ?? "";
+        var b = new Button
+        {
+            Text = "Profile:  " + Path.GetFileNameWithoutExtension(name) + "   \u25BE", AutoSize = true, Height = 50, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+            Font = new Font("Segoe UI", 15f, FontStyle.Bold), BackColor = Color.FromArgb(40, 110, 200), ForeColor = Color.White,
+            Padding = new Padding(18, 0, 18, 0), Tag = "swatch",
+        };
+        b.FlatAppearance.BorderSize = 0;
+        FormPanel.Tips.SetToolTip(b, "The profile you are editing, and the one your games use now (" + name + "). Click to switch to another profile.");
+        b.Click += (s, e) =>
+        {
+            var menu = new ContextMenuStrip { Font = new Font("Segoe UI", 11f) };
+            foreach (var file in main?.ProfileFiles ?? Array.Empty<string>())
+            {
+                var f2 = file;
+                var item = new ToolStripMenuItem(Path.GetFileNameWithoutExtension(f2) + "   (" + f2 + ")") { Checked = f2 == name };
+                item.Click += (o, a) => main?.PickProfile(f2);
+                menu.Items.Add(item);
+            }
+            if (Theme.IsDark)
+                ThemeWalker.Apply(menu);
+            menu.Show(b, new Point(0, b.Height));
+        };
+        bar.Controls.Add(b);
+        void Center() { b.Location = new Point(Math.Max(0, (bar.ClientSize.Width - b.Width) / 2), 12); }
+        bar.Resize += (s, e) => Center();
+        b.SizeChanged += (s, e) => Center();
+        return bar;
+    }
+
     static string Hand(BindingModel b) => (b.Input ?? "").Split('+').Last().Trim().StartsWith("left") ? "left" : "right";
 
     void Build()
@@ -66,9 +101,9 @@ public class OverviewEditor : EditorBase
 
         // Overlay master switch
         {
-            var c = Card("Overlay for this game", p.Enabled ? "ON" : "OFF", p.Enabled ? On : Off,
-                "Everything below only works while this is on.", null, MiniPics.Headset(96, 72, p.Enabled));
-            c.Body.Controls.Add(Switch("Overlay", p.Enabled, v => p.Enabled = v));
+            var c = Card("Master switch", p.Enabled ? "ON" : "OFF", p.Enabled ? On : Off,
+                "Turns the whole OpenXR Companion layer on or off for this profile. Everything below only works while it is on.", null, MiniPics.Headset(96, 72, p.Enabled));
+            c.Body.Controls.Add(Switch("Layer on for this profile", p.Enabled, v => p.Enabled = v));
             c.Go("Settings (look, picking items)", () => go(p));
         }
 
