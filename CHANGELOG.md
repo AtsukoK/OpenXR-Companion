@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.2.16-experimental (2026-11-24)
+
+An experimental build from the `experimental` branch. The stable release stays v0.2.13.
+
+### Fixed
+- **One-click update**: after installing the new files, the editor showed "The update didn't finish ... your current version is unchanged" and then an error (FileNotFoundException), although the update had worked. From this version on the update restarts cleanly, and if a restart ever fails it says the update is in and to start the editor again. Updating *to* this version from v0.2.14 / v0.2.15 can still show those two messages once: the update still works, just start the editor again.
+
 ## v0.2.15-experimental (2026-11-24)
 
 An experimental build from the `experimental` branch. The stable release stays v0.2.13.
