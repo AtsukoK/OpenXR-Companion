@@ -1,4 +1,4 @@
-﻿namespace OpenXRCompanionEditor;
+namespace OpenXRCompanionEditor;
 
 public class SettingsEditor : EditorBase
 {
@@ -394,7 +394,7 @@ public class SettingsEditor : EditorBase
                     FormPanel.Show(l, !wr);
             }
             scr.AddRow("", Check("Show it as soon as the game starts", sc.StartOn, v => sc.StartOn = v),
-                "Otherwise add a Screen button to a wheel or wrist panel (the default left wrist panel has them under More > Screen).");
+                "Otherwise add a Screen button to a wheel or wrist panel (the default left wrist panel has a Monitor button).");
             Label lMon = null, lWin = null;
             scr.AddRow("Show", Pick(new Choice[] { new("monitor", "A whole monitor"), new("window", "One window (a browser, Discord, a video...)") }, sc.Source ?? "monitor",
                 v => { sc.Source = v; FormPanel.Show(lMon, v != "window"); FormPanel.Show(lWin, v == "window"); }),

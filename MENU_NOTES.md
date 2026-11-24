@@ -1,4 +1,30 @@
-# RESUME HERE (2026-11-23, day) -- in-game menu hub, BUILT into dist2 08:06 (64 + 32-bit; backup: dist2_backup_2026-11-23_before-menu-hub), untested in headset
+# RESUME HERE (2026-11-24) -- releases 0.2.15 / 0.2.16-experimental, core split, Avalonia port
+
+**Releases (pushed, prerelease on branch experimental):**
+- v0.2.15-experimental (26b72b1): editor high-DPI / window-size fixes (4 rounds, see the paragraph below), bigger
+  controller tags, list always starts folded, stick log summary.
+- v0.2.16-experimental (527c462): updater fix. The single-file editor loads .NET parts lazily from its exe; after the
+  swap the restart's Process code couldn't load (FileNotFoundException, empty message, false "didn't finish"). Fix:
+  Updater.PreloadAll before the swap; a failed restart after a good swap now says "start the editor again".
+  Tested: old updater (0.2.14 / 0.2.15) fails unless Process was loaded earlier in the session (e.g. Install layer
+  clicked), whatever the layer state; the fixed one updates and restarts cleanly. --update-now now also starts the new exe.
+- Release recipe: see memory openxr-companion-dist2-only (build_all.ps1, dotnet publish single-file, zip in CI layout,
+  gh release --prerelease; verify with an old exe's --updatecheck / --update-now).
+- main is left as it is (user): all work goes to experimental only.
+
+**Core split (LOCAL ONLY, not pushed, not merged):** worktree G:/Claude/OpenXR Companion - Core Split, branch
+core-split (from 527c462; commits f29edca + 85be4d9). The data side moved to core/ (OpenXRCompanion.Core: ProfileIO,
+model, choices, layouts, silhouettes, tag lines, action words/options, presets, Native, Paths, Releases, layer registry,
+app-wide files). The WinForms editor there uses it via one-line forwarders: --selftest identical before/after (725 lines).
+This worktree (Dist2) is untouched by it.
+
+**Avalonia port (separate, local, not in git):** G:/Claude/OpenXR Companion - Avalonia Prototype, resume from its
+PORT_NOTES.md. Whole editor ported (all pages, tutorials, search) except Headset mirror / Experimental pages and the
+one-click updater; uses only the core (no WinForms). Since today it loads AND saves the real profiles (backup first:
+G:/Claude/OpenXR Companion - Backups/data-folder before Avalonia port saving 2026-11-24). User is testing it; nothing
+goes to GitHub until they decide. Dark mode only; the left list is dropped for good.
+
+# (older) 2026-11-23, day -- in-game menu hub, BUILT into dist2 08:06 (64 + 32-bit; backup: dist2_backup_2026-11-23_before-menu-hub), untested in headset
 
 **2026-11-24 high-DPI fix (from a user screenshot, untested):** at 150%+ Windows scaling the editor's left list cut text in half (fixed 46 px rows) and the Overview 'Turn on/off' buttons were clipped (fixed 76x24). Rows now size from font heights at tree.DeviceDpi (MainForm.Tree.cs RowHeight/Px), switch buttons AutoSize. Also fixed: Switch() ForeColor/Font/Margin were stuck inside a // comment. Other pages still use fixed px sizes (AllBindingsPage, SettingsEditor rows) if more reports come in. Round 2 (user's own 175% screenshot): tip bar height from font (2 lines) + 'Show me' width from its text, section switch strips AutoSize, Controllers chooser row wraps. Still open: controller picture tags look small at 175% (picture fits its width; would need the two pictures stacked on narrow logical widths). Round 3: left list ALWAYS starts folded to the icon rail (user request; no longer remembers unfolded), rail width/buttons scale with DPI. Round 4: controller picture tags grow (up to 1.8x: boxes, fonts, spacing) into spare width when the picture is height-limited (ControllerPicture.FitTags, T); Overview cards drop to 1 column when <940 logical px wide; Controllers hint wraps to page width. New `--size-shots <dir>` mode: main pages at 8 window sizes (heights capped to the screen, 3440 only half captured on a 1920 monitor). Checked 1280x720, 1366x768, 1600x1200, 1920x1080, 2560x1080, 1080x1600 at 100%. Built into dist.
 User asked: bring the editor's wheel / wrist / binding features into the headset menu, easy to use in VR, with overview

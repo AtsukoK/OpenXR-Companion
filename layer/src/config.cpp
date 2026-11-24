@@ -1297,18 +1297,8 @@ const char* DefaultProfileJson() {
         { "label": "Controller offsets", "action": { "type": "controller_offsets", "mode": "panel" } },
         { "label": "Settings", "action": { "type": "settings_menu" } },
         { "label": "Headset mirror", "action": { "type": "headset_mirror", "mode": "toggle" } },
-        { "label": "Screen options", "action": { "type": "page", "page": "Screen (sub-page)" } },
         { "label": "Screenshot", "enabled": false, "action": { "type": "key", "keys": "F12" } },
         { "label": "Hide", "enabled": false, "action": { "type": "close" } }
-      ] },
-      "Screen (sub-page)": { "title": "Screen", "items": [
-        { "label": "On my wrist", "action": { "type": "screen", "mode": "toggle", "place": "wrist_left" } },
-        { "label": "In front of me", "action": { "type": "screen", "mode": "toggle", "place": "front" } },
-        { "label": "Next monitor", "action": { "type": "screen", "mode": "next_monitor" } },
-        { "label": "Choose window", "action": { "type": "screen", "mode": "choose" } },
-        { "label": "Frame rate", "action": { "type": "screen", "mode": "next_fps" } },
-        { "label": "Move it", "action": { "type": "screen", "mode": "next_place" } },
-        { "label": "Screen off", "action": { "type": "screen", "mode": "off" } }
       ] }
     }
   },

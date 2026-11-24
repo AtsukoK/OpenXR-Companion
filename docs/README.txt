@@ -34,8 +34,8 @@ DEFAULT CONTROLS
   the trigger.
 - The VR keyboard is on the wheels and the left wrist panel.
 - The left wrist panel: Quick save, Pause, Monitor (screen on your wrist), Keyboard, More.
-  More has Quick load, Reload profile, Calibrate Positions, Controller offsets,
-  Headset mirror and Screen options.
+  More has Quick load, Reload profile, Calibrate Positions, Controller offsets
+  and Headset mirror.
 - Move things to where you like them: left wrist panel > More > Calibrate Positions
   (or right wheel > More... > Adjust positions). Grab the
   wheel or a wrist panel with your other hand's grip and move it; while holding, the stick
@@ -64,7 +64,7 @@ with the 64-bit one. The toolbar then shows "Layer: installed (+ 32-bit)".
 "Uninstall layer" removes both (or run x86\uninstall.ps1 as admin).
 
 SCREEN MIRROR (a monitor or window in VR)
-Turn it on from the left wrist panel: Monitor, or More > Screen options. Point at the screen and a button bar
+Turn it on from the left wrist panel: Monitor. Point at the screen and a button bar
 appears under it:
   Choose...   pick any monitor or open window (your pick is remembered)
   Frame rate  steps through the frame rates from Settings

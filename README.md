@@ -77,8 +77,7 @@ New profiles start with the tools you need to set things up close at hand:
 | Page | Buttons |
 |---|---|
 | Main | Quick save, Pause, **Monitor** (your screen on your wrist), Keyboard, More |
-| More | Quick load, Reload profile, **Calibrate Positions** (move wheels, panels and the screen by hand), **Controller offsets**, **Headset mirror**, **Screen options** |
-| Screen options | On my wrist, In front of me, Next monitor, Choose window, Frame rate, Move it, Screen off |
+| More | Quick load, Reload profile, **Calibrate Positions** (move wheels, panels and the screen by hand), **Controller offsets**, **Headset mirror** |
 
 Older profiles keep their own panels; add any of these buttons in the editor.
 
@@ -185,7 +184,7 @@ Shows one of your monitors, or a single window (a browser, Discord, a video, a T
 
 ### Getting started
 
-1. Turn it on with a **Screen** button. The default left wrist panel has **Monitor** on its first page and a page of screen buttons under **More > Screen options**. You can also add a button with the action **Desktop screen** to any wheel or wrist panel.
+1. Turn it on with a **Screen** button. The default left wrist panel has **Monitor** on its first page; the screen's own button bar switches monitors, windows and frame rates. You can also add a button with the action **Desktop screen** to any wheel or wrist panel.
 2. Point at the screen. A button bar appears under it.
 3. Press **Choose...** and pick a monitor or window from the list.
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased (experimental)
+
+### Changed
+- **Default left wrist panel**: the Screen options page (and its button on More) is gone, it was cluttered. Monitor on the first page still shows / hides the screen, and the screen's own button bar switches monitors, windows and frame rates. Only the standard default.json changes; your own profiles keep their pages.
+
 ## v0.2.16-experimental (2026-11-24)
 
 An experimental build from the `experimental` branch. The stable release stays v0.2.13.
