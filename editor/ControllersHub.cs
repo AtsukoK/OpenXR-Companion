@@ -51,14 +51,16 @@ public sealed class ControllersHub : DrawerPage
         this.grid = grid;
         BuildDrawer();
         DrawerClosed += () => { foreach (var pic in pics) pic.Selected = null; ShowOnly(-1); };
-        Resize += (s, e) => FitPictures();
-        Controls.Add(new Label
+        Label hint = null;
+        Resize += (s, e) => { FitPictures(); if (hint != null) hint.MaximumSize = new Size(Math.Max(200, Math.Min(1000 * DeviceDpi / 96, ClientSize.Width - Padding.Horizontal - 20)), 0); };
+        Controls.Add(hint = new Label
         {
             Text = "Click a button (or its tag) to change what it does. The + on a tag adds something to that button. Blue = your bindings, grey 'Default' = the game's own control.",
             AutoSize = true, MaximumSize = new Size(1000, 0), Dock = DockStyle.Top, ForeColor = Theme.SubText, Font = new Font("Segoe UI", 10.5f), Padding = new Padding(0, 0, 0, 12),
         });
         // which controllers are drawn (and the Steam Frame setting): the same choice the per-controller pages had
-        var chooserRow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = false, Padding = new Padding(0, 0, 0, 8) };
+        var chooserRow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, // wraps instead of running off the edge at high scaling
+            Padding = new Padding(0, 0, 0, 8) };
         chooserRow.Controls.Add(new Label { Text = "Controller:", AutoSize = true, Margin = new Padding(0, 7, 8, 0), ForeColor = Theme.Text });
         var chooser = new ChoiceBox(ControllerLayouts.All.Select(l => new Choice(l.Id, l.Name)), 330) { Code = layout.Id };
         var models = new Label { AutoSize = true, Margin = new Padding(10, 7, 0, 0), ForeColor = Theme.SubText, Text = "For: " + layout.Models };

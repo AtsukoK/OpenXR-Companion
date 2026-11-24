@@ -17,7 +17,8 @@ public class OverviewEditor : EditorBase
     }
 
     readonly Dictionary<string, CardPanel> made = new();
-    bool fitHooked;
+    bool cardsHooked;
+    Action arrangeCards; // the current page's card layout, re-run when the page changes width
 
     // Two columns of matching pairs, left-hand things on the left: the window's width is used and the page is shorter.
     void PlaceInPairs()
@@ -29,29 +30,45 @@ public class OverviewEditor : EditorBase
             ("Left wrist panel", "Right wrist panel"),
             ("Other bindings", "Tools on your menus"),
         };
-        var grid = new TableLayoutPanel { ColumnCount = 2, AutoSize = true, Dock = DockStyle.Top, Margin = Padding.Empty, Padding = Padding.Empty };
-        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        int row = 0;
-        foreach (var (a, b) in pairs)
+        var grid = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Top, Margin = Padding.Empty, Padding = Padding.Empty };
+        var order = pairs.SelectMany(p => new[] { p.Item1, p.Item2 }).Where(made.ContainsKey).Select(t => made[t]).ToList();
+        foreach (var c in order)
         {
-            grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            foreach (var (title, col) in new[] { (a, 0), (b, 1) })
-                if (made.TryGetValue(title, out var c))
-                {
-                    c.MinimumSize = new Size(460, 0);
-                    c.Dock = DockStyle.Fill;
-                    c.Margin = new Padding(col == 0 ? 0 : 6, 0, col == 0 ? 6 : 0, 8);
-                    grid.Controls.Add(c, col, row);
-                }
-            row++;
+            c.MinimumSize = new Size(460, 0);
+            c.Dock = DockStyle.Fill;
         }
         cards.Controls.Add(grid);
-        // as wide as the page allows (the cards stretch with it)
-        // the cards' row is docked to the page's width: the grid follows it
-        grid.MinimumSize = new Size(Math.Max(940, cards.ClientSize.Width - 8), 0); // AutoSize: a minimum, not a width
-        if (!fitHooked)
-        { fitHooked = true; cards.SizeChanged += (s, e) => { foreach (Control k in cards.Controls) if (k is TableLayoutPanel t) t.MinimumSize = new Size(Math.Max(940, cards.ClientSize.Width - 8), 0); }; }
+        // Two columns when the page is wide enough for two cards, else one (narrow windows, high Windows scaling).
+        int lastCols = 0;
+        void Arrange()
+        {
+            int width = cards.ClientSize.Width - 8;
+            int cols = width >= 940 * DeviceDpi / 96 ? 2 : 1;
+            grid.MinimumSize = new Size(Math.Max(cols == 2 ? 940 : 460, width), 0); // AutoSize: a minimum, not a width
+            if (cols == lastCols)
+                return;
+            lastCols = cols;
+            grid.SuspendLayout();
+            grid.Controls.Clear();
+            grid.ColumnStyles.Clear();
+            grid.RowStyles.Clear();
+            grid.ColumnCount = cols;
+            for (int k = 0; k < cols; k++)
+                grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / cols));
+            for (int i = 0; i < order.Count; i++)
+            {
+                int col = i % cols, row = i / cols;
+                if (col == 0)
+                    grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                order[i].Margin = cols == 1 ? new Padding(0, 0, 0, 8) : new Padding(col == 0 ? 0 : 6, 0, col == 0 ? 6 : 0, 8);
+                grid.Controls.Add(order[i], col, row);
+            }
+            grid.ResumeLayout();
+        }
+        arrangeCards = Arrange;
+        Arrange();
+        if (!cardsHooked)
+        { cardsHooked = true; cards.SizeChanged += (s, e) => arrangeCards?.Invoke(); }
     }
 
     // Top middle: a big button with the profile you are on (the one your games use); click it to switch.
@@ -264,12 +281,15 @@ public class OverviewEditor : EditorBase
         var b = new Button
         {
             Text = value ? "Turn off" : "Turn on",
-            Width = 76,
-            Height = 24,
+            AutoSize = true, // fits the text at any Windows scaling
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            MinimumSize = new Size(76, 24),
+            Padding = new Padding(6, 2, 6, 2),
             FlatStyle = FlatStyle.Flat,
             Cursor = Cursors.Hand,
             Tag = "swatch", // the theme leaves its colours alone
-            BackColor = value ? SwitchOff : SwitchOn, // the colour of what a click does: red = turn off, green = turn on ForeColor = Color.White, Font = new Font("Segoe UI", 9f, FontStyle.Bold), Margin = new Padding(0, 0, 10, 0),
+            BackColor = value ? SwitchOff : SwitchOn, // the colour of what a click does: red = turn off, green = turn on
+            ForeColor = Color.White, Font = new Font("Segoe UI", 9f, FontStyle.Bold), Margin = new Padding(0, 0, 10, 0),
         };
         b.FlatAppearance.BorderSize = 0;
         b.Click += (s, e) => { set(!value); Fire(); BeginInvoke(Build); };

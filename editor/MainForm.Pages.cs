@@ -74,8 +74,13 @@ public partial class MainForm
     // The tip, and a "Show me this page" button that starts this page's short tour.
     Control TipBar(string text, string tourId)
     {
-        var p = new Panel { Dock = DockStyle.Top, Height = text.Length > 300 ? 62 : 44, BackColor = Color.FromArgb(255, 248, 225), Padding = new Padding(14, 0, 8, 0) };
-        p.Controls.Add(new Label { Text = text.Length > 0 ? "💡  " + text : "", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.FromArgb(110, 80, 10), Font = new Font("Segoe UI", 9.5f) });
+        // Sized from the font at this window's DPI: fixed pixel heights clipped the text at 150 % and up.
+        int dpi = DeviceDpi;
+        int Px(int v) => (int)Math.Round(v * dpi / 96f);
+        var tipFont = new Font("Segoe UI", 9.5f);
+        int line = (int)Math.Ceiling(tipFont.GetHeight(dpi));
+        var p = new Panel { Dock = DockStyle.Top, Height = Math.Max(Px(44), line * 2 + Px(10)), BackColor = Color.FromArgb(255, 248, 225), Padding = new Padding(Px(14), 0, Px(8), 0) };
+        p.Controls.Add(new Label { Text = text.Length > 0 ? "💡  " + text : "", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.FromArgb(110, 80, 10), Font = tipFont, AutoEllipsis = true });
         if (tourId != null)
         {
             var b = new Button { Text = "🎓  Show me this page", AutoSize = true, Dock = DockStyle.Right, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Tag = "swatch",
@@ -83,7 +88,7 @@ public partial class MainForm
             b.FlatAppearance.BorderSize = 0;
             FormPanel.Tips.SetToolTip(b, "A short guided tour of this page. More tours (and how-tos like sprinting with a double flick): the Tutorial button at the top.");
             b.Click += (s, e) => StartTutorial(tourId);
-            var wrap = new Panel { Dock = DockStyle.Right, Width = 230, Padding = new Padding(0, 6, 0, 6), BackColor = p.BackColor };
+            var wrap = new Panel { Dock = DockStyle.Right, Width = TextRenderer.MeasureText(b.Text, b.Font).Width + Px(40), Padding = new Padding(Px(8), Px(6), 0, Px(6)), BackColor = p.BackColor };
             b.Dock = DockStyle.Fill;
             wrap.Controls.Add(b);
             p.Controls.Add(wrap);
@@ -101,7 +106,7 @@ public partial class MainForm
             _ => Profile.Bindings.Where(b => b.Action?.Type == ActionType.Wheel).ToList(),
         };
         string what = tag == "wheels" ? "Bindings that open a wheel" : (tag == "bindings_left" ? "Left" : "Right") + " controller bindings";
-        var strip = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 48, Padding = new Padding(12, 8, 0, 0), BackColor = Color.FromArgb(236, 240, 247), WrapContents = false };
+        var strip = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, MinimumSize = new Size(0, 48), Padding = new Padding(12, 8, 0, 8), BackColor = Color.FromArgb(236, 240, 247), WrapContents = false };
         int on = list.Count(b => b.Enabled);
         strip.Controls.Add(new Label { Text = $"{what}: {on} of {list.Count} on", AutoSize = true, Font = new Font("Segoe UI", 10f, FontStyle.Bold), Margin = new Padding(0, 7, 12, 0), ForeColor = Color.FromArgb(40, 60, 100) });
         void Opt(string text, bool v)
@@ -122,7 +127,7 @@ public partial class MainForm
         var wm = Profile.WristFor(h);
         var other = Profile.WristFor(1 - h);
         string side = h == 0 ? "Left" : "Right", otherSide = h == 0 ? "right" : "left";
-        var strip = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 48, Padding = new Padding(12, 8, 0, 0), BackColor = Color.FromArgb(232, 244, 241), WrapContents = false };
+        var strip = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, MinimumSize = new Size(0, 48), Padding = new Padding(12, 8, 0, 8), BackColor = Color.FromArgb(232, 244, 241), WrapContents = false };
         strip.Controls.Add(new Label { Text = $"{side} wrist panel:", AutoSize = true, Font = new Font("Segoe UI", 10f, FontStyle.Bold), Margin = new Padding(0, 7, 10, 0), ForeColor = Color.FromArgb(30, 90, 80) });
         void Opt(string text, bool active, Action apply)
         {

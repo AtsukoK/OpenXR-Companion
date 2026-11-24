@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.2.15-experimental (2026-11-24)
+
+An experimental build from the `experimental` branch. The stable release stays v0.2.13.
+
+### Fixed
+- **Editor at 150 % / 175 % Windows scaling**: the list on the left, the Overview's Turn on / Turn off buttons, the tip bar and its "Show me this page" button, and the Controllers page's top row no longer cut off their text.
+- **Small and narrow windows**: the Overview shows one column of cards when two don't fit, and the Controllers page's text wraps instead of running off the edge.
+
+### Changed
+- **Controller pictures**: the button tags grow to use the free space beside the controllers, so they are easier to read on wide windows.
+- The editor always starts with the list folded into the icon bar (» opens the full list).
+- The game stick log now writes a 10-second summary per stick (reads, pushes, and how many the direction zone straightened), to help with stick reports.
+
 ## v0.2.14-experimental (2026-11-23)
 
 An experimental build from the `experimental` branch: new and only lightly tested. The stable release stays v0.2.13.

@@ -56,7 +56,9 @@ public partial class MainForm
         if (tree.IsHandleCreated)
             Buffer();
         tree.HandleCreated += (s, e) => Buffer();
-        tree.ItemHeight = 46;
+        tree.ItemHeight = RowHeight();
+        tree.DpiChangedAfterParent += (s, e) => { tree.ItemHeight = RowHeight(); tree.Invalidate(); };
+        tree.HandleCreated += (s, e) => tree.ItemHeight = RowHeight();
         tree.ShowLines = false;
         tree.ShowPlusMinus = false;
         tree.ShowRootLines = false;
@@ -296,6 +298,12 @@ public partial class MainForm
         return (n.Text, null, null, SecNav, null, default);
     }
 
+    // Text line heights in pixels at the list's current DPI (the user may run Windows at 150 % or more).
+    int TitleH => (int)Math.Ceiling(fTitle.GetHeight(tree.DeviceDpi));
+    int SubH => (int)Math.Ceiling(fSub.GetHeight(tree.DeviceDpi));
+    int Px(int v) => (int)Math.Round(v * tree.DeviceDpi / 96f);
+    int RowHeight() => Math.Max(46, TitleH + SubH + Px(10));
+
     void DrawRow(object sender, DrawTreeNodeEventArgs e)
     {
         var n = e.Node;
@@ -383,7 +391,8 @@ public partial class MainForm
         if (RealCount(n) > 0 && n.Tag is not ProfileModel)
             Chevron(g, indent - 13, row.Y + row.Height / 2, n.IsExpanded, Theme.Chevron); // Settings always shows its pages
         // icon (or colour swatch for items with a colour)
-        var ic = new Rectangle(indent + 2, row.Y + 9, 28, 28);
+        int icS = Px(28);
+        var ic = new Rectangle(indent + 2, row.Y + (row.Height - icS) / 2, icS, icS);
         Color iconCol = enabled ? d.accent : OffC;
         if (n.Tag is WheelItemModel wi && WheelPreview.TryColor(wi.Color, out var sw))
         {
@@ -401,21 +410,22 @@ public partial class MainForm
         else
         {
             using var b = new SolidBrush(Color.FromArgb(enabled ? 60 : 30, iconCol));
-            using var p = RoundRect(new Rectangle(ic.X + 7, ic.Y + 7, 14, 14), 4);
+            using var p = RoundRect(new Rectangle(ic.X + icS / 4, ic.Y + icS / 4, icS / 2, icS / 2), 4);
             g.FillPath(b, p);
         }
-        int tx = ic.Right + 10, tw = W - tx - (Toggleable(n.Tag) ? 54 : 10);
+        int tx = ic.Right + 10, tw = W - tx - (Toggleable(n.Tag) ? Px(54) : 10);
         var titleCol = enabled ? Theme.Text : Theme.OffText;
         var flags = TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
-        TextRenderer.DrawText(g, d.title, enabled ? fTitle : fTitleOff, new Rectangle(tx, row.Y + 4, tw, 20), titleCol, flags);
+        TextRenderer.DrawText(g, d.title, enabled ? fTitle : fTitleOff, new Rectangle(tx, row.Y + (row.Height - TitleH - SubH) / 2, tw, TitleH), titleCol, flags);
         if (d.sub != null)
-            TextRenderer.DrawText(g, (enabled ? "" : "Off  ·  ") + d.sub, fSub, new Rectangle(tx, row.Y + 24, tw, 18), Theme.SubText, flags);
+            TextRenderer.DrawText(g, (enabled ? "" : "Off  ·  ") + d.sub, fSub, new Rectangle(tx, row.Y + (row.Height - TitleH - SubH) / 2 + TitleH, tw, SubH), Theme.SubText, flags);
         // on/off dot
         if (Toggleable(n.Tag))
         {
-            var dot = new Rectangle(W - 38, row.Y + 13, 20, 20);
+            int dS = Px(20);
+            var dot = new Rectangle(W - Px(38), row.Y + (row.Height - dS) / 2, dS, dS);
             if (enabled)
-            { using var b = new SolidBrush(OnC); g.FillEllipse(b, dot); using var pen = new Pen(Color.White, 2.2f); g.DrawLines(pen, new[] { new Point(dot.X + 5, dot.Y + 10), new Point(dot.X + 9, dot.Y + 14), new Point(dot.X + 15, dot.Y + 6) }); }
+            { using var b = new SolidBrush(OnC); g.FillEllipse(b, dot); using var pen = new Pen(Color.White, 2.2f); g.DrawLines(pen, new[] { new Point(dot.X + dS / 4, dot.Y + dS / 2), new Point(dot.X + dS * 9 / 20, dot.Y + dS * 7 / 10), new Point(dot.X + dS * 3 / 4, dot.Y + dS * 3 / 10) }); }
             else
             { using var pen = new Pen(OffC, 2f); g.DrawEllipse(pen, dot); }
         }
@@ -429,7 +439,8 @@ public partial class MainForm
     static int Pill(Graphics g, string text, Color c, int x, int midY)
     {
         var sz = TextRenderer.MeasureText(text, fPill);
-        var r = new Rectangle(x, midY - 10, sz.Width + 8, 20);
+        int h = Math.Max(20, sz.Height + 4);
+        var r = new Rectangle(x, midY - h / 2, sz.Width + 8, h);
         using (var b = new SolidBrush(c))
         using (var p = RoundRect(r, 10))
             g.FillPath(b, p);

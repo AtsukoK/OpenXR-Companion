@@ -4,7 +4,7 @@
 // the section you are in lit up. Folded or not is remembered between runs.
 public partial class MainForm
 {
-    const int RailWidth = 64;
+    int RailWidth => (int)Math.Round(64 * DeviceDpi / 96f); // wider at 150 % and up so the icons fit
     FlowLayoutPanel rail;
     Panel listPanel;
     SplitContainer split2;
@@ -39,17 +39,16 @@ public partial class MainForm
         RailButton("", "Tutorials: the full tour, how-tos and a tour of each page", TutorialMenu, null);
         RailButton("", "Search everything", () => { GoTo(BindingsPage); if (currentEditor is AllBindingsPage ab) ab.FocusSearch(); }, null);
 
-        listFolded = true; // the icon bar is the default; the full list only when the user unfolded it last time
-        try { if (File.Exists(RailFile) && File.ReadAllText(RailFile).Trim() == "0") listFolded = false; } catch (IOException) { }
-        if (listFolded)
-            Shown += (s, e) => SetFolded(true);
+        // Always start as the icon bar; » shows the full list for this run only.
+        listFolded = true;
+        Shown += (s, e) => SetFolded(true);
     }
 
     void RailButton(string glyph, string name, Action click, Func<object> tag, string badge = null)
     {
         var b = new Button
         {
-            Size = new Size(RailWidth - 10, 52), FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(0, 0, 0, 4),
+            Size = new Size(RailWidth - (int)Math.Round(10 * DeviceDpi / 96f), (int)Math.Round(52 * DeviceDpi / 96f)), FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(0, 0, 0, 4),
             Font = new Font("Segoe MDL2 Assets", 16f), Text = glyph, TextAlign = ContentAlignment.MiddleCenter,
             BackColor = Theme.IsDark ? Theme.Card : Color.FromArgb(240, 243, 248), ForeColor = Theme.IsDark ? Theme.Text : Color.FromArgb(40, 60, 100),
         };
@@ -163,6 +162,39 @@ public partial class MainForm
     }
 
     // The README's screenshots (docs/images): the built-in default profile, list folded, a readable window size.
+    // The main pages at several window sizes / aspect ratios (layout checks): <dir>/<WxH>-<page>.png
+    public static void SizeShots(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var shotDir = Path.Combine(Path.GetTempPath(), "vro_size_shots");
+        Directory.CreateDirectory(shotDir);
+        var builtin = Path.Combine(shotDir, "default.json");
+        File.WriteAllText(builtin, Native.DefaultProfile() ?? "{}");
+        foreach (var (w, h) in new[] { (1280, 720), (1366, 768), (1600, 1200), (1920, 1080), (2560, 1080), (2560, 1440), (3440, 1440), (1080, 1600) })
+        {
+            var f = new MainForm { StartPosition = FormStartPosition.Manual, Location = new Point(0, 0) };
+            f.Show();
+            f.Size = new Size(w, h);
+            f.LoadFile(builtin);
+            f.SetFolded(true);
+            void Snap(string name)
+            {
+                for (int i = 0; i < 12; i++)
+                    Application.DoEvents();
+                using var bmp = new Bitmap(f.Width, f.Height);
+                using (var g = Graphics.FromImage(bmp)) { var dc = g.GetHdc(); PrintWindow(f.Handle, dc, 2); g.ReleaseHdc(dc); }
+                bmp.Save(Path.Combine(dir, $"{w}x{h}-{name}.png"));
+            }
+            f.GoTo("overview"); Snap("overview");
+            f.GoTo(f.Profile); Snap("settings");
+            f.GoTo(ControllersPage); Snap("controllers");
+            f.GoTo(BindingsPage); Snap("all-bindings");
+            f.GoTo("wheels"); Snap("wheels");
+            f.SetFolded(false); f.GoTo("overview"); Snap("overview-list");
+            f.Dispose();
+        }
+    }
+
     public static void GithubShots(string dir)
     {
         Directory.CreateDirectory(dir);

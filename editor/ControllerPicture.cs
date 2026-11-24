@@ -16,12 +16,21 @@ public class ControllerPicture : Control
     // Design canvas: [labels][top view][labels][side view][labels], see ControllerLayouts for the view sizes.
     // Top-view parts are named on whichever side of the top view they sit, so leader lines don't cross the body.
     // Tags grow with their lines, and the canvas grows taller when a column of tags needs it.
-    const float LabelWidth = 158, Gap = 10, CanvasMargin = 14, TagGap = 5;
-    const float NameHeight = 19, LineHeight = 14.5f, MinTagHeight = 38;
+    const float Gap = 10, CanvasMargin = 14;
     const int MaxLines = 8; // a stick has six ways to use it
-    const float TopX = LabelWidth, MiddleX = TopX + ControllerLayouts.TopWidth + Gap;
-    const float SideX = MiddleX + LabelWidth + Gap;
-    const float CanvasWidth = SideX + ControllerLayouts.SideWidth + LabelWidth;
+    // Tag size: T = 1 is the design size. When the picture has spare width (its height is what limits it), the tags grow
+    // (boxes, text, spacing) to use that room; the controller drawings keep their size.
+    float T = 1;
+    const float MaxTagScale = 1.8f;
+    float LabelWidth => 158 * T;
+    float TagGap => 5 * T;
+    float NameHeight => 19 * T;
+    float LineHeight => 14.5f * T;
+    float MinTagHeight => 38 * T;
+    float TopX => LabelWidth;
+    float MiddleX => TopX + ControllerLayouts.TopWidth + Gap;
+    float SideX => MiddleX + LabelWidth + Gap;
+    float CanvasWidth => SideX + ControllerLayouts.SideWidth + LabelWidth;
     const float ViewsHeight = ControllerLayouts.Height + 2 * CanvasMargin;
 
     ControllerLayout layout = ControllerLayouts.All[0];
@@ -44,7 +53,7 @@ public class ControllerPicture : Control
     public bool AddButtons;
     public event Action<ControllerPart> AddClicked;
     bool addHovered;
-    static RectangleF AddBox(RectangleF tag) => new(tag.Right - 22, tag.Y + 3, 18, 15);
+    RectangleF AddBox(RectangleF tag) => new(tag.Right - 22 * T, tag.Y + 3 * T, 18 * T, 15 * T);
 
     public ControllerPicture()
     {
@@ -66,7 +75,38 @@ public class ControllerPicture : Control
     }
 
     // The height that shows the whole picture at this width.
-    public int HeightFor(int width) => (int)Math.Ceiling(width * CanvasHeight() / CanvasW);
+    public int HeightFor(int width)
+    {
+        float keep = T;
+        T = 1; // the natural height, at the design tag size
+        try { return (int)Math.Ceiling(width * CanvasHeight() / CanvasW); }
+        finally { T = keep; }
+    }
+
+    // The largest tag size whose canvas still fits the picture's shape (more width to spare = bigger tags).
+    void FitTags()
+    {
+        T = 1;
+        if (Width <= 0 || Height <= 0)
+            return;
+        float aspect = (float)Width / Height;
+        for (float t = 1.05f; t <= MaxTagScale + 0.001f; t += 0.05f)
+        {
+            T = t;
+            if (CanvasW / CanvasHeight() > aspect)
+            {
+                T = t - 0.05f;
+                break;
+            }
+        }
+    }
+
+    protected override void OnSizeChanged(EventArgs e)
+    {
+        base.OnSizeChanged(e);
+        FitTags();
+        Invalidate();
+    }
 
     public string Selected
     {
@@ -244,7 +284,7 @@ public class ControllerPicture : Control
     {
         TagColumn.Left => 0,
         TagColumn.Middle => MiddleX,
-        _ => CanvasW - LabelWidth + 6,
+        _ => CanvasW - LabelWidth + 6 * T,
     };
 
     // Lines shown in a tag: up to MaxLines, the last saying how many more when there are more.
@@ -270,7 +310,7 @@ public class ControllerPicture : Control
             foreach (var (part, h, y) in column)
             {
                 float top = Math.Max(y, next);
-                tags[part] = new RectangleF(x, top, LabelWidth - 6, h);
+                tags[part] = new RectangleF(x, top, LabelWidth - 6 * T, h);
                 next = top + h + TagGap;
             }
         }
@@ -426,12 +466,12 @@ public class ControllerPicture : Control
             g.FillPath(fill, p);
             g.DrawPath(edge, p);
         }
-        using var nameFont = new Font("Segoe UI", 9.5f, FontStyle.Bold);
-        using var subFont = new Font("Segoe UI", 8.5f);
+        using var nameFont = new Font("Segoe UI", 9.5f * T, FontStyle.Bold);
+        using var subFont = new Font("Segoe UI", 8.5f * T);
         using var text = new SolidBrush(part.IsUsable ? Theme.Text : Theme.OffText);
         using var sub = new SolidBrush(count > 0 ? Accent : Theme.SubText);
         var fmt = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
-        g.DrawString(part.LabelFor(hand), nameFont, text, new RectangleF(tag.X + 6, tag.Y + 2, tag.Width - (AddButtons && part.IsUsable ? 30 : 10), 16), fmt);
+        g.DrawString(part.LabelFor(hand), nameFont, text, new RectangleF(tag.X + 6 * T, tag.Y + 2 * T, tag.Width - (AddButtons && part.IsUsable ? 30 : 10) * T, 16 * T), fmt);
         var lines = part.IsUsable ? linesOf(part) : Array.Empty<TagLine>();
         if (lines.Count == 0)
         {
@@ -439,12 +479,12 @@ public class ControllerPicture : Control
                             : count > 0 ? (count == 1 ? "1 binding" : count + " bindings") + (use.Off > 0 ? $", {use.Off} off" : "")
                             : use.Off > 0 ? $"{use.Off} switched off"
                                           : "nothing set";
-            g.DrawString(status, subFont, sub, new RectangleF(tag.X + 6, tag.Y + NameHeight, tag.Width - 10, 14), fmt);
+            g.DrawString(status, subFont, sub, new RectangleF(tag.X + 6 * T, tag.Y + NameHeight, tag.Width - 10 * T, 14 * T), fmt);
             return;
         }
         using var whenBrush = new SolidBrush(Theme.SubText);
         using var doesBrush = new SolidBrush(Theme.IsDark ? Color.FromArgb(140, 190, 255) : Color.FromArgb(30, 95, 200));
-        using var doesFont = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+        using var doesFont = new Font("Segoe UI", 8.5f * T, FontStyle.Bold);
         using var unusedBrush = new SolidBrush(Theme.OffText);
         using var exact = (StringFormat)StringFormat.GenericTypographic.Clone();
         exact.FormatFlags |= StringFormatFlags.MeasureTrailingSpaces; // keep the space after "Press:"
@@ -455,15 +495,15 @@ public class ControllerPicture : Control
             bool isMoreLine = i == MaxLines - 1 && lines.Count > MaxLines;
             if (isMoreLine)
             {
-                g.DrawString($"+ {lines.Count - MaxLines + 1} more", subFont, whenBrush, new RectangleF(tag.X + 6, y, tag.Width - 10, 14), fmt);
+                g.DrawString($"+ {lines.Count - MaxLines + 1} more", subFont, whenBrush, new RectangleF(tag.X + 6 * T, y, tag.Width - 10 * T, 14 * T), fmt);
                 break;
             }
             var line = lines[i];
             string when = (line.Layer != null ? line.Layer + " · " : "") + line.When + ": ";
             float whenWidth = g.MeasureString(when, subFont, PointF.Empty, exact).Width;
-            g.DrawString(when, subFont, whenBrush, new PointF(tag.X + 6, y), exact);
+            g.DrawString(when, subFont, whenBrush, new PointF(tag.X + 6 * T, y), exact);
             g.DrawString(line.Does, line.IsUnused ? subFont : doesFont, line.IsUnused ? unusedBrush : doesBrush,
-                         new RectangleF(tag.X + 6 + whenWidth, y, tag.Width - 12 - whenWidth, 14), fmt);
+                         new RectangleF(tag.X + 6 * T + whenWidth, y, tag.Width - 12 * T - whenWidth, 14 * T), fmt);
         }
     }
 
