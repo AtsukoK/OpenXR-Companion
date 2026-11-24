@@ -123,8 +123,15 @@ public partial class MainForm
         {
             var r = await Updater.LatestAsync();
             string exe = await Updater.RunAsync(r, (pct, text) => BeginInvoke(() => { updateBtn.Text = pct >= 0 ? "Downloading " + pct + "%" : "Updating..."; SetStatus(text, false); }));
-            Updater.Restart(exe, was);
+            // the new files are in now: whatever happens next, don't say the version is unchanged
             dirty = false;
+            try
+            { Updater.Restart(exe, was); }
+            catch
+            {
+                try { MessageBox.Show(this, "Updated to " + r.Tag + ". Please start the editor again.", "Update", MessageBoxButtons.OK, MessageBoxIcon.Information); }
+                catch { }
+            }
             Close();
         }
         catch (Exception ex)

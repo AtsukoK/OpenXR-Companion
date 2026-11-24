@@ -40,8 +40,10 @@ static class Program
                 if (why != null)
                 { File.WriteAllText(args[1], "refused: " + why); return 2; }
                 var r = Updater.LatestAsync().GetAwaiter().GetResult();
-                Updater.RunAsync(r, (p, t) => { }).GetAwaiter().GetResult();
+                string exe = Updater.RunAsync(r, (p, t) => { }).GetAwaiter().GetResult();
                 File.WriteAllText(args[1], "updated to " + r.Tag + " from v" + MainForm.AppVersion.ToString(3));
+                // like the real update: start the new editor after the swap (it writes its version next to the result)
+                Updater.StartAndWait(exe, "--updatecheck \"" + args[1] + ".started\"");
                 return 0;
             }
             catch (Exception ex) { File.WriteAllText(args[1], "failed: " + ex.Message); return 1; }

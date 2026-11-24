@@ -134,6 +134,10 @@ public static class Updater
             File.Copy(cur, b, true);
         }
 
+        // The editor is one file: .NET reads its parts from the exe the first time each is used. Once the exe is swapped,
+        // a part not used yet can't be found (FileNotFoundException), so load all of them now, while the old exe is in place.
+        PreloadAll();
+
         // 5. swap in: rename the old file aside (works while in use), copy the new one; undo everything on failure
         progress(-1, "Installing " + r.Tag + "...");
         var done = new List<(string target, string old)>();
@@ -186,6 +190,30 @@ public static class Updater
         }
         catch { }
     }
+
+    static void PreloadAll()
+    {
+        var seen = new HashSet<string>();
+        var queue = new Queue<System.Reflection.Assembly>();
+        foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
+            if (seen.Add(a.FullName ?? ""))
+                queue.Enqueue(a);
+        while (queue.Count > 0)
+            foreach (var name in queue.Dequeue().GetReferencedAssemblies())
+            {
+                if (!seen.Add(name.FullName))
+                    continue;
+                try { queue.Enqueue(System.Reflection.Assembly.Load(name)); }
+                catch { }
+            }
+        // what the restart and the messages after it use
+        _ = typeof(Process).TypeHandle;
+        _ = typeof(ProcessStartInfo).TypeHandle;
+    }
+
+    // Tests: start the new editor after an update, like Restart (Process first used here, after the swap).
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    public static void StartAndWait(string exe, string args) => Process.Start(exe, args)?.WaitForExit(60000);
 
     public static void Restart(string exe, string fromVersion)
     {
