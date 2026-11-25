@@ -42,7 +42,7 @@ bool Connect(std::string& err) {
         vigem_free(client);
         client = nullptr;
         failed = true;
-        err = "Gamepad buttons need the free ViGEmBus driver: github.com/nefarius/ViGEmBus";
+        err = "Optional: gamepad buttons need the free ViGEmBus driver (github.com/nefarius/ViGEmBus). Everything else works.";
         Log("gamepad: vigem_connect failed 0x%08X", (unsigned)e);
         return false;
     }

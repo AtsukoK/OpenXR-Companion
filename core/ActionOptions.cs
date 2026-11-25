@@ -11,7 +11,7 @@ public static class ActionOptions
         (ActionType.Key, new("Keys", "Press a key", "A keyboard key, key combo or mouse button.", "quick save, map, push-to-talk.")),
         (ActionType.Sequence, new("Keys", "Type a few keys in a row", "Several keys one after another, with waits if needed (a macro).", "copy-paste, a chat command.")),
         (ActionType.XrInput, new("Keys", "Press a controller button", "The game thinks one of its controller buttons is pressed.", "a game action that has no keyboard key.")),
-        (ActionType.Gamepad, new("Keys", "Press a gamepad button", "A button on a virtual Xbox 360 pad, for games that read one. Needs the free ViGEmBus driver.", "Fallout New Vegas, flat games on the desktop screen.")),
+        (ActionType.Gamepad, new("Keys", "Press a gamepad button", "A button on a virtual Xbox 360 pad, for games that read one. Optional: needs the free ViGEmBus driver.", "Fallout New Vegas, flat games on the desktop screen.")),
         (ActionType.Page, new("This panel", "Go to another page", "Shows another page of this wrist panel.", "a 'Next page' button.")),
         (ActionType.Back, new("This panel", "Go back a page", "Back to the page before. On the first page it hides the panel.", null)),
         (ActionType.Close, new("This panel", "Hide the panel", "Hides it until you look away from your arm.", null)),
