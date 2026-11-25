@@ -167,7 +167,12 @@ bool WristPanels::UpdateVisibility(int h, const XrPosef& pose, const Vec3& n) {
     float slack = wv.visible ? 15.f : 0.f;
     bool facing = Dot(n, toEye) >= std::cos((W.facingDeg + slack) * kDeg);
     bool looked = Dot(fwd, toEye * -1.f) >= std::cos((W.gazeDeg + slack) * kDeg);
-    bool isWanted = (facing && looked && dist < 0.8f) || e.adjust; // adjust mode: always shown
+    e.wristFacingNow[h] = std::acos(std::clamp(Dot(n, toEye), -1.f, 1.f)) / kDeg;
+    e.wristGazeNow[h] = std::acos(std::clamp(Dot(fwd, toEye * -1.f), -1.f, 1.f)) / kDeg;
+    e.wristAngleValid[h] = true;
+    e.wristWouldShow[h] = e.wristFacingNow[h] <= W.facingDeg && e.wristGazeNow[h] <= W.gazeDeg && dist < 0.8f;
+    bool forced = e.adjust && !e.wristViewTest; // adjust mode: always shown (not while trying when it shows)
+    bool isWanted = (facing && looked && dist < 0.8f) || forced;
 
     if (!isWanted) { // Close/Back on the first page needs a fresh look
         R.condSince = -1;
@@ -177,7 +182,7 @@ bool WristPanels::UpdateVisibility(int h, const XrPosef& pose, const Vec3& n) {
     }
 
     if (!wv.visible) {
-        bool waitedLongEnough = (e.now - R.condSince) * 1000 >= W.showMs || e.adjust;
+        bool waitedLongEnough = (e.now - R.condSince) * 1000 >= W.showMs || forced;
         if (!isWanted || R.closedByItem || !waitedLongEnough) return false;
         R.stack.assign(1, &src.pages.find(src.start)->second);
         wv = WristView{};

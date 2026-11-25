@@ -263,7 +263,16 @@ public:
         int step = -1;           // index into steps; -1 = not running
         bool placed = false;     // the current thing was grabbed and let go
         GrabTarget prevGrab = GrabTarget::None;
+        double shownAt = 0;      // the guide card text was last rebuilt (live numbers)
     } setup;
+    // The wrist panels' viewing angles right now (for the "when it shows" setup step): how far the panel is turned
+    // away from the eyes and how far from the middle of the view it is, in degrees; valid = worked out this frame.
+    float wristFacingNow[2]{}, wristGazeNow[2]{};
+    bool wristAngleValid[2]{}, wristWouldShow[2]{};
+    bool wristViewTest = false; // in adjust mode, the panels still show only by their real rule (to try it)
+    void StartWristViewSetup(); // the "when it shows" step on its own (from the in-headset wrist settings)
+    bool wristViewAsked = false;
+    void RunWristViewSetup();
     std::string guideText;    // the guide card in view: title \n body \n footer (empty = hidden)
     uint64_t guideVersion = 0;
     static std::wstring SetupFile();

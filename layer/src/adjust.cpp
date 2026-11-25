@@ -3,6 +3,8 @@
 #include "engine.h"
 #include "keys.h"
 #include <algorithm>
+#include <cmath>
+#include <cstdio>
 #include <fstream>
 #include <sstream>
 
@@ -11,7 +13,7 @@
 // A few seconds after the headset is tracked, adjust mode turns on by itself and a guide card walks through each
 // thing to place: grab it with a grip, let go, A = next, B = skip. At the end the positions are saved (like leaving
 // adjust mode) and the file says { "pending": false }, so it runs once.
-enum SetupStep { S_LeftWrist, S_RightWrist, S_Wheel, S_Screen, S_Keyboard, S_Fingertips };
+enum SetupStep { S_LeftWrist, S_RightWrist, S_WristView, S_Wheel, S_Screen, S_Keyboard, S_Fingertips };
 
 std::wstring Engine::SetupFile() { return DataDir() + L"\\setup_positions.json"; }
 
@@ -33,6 +35,7 @@ static bool SetupGrabMatches(int id, GrabTarget g) {
     case S_Screen: return g == GrabTarget::Screen;
     case S_Keyboard: return g == GrabTarget::Keyboard;
     case S_Fingertips: return g == GrabTarget::LeftFingertip || g == GrabTarget::RightFingertip;
+    case S_WristView: return false;
     }
     return false;
 }
@@ -41,7 +44,28 @@ void Engine::SetupShow() {
     if (setup.step < 0 || setup.step >= (int)setup.steps.size()) return;
     int id = setup.steps[setup.step];
     const char* body = "";
+    std::string live; // the wrist view step: what each panel does right now
     switch (id) {
+    case S_WristView: {
+        body = "WHEN THE WRIST PANELS SHOW: raise an arm and look at it the way you'd check a watch. The panel shows and "
+               "hides just like in the game. Click a thumbstick to make it show from how you're holding it now.";
+        for (int h = 0; h < 2; h++) {
+            if (!prof->wrist[h].enabled) continue;
+            const WristStyle& W = prof->wrist[h];
+            char buf[220];
+            if (!wristAngleValid[h])
+                snprintf(buf, sizeof buf, "%s: not tracked", h ? "Right" : "Left");
+            else
+                snprintf(buf, sizeof buf, "%s: %s   turned %.0f\xC2\xB0 (up to %.0f\xC2\xB0)   looked at %.0f\xC2\xB0 (up to %.0f\xC2\xB0)",
+                         h ? "Right" : "Left",
+                         wristWouldShow[h] ? "\xE2\x9C\x93 shows"
+                         : wristFacingNow[h] > W.facingDeg ? "hidden: turn the wrist more toward you"
+                         : wristGazeNow[h] > W.gazeDeg ? "hidden: look more straight at it" : "hidden: bring it closer",
+                         wristFacingNow[h], W.facingDeg, wristGazeNow[h], W.gazeDeg);
+            live += std::string("\n") + buf;
+        }
+        break;
+    }
     case S_LeftWrist:
         body = "LEFT WRIST PANEL: hold your left arm up and look at it. Grab the panel with your RIGHT grip and put it where "
                "you like it. Thumbstick up / down while holding it: size.";
@@ -67,6 +91,12 @@ void Engine::SetupShow() {
                "your real fingertip is, then the other one. Then touching panel buttons lands right.";
         break;
     }
+    if (id == S_WristView) {
+        std::string t = "Set up your positions   (" + std::to_string(setup.step + 1) + " of " + std::to_string(setup.steps.size()) + ")\n" +
+                        body + live + "\nClick a thumbstick: show it from here   A: next   B: skip";
+        if (t != guideText) { guideText = t; guideVersion++; }
+        return;
+    }
     guideText = "Set up your positions   (" + std::to_string(setup.step + 1) + " of " + std::to_string(setup.steps.size()) + ")\n" +
                 body + "\n" +
                 (setup.placed ? "\xE2\x9C\x93 Placed!   A: next   (grab it again to change it)   B: skip"
@@ -75,6 +105,8 @@ void Engine::SetupShow() {
 }
 
 void Engine::SetupFinish(bool completed) {
+    wristViewTest = false;
+    bool singleStep = setup.steps.size() == 1;
     setup.step = -1;
     setup.steps.clear();
     guideText.clear();
@@ -85,19 +117,22 @@ void Engine::SetupFinish(bool completed) {
         grab = GrabRun{};
         if (wr.open) CloseWheel();
     }
+    bool single = singleStep;
     saveRequested = true; // keep what was placed
-    {
+    if (!single) {
         std::ofstream o(SetupFile(), std::ios::binary | std::ios::trunc);
         o << "{ \"pending\": false }";
     }
     // shown even with notifications off: the user is waiting for it
-    toast = completed ? "All set: your positions are saved" : "Setup ended: your positions so far are saved";
+    toast = single ? "Saved: when the wrist panels show"
+                   : completed ? "All set: your positions are saved" : "Setup ended: your positions so far are saved";
     toastUntil = NowSec() + 3.5;
     toastVersion++;
     Log("setup of positions %s", completed ? "done" : "ended early");
 }
 
 void Engine::UpdateSetup() {
+    if (wristViewAsked) RunWristViewSetup();
     if (!setup.checked) {
         if (!fr.headValid) { setup.trackedSince = -1; return; }
         if (setup.trackedSince < 0) setup.trackedSince = now;
@@ -107,6 +142,7 @@ void Engine::UpdateSetup() {
         setup.steps.clear();
         if (prof->wrist[0].enabled) setup.steps.push_back(S_LeftWrist);
         if (prof->wrist[1].enabled) setup.steps.push_back(S_RightWrist);
+        if (prof->wrist[0].enabled || prof->wrist[1].enabled) setup.steps.push_back(S_WristView);
         if (!prof->wheels.empty()) setup.steps.push_back(S_Wheel);
         setup.steps.push_back(S_Screen);
         setup.steps.push_back(S_Keyboard);
@@ -125,6 +161,28 @@ void Engine::UpdateSetup() {
     if (setup.step < 0) return;
     if (!adjust) { SetupFinish(false); return; } // ended with the Calibrate button
     int id = setup.steps[setup.step];
+    wristViewTest = id == S_WristView;
+    if (id == S_WristView) {
+        // click a thumbstick: the panel being looked at shows from this pose on (with a little room to spare)
+        bool click = (cur[0][C_STICK][F_PRESS] && !prev[0][C_STICK][F_PRESS]) || (cur[1][C_STICK][F_PRESS] && !prev[1][C_STICK][F_PRESS]);
+        if (click) {
+            int best = -1;
+            for (int h = 0; h < 2; h++)
+                if (prof->wrist[h].enabled && wristAngleValid[h] && (best < 0 || wristGazeNow[h] < wristGazeNow[best])) best = h;
+            if (best >= 0) {
+                WristStyle& W = prof->wrist[best];
+                auto up5 = [](float v) { return std::ceil(v / 5.f) * 5.f; };
+                W.facingDeg = std::clamp(up5(wristFacingNow[best] + 10.f), 10.f, 80.f);
+                W.gazeDeg = std::clamp(up5(wristGazeNow[best] + 8.f), 5.f, 60.f);
+                char buf[160];
+                snprintf(buf, sizeof buf, "%s panel: shows from here now (turned up to %.0f\xC2\xB0, looked at within %.0f\xC2\xB0)",
+                         best ? "Right" : "Left", W.facingDeg, W.gazeDeg);
+                Toast(buf, 3.0);
+                if (prof->haptics) haptics.push_back({ best, prof->hapticAmp, 0.04f });
+            }
+        }
+        if (now - setup.shownAt > 0.2) { setup.shownAt = now; SetupShow(); } // live numbers
+    }
     if (SetupGrabMatches(id, setup.prevGrab) && !grab.Active() && !setup.placed) {
         setup.placed = true;
         SetupShow();
@@ -139,6 +197,23 @@ void Engine::UpdateSetup() {
     setup.prevGrab = GrabTarget::None;
     if (setup.step >= (int)setup.steps.size()) { SetupFinish(true); return; }
     if (setup.steps[setup.step] == S_Keyboard && !kb.visible) keyboard.Open(-1);
+    SetupShow();
+}
+
+// The "when it shows" step on its own: adjust mode with just that step (saved like the full setup, file untouched).
+void Engine::StartWristViewSetup() { wristViewAsked = true; } // started on the next update, not inside the menu's press
+
+void Engine::RunWristViewSetup() {
+    wristViewAsked = false;
+    if (menu.IsOpen()) menu.Close();
+    if (wr.open) CloseWheel();
+    setup.checked = true;
+    setup.steps.assign(1, S_WristView);
+    setup.step = 0;
+    setup.placed = false;
+    setup.prevGrab = GrabTarget::None;
+    adjust = true;
+    grab = GrabRun{};
     SetupShow();
 }
 

@@ -723,6 +723,8 @@ MenuPage WristPanel(Engine& e, InGameMenu& m, int h) {
     p.rows.push_back(MenuRow::Choice("Press by", "", { "Poking", "Pointing", "Both" }, [W] { return (int)W->press; },
                                      [edit](int i) { edit([i](WristStyle& x) { x.press = (PressMethod)i; }); }));
     p.rows.push_back(MenuRow::Heading("When it shows"));
+    p.rows.push_back(MenuRow::Link("Try it and set it by hand", "Raise your arm and look: see when it shows, click a stick to set it",
+                                   [&e] { e.StartWristViewSetup(); }));
     MenuRow facing = MenuRow::Number("Turned toward you within", "Bigger: shows with the arm less turned", [W] { return W->facingDeg; },
                                      [edit](float v) { edit([v](WristStyle& x) { x.facingDeg = v; }); }, 10, 80, 5);
     facing.unit = "\xC2\xB0";

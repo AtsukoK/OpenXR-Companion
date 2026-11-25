@@ -363,6 +363,28 @@ void TestHoldOnlyQuickBinding() {
 }
 
 // The guided setup of positions at the start of a game (setup_positions.json, in a throwaway settings folder).
+// "When the wrist panels show" on its own (from the in-headset wrist settings): the panels follow their real rule,
+// the card shows live numbers, A ends it and saves, the setup file is left alone.
+void TestWristViewSetup() {
+    std::string err;
+    Engine e;
+    e.SetProfile(ParseProfileText(DefaultProfileJson(), err));
+    Frame f;
+    double t = 0;
+    f.headValid = true;
+    f.head.position = { 0, 1.6f, 0 };
+    for (auto& h : f.h) { h.gripValid = h.aimValid = true; h.gripPose = h.aimPose = { { 0, 0, 0, 1 }, { 0, 1.2f, -0.3f } }; }
+    auto step = [&](int n = 1) { for (int i = 0; i < n; i++) { t += 0.011; f.t = t; e.Update(f); } };
+    step(500);
+    e.StartWristViewSetup();
+    step(30);
+    CHECK(e.adjust && e.wristViewTest && e.guideText.find("WHEN THE WRIST PANELS SHOW") != std::string::npos &&
+              e.guideText.find("Left:") != std::string::npos,
+          "wrist view: the step starts, panels follow their real rule, the card has a line per panel");
+    f.h[1].b1 = true; step(3); f.h[1].b1 = false; step(3);
+    CHECK(!e.adjust && !e.wristViewTest && e.setup.step < 0, "wrist view: A ends it (adjust mode off)");
+}
+
 void TestSetupPositions() {
     wchar_t tmp[MAX_PATH];
     GetTempPathW(MAX_PATH, tmp);

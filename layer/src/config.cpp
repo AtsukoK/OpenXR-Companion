@@ -814,6 +814,8 @@ bool SavePlacement(const Profile& p, std::string& err) {
             w["toward_elbow_m"] = r(W.towardElbow);
             w["lift_m"] = r(W.lift);
             w["side_m"] = r(W.side);
+            w["facing_deg"] = std::round(W.facingDeg);
+            w["gaze_deg"] = std::round(W.gazeDeg);
             w["text_up"] = EnumKey(kTextUpNames, W.textUp);
             if (W.textUp == TextUp::Custom) w["rotate_deg"] = std::round(W.rotateDeg * 10.f) / 10.f;
             if (W.pose.set)
