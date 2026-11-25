@@ -35,10 +35,14 @@ public static class ControllerButtonPicker
             Background = Brush.Parse("#1B1E23"),
         };
         var layouts = ControllerLayouts.All;
-        var layoutBox = new ChoiceCombo(layouts.Select(l => new Choice(l.Id, l.Name)), 320)
+        var mine = ControllerLayouts.ById(EditorApi.PictureChoice(Shell.Store.Profile));
+        var layoutBox = new ChoiceCombo(layouts.Select(l => new Choice(l.Id, l.Id == mine.Id ? l.Name + "  (yours)" : l.Name)), 320)
         {
-            Code = ControllerLayouts.ById(EditorApi.PictureChoice(Shell.Store.Profile)).Id,
+            Code = mine.Id,
         };
+        var warn = new TextBlock { Foreground = Brush.Parse("#F2C94C"), TextWrapping = TextWrapping.Wrap, IsVisible = false };
+        var back = new Button { Content = "Back to mine", IsVisible = false };
+        back.Click += (s, e) => layoutBox.Code = mine.Id;
         var pics = new[] { new ControllerDrawing { Stacked = true }, new ControllerDrawing { Stacked = true } };
         var ways = new WrapPanel();
         var prompt = new TextBlock { Text = "Click a button, stick, trigger or grip on either controller.", Classes = { "desc" } };
@@ -47,6 +51,9 @@ public static class ControllerButtonPicker
         void ShowLayouts()
         {
             var layout = ControllerLayouts.ById(layoutBox.Code);
+            bool other = layout.Id != mine.Id;
+            warn.IsVisible = back.IsVisible = other;
+            warn.Text = other ? $"This isn't your controller ({mine.Name}). Buttons yours doesn't have can be picked, but they only work on a {layout.Name}." : "";
             for (int h = 0; h < 2; h++)
                 pics[h].ShowController(layout, h, (h == 0) == (currentHand == "left") ? curComp : null, _ => default);
         }
@@ -62,13 +69,17 @@ public static class ControllerButtonPicker
                 prompt.Text = name + ": " + part.NotUsable;
                 return;
             }
-            if (part.Ways.Length == 1)
+            // a part your own controller doesn't have: say so before it is picked
+            bool missing = !mine.PartsFor(hand).Any(p => p.Comp == part.Comp && p.IsUsable);
+            if (missing)
+                name += $"  ⚠ your {mine.Name} doesn't have this; it will only work on a {ControllerLayouts.ById(layoutBox.Code).Name}";
+            if (part.Ways.Length == 1 && !missing)
             {
                 result = (hand == 0 ? "left" : "right", part.Comp);
                 win.Close();
                 return;
             }
-            prompt.Text = name + ": how?";
+            prompt.Text = name + (part.Ways.Length == 1 ? "" : ": how?");
             foreach (var way in part.Ways)
             {
                 var b = new Button { Content = WayText(part, way), MinWidth = 150, MinHeight = 44, Margin = new Thickness(0, 0, 8, 8), FontSize = 15 };
@@ -108,8 +119,9 @@ public static class ControllerButtonPicker
         top.Children.Add(new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 8,
-            Children = { new TextBlock { Text = "Controller:", VerticalAlignment = VerticalAlignment.Center }, layoutBox, cancel },
+            Children = { new TextBlock { Text = "Controller:", VerticalAlignment = VerticalAlignment.Center }, layoutBox, back, cancel },
         });
+        top.Children.Add(warn);
         top.Children.Add(prompt);
         top.Children.Add(ways);
         DockPanel.SetDock(top, Dock.Top);
