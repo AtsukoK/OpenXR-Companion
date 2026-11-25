@@ -21,6 +21,7 @@
           <ComboBoxItem Tag="controller">Controller bindings</ComboBoxItem>
           <ComboBoxItem Tag="wheels">Wheel items</ComboBoxItem>
           <ComboBoxItem Tag="wrist">Wrist buttons</ComboBoxItem>
+          <ComboBoxItem Tag="layers">Layers</ComboBoxItem>
         </ComboBox>
         <Button x:Name="AddButton" Classes="go" Content="+ Add binding" Margin="0,0,0,6"
                 ToolTip.Tip="A blank binding, opened in the binding editor." />
@@ -45,10 +46,34 @@
 
         <DataTemplate DataType="local:BindingRow">
           <Border Classes="row" Classes.lost="{Binding Lost}" Classes.off="{Binding !IsOn}" ToolTip.Tip="{Binding Tip}">
-            <Grid ColumnDefinitions="44,2*,32,3*,150,40,40">
+            <Grid ColumnDefinitions="44,3*,32,3*,130,40,40">
               <Button Classes="glyph onoff" Classes.on="{Binding IsOn}" Content="{Binding OnGlyph}" Click="Toggle_Click"
                       ToolTip.Tip="Switch it on or off (it stays here)" />
-              <TextBlock Grid.Column="1" Classes="rowmain" Text="{Binding Where}" />
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <TextBlock Classes="rowmain" Text="{Binding Where}" />
+                <ItemsControl ItemsSource="{Binding LayerOnly}" IsVisible="{Binding HasLayerTags}" VerticalAlignment="Center">
+                  <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="4" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Border Background="#2B3F66" BorderBrush="#5D8BE0" BorderThickness="1" CornerRadius="2" Padding="6,1"
+                              ToolTip.Tip="Only works while this layer is on">
+                        <TextBlock Text="{Binding}" FontSize="11" FontWeight="Bold" Foreground="#CFE0FF" />
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <ItemsControl ItemsSource="{Binding LayerOff}" IsVisible="{Binding HasLayerTags}" VerticalAlignment="Center">
+                  <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="4" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Border Background="#3A2B2B" BorderBrush="#B06A6A" BorderThickness="1" CornerRadius="2" Padding="6,1"
+                              ToolTip.Tip="Does nothing while this layer is on">
+                        <TextBlock Text="{Binding}" FontSize="11" FontWeight="Bold" Foreground="#F0CFCF" />
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
               <TextBlock Grid.Column="2" Text="→" Classes="rowsub" HorizontalAlignment="Center" />
               <TextBlock Grid.Column="3" Classes="rowsub" Text="{Binding What}" />
               <TextBlock Grid.Column="4" Text="⚠ check this" Foreground="#F2C94C" FontWeight="SemiBold" VerticalAlignment="Center"

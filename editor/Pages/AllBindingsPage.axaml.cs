@@ -21,6 +21,7 @@ public partial class AllBindingsPage : UserControl
     public AllBindingsPage(string query)
     {
         AvaloniaXamlLoader.Load(this);
+        if (query?.StartsWith("@") == true) { show = query[1..]; query = null; } // bindings:@layers opens that view
         search = this.FindControl<TextBox>("Search")!;
         list = this.FindControl<ListBox>("List")!;
         var sortBox = this.FindControl<ComboBox>("SortBox")!;

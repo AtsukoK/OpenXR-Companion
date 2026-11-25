@@ -24,6 +24,11 @@ public class BindingRow : ListRow
                            InputText.Friendly(Binding.Input) + (Binding.Enabled ? "" : "   (off)");
     public string What => EditorApi.Plain(Binding.Action);
     public string Tip => Binding.Name + "  (click for all its settings)";
+    // square tags for the layer rules: "SHIFT  LAYER ONLY", "OFF IN SHIFT"
+    public List<string> LayerOnly => Split(Binding.Layers).Select(l => l.ToUpperInvariant() + "  LAYER ONLY").ToList();
+    public List<string> LayerOff => Split(Binding.NotLayers).Select(l => "OFF IN " + l.ToUpperInvariant()).ToList();
+    public bool HasLayerTags => LayerOnly.Count + LayerOff.Count > 0;
+    static IEnumerable<string> Split(string s) => (s ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     public string AttentionText { get; init; } // "This may need your attention": what the checks found, or null
     public bool HasAttention => !string.IsNullOrEmpty(AttentionText);
 }
@@ -55,6 +60,45 @@ public static class AllBindings
         GestureKind.Tap => "Quick tap", GestureKind.DoubleTapHold => "2× hold", _ => "Press",
     };
 
+    // Show: Layers. Per layer: what switches it on, the bindings that only work in it, and the ones it switches off.
+    static List<ListRow> LayerRows(ProfileModel p, List<BindingModel> shown, Func<BindingModel, string> att)
+    {
+        var rows = new List<ListRow>();
+        static IEnumerable<string> Names(string s) => (s ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        bool Is(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+        foreach (var layer in EditorApi.LayerNames(p))
+        {
+            bool Turns(ActionModel a) => a?.Type == ActionType.Layer && Is(a.Layer, layer);
+            var by = new List<string>();
+            foreach (var b in p.Bindings.Where(b => Turns(b.Action) || Turns(b.TapAction)))
+                by.Add($"{(b.Gesture == GestureKind.WhileHeld ? "Hold" : GestureWord(b.Gesture))} {InputText.Friendly(b.Input)}{(b.Enabled ? "" : " (off)")}");
+            foreach (var w in p.Wheels.Values)
+                by.AddRange(w.Items.Where(i => Turns(i.Action)).Select(i => $"wheel '{w.Title ?? w.Name}': {i.Label}"));
+            for (int h = 0; h < 2; h++)
+                foreach (var w in p.WristFor(h).Pages.Values)
+                    by.AddRange(w.Items.Where(i => Turns(i.Action)).Select(i => $"{(h == 0 ? "left" : "right")} wrist: {i.Label}"));
+            var only = shown.Where(b => Names(b.Layers).Any(l => Is(l, layer))).ToList();
+            var off = shown.Where(b => Names(b.NotLayers).Any(l => Is(l, layer))).ToList();
+            rows.Add(new HeadingRow
+            {
+                Text = $"Layer '{layer}'",
+                Note = by.Count == 0 ? "⚠ Nothing switches this layer on, so the bindings below never work."
+                                     : "Switched on by: " + string.Join(";  ", by),
+            });
+            if (only.Count == 0 && off.Count == 0)
+                rows.Add(new HeadingRow { Text = "", Note = "No bindings only work in this layer." });
+            rows.AddRange(only.Select(b => new BindingRow { Binding = b, AttentionText = att(b) }));
+            if (off.Count > 0)
+            {
+                rows.Add(new HeadingRow { Text = "", Note = $"Switched off while '{layer}' is on:" });
+                rows.AddRange(off.Select(b => new BindingRow { Binding = b, AttentionText = att(b) }));
+            }
+        }
+        if (rows.Count == 0)
+            rows.Add(new HeadingRow { Text = "No layers yet.", Note = "A layer makes buttons do something else while it is on. Make one with What happens: Switch a layer, then use it in a binding's Details: Only while layer." });
+        return rows;
+    }
+
     // sort: 0 = by hand and button, 1 = on first, 2 = by name. show: all, controller, wheels, wrist.
     public static List<ListRow> Rows(ProfileModel p, string q, int sort, string show)
     {
@@ -71,13 +115,15 @@ public static class AllBindings
                     inputs.Add(ControllerLayouts.InputOf(h, part, way));
         bool OnPicture(BindingModel b) => inputs.Any(i => QuickBindings.FiredBy(b, i));
 
-        var all = p.Bindings.Where(b => q.Length == 0 || $"{b.Name} {InputText.Friendly(b.Input)} {EditorApi.Plain(b.Action)}".Contains(q, StringComparison.OrdinalIgnoreCase));
+        var all = p.Bindings.Where(b => q.Length == 0 || $"{b.Name} {InputText.Friendly(b.Input)} {EditorApi.Plain(b.Action)} {b.Layers} {b.NotLayers}".Contains(q, StringComparison.OrdinalIgnoreCase));
         all = sort switch
         {
             1 => all.OrderBy(b => b.Enabled ? 0 : 1),
             2 => all.OrderBy(b => b.Name, StringComparer.OrdinalIgnoreCase),
             _ => all.OrderBy(b => b.Input ?? "", StringComparer.OrdinalIgnoreCase),
         };
+        if (show == "layers")
+            return LayerRows(p, all.ToList(), Att);
         var list = show is "all" or "controller" ? all.ToList() : new List<BindingModel>();
         var off = list.Where(b => !OnPicture(b)).ToList();
         if (off.Count > 0)
