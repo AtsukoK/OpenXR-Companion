@@ -12,3 +12,4 @@ dist2/
 .quick_build.log
 core/bin/
 core/obj/
+release_stage/

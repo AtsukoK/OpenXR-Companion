@@ -116,6 +116,8 @@ The bar on the left goes to each part: Overview, Settings, Controllers, All bind
 - **Wheels and wrist panels:** click an item in the picture or the list to change it. Drag ≡ to reorder. Up to 16 items per wheel, sub-wheels, as many wrist pages as you like. **+ Add page from...** copies pages from another profile or the standard one.
 - **Controllers:** click any button on the controller pictures to see what it does, and **+** to give it a job: a key, a wheel, a macro, a game button, the keyboard... **Apply a controller preset** sets the usual buttons for your controllers.
 - **All bindings:** everything in the profile in one searchable list; the search also finds settings.
+- **Click to pick:** next to *Record key*, **⌨ Keyboard…** shows a whole keyboard (and the mouse buttons) to click; next to every controller button, **🎮 Pick…** shows the controllers to click. Easy with a VR pointer on the screen mirror.
+- **Xbox 360 buttons (optional):** *Press an Xbox 360 button* emulates a 360 pad button for games that read one. Only this needs the free [ViGEmBus driver](https://github.com/nefarius/ViGEmBus/releases/latest); everything else works without it.
 - **Key behaviour:** a key on a controller button acts like the real key (held while you hold the button), or **Toggle** (press once to hold it down, again to let go). On wheels and panels a key is one quick press.
 - **Size** on the toolbar (or Ctrl + / Ctrl -) makes the whole editor bigger or smaller. It stays sharp at any Windows scaling.
 - **Profiles:** the profile you select at the top is the one your games use. **New game profile...** makes one used only by one game.

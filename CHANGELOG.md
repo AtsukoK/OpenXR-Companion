@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.3.1 (2026-11-25)
+
+### New
+- **Click instead of searching dropdowns** in the desktop editor (handy with a VR pointer on the screen mirror):
+  - **⌨ Keyboard…** next to every *Record key*: a whole keyboard plus the mouse buttons to click. Click Ctrl / Shift / Alt / Win first for a combo. Macros get **⌨ Add a key…**.
+  - **🎮 Pick…** next to every controller button: both controllers as pictures, click a part, then how (press, touch, push up...). It opens on your own controller; another controller, or a button yours doesn't have, is pointed out.
+  - The dropdowns and *Record key* are still there.
+- **Xbox 360 controller emulation (optional)**: a new action, *Press an Xbox 360 button*, for games that read a 360 pad (Fallout: New Vegas, flat games on the screen mirror). Pick the button on a picture of the pad. It needs the free [ViGEmBus](https://github.com/nefarius/ViGEmBus/releases/latest) driver; without it nothing else changes, the editor shows where to get it and the headset says so once. Buttons, triggers and stick directions are on/off (a stick direction pushes the stick all the way).
+- **Short press on a Hold binding**: a binding that works on *Hold* can do something else on a quick press (a key, another button...), instead of passing the tap to the game.
+- **The in-headset editor works more like the desktop one**: each button lists every binding with on/off switches, + Add / Swap with / Reset to default, all binding details (name, combo, blocking, tap times, layers, short press), **Save now**, and a bigger panel.
+
+### Fixed
+- The desktop editor picks up changes saved from the headset (it reloads them when you have nothing unsaved, and warns otherwise).
+
 ## v0.3.0 (2026-11-25)
 
 The new editor. Everything from the 0.2.14 - 0.2.16 experimental line is in it too.
