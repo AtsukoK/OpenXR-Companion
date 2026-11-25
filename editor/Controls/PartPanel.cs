@@ -108,7 +108,7 @@ public class PartPanel : StackPanel
             if (!string.IsNullOrWhiteSpace(bd.Layers) && bd.Layers != shownLayer)
             {
                 shownLayer = bd.Layers;
-                body.Children.Add(new TextBlock { Text = "In layer " + bd.Layers, FontSize = 11, FontWeight = FontWeight.Bold, Foreground = Brush.Parse("#AAB2BF"), Margin = new Thickness(0, 6, 0, 0) });
+                body.Children.Add(new TextBlock { Text = "In " + bd.Layers + " mode", FontSize = 11, FontWeight = FontWeight.Bold, Foreground = Brush.Parse("#AAB2BF"), Margin = new Thickness(0, 6, 0, 0) });
             }
             body.Children.Add(BindingRow(bd));
         }

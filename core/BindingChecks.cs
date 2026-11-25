@@ -86,8 +86,8 @@ public static class BindingChecks
             // 5. "Only while layer" names a layer that nothing switches on: the binding can never work.
             foreach (var layer in (b.Layers ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 if (!LayerSwitchedOn(p, layer))
-                    issues.Add(new(b, "layer_never_on", "layers", "This layer is never switched on",
-                        $"It only works while layer '{layer}' is on, but no binding, wheel item or wrist button switches '{layer}' on."));
+                    issues.Add(new(b, "layer_never_on", "layers", "This mode is never switched on",
+                        $"It only works in {layer} mode, but no binding, wheel item or wrist button turns {layer} mode on."));
 
             // 6. A button the chosen controller doesn't have (still works on controllers that do).
             if (ctx?.Controller is { } lay)

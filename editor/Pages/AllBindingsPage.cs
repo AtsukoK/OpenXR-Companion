@@ -25,7 +25,7 @@ public class BindingRow : ListRow
     public string What => EditorApi.Plain(Binding.Action);
     public string Tip => Binding.Name + "  (click for all its settings)";
     // square tags for the layer rules: "SHIFT  LAYER ONLY", "OFF IN SHIFT"
-    public List<string> LayerOnly => Split(Binding.Layers).Select(l => l.ToUpperInvariant() + "  LAYER ONLY").ToList();
+    public List<string> LayerOnly => Split(Binding.Layers).Select(l => l.ToUpperInvariant() + "  MODE ONLY").ToList();
     public List<string> LayerOff => Split(Binding.NotLayers).Select(l => "OFF IN " + l.ToUpperInvariant()).ToList();
     public bool HasLayerTags => LayerOnly.Count + LayerOff.Count > 0;
     static IEnumerable<string> Split(string s) => (s ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -81,21 +81,21 @@ public static class AllBindings
             var off = shown.Where(b => Names(b.NotLayers).Any(l => Is(l, layer))).ToList();
             rows.Add(new HeadingRow
             {
-                Text = $"Layer '{layer}'",
-                Note = by.Count == 0 ? "⚠ Nothing switches this layer on, so the bindings below never work."
+                Text = $"{layer} mode",
+                Note = by.Count == 0 ? "⚠ Nothing turns this mode on, so the bindings below never work."
                                      : "Switched on by: " + string.Join(";  ", by),
             });
             if (only.Count == 0 && off.Count == 0)
-                rows.Add(new HeadingRow { Text = "", Note = "No bindings only work in this layer." });
+                rows.Add(new HeadingRow { Text = "", Note = "No bindings only work in this mode." });
             rows.AddRange(only.Select(b => new BindingRow { Binding = b, AttentionText = att(b) }));
             if (off.Count > 0)
             {
-                rows.Add(new HeadingRow { Text = "", Note = $"Switched off while '{layer}' is on:" });
+                rows.Add(new HeadingRow { Text = "", Note = $"Switched off in {layer} mode:" });
                 rows.AddRange(off.Select(b => new BindingRow { Binding = b, AttentionText = att(b) }));
             }
         }
         if (rows.Count == 0)
-            rows.Add(new HeadingRow { Text = "No layers yet.", Note = "A layer makes buttons do something else while it is on. Make one with What happens: Switch a layer, then use it in a binding's Details: Only while layer." });
+            rows.Add(new HeadingRow { Text = "No modes yet.", Note = "A mode makes buttons do something else while it is on (previously called layers). The Modes tab makes one." });
         return rows;
     }
 

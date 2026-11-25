@@ -176,6 +176,15 @@ public class ProfileModel
 
     [Browsable(false)][JsonPropertyName("bindings")] public List<BindingModel> Bindings { get; set; } = new();
     [Browsable(false)][JsonPropertyName("wheels")] public Dictionary<string, WheelModel> Wheels { get; set; } = new();
+    // Modes (called layers in the file's bindings): a colour for the in-game badge and whether it may be on together
+    // with other modes. Only written when there is something in it.
+    [Browsable(false)][JsonPropertyName("modes"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, ModeModel> Modes { get; set; }
+}
+
+public class ModeModel
+{
+    [JsonPropertyName("color"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string Color { get; set; }
+    [JsonPropertyName("together"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool Together { get; set; }
 }
 
 // Stick options, all off at 0 (see the layer's stick_shape.h).

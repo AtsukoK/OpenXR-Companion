@@ -26,6 +26,8 @@ public static class Shell
                            () => new ControllersPage()),
         ["wrists"] = ("Wrist panels", "Tip: click a panel to edit it. 'Copy to left / right' puts a whole panel from another profile on that arm.",
                       () => new WristsPage()),
+        ["modes"] = ("Modes", "Tip: a mode changes what some buttons do while it's on. Previously called layers.",
+                     () => new ModesPage()),
         ["wheels"] = ("Wheels", "Tip: click a wheel to open it. On its page, '+ Add sub-wheel' makes a submenu that is linked to it automatically.",
                       () => new WheelsPage()),
     };
@@ -38,6 +40,7 @@ public static class Shell
         ("bindings", "", "All bindings"),
         ("wheels", "", "Wheels"),
         ("wrists", "", "Wrist panels"),
+        ("modes", "", "Modes: buttons that do something else while a mode is on (previously called layers)"),
         ("tutorials", "", "Tutorials: the full tour, how-tos and a tour of each page"),
     };
 

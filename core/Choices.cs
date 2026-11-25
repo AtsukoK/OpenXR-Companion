@@ -98,7 +98,7 @@ public static class Choices
     {
         new(ActionType.Key, "Press a keyboard key or mouse button"), new(ActionType.Sequence, "Run a macro (several keys with waits)"),
         new(ActionType.Wheel, "Open a wheel"), new(ActionType.Keyboard, "Open the VR keyboard"),
-        new(ActionType.Layer, "Switch a layer (changes what other buttons do)"),
+        new(ActionType.Layer, "Turn a mode on / off (changes what other buttons do)"),
         new(ActionType.XrInput, "Press a controller button inside the game"),
         new(ActionType.Gamepad, "Press a button on a virtual Xbox 360 pad (needs ViGEmBus)"),
         new(ActionType.Back, "Wheel: go back one level"), new(ActionType.Close, "Wheel: close"),
@@ -130,7 +130,7 @@ public static class Choices
         new("", "Where Settings says"), new("wrist_left", "On my left wrist"), new("wrist_right", "On my right wrist"),
         new("front", "In front of me (stays where it appeared)"), new("head", "In front of me, following my view"),
     };
-    public static readonly Choice[] LayerModes = { new("hold", "On while held"), new("toggle", "Toggle on / off"), new("on", "Turn on"), new("off", "Turn off") };
+    public static readonly Choice[] LayerModes = { new("toggle", "Press: on / off  (turns the other modes off)"), new("on", "Turn it on"), new("off", "Turn it off"), new("hold", "Only while held  (on top of the others)") };
     public static readonly Choice[] Confirms =
     {
         new("auto", "Automatic (best fit for the opening button)"), new("stick_return", "Push the stick to an item, let it spring back"),

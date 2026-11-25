@@ -23,7 +23,7 @@ public static class ActionOptions
         (ActionType.ControllerOffsets, new("Set up", "Fix hand / gun aim", "Opens the controller offsets, for games whose hands point wrong.", null)),
         (ActionType.HeadsetMirror, new("Set up", "Headset view on the desktop", "A window on the monitor showing what the headset shows.", "streaming or showing someone.")),
         (ActionType.Reload, new("Set up", "Reload profile", "Loads the profile again after you saved changes.", null)),
-        (ActionType.Layer, new("Advanced", "Switch a layer", "Changes what other buttons do while the layer is on.", null)),
+        (ActionType.Layer, new("Modes", "Turn a mode on / off", "A mode changes what some buttons do while it's on (previously called layers).", "Combat mode: Y presses K.")),
         (ActionType.None, new("Advanced", "Nothing", "The button is shown but does nothing.", null)),
     };
 

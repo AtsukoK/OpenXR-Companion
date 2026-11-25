@@ -21,7 +21,7 @@
           <ComboBoxItem Tag="controller">Controller bindings</ComboBoxItem>
           <ComboBoxItem Tag="wheels">Wheel items</ComboBoxItem>
           <ComboBoxItem Tag="wrist">Wrist buttons</ComboBoxItem>
-          <ComboBoxItem Tag="layers">Layers</ComboBoxItem>
+          <ComboBoxItem Tag="layers">Modes</ComboBoxItem>
         </ComboBox>
         <Button x:Name="AddButton" Classes="go" Content="+ Add binding" Margin="0,0,0,6"
                 ToolTip.Tip="A blank binding, opened in the binding editor." />
@@ -56,7 +56,7 @@
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
                       <Border Background="#2B3F66" BorderBrush="#5D8BE0" BorderThickness="1" CornerRadius="2" Padding="6,1"
-                              ToolTip.Tip="Only works while this layer is on">
+                              ToolTip.Tip="Only works while this mode is on">
                         <TextBlock Text="{Binding}" FontSize="11" FontWeight="Bold" Foreground="#CFE0FF" />
                       </Border>
                     </DataTemplate>
@@ -67,7 +67,7 @@
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
                       <Border Background="#3A2B2B" BorderBrush="#B06A6A" BorderThickness="1" CornerRadius="2" Padding="6,1"
-                              ToolTip.Tip="Does nothing while this layer is on">
+                              ToolTip.Tip="Does nothing while this mode is on">
                         <TextBlock Text="{Binding}" FontSize="11" FontWeight="Bold" Foreground="#F0CFCF" />
                       </Border>
                     </DataTemplate>

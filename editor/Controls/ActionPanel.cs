@@ -92,8 +92,8 @@ public class ActionPanel : Form
         lWheel = AddRow("Wheel", wheel);
         lPage = AddRow("Page", page, "Its buttons replace these; a Back button is added automatically.");
         lConfirm = AddRow("Pick items by", confirm);
-        lLayer = AddRow("Layer name", layer, "Type a new name or pick one you already use.");
-        lLayerMode = AddRow("Layer", layerMode);
+        lLayer = AddRow("Mode", layer, "Type a new name or pick one you already use. The Modes tab shows them all.");
+        lLayerMode = AddRow("How", layerMode);
         lTarget = AddRow("Game button", target, "The game will think this controller button is pressed.");
         // ViGEmBus missing: say so, with where to get it (checked again each time the row shows, so installing it is seen)
         padWarn = new StackPanel

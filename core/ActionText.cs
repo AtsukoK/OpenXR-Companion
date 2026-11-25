@@ -25,7 +25,7 @@ public static class ActionText
                 "reset" => "Controller offsets: reset all",
                 _ => "Opens the controller offsets panel",
             },
-            "layer" => a.Mode switch { "on" => $"Turns layer '{a.Layer}' on", "off" => $"Turns layer '{a.Layer}' off", "toggle" => $"Switches layer '{a.Layer}' on/off", _ => $"Layer '{a.Layer}' while held" },
+            "layer" => a.Mode switch { "on" => $"Turns {a.Layer} mode on", "off" => $"Turns {a.Layer} mode off", "toggle" => $"Switches {a.Layer} mode on/off", _ => $"{a.Layer} mode while held" },
             "xr_input" => $"Presses game button {a.Target}{mode}",
             "gamepad" => $"Presses gamepad {Choices.PadName(a.Button)}{mode}",
             "back" => "Goes back",

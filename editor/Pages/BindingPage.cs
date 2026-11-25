@@ -99,8 +99,8 @@ public class BindingPage : UserControl
         lPressAt = form.AddRow("Press point (%)", pressAt, "For an Index full squeeze: how hard.", "How far the trigger or grip must go. 0 = usual, low = hair trigger, high = a long pull.");
         lReleaseAt = form.AddRow("Keeps going until (%)", releaseAt, "30 = until you mostly let go. 0 = it stops as soon as the stick leaves the direction.",
                                  "Double flick: keeps going while you steer, until the stick comes back below this much from the middle.");
-        lLayers = form.AddRow("Only while layer", layers, "Layers are switched on by other bindings (What happens: Switch a layer).", "Works only while this layer is on. Empty = always.");
-        form.AddRow("Not while layer", notLayers, null, "Does nothing while this layer is on. Empty = never off.");
+        lLayers = form.AddRow("Only in mode", layers, "Modes (previously called layers) are turned on by a wrist button, wheel item or controller button. The Modes tab shows them all.", "Works only while this mode is on. Empty = always.");
+        form.AddRow("Off in mode", notLayers, null, "Does nothing while this mode is on. Empty = never off.");
         details = Cards.Make("Details", form);
         details.IsVisible = detailsOpen;
         fold.Click += (s, e) => { detailsOpen = !detailsOpen; details.IsVisible = detailsOpen; ShowFold(); };

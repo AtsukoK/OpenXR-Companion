@@ -88,7 +88,7 @@ public static class TagLines
             ActionType.None => "Disabled in the game",
             ActionType.Wheel => $"Wheel '{a.Wheel}'",
             ActionType.Keyboard => "VR keyboard",
-            ActionType.Layer => $"Layer '{a.Layer}'" + mode,
+            ActionType.Layer => $"Mode '{a.Layer}'" + mode,
             ActionType.Sequence => "Macro",
             _ => ActionText.Plain(a),
         };
