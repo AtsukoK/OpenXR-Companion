@@ -79,7 +79,8 @@ public class BindingPage : UserControl
         form.AddRow("", enabled);
         form.AddRow("The game also gets the button", block, "Set for you when you pick How: a plain press is taken from the game; hold and double-tap let a quick tap through; a touch always reaches the game.");
         lPass = form.AddRow("", passthrough);
-        lTapOwn = form.AddRow("", tapOwn, "Let go before the hold time and this happens instead (a key, another button...). The hold still does the action above.");
+        lTapOwn = form.AddRow("", tapOwn, "Hold: let go before the hold time and this happens instead (a key, another button...); the hold still does the action above.\n" +
+                                         "Double-tap: off by default (a single tap does nothing). When on, a single tap does this, a moment late: it waits out 'Second tap within' to see if a second tap comes.");
         lTapAction = form.AddRow("Short press", tapAction);
         lHold = form.AddRow("Hold time (ms)", hold, "How long counts as a hold. 400 is the default.");
         lTap = form.AddRow("Tap shorter than (ms)", tap);
@@ -214,6 +215,7 @@ public class BindingPage : UserControl
         };
         sentence.Text = how + " " + InputText.Friendly(b.Input) + "   →   " + EditorApi.Plain(b.Action)
             + (b.Gesture == GestureKind.Hold && b.TapAction != null ? "     ·     short press   →   " + EditorApi.Plain(b.TapAction) : "")
+            + (b.Gesture == GestureKind.DoubleTap ? "     ·     single tap   →   " + (b.TapAction != null ? EditorApi.Plain(b.TapAction) : "nothing (off)") : "")
             + (b.Enabled ? "" : "   (off)");
         sentence.Foreground = b.Enabled ? Brushes.White : Brush.Parse("#7F8896");
     }
@@ -237,8 +239,11 @@ public class BindingPage : UserControl
         ShowSentence();
         Form.Show(lHold, b.Gesture == GestureKind.Hold);
         Form.Show(lPass, b.Gesture == GestureKind.Hold && b.TapAction == null);
-        Form.Show(lTapOwn, b.Gesture == GestureKind.Hold);
-        Form.Show(lTapAction, b.Gesture == GestureKind.Hold && b.TapAction != null);
+        bool dbl = b.Gesture == GestureKind.DoubleTap;
+        tapOwn.Content = dbl ? "A single tap does something too  (off by default; it comes a moment late)" : "A short press does something else:";
+        if (lTapAction is Grid g && g.Children.Count > 0 && g.Children[0] is TextBlock tl) tl.Text = dbl ? "Single tap" : "Short press";
+        Form.Show(lTapOwn, b.Gesture == GestureKind.Hold || dbl);
+        Form.Show(lTapAction, (b.Gesture == GestureKind.Hold || dbl) && b.TapAction != null);
         Form.Show(lTap, b.Gesture == GestureKind.Tap);
         Form.Show(lDbl, b.Gesture is GestureKind.DoubleTap or GestureKind.DoubleTapHold);
         Form.Show(lPressAt, IsAnalog(b.Input));

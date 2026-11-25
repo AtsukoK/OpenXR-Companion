@@ -361,6 +361,7 @@ MenuPage PartPage(Engine& e, InGameMenu& m, int hand, int comp) {
             const Binding& b = e.prof->bindings[i];
             std::string what = ActionWords(b.action);
             if (b.gesture == Gesture::Hold && b.hasTapAction) what += "  ·  short: " + ActionWords(b.tapAction);
+            if (b.gesture == Gesture::DoubleTap && b.hasTapAction) what += "  ·  single: " + ActionWords(b.tapAction);
             p.rows.push_back(MenuRow::Link(kGestureWords[GestureIndex(b.gesture)] + ":  " + what, HowWords(b),
                                            [&e, &m, i] { m.Push([&e, &m, i] { return BindingDetail(e, m, i); }); }));
             p.rows.push_back(OnOffRow(e, m, i));
@@ -754,6 +755,12 @@ MenuPage BindingDetail(Engine& e, InGameMenu& m, int index) {
     if (b.action.type == ActType::Wheel) {
         std::string n = b.action.wheel;
         p.rows.push_back(MenuRow::Link("Edit that wheel", "", [&e, &m, n] { m.Push([&e, &m, n] { return WheelPage(e, m, n); }); }));
+    }
+    if (b.gesture == Gesture::DoubleTap) {
+        p.rows.push_back(MenuRow::Heading("Single tap (no second tap in time)"));
+        p.rows.push_back(MenuRow::Link("Single tap does: " + (b.hasTapAction ? ActionWords(b.tapAction) : std::string("nothing (off)")),
+                                       "Off by default. When set, it comes a moment late: it waits to see if a second tap comes",
+                                       [&e, &m, index] { m.Push([&e, &m, index] { return WhatHappens(e, m, index, true); }); }));
     }
     if (b.gesture == Gesture::Hold) {
         p.rows.push_back(MenuRow::Heading("Short press (let go before the hold time)"));

@@ -301,6 +301,7 @@ private:
         bool fired = false;
         bool needEnd = false;
         double lastTap = -1;
+        bool singlePending = false; // double-tap: a short first tap waits out the window for its single-tap action
         bool analogDown = false, analogPrev = false; // its own press point (Binding::pressAt)
     };
     struct Pulse {

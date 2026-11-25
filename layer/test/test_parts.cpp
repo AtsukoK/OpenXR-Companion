@@ -737,6 +737,47 @@ void TestDoubleFlickRelease() { // a double flick with release_at: steer freely 
     CHECK(!on(1), "double flick (old way): leaving the direction zone stops it");
 }
 
+void TestDoubleTapSingle() { // double-tap with a single-tap action: a lone tap runs it after the window; a double tap or a long press never does
+    std::string err;
+    auto p = ParseProfileText(R"({ "bindings": [
+      { "name": "wait", "input": "left.thumbstick", "gesture": "double_tap", "double_tap_ms": 350, "block": "trigger",
+        "action": { "type": "layer", "layer": "dbl", "mode": "toggle" },
+        "tap_action": { "type": "layer", "layer": "single", "mode": "toggle" } },
+      { "name": "plain", "input": "right.thumbstick", "gesture": "double_tap", "double_tap_ms": 350,
+        "action": { "type": "layer", "layer": "dbl2", "mode": "toggle" } } ] })", err);
+    CHECK(p && err.empty(), ("single tap: profile parses: " + err).c_str());
+    if (!p) return;
+    Engine e;
+    e.SetProfile(p);
+    Frame f;
+    f.headValid = true;
+    for (auto& h : f.h) { h.gripValid = h.aimValid = true; h.aimPose = h.gripPose = { { 0, 0, 0, 1 }, { 0, 1.f, -0.3f } }; }
+    double t = 1.0;
+    auto step = [&] { t += 0.02; f.t = t; e.Update(f); };
+    auto wait = [&](double s) { for (double end = t + s; t < end;) step(); };
+    auto layer = [&](const char* n) { Action a; a.type = ActType::Layer; a.layer = n; return e.IsOn(a); };
+    auto click = [&](int h) { f.h[h].sc = true; step(); step(); f.h[h].sc = false; step(); };
+    step();
+    click(0);
+    CHECK(!layer("single"), "single tap: not yet, inside the double-tap window");
+    wait(0.4);
+    CHECK(layer("single") && !layer("dbl"), "single tap: a lone tap runs the single-tap action after the window");
+    wait(0.5);
+    click(0);
+    wait(0.05);
+    click(0);
+    wait(0.5);
+    CHECK(layer("dbl") && layer("single"), "single tap: a double tap runs the double action only (single stays as it was)");
+    f.h[0].sc = true;
+    wait(0.6); // a long press
+    f.h[0].sc = false;
+    wait(0.5);
+    CHECK(layer("single"), "single tap: a long press doesn't run it");
+    click(1);
+    wait(0.5);
+    CHECK(!layer("dbl2"), "single tap: none set = a lone tap does nothing (off by default)");
+}
+
 void TestReloadRedraws() { // after a profile reload the wrist panels and keyboard get new version numbers (so they are drawn again)
     std::string err;
     auto p = ParseProfileText(DefaultProfileJson(), err);

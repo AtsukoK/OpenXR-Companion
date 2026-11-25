@@ -510,10 +510,28 @@ void Engine::ProcessBindings() {
                 if (RunAction(t, trig.hand, -1, false)) EndAction(t, -1);
             } else if (b.gesture == Gesture::Hold && !s.fired && b.tapPassthrough)
                 pulses.push_back({ trig.hand, trig.comp, MakeOv(trig), now + 0.08 });
+            // Double-tap with a single-tap action: a short first tap waits for the window to pass (below).
+            if (b.gesture == Gesture::DoubleTap && b.hasTapAction)
+                s.singlePending = !s.fired && s.lastTap >= 0 && dur * 1000 <= b.doubleTapMs;
             EndB(i);
             continue;
         }
         if (b.gesture == Gesture::Hold && !s.fired && dur * 1000 >= b.holdMs) Fire(i);
+    }
+    // Double-tap bindings with a single-tap action: no second tap within the window = a single tap. It comes the
+    // window's length late (it can't be known sooner); a long press or a double tap never runs it.
+    for (int i = 0; i < (int)B.size(); i++) {
+        BState& s = bs[i];
+        if (!s.singlePending) continue;
+        const Binding& b = B[i];
+        if (s.lastTap < 0 || !b.hasTapAction || b.gesture != Gesture::DoubleTap) { s.singlePending = false; continue; }
+        if (s.armed || (now - s.lastTap) * 1000 <= b.doubleTapMs) continue;
+        s.singlePending = false;
+        s.lastTap = -1;
+        Action t = b.tapAction;
+        if (t.mode == ActMode::Hold) t.mode = ActMode::Tap;
+        Log("single tap '%s' (%s)", b.name.c_str(), b.chordText.c_str());
+        if (RunAction(t, b.chord.back().hand, -1, false)) EndAction(t, -1);
     }
     // A double tap on a .touch input only counts touches that never become a real press:
     // pressing the button (e.g. B twice fast to loot) cancels it, so it can't open a wheel.
@@ -562,6 +580,7 @@ void Engine::ProcessBindings() {
         else if (b.gesture == Gesture::DoubleTap || b.gesture == Gesture::DoubleTapHold) {
             if (s.lastTap >= 0 && (now - s.lastTap) * 1000 <= b.doubleTapMs) {
                 s.lastTap = -1;
+                s.singlePending = false;
                 Fire(i);
             } else
                 s.lastTap = now;

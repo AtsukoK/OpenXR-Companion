@@ -15,6 +15,7 @@ void TestSetupPositions();
 void TestSteamFrame();
 void TestPressPoints();
 void TestDoubleFlickRelease();
+void TestDoubleTapSingle();
 void TestReloadRedraws();
 void TestInGameMenu();
 void TestMenuSave();
@@ -2695,6 +2696,7 @@ int main(int argc, char** argv) {
     TestSteamFrame();
     TestPressPoints();
     TestDoubleFlickRelease();
+    TestDoubleTapSingle();
     TestReloadRedraws();
     TestInGameMenu();
     TestMenuSave();
