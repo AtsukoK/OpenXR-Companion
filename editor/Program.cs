@@ -4,7 +4,10 @@ namespace OverviewPrototype;
 
 static class Program
 {
-    public static bool TestRun; // started with a --test option: don't move/resize the window to the screen
+    public static bool TestRun;
+    // README / docs screenshots only (env VRO_DOCS_SHOT=1, never set in normal use): a plain status bar, the layer
+    // shown as installed, the setup card on.
+    public static readonly bool DocsShot = Environment.GetEnvironmentVariable("VRO_DOCS_SHOT") == "1"; // started with a --test option: don't move/resize the window to the screen
     [STAThread]
     public static int Main(string[] args)
     {

@@ -19,6 +19,7 @@ public class SetupCard : Border
     {
         get
         {
+            if (Program.DocsShot) return true;
             try { return File.Exists(FilePath) && File.ReadAllText(FilePath).Replace(" ", "").Contains("\"pending\":true"); }
             catch { return false; }
         }

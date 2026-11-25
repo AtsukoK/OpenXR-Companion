@@ -22,6 +22,7 @@ public static class LayerTools
     // ("Layer: installed (+ 32-bit)", all fine)
     public static (string text, bool ok) Status()
     {
+        if (Program.DocsShot) return ("Layer: installed (+ 32-bit)", true);
         int s64 = LayerState(RegistryView.Registry64, Path.Combine(ScriptDir, LayerJson));
         string text = s64 == 1 ? "Layer: installed" : s64 == 2 ? "Layer: installed from another folder" : "Layer: NOT installed";
         bool ok = s64 == 1;

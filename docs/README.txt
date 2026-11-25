@@ -2,102 +2,92 @@ OpenXR Companion - by Atsuko
 
 Hand tools for any OpenXR game: radial menus (wheels), wrist panels, button combos, a VR keyboard,
 your desktop mirrored into VR, a headset mirror window for recording, controller offsets for the
-game's hands and guns, and steadying for shaky hands. (Formerly OpenXR Hand Menus.)
+game's hands and guns, stick shaping for jump-on-stick games, and steadying for shaky hands.
 Works with Virtual Desktop (VDXR), SteamVR OpenXR, Meta Link and other OpenXR runtimes.
+Full guide with pictures: https://github.com/AtsukoK/OpenXR-Companion
 
 
 INSTALL
-1. Unzip this folder somewhere it can stay (for example C:\Games\OpenXRCompanion).
-   The game loads the overlay from this folder, so don't move or delete it after installing.
-   If you do move it, click Install layer again.
+1. Unzip this folder somewhere it can stay (for example C:\Games\OpenXRCompanion), not in
+   Program Files. The game loads the overlay from this folder, so don't move or delete it after
+   installing. If you do move it, click Install layer again.
 2. Run OpenXRCompanionEditor.exe.
    The first time, it asks which controllers you use (this picks the buttons that open
-   the wheels), then offers a short tour. The tour is worth doing: it takes about two minutes.
+   the wheels), then offers a short tour.
    Windows may warn that the program is unrecognised (it isn't code-signed yet):
    click "More info", then "Run anyway".
 3. Click "Install layer" at the top. Windows asks for admin rights, which it needs to
    register the overlay with OpenXR.
-4. Start an OpenXR game. A message at the bottom of your view saying
-   "OpenXR Companion: default.json loaded" means it's running.
+
+
+YOUR FIRST GAME: SET UP YOUR MENU POSITIONS
+At the top of the editor's Overview is the card "Set up your menu positions at the start of
+the next game?". For a new install it is already on. Start your VR game: a few seconds in, a
+card above your view walks you through placing each thing where you like it:
+  left wrist panel, right wrist panel, the wheel, the screen mirror, the VR keyboard, fingertips.
+- Grab each one with a grip, move it, let go. Thumbstick up / down while holding it: size.
+- A (or X) = next, B (or Y) = skip. A, B, X and Y don't reach the game meanwhile.
+- At the end everything is saved and the setup switches itself off.
+Your positions are saved to your own copy of the profile (user_defaults.json). Redo it any time:
+switch the Overview card on again, or press "Calibrate Menu Positions" on a wrist panel.
 
 
 DEFAULT CONTROLS
+- Wrist panels (both arms): turn your forearm toward your face and look at it. Touch a button
+  with your other hand's fingertip, or point at it and pull the trigger.
+    First page: Quick save / F5, Pause / ESC, Screen Mirror, Open VR Keyboard, -> Configuration Page
+    Configuration Page: Quick load / F9, Reload profile, Calibrate Menu Positions,
+      Controller offsets Configuration, VR mirror to Desktop, OpenXR Companion Ingame Editor
 - Open a hand's wheel (depends on the controllers you picked):
-    Quest / Rift / Pico: double-tap that hand's thumbrest
+    Quest / Rift / Pico: double-tap that hand's thumb rest
     Index / Pimax / Bigscreen: double-click that hand's thumbstick
     WMR / HP Reverb / Vive: hold that hand's menu button
-  The wheel appears in front of you. Pick an item by pushing the stick toward it and letting
-  it spring back, or by pointing at it and pulling the trigger (WMR/Vive: let go of menu).
-  The "Controllers" button at the top of the editor changes the opening buttons later.
-- Wrist panels: turn your wrist toward your face and look at it. Poke a button with your
-  other hand's controller (a ring shows where it will touch), or point at it and pull
-  the trigger.
-- The VR keyboard is on the wheels and the left wrist panel.
-- The left wrist panel: Quick save, Pause, Monitor (screen on your wrist), Keyboard, More.
-  More has Quick load, Reload profile, Calibrate Positions, Controller offsets
-  and Headset mirror.
-- Move things to where you like them: left wrist panel > More > Calibrate Positions
-  (or right wheel > More... > Adjust positions). Grab the
-  wheel or a wrist panel with your other hand's grip and move it; while holding, the stick
-  resizes it (up/down) or turns a wrist panel (left/right). Adjust positions again saves.
+  Point at an item and pull the trigger, or push the stick toward it.
+- "OpenXR Companion Ingame Editor" opens the editor inside the headset. While it is open the
+  game gets no controller input.
 
 Change anything in the editor and save (Ctrl+S). A running game picks it up within a second.
-default.json is the standard profile and updates with each release. When you save changes to it,
-they go to user_defaults.json (your own defaults). If you already have one, it is never replaced:
-the changes become a new profile (user_defaults 2.json).
-THE PROFILE YOU SELECT IN THE EDITOR IS THE ONE YOUR GAMES USE. Select default.json to use the standard.
+default.json is the standard profile and updates with each release. Changes to it are saved to
+user_defaults.json (your own defaults), which is never overwritten.
+THE PROFILE YOU SELECT IN THE EDITOR IS THE ONE YOUR GAMES USE.
+
 
 UPDATING
-When a new version is out, an orange "Update available" button appears at the top right of the
-editor. Click it and choose Yes. It downloads and checks the release, keeps your current version in
-the _previous_version folder and restarts. Your profiles are not touched. Close VR games first.
+When a new version is out, a blue "Update available" button appears on the editor's toolbar.
+Click it and choose "Update now". It downloads and checks the release, keeps your current files
+in the _previous_version folder and restarts. Your profiles are not touched. Close VR games first.
+Coming from v0.2.15 or older: the old updater may say "The update didn't finish". It did:
+just start the editor again.
 
 
 32-BIT GAMES (Fallout: New Vegas / Fallout 3 / TTW with TTWVR)
-32-bit games only load 32-bit layers, which Windows keeps in a separate list. The x86
-folder has the 32-bit layer, and "Install layer" in the editor installs it too, together
-with the 64-bit one. The toolbar then shows "Layer: installed (+ 32-bit)".
-1. Install as above.
-2. Without the editor: run x86\install.ps1 as admin (right-click > Run with PowerShell, or from an admin
-   PowerShell: powershell -ExecutionPolicy Bypass -File x86\install.ps1).
-3. Start the game. The same profiles are used (per-game: profiles\FalloutNV.json).
-"Uninstall layer" removes both (or run x86\uninstall.ps1 as admin).
+The x86 folder has the 32-bit layer, and "Install layer" installs it together with the 64-bit
+one (the toolbar then shows "Layer: installed (+ 32-bit)"). Without the editor: run
+x86\install.ps1 as admin. "Uninstall layer" removes both.
 
-SCREEN MIRROR (a monitor or window in VR)
-Turn it on from the left wrist panel: Monitor. Point at the screen and a button bar
-appears under it:
-  Choose...   pick any monitor or open window (your pick is remembered)
-  Frame rate  steps through the frame rates from Settings
-  Move...     left wrist / right wrist / in front of you / following your view, or Cancel
-  Keyboard    VR keyboard; typing goes into the mirrored window
-  Adjust      grab the screen (or wheel, wrist panels) with a grip and place it anywhere;
-              press "Done adjusting" to save
-  Hide        turns it off
-Pointing at the screen moves the mouse: trigger = left click, A/X = right click,
-stick = scroll. Recommended: frame rate 15-30, button bar size 0.7, and on your Screen
-buttons leave Monitor on "Keep the current one" and the window name empty.
 
-HEADSET MIRROR (what the headset shows, in a desktop window)
-Turn it on with the first button on the editor's toolbar or the left wrist panel (More >
-Headset mirror). It shows the wheel, panels, lasers and messages too, so it's good for OBS.
-Settings > Headset mirror: eye, zoom, steady the picture, frame rate cap, and
-"Always on top of other windows". The mirror never takes focus from the game, even when you
-click or move it. Use borderless or windowed mode in the game.
+STICK OPTIONS (jump on a stick without turning)
+Editor > Controllers > click a stick. Direction zone (degrees): a push near straight up counts as
+exactly up for the game. "Ignore pushes outside the zones": diagonals give the game nothing.
+Everything is off by default. Try 25-30 degrees with "Ignore outside" ticked.
 
-CONTROLLER OFFSETS (when the game's hands or guns point wrong)
-Left wrist panel > More > Controller offsets: + / - for pitch, yaw, roll and position, or
-"Grab to set" (hold grip, turn the controller until it feels right, let go). Saved per game.
-The same values are in the editor under Settings > Controller offsets.
 
-STEADYING FOR SHAKY HANDS (all off by default, 0.5 is a good start)
-Settings > Pointing > Steady the laser; Settings > Screen mirror > Steady the screen;
-Settings > Controller offsets > Steady the game's hands.
+SCREEN MIRROR, HEADSET MIRROR, CONTROLLER OFFSETS, STEADYING
+- Screen Mirror (wrist panel): your monitor or a window in VR. Point at it for its button bar
+  (Choose, Frame rate, Move, Keyboard, Adjust, Hide). Trigger = left click, A/X = right click,
+  stick = scroll.
+- VR mirror to Desktop (wrist panel) or the first toolbar button: a desktop window with what
+  the headset shows, menus included. Good for OBS. Settings > Headset mirror.
+- Controller offsets Configuration (wrist panel): fix how the game's hands point. Saved per game.
+- Steadying for shaky hands (all off by default, 0.5 is a good start): Settings > Pointing >
+  Steady the laser; Settings > Screen mirror > Steady the screen; Settings > Controller offsets >
+  Steady the game's hands.
 
 EXPERIMENTAL (hidden, off by default) - WARNING: CAN CAUSE MOTION SICKNESS
-Settings > Advanced > Show experimental features adds a "! Experimental" page with
-head smoothing (steadies the game's camera, for using the headset as a camera).
-Start with "For recording" and a low strength. It switches itself off whenever a game starts.
-Take the headset off at the first sign of feeling unwell.
+Settings > Advanced > Show experimental features adds the Experimental page with head smoothing.
+Start with "For recording" and a low strength. Take the headset off at the first sign of feeling
+unwell.
+
 
 UNINSTALL
 Open the editor and click "Uninstall layer", or run uninstall.ps1 as admin. Then delete the folder.
@@ -105,11 +95,10 @@ Your settings are in %LOCALAPPDATA%\OpenXRCompanion\ if you want to remove those
 
 
 REPORTING PROBLEMS
-Please send:
+https://github.com/AtsukoK/OpenXR-Companion/issues - please send:
 - what you did and what happened
 - your headset and runtime (Virtual Desktop, SteamVR, Link...) and the game
 - the log: %LOCALAPPDATA%\OpenXRCompanion\logs\<game>.log  (the editor's "Logs" button opens the folder)
-- your profile: %LOCALAPPDATA%\OpenXRCompanion\profiles\default.json
 
-If a game misbehaves, you can turn the overlay off for just that game: in the editor, make a
-profile for it and untick "Overlay is on" in Settings. Or uninstall the layer.
+To turn the overlay off for one game: make a profile for it in the editor and switch off its
+Master switch on the Overview. Or uninstall the layer.

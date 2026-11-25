@@ -1,6 +1,29 @@
 # Changelog
 
-## Unreleased (experimental)
+## v0.3.0 (2026-11-25)
+
+The new editor. Everything from the 0.2.14 - 0.2.16 experimental line is in it too.
+
+### New
+- **A new editor**, rebuilt from scratch: sharp at any Windows scaling, a Size slider (Ctrl + / Ctrl -), opens maximized the first time and remembers its size. The old README is kept in `docs/README-v0.2.13-winforms.md`.
+- **Guided setup of your menu positions**: a card on the Overview ("Set up your menu positions at the start of the next game?"), on for a new install. At the start of the next game, a card in the headset walks through placing the wrist panels, wheel, screen mirror, VR keyboard and fingertips (A = next, B = skip), saves to your own profile and switches itself off.
+- **Getting started guide** on the Overview: plays by itself, walks through every button of the default panels with animations.
+- **Tutorials page** in the left bar; **How you press** (laser, touch or both) at the top of the Wheels and Wrist panels pages, for everything at once or each separately.
+- **Stick options**: *Ignore pushes outside the zones* (with a direction zone, diagonals give the game nothing, so a jump on right-stick up never turns) and *Game: ignore small pushes below (%)*. Also in the headset (stick > Directions). All off by default.
+- **In the editor**: Settings > Headset mirror page, the headset mirror switch on the toolbar, a colour picker, drag ≡ to reorder lists, Duplicate / Delete for bindings and wheels, All on / All off per controller, Open folder and Logs buttons, + Add page from... for wrist panels.
+- **One-click updater** in the new editor.
+
+### Changed
+- **New default profile**: the same wrist panel on both arms, with every configuration menu (Calibrate Menu Positions, Controller offsets, VR mirror to Desktop, the in-headset editor) and hand-placed positions. Only the standard default.json changes; your own profiles keep theirs.
+- **A key on a controller button acts like the real key**: held while you hold the button (at least the tap time). On wheels and wrist panels a key is still one quick press. In the editor: *Press* and *Toggle*.
+- **The in-headset menu keeps all controller input from the game** while it is open.
+- **Controller presets** (and the first-start controller question) also work on profiles whose wheels aren't named "right" / "left".
+- "Open the download page" opens the exact release on offer.
+
+### Updating from v0.2.15 or older
+The old editor's updater may say "The update didn't finish" after installing this version. It did finish: start the editor again and the new one opens.
+
+## Unreleased (experimental, before v0.3.0)
 
 ### Changed
 - **Default left wrist panel**: the Screen options page (and its button on More) is gone, it was cluttered. Monitor on the first page still shows / hides the screen, and the screen's own button bar switches monitors, windows and frame rates. Only the standard default.json changes; your own profiles keep their pages.

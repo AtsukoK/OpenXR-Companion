@@ -139,7 +139,7 @@ public partial class MainWindow : Window
             st.Foreground = error ? Brush.Parse("#FF7D73") : Brush.Parse("#C8CDD6");
         };
 
-        Shell.SetStatus(canSave
+        Shell.SetStatus(Program.DocsShot ? "" : canSave
             ? (dataDir == ProfileStore.RealDataDir ? "Your profiles (" + dataDir + ")." : "Data folder: " + dataDir + " (a copy).")
             : "Preview: your profiles are shown but nothing is saved.");
         SetupLayerAndUpdates();
