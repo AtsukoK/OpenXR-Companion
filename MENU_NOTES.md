@@ -1,3 +1,21 @@
+# RESUME HERE (2026-11-25 evening) -- branch hold-tap-action (this worktree), built into G:/Claude/OpenXR Companion Testing
+
+Two LOCAL commits on top of release-0.3.0, not pushed, untested in the headset. Test list:
+"G:/Claude/OpenXR Companion Testing/TESTING NOTES 2026-11-26.md".
+- 8707b01 Hold bindings: `tap_action` (short press does its own action, one quick tap; replaces tap_passthrough
+  when set). Layer: config.h/.cpp, engine.cpp ProcessBindings. Editor: core/Model.cs TapAction, BindingPage Details.
+- e849de1 In-game menu like the desktop editor: PartPage lists every binding per way (feat) with on/off switches,
+  + Add / Swap with / Reset to default; ControllerBindings All on/off; BindingDetail has name, combo, 3-way block,
+  tap/double-tap ms, layers, short press, duplicate; WhatHappens(index, tap) has every action type (macro, layer,
+  reload, adjust, mirror, offsets). "Save now" (InGameMenu::SaveNow, toast "Saved to X"). MenuBindingJson now writes
+  tap_ms, double_tap_ms, layers, not_layers, tap_action. Bigger panel: MenuPage.shownRows / MenuView.visibleRows,
+  list pages 12 rows, 0.72 m wide, 0.75 m away (menu.h kMenuList*); overview and home tiles keep 8 scaled rows.
+- Editor save bug fixed: ProfileStore.WatchDisk (1 s timer in MainWindow) reloads headset saves when nothing is
+  unsaved, warns otherwise, and follows a default.json -> user_defaults.json fork.
+- Gotcha: after changing menu.h structs, a plain incremental build crashed vro_test (stale objects); rebuild
+  with build_all.ps1 run from PowerShell (not `cmd //c build.bat`, which silently did nothing).
+- Next: user tests; then decide where it goes (experimental release / main) -- ask first, never push unasked.
+
 # RESUME HERE (2026-11-24) -- releases 0.2.15 / 0.2.16-experimental, core split, Avalonia port
 
 **Releases (pushed, prerelease on branch experimental):**
