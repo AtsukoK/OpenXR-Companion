@@ -40,6 +40,8 @@ public class BindingPage : UserControl
     readonly Control lHold, lTap, lDbl, lPass, lTapOwn, lTapAction, lPressAt, lReleaseAt, lBlock;
     readonly Button fold = new() { Classes = { "link" }, FontWeight = FontWeight.Bold };
     readonly Border details;
+    // other bindings on the same button that undo what this one says (e.g. a Hold letting short presses through)
+    readonly StackPanel warnings = new() { Spacing = 6, Margin = new Thickness(0, 0, 0, 10) };
 
     static NumericUpDown Ms() => new() { Minimum = 50, Maximum = 5000, Increment = 50, Width = 130, FormatString = "0" };
 
@@ -109,7 +111,7 @@ public class BindingPage : UserControl
             Content = new StackPanel
             {
                 Margin = new Thickness(16, 12), MaxWidth = 1500,
-                Children = { sentence, ActionBar(), cards, fold, details },
+                Children = { sentence, warnings, ActionBar(), cards, fold, details },
             },
         };
 
@@ -139,7 +141,7 @@ public class BindingPage : UserControl
         Sync();
 
         name.TextChanged += (s, e) => { if (Same(b.Name, name.Text)) return; b.Name = name.Text; Fire(); };
-        enabled.IsCheckedChanged += (s, e) => { if (b.Enabled == (enabled.IsChecked == true)) return; b.Enabled = enabled.IsChecked == true; Fire(); };
+        enabled.IsCheckedChanged += (s, e) => { if (b.Enabled == (enabled.IsChecked == true)) return; b.Enabled = enabled.IsChecked == true; ShowWarnings(); Fire(); };
         chord.Changed += () => { if (b.Input == chord.Value) return; b.Input = chord.Value; Sync(); Fire(); };
         gesture.SelectionChanged += (s, e) => { if (loading || gesture.Code == null || b.Gesture == gesture.Code) return; b.Gesture = gesture.Code; DefaultsForHow(); Sync(); Fire(); };
         hold.ValueChanged += (s, e) => { if (loading || hold.Value == null || b.HoldMs == (int)hold.Value) return; b.HoldMs = (int)hold.Value; Fire(); };
@@ -150,7 +152,7 @@ public class BindingPage : UserControl
         layers.TextChanged += (s, e) => { if (Same(b.Layers, layers.Text)) return; b.Layers = (layers.Text ?? "").Trim(); Fire(); };
         notLayers.TextChanged += (s, e) => { if (Same(b.NotLayers, notLayers.Text)) return; b.NotLayers = (notLayers.Text ?? "").Trim(); Fire(); };
         block.SelectionChanged += (s, e) => { if (loading || block.Code == null || b.Block == block.Code) return; b.Block = block.Code; Sync(); Fire(); };
-        passthrough.IsCheckedChanged += (s, e) => { if (loading || b.TapPassthrough == (passthrough.IsChecked == true)) return; b.TapPassthrough = passthrough.IsChecked == true; Fire(); };
+        passthrough.IsCheckedChanged += (s, e) => { if (loading || b.TapPassthrough == (passthrough.IsChecked == true)) return; b.TapPassthrough = passthrough.IsChecked == true; ShowWarnings(); Fire(); };
         action.Changed += Fire;
         tapOwn.IsCheckedChanged += (s, e) =>
         {
@@ -169,6 +171,57 @@ public class BindingPage : UserControl
             Fire();
         };
         tapAction.Changed += Fire;
+    }
+
+    // Plain single-button bindings on the same button as this one (combos only count while their other buttons are held).
+    IEnumerable<BindingModel> SameButton()
+    {
+        var parts = (b.Input ?? "").Split('+', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) return Array.Empty<BindingModel>();
+        var mine = InputText.Split(parts[^1]);
+        return Shell.Store.Profile.Bindings.Where(o => !ReferenceEquals(o, b) && !(o.Input ?? "").Contains('+')
+                                                       && !string.IsNullOrWhiteSpace(o.Input) && InputText.Split(o.Input) == mine);
+    }
+
+    // Bindings on the same button that disagree about the game getting it, with a one-click fix each.
+    void ShowWarnings()
+    {
+        warnings.Children.Clear();
+        if (!b.Enabled) return;
+        string btn = InputText.Friendly((b.Input ?? "").Split('+').Last());
+        bool keeps = (b.Block ?? "none") != "none";
+        bool leaks = b.Gesture == GestureKind.Hold && b.TapPassthrough && b.TapAction == null;
+        foreach (var o in SameButton().Where(o => o.Enabled))
+        {
+            bool oLeaks = o.Gesture == GestureKind.Hold && o.TapPassthrough && o.TapAction == null;
+            bool oKeeps = (o.Block ?? "none") != "none";
+            if (keeps && oLeaks)
+                AddWarning($"'{o.Name}' (Hold) on {btn} sends short presses to the game, so single presses still reach it even though this binding keeps the button from the game.",
+                           "Stop that binding's short presses", () => o.TapPassthrough = false);
+            else if (leaks && oKeeps)
+                AddWarning($"This binding sends short presses of {btn} to the game, but '{o.Name}' keeps the button from the game. Short presses will still reach it.",
+                           "Stop this binding's short presses", () => { b.TapPassthrough = false; loading = true; passthrough.IsChecked = false; loading = false; });
+        }
+    }
+
+    void AddWarning(string text, string fix, Action apply)
+    {
+        var button = new Button { Content = fix, Classes = { "pill" } };
+        button.Click += (s, e) => { apply(); Shell.Store.MarkDirty(); Sync(); Shell.SetStatus("Fixed: " + fix.ToLowerInvariant() + "."); };
+        warnings.Children.Add(new Border
+        {
+            Background = Brush.Parse("#3A3220"), BorderBrush = Brush.Parse("#F2C94C"), BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6), Padding = new Thickness(12, 8), MaxWidth = 1100, HorizontalAlignment = HorizontalAlignment.Left,
+            Child = new StackPanel
+            {
+                Orientation = Orientation.Horizontal, Spacing = 12,
+                Children =
+                {
+                    new TextBlock { Text = "⚠  " + text, TextWrapping = TextWrapping.Wrap, MaxWidth = 820, VerticalAlignment = VerticalAlignment.Center, Foreground = Brush.Parse("#F7E3A1") },
+                    button,
+                },
+            },
+        });
     }
 
     // A double-tap's single tap with nothing of its own: the game gets it, unless the button is kept from the game.
@@ -211,7 +264,11 @@ public class BindingPage : UserControl
         if (touch || b.Gesture is GestureKind.DoubleTap or GestureKind.DoubleTapHold or GestureKind.Tap)
             b.Block = "none";
         else if (b.Gesture == GestureKind.Hold)
-        { b.Block = "trigger"; b.TapPassthrough = true; }
+        {
+            b.Block = "trigger";
+            // short presses go to the game, unless another binding on this button keeps it from the game
+            b.TapPassthrough = !SameButton().Any(o => o.Enabled && (o.Block ?? "none") != "none");
+        }
         else
             b.Block = "trigger";
         bool was = loading;
@@ -224,8 +281,8 @@ public class BindingPage : UserControl
     static string HowHint(string g) => g switch
     {
         GestureKind.Press => "Starts the moment you press it.",
-        GestureKind.Hold => "Hold it a moment (Details: how long). A quick tap can still reach the game.",
-        GestureKind.DoubleTap => "Two quick presses. A single press still reaches the game.",
+        GestureKind.Hold => "Hold it a moment (Details: how long, and whether a quick tap still reaches the game).",
+        GestureKind.DoubleTap => "Two quick presses. Details: whether a single press still reaches the game, or does something of its own.",
         GestureKind.DoubleTapHold => "Press twice and keep it down the second time; it lasts until you let go. On a stick direction: a double flick (sprint).",
         GestureKind.Tap => "Only a short press counts, so a Hold on the same button can do something else.",
         GestureKind.WhileHeld => "On while you hold it, off when you let go.",
@@ -272,6 +329,7 @@ public class BindingPage : UserControl
                           : "Its own action when you let go before the hold time (instead of the tap above). Off: nothing of its own.");
         Form.SetLabel(lTapAction, dbl ? "Single tap does" : "Short press does");
         blockSays.Text = BlockSays();
+        ShowWarnings();
         Form.Show(lTapOwn, b.Gesture == GestureKind.Hold || dbl);
         Form.Show(lTapAction, (b.Gesture == GestureKind.Hold || dbl) && b.TapAction != null);
         Form.Show(lTap, b.Gesture == GestureKind.Tap);
