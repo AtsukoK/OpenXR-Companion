@@ -84,6 +84,7 @@ public static class TagLines
         {
             ActionType.Key => "Key: " + (a.Keys ?? "?") + mode,
             ActionType.XrInput => "Controller: " + InputText.Friendly(a.Target) + mode,
+            ActionType.Gamepad => "Pad: " + Choices.PadName(a.Button) + mode,
             ActionType.None => "Disabled in the game",
             ActionType.Wheel => $"Wheel '{a.Wheel}'",
             ActionType.Keyboard => "VR keyboard",

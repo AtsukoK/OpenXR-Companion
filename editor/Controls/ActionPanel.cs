@@ -39,13 +39,15 @@ public class ActionPanel : Form
     readonly AutoCompleteBox layer = new() { Width = 400, FilterMode = AutoCompleteFilterMode.StartsWith };
     readonly ChoiceCombo layerMode = new(Choices.LayerModes);
     readonly ChordPicker target = new();
+    readonly ChoiceCombo pad = new(Choices.PadButtons, 260);
+    readonly Button padPick = new() { Content = "🎮 Pick…" };
     readonly ChoiceCombo screenMode = new(Choices.ScreenModes, 420);
     readonly ChoiceCombo screenPlace = new(Choices.ScreenPlaces);
     readonly ChoiceCombo screenMon = new(Monitors.Choices(true));
     readonly TextBox screenWin = new() { Width = 400, Watermark = "empty = a monitor; or part of a window title / program name" };
     readonly ChoiceCombo offMode = new(Choices.OffsetModes, 460);
     readonly ChoiceCombo mirMode = new(Choices.MirrorModes, 300);
-    readonly Control lKeys, lKeyMode, lSteps, lWheel, lPage, lConfirm, lLayer, lLayerMode, lTarget, lScreenMode, lScreenPlace, lScreenMon, lScreenWin, lOffMode, lMirMode;
+    readonly Control lKeys, lKeyMode, lSteps, lWheel, lPage, lConfirm, lLayer, lLayerMode, lTarget, lPad, lScreenMode, lScreenPlace, lScreenMon, lScreenWin, lOffMode, lMirMode;
 
     public ActionPanel(string kind, WristModel wrist = null)
     {
@@ -81,6 +83,15 @@ public class ActionPanel : Form
         lLayer = AddRow("Layer name", layer, "Type a new name or pick one you already use.");
         lLayerMode = AddRow("Layer", layerMode);
         lTarget = AddRow("Game button", target, "The game will think this controller button is pressed.");
+        lPad = AddRow("Gamepad button", new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { pad, padPick } },
+                      "A button on a virtual Xbox 360 pad. Needs the free ViGEmBus driver installed; without it this does nothing and the headset says so once.");
+        ToolTip.SetTip(padPick, "Click the button on a picture of the pad.");
+        padPick.Click += async (s, e) =>
+        {
+            var b = await GamepadPicker.Show(this, a?.Button);
+            if (b != null) pad.Code = b;
+        };
+        pad.SelectionChanged += (s, e) => { if (!loading && pad.Code != null && a.Button != pad.Code) { a.Button = pad.Code; Fire(); } };
         lScreenMode = AddRow("Screen", screenMode, "Settings > Screen mirror sets the monitor, frame rates, size and position.");
         lScreenPlace = AddRow("Show it", screenPlace);
         lScreenMon = AddRow("Monitor", screenMon, "Monitors are numbered from left to right.");
@@ -157,6 +168,11 @@ public class ActionPanel : Form
             case ActionType.XrInput:
                 a.Target ??= "left.menu";
                 break;
+            case ActionType.Gamepad:
+                a.Button ??= "a";
+                if (a.Mode is not ("tap" or "hold" or "toggle"))
+                    a.Mode = null;
+                break;
             case ActionType.Screen:
                 if (Choices.ScreenModes.All(c => c.Code != a.Mode))
                     a.Mode = "toggle";
@@ -179,7 +195,7 @@ public class ActionPanel : Form
         loading = true;
         a = model;
         keys.Value = a.Keys;
-        string km = string.IsNullOrEmpty(a.Mode) || a.Type is not (ActionType.Key or ActionType.XrInput) ? "tap" : a.Mode;
+        string km = string.IsNullOrEmpty(a.Mode) || a.Type is not (ActionType.Key or ActionType.XrInput or ActionType.Gamepad) ? "tap" : a.Mode;
         keyMode.SetChoices(KeyModeList(km == "hold"));
         keyMode.Code = km;
         steps.Text = (a.Steps ?? "").Replace("; ", "\n").Replace(";", "\n");
@@ -192,6 +208,7 @@ public class ActionPanel : Form
         layer.Text = a.Layer ?? "";
         layerMode.Code = a.Type == ActionType.Layer && !string.IsNullOrEmpty(a.Mode) ? a.Mode : (InWheel ? "toggle" : "hold");
         target.Value = a.Target ?? "left.menu";
+        pad.Code = a.Button ?? "a";
         screenMode.Code = a.Type == ActionType.Screen && !string.IsNullOrEmpty(a.Mode) ? a.Mode : "toggle";
         screenPlace.Code = a.Place ?? "";
         screenMon.Code = a.Monitor?.ToString() ?? "";
@@ -209,7 +226,7 @@ public class ActionPanel : Form
                     ?? Choices.ActionTypes.FirstOrDefault(c => c.Code == t)?.Text ?? t;
         whatText.Text = title;
         Show(lKeys, t == ActionType.Key);
-        Show(lKeyMode, t is ActionType.Key or ActionType.XrInput);
+        Show(lKeyMode, t is ActionType.Key or ActionType.XrInput or ActionType.Gamepad);
         Show(lSteps, t == ActionType.Sequence);
         Show(lWheel, t == ActionType.Wheel);
         Show(lConfirm, t == ActionType.Wheel && (!InWheel || kind == "wrist"));
@@ -217,6 +234,7 @@ public class ActionPanel : Form
         Show(lLayer, t == ActionType.Layer);
         Show(lLayerMode, t == ActionType.Layer);
         Show(lTarget, t == ActionType.XrInput);
+        Show(lPad, t == ActionType.Gamepad);
         bool turnsOn = t == ActionType.Screen && (a.Mode is null or "toggle" or "on");
         Show(lScreenMode, t == ActionType.Screen);
         Show(lScreenPlace, turnsOn);

@@ -329,6 +329,11 @@ private:
     std::map<std::pair<int, int>, Override> xrToggles;
     std::map<int, std::pair<std::pair<int, int>, Override>> xrHolds; // binding -> override
     std::vector<Pulse> pulses;
+    // gamepad actions (virtual 360 pad): toggled on, held by a binding, quick taps until a time
+    std::set<std::string> padToggles;
+    std::map<int, std::string> padHolds;
+    std::vector<std::pair<std::string, double>> padPulses;
+    void UpdateGamepad();
     WheelRun wr;
     double now = 0, lastNow = 0;
     // What a grip is holding while things are being placed by hand.

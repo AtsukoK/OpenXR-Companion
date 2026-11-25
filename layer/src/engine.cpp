@@ -1,4 +1,5 @@
 #include "engine.h"
+#include "gamepad.h"
 #include "keys.h"
 #include <algorithm>
 
@@ -67,6 +68,9 @@ void Engine::Reset() {
     xrToggles.clear();
     xrHolds.clear();
     pulses.clear();
+    padToggles.clear();
+    padHolds.clear();
+    padPulses.clear();
     layers.clear();
     for (auto& b : bs)
         b = BState{};
@@ -82,6 +86,8 @@ bool Engine::IsOn(const Action& a) const {
         return a.mode == ActMode::Toggle && keyToggles.count(a.keys) > 0;
     case ActType::XrInput:
         return a.mode == ActMode::Toggle && xrToggles.count({ a.target.hand, a.target.comp }) > 0;
+    case ActType::Gamepad:
+        return a.mode == ActMode::Toggle && padToggles.count(a.pad) > 0;
     case ActType::Layer:
         return layers.count(a.layer) > 0;
     case ActType::Screen:
@@ -289,6 +295,20 @@ bool Engine::RunAction(const Action& a, int hand, int bi, bool fromWheel) {
         pulses.push_back({ a.target.hand, a.target.comp, MakeOv(a.target), now + std::max(a.tapMs, 30) / 1000.0 });
         return false;
     }
+    case ActType::Gamepad: {
+        double until = now + std::max(a.tapMs, 60) / 1000.0;
+        if (a.mode == ActMode::Toggle) {
+            if (!padToggles.erase(a.pad)) padToggles.insert(a.pad);
+            return false;
+        }
+        if (hold || (a.mode == ActMode::Tap && bi >= 0)) { // like a real pad button: held while the controller button is
+            padHolds[bi] = a.pad;
+            if (!hold) padPulses.push_back({ a.pad, until });
+            return true;
+        }
+        padPulses.push_back({ a.pad, until });
+        return false;
+    }
     case ActType::Layer:
         if (a.mode == ActMode::Hold && !fromWheel) {
             SetLayer(a.layer, true);
@@ -372,6 +392,9 @@ void Engine::EndAction(const Action& a, int bi) {
     }
     case ActType::XrInput:
         xrHolds.erase(bi);
+        break;
+    case ActType::Gamepad:
+        padHolds.erase(bi);
         break;
     case ActType::Layer:
         SetLayer(a.layer, false);
@@ -714,6 +737,17 @@ void Engine::ComputeBlocks() {
         ovOut[ko.first.first][ko.first.second] = ko.second;
 }
 
+// The virtual 360 pad shows every gamepad action that is on now. The pad is plugged in on first use only.
+void Engine::UpdateGamepad() {
+    padPulses.erase(std::remove_if(padPulses.begin(), padPulses.end(), [&](auto& p) { return p.second < now; }), padPulses.end());
+    Gamepad::State s;
+    for (auto& b : padToggles) Gamepad::Apply(b, s);
+    for (auto& [bi, b] : padHolds) Gamepad::Apply(b, s);
+    for (auto& [b, t] : padPulses) Gamepad::Apply(b, s);
+    std::string err = Gamepad::Submit(s, true);
+    if (!err.empty()) Toast(err, 6);
+}
+
 void Engine::Update(const Frame& f) {
     for (int h = 0; h < 2; h++) { stickX[h] = f.h[h].sx; stickY[h] = f.h[h].sy; }
     if (!Active()) {
@@ -767,6 +801,7 @@ void Engine::Update(const Frame& f) {
     offsetsPanel.Update();
     menu.Update();
     ComputeBlocks();
+    UpdateGamepad();
     UpdatePointers();
     lastNow = now;
 

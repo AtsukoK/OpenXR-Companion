@@ -72,6 +72,8 @@ static std::string ActionWords(const Action& a) {
         return "Layer '" + a.layer + "'" + mode;
     case ActType::XrInput:
         return "Controller: " + InputWords(a.target) + mode;
+    case ActType::Gamepad:
+        return "Gamepad: " + a.pad + mode;
     case ActType::None:
         return "Disabled in the game";
     case ActType::Menu:

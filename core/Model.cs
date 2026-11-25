@@ -61,7 +61,7 @@ public class BlockOpenConv : ChoiceConverter
 public class TypeConv : ChoiceConverter
 {
     protected override bool Exclusive => true;
-    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "key", "sequence", "xr_input", "wheel", "back", "close", "layer", "reload", "keyboard", "page", "adjust", "screen", "controller_offsets", "headset_mirror", "settings_menu" };
+    protected override IEnumerable<string> Values(ITypeDescriptorContext c) => new[] { "none", "key", "sequence", "xr_input", "gamepad", "wheel", "back", "close", "layer", "reload", "keyboard", "page", "adjust", "screen", "controller_offsets", "headset_mirror", "settings_menu" };
 }
 public class ModeConv : ChoiceConverter
 {
@@ -514,6 +514,8 @@ public class ActionModel
     [JsonPropertyName("layer"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string Layer { get; set; }
     [Description("xr_input: the controller input the game should think is pressed, e.g. left.menu or right.thumbstick.up"), TypeConverter(typeof(InputConv))]
     [JsonPropertyName("target"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string Target { get; set; }
+    [Description("gamepad: the virtual Xbox 360 pad button, e.g. a, lb, rt, dpad_up, ls_left (needs the ViGEmBus driver)")]
+    [JsonPropertyName("button"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string Button { get; set; }
     [Description("page: the wrist panel page to open"), JsonPropertyName("page"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string Page { get; set; }
     [Description("screen: where it shows when turned on: wrist_left, wrist_right, front, head (empty = the Settings choice)"), JsonPropertyName("place"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string Place { get; set; }
     [Description("screen: which monitor when turned on: 0 = main, 1.. = left to right (empty = keep)"), JsonPropertyName("monitor"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? Monitor { get; set; }
@@ -524,6 +526,7 @@ public class ActionModel
         "key" => $"key {Keys} {Mode}".Trim(),
         "sequence" => $"macro: {Steps}",
         "xr_input" => $"game input {Target} {Mode}".Trim(),
+        "gamepad" => $"gamepad {Button} {Mode}".Trim(),
         "wheel" => $"wheel {Wheel}",
         "page" => $"page {Page}",
         "layer" => $"layer {Layer} {Mode}".Trim(),

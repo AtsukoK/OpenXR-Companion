@@ -44,6 +44,8 @@ std::string ItemWords(Engine& e, const Action& a, const ItemListRef& ref) {
         return a.keys.empty() ? "No key set" : "Key: " + a.keys;
     case ActType::XrInput:
         return "Controller: " + InputWords(a.target);
+    case ActType::Gamepad:
+        return "Gamepad: " + a.pad;
     case ActType::Wheel: {
         auto it = e.prof->wheels.find(a.wheel);
         return "Opens wheel '" + (it == e.prof->wheels.end() ? a.wheel : TitleOf(it->second)) + "'";

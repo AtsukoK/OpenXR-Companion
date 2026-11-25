@@ -27,6 +27,7 @@ public static class ActionText
             },
             "layer" => a.Mode switch { "on" => $"Turns layer '{a.Layer}' on", "off" => $"Turns layer '{a.Layer}' off", "toggle" => $"Switches layer '{a.Layer}' on/off", _ => $"Layer '{a.Layer}' while held" },
             "xr_input" => $"Presses game button {a.Target}{mode}",
+            "gamepad" => $"Presses gamepad {Choices.PadName(a.Button)}{mode}",
             "back" => "Goes back",
             "close" => "Closes / hides",
             "reload" => "Reloads the profile",

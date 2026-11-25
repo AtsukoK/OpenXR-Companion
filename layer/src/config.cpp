@@ -1,4 +1,5 @@
 #include "config.h"
+#include "gamepad.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <sstream>
@@ -167,6 +168,8 @@ static Action ParseAction(const json& j, const std::string& ctx) {
         a.type = ActType::Mirror;
     else if (t == "settings_menu" || t == "settings")
         a.type = ActType::Menu;
+    else if (t == "gamepad" || t == "pad")
+        a.type = ActType::Gamepad;
     else if (t == "none" || t.empty())
         a.type = ActType::None;
     else
@@ -212,6 +215,11 @@ static Action ParseAction(const json& j, const std::string& ctx) {
         if (!ParseInput(tg, a.target)) throw std::runtime_error(ctx + ": bad target input '" + tg + "'");
     }
     if (a.type == ActType::XrInput && !a.target.valid()) throw std::runtime_error(ctx + ": xr_input needs a target");
+    if (a.type == ActType::Gamepad) {
+        Get(j, "button", a.pad);
+        a.pad = Lower(a.pad);
+        if (!Gamepad::IsButton(a.pad)) throw std::runtime_error(ctx + ": unknown gamepad button '" + a.pad + "'");
+    }
     return a;
 }
 
@@ -926,7 +934,7 @@ static json ActionJson(const Action& a, const json& original) {
         { ActType::Close, "close" },       { ActType::Layer, "layer" },     { ActType::Reload, "reload" },
         { ActType::Keyboard, "keyboard" }, { ActType::Page, "page" },       { ActType::Adjust, "adjust" },
         { ActType::Screen, "screen" },     { ActType::Offsets, "controller_offsets" },
-        { ActType::Mirror, "headset_mirror" }, { ActType::Menu, "settings_menu" } };
+        { ActType::Mirror, "headset_mirror" }, { ActType::Menu, "settings_menu" }, { ActType::Gamepad, "gamepad" } };
     json o = original.is_object() ? original : json::object();
     Action was;
     try {
@@ -943,6 +951,10 @@ static json ActionJson(const Action& a, const json& original) {
         break;
     case ActType::XrInput:
         o["target"] = InputName(a.target);
+        o["mode"] = ActModeKey(a.mode);
+        break;
+    case ActType::Gamepad:
+        o["button"] = a.pad;
         o["mode"] = ActModeKey(a.mode);
         break;
     case ActType::Sequence:

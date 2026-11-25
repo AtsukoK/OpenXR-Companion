@@ -29,7 +29,7 @@ bool ParseInput(const std::string& s, InputId& out);
 std::string InputName(const InputId& i);
 int ParseCompName(const std::string& s); // "trigger", "primary", ... -> Comp or -1
 
-enum class ActType { None, Key, Sequence, XrInput, Wheel, Back, Close, Layer, Reload, Keyboard, Page, Adjust, Screen, Offsets, Mirror, Menu };
+enum class ActType { None, Key, Sequence, XrInput, Wheel, Back, Close, Layer, Reload, Keyboard, Page, Adjust, Screen, Offsets, Mirror, Menu, Gamepad };
 
 // Text <-> enum tables for profile settings: { value, "text in the file" }.
 template <class E>
@@ -182,6 +182,7 @@ struct Action {
     std::string layer;                       // layer: name
     std::string page;                        // page: wrist panel page name
     InputId target;                          // xr_input: game input to fake
+    std::string pad;                         // gamepad: virtual 360 pad button ("a", "lt", "dpad_up", "ls_left"...)
     // screen: mode toggle|on|off|next_monitor|prev_monitor|next_fps|next_place
     std::optional<ScreenPlace> place; // screen: where to show it when turned on (none = the profile's place)
     std::string window;               // screen: show the first window whose title or program contains this

@@ -15,6 +15,7 @@ public static class ActionType
     public const string Keyboard = "keyboard";
     public const string Layer = "layer";
     public const string XrInput = "xr_input";
+    public const string Gamepad = "gamepad";
     public const string Back = "back";
     public const string Close = "close";
     public const string Reload = "reload";
@@ -67,6 +68,20 @@ public static class Choices
         new("trackpad.up", "Trackpad swiped up"), new("trackpad.down", "Trackpad swiped down"),
         new("trackpad.left", "Trackpad swiped left"), new("trackpad.right", "Trackpad swiped right"),
     };
+    // The virtual 360 pad's buttons (layer gamepad.cpp). Stick directions push the stick all the way.
+    public static readonly Choice[] PadButtons =
+    {
+        new("a", "A"), new("b", "B"), new("x", "X"), new("y", "Y"),
+        new("lb", "Left bumper (LB)"), new("rb", "Right bumper (RB)"),
+        new("lt", "Left trigger (LT)"), new("rt", "Right trigger (RT)"),
+        new("back", "Back / View"), new("start", "Start / Menu"), new("guide", "Guide (Xbox button)"),
+        new("dpad_up", "D-pad up"), new("dpad_down", "D-pad down"), new("dpad_left", "D-pad left"), new("dpad_right", "D-pad right"),
+        new("ls", "Left stick click"), new("ls_up", "Left stick up"), new("ls_down", "Left stick down"),
+        new("ls_left", "Left stick left"), new("ls_right", "Left stick right"),
+        new("rs", "Right stick click"), new("rs_up", "Right stick up"), new("rs_down", "Right stick down"),
+        new("rs_left", "Right stick left"), new("rs_right", "Right stick right"),
+    };
+    public static string PadName(string code) => PadButtons.FirstOrDefault(c => c.Code == code)?.Text ?? code;
     public static readonly Choice[] Gestures =
     {
         new(GestureKind.Press, "Press"), new(GestureKind.Tap, "Quick tap  (a Hold on the same button can still work)"),
@@ -85,6 +100,7 @@ public static class Choices
         new(ActionType.Wheel, "Open a wheel"), new(ActionType.Keyboard, "Open the VR keyboard"),
         new(ActionType.Layer, "Switch a layer (changes what other buttons do)"),
         new(ActionType.XrInput, "Press a controller button inside the game"),
+        new(ActionType.Gamepad, "Press a button on a virtual Xbox 360 pad (needs ViGEmBus)"),
         new(ActionType.Back, "Wheel: go back one level"), new(ActionType.Close, "Wheel: close"),
         new(ActionType.Reload, "Reload this profile"), new(ActionType.Adjust, "Adjust positions: move wheels and wrist panels by hand"),
         new(ActionType.Screen, "Mirror a monitor: show / hide it, switch monitor, frame rate or place"),

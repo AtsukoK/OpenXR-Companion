@@ -17,8 +17,12 @@ Two LOCAL commits on top of release-0.3.0, not pushed, untested in the headset. 
 - (uncommitted->committed late 2026-11-25) Click pickers in the Avalonia editor: Controls/KeyboardPicker.cs (whole
   keyboard + mouse, sticky modifiers) behind "⌨ Keyboard…" on every KeyField and "⌨ Add a key…" on macros;
   Controls/ControllerButtonPicker.cs (both ControllerDrawings, then a way button) behind "🎮 Pick…" on each ChordPicker row
-  (binding button + xr_input target). XInput (360 pad) output NOT done: the layer can't send gamepad input (needs a
-  virtual pad driver, e.g. ViGEmBus) -- waiting on the user's call.
+  (binding button + xr_input target).
+- Gamepad action (user chose the optional ViGEmBus route): layer src/gamepad.cpp + third_party/ViGEmClient (MIT, built in,
+  setupapi); ActType::Gamepad, json {"type":"gamepad","button":"a|lt|dpad_up|ls_left..","mode":tap|hold|toggle};
+  Engine::UpdateGamepad after ComputeBlocks; pad plugged in on first use only; no driver = one toast. Digital only
+  (stick directions = full push); analog stick/trigger passthrough not done. Editor: ActionType.Gamepad, Choices.PadButtons,
+  Controls/GamepadPicker.cs (drawn pad), row in ActionPanel. In-game menu shows it but can't create one yet.
 - Next: user tests; then decide where it goes (experimental release / main) -- ask first, never push unasked.
 
 # RESUME HERE (2026-11-24) -- releases 0.2.15 / 0.2.16-experimental, core split, Avalonia port
