@@ -97,13 +97,13 @@ public class ActionPanel : Form
             Spacing = 4,
             Children =
             {
-                new TextBlock { Text = "Optional: gamepad buttons need the free ViGEmBus driver, which isn't installed. Everything else works without it. Only install it if you want gamepad buttons, then restart the game.",
+                new TextBlock { Text = "Optional, only for Xbox 360 controller emulation: to press 360 pad buttons (A, B, LB, Start...) the free ViGEmBus driver is needed, and it isn't installed. Everything else works without it. Install it only if you want 360 buttons, then restart the game.",
                                 Foreground = Brush.Parse("#F2C94C"), TextWrapping = TextWrapping.Wrap, MaxWidth = 460 },
-                LinkButton("Download ViGEmBus (the ViGEmBus_Setup .exe on its releases page)", LayerTools.ViGEmBusUrl),
+                LinkButton("Download ViGEmBus for 360 controller emulation (ViGEmBus_Setup .exe on its releases page)", LayerTools.ViGEmBusUrl),
             },
         };
         lPad = AddRow("Gamepad button", new StackPanel { Spacing = 6, Children = { new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { pad, padPick } }, padWarn } },
-                      "A button on a virtual Xbox 360 pad. Optional: only this needs the free ViGEmBus driver; without it this does nothing and the headset says so once.");
+                      "Emulates an Xbox 360 controller button, for games that read a 360 pad. Optional: only this needs the free ViGEmBus driver; without it this does nothing and the headset says so once.");
         ToolTip.SetTip(padPick, "Click the button on a picture of the pad.");
         padPick.Click += async (s, e) =>
         {
