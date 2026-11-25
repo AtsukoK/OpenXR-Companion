@@ -5,7 +5,7 @@
   <DockPanel Margin="16,12,16,0">
     <StackPanel DockPanel.Dock="Top" Spacing="4">
       <TextBlock Text="All bindings" FontSize="24" FontWeight="SemiBold" />
-      <TextBlock Classes="desc" Text="Everything in this profile: controller bindings, wheel items and wrist buttons. The circle switches one on or off, ⧉ duplicates it, ✕ deletes it; click one for all its settings." />
+      <TextBlock Classes="desc" Text="Everything in this profile: controller bindings, wheel items and wrist buttons. On / Off switches one, ⧉ duplicates it, ✕ deletes it; click one for all its settings." />
       <WrapPanel Margin="0,0,0,8">
         <TextBlock Text="Search:" VerticalAlignment="Center" Margin="0,0,6,0" />
         <TextBox x:Name="Search" Width="380" Margin="0,0,18,6" Watermark="name, button or what it does" />

@@ -386,7 +386,7 @@ public class WristPage : UserControl
     {
         var up = Glyph("↑", () => MoveItem(it, -1), "Move up");
         var down = Glyph("↓", () => MoveItem(it, 1), "Move down");
-        var onOff = Glyph(it.Enabled ? "✔" : "○", () => { it.Enabled = !it.Enabled; Structure(); },
+        var onOff = Glyph(it.Enabled ? "On" : "Off", () => { it.Enabled = !it.Enabled; Structure(); },
                           it.Enabled ? "On: click to take it off the panel (kept in this list)" : "Off: click to put it back on the panel");
         onOff.Classes.Add("onoff");
         onOff.Classes.Set("on", it.Enabled);
@@ -416,6 +416,7 @@ public class WristPage : UserControl
     static Button Glyph(string text, Action click, string tip)
     {
         var b = new Button { Content = text, Classes = { "glyph" } };
+        if (text is "On" or "Off") { b.Classes.Add("onoff"); b.Classes.Set("on", text == "On"); }
         ToolTip.SetTip(b, tip);
         b.Click += (s, e) => click();
         return b;

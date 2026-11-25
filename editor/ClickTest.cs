@@ -68,7 +68,7 @@ public static class ClickTest
         }
 
         await Go("bindings");
-        await Press("All bindings: on/off of the first row", Find("✔") ?? Find("○"));
+        await Press("All bindings: on/off of the first row", Find("On") ?? Find("Off"));
         await Press("All bindings: duplicate the first row", Find("⧉"));
         int before = store.Profile.Bindings.Count;
         Find("✕")?.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

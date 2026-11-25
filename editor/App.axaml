@@ -144,12 +144,19 @@
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Padding" Value="6,2" />
     </Style>
+    <!-- On / Off switch as a small pill: green "On", grey "Off" -->
     <Style Selector="Button.glyph.onoff">
-      <Setter Property="Foreground" Value="#AAB2BF" />
+      <Setter Property="Foreground" Value="#C8CDD6" />
+      <Setter Property="Background" Value="#3A414B" />
       <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="MinWidth" Value="40" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.glyph.onoff.on">
-      <Setter Property="Foreground" Value="#3CBE6E" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="Background" Value="#2E9E5B" />
     </Style>
     <Style Selector="Button.glyph.del">
       <Setter Property="Foreground" Value="#E65A5A" />

@@ -108,7 +108,7 @@ public class WheelPage : UserControl
         var openCard = Cards.Make("Opened by", new StackPanel
         {
             Spacing = 6, Width = 560,
-            Children = { Note("The controller buttons that open this wheel. The circle switches one on or off; ✕ deletes it. Click one for all its settings."),
+            Children = { Note("The controller buttons that open this wheel. On / Off switches one; ✕ deletes it. Click one for all its settings."),
                          openerRows, Btn("+ Add a button that opens it", AddOpener, blue: true) },
         });
         var libCard = Cards.Make("All buttons and bindings", new LibraryPanel(() => w, it => { Structure(); Edit(it); }, "this wheel"));
@@ -309,7 +309,7 @@ public class WheelPage : UserControl
         bool sel = ReferenceEquals(it, editing);
         var up = Glyph("↑", () => MoveItem(it, -1), "Move up");
         var down = Glyph("↓", () => MoveItem(it, 1), "Move down");
-        var onOff = Glyph(it.Enabled ? "✔" : "○", () => { it.Enabled = !it.Enabled; Structure(); }, it.Enabled ? "On: click to switch it off (kept here)" : "Off: click to switch it on");
+        var onOff = Glyph(it.Enabled ? "On" : "Off", () => { it.Enabled = !it.Enabled; Structure(); }, it.Enabled ? "On: click to switch it off (kept here)" : "Off: click to switch it on");
         onOff.Classes.Add("onoff");
         onOff.Classes.Set("on", it.Enabled);
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("26,30,30,*,230,44") };
@@ -360,7 +360,7 @@ public class WheelPage : UserControl
             RefreshOpeners();
         }, "Delete this binding");
         del.Classes.Add("del");
-        var onOff = Glyph(b.Enabled ? "✔" : "○", () => { b.Enabled = !b.Enabled; Shell.Store.MarkDirty(); RefreshOpeners(); }, b.Enabled ? "On: click to switch it off" : "Off: click to switch it on");
+        var onOff = Glyph(b.Enabled ? "On" : "Off", () => { b.Enabled = !b.Enabled; Shell.Store.MarkDirty(); RefreshOpeners(); }, b.Enabled ? "On: click to switch it off" : "Off: click to switch it on");
         onOff.Classes.Add("onoff");
         onOff.Classes.Set("on", b.Enabled);
         Grid.SetColumn(what, 1); Grid.SetColumn(del, 2); Grid.SetColumn(onOff, 3);
@@ -420,6 +420,7 @@ public class WheelPage : UserControl
     static Button Glyph(string text, Action click, string tip)
     {
         var b = new Button { Content = text, Classes = { "glyph" } };
+        if (text is "On" or "Off") { b.Classes.Add("onoff"); b.Classes.Set("on", text == "On"); }
         ToolTip.SetTip(b, tip);
         b.Click += (s, e) => click();
         return b;

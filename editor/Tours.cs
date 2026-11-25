@@ -210,7 +210,7 @@ public static class Tours
             "sec_bindings" => new List<TourStep>
             {
                 S("All bindings", "Everything in this profile: what your controller buttons do, every wheel item and every wrist button.", h.PageArea, () => Shell.Go("bindings")),
-                S("Switch, copy, delete", "The circle switches one on or off (kept here when off), ⧉ copies it, ✕ deletes it. Click a line for all its settings.", h.PageArea),
+                S("Switch, copy, delete", "On / Off switches one (kept here when off), ⧉ copies it, ✕ deletes it. Click a line for all its settings.", h.PageArea),
                 S("Find it", "Search by name, key or button. 'Show' limits the list; 'Sort' puts switched-on ones first or sorts by name.", () => T("Search:")),
             },
             "sec_wheels" => new List<TourStep>

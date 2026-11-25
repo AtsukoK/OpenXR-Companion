@@ -19,7 +19,7 @@ public class BindingRow : ListRow
     public BindingModel Binding { get; init; }
     public bool Lost { get; init; } // not on the chosen controller's picture
     public bool IsOn => Binding.Enabled;
-    public string OnGlyph => Binding.Enabled ? "✔" : "○";
+    public string OnGlyph => Binding.Enabled ? "On" : "Off";
     public string Where => (Binding.Gesture == GestureKind.WhileHeld ? "Hold" : AllBindings.GestureWord(Binding.Gesture)) + " " +
                            InputText.Friendly(Binding.Input) + (Binding.Enabled ? "" : "   (off)");
     public string What => EditorApi.Plain(Binding.Action);
@@ -46,7 +46,7 @@ public class ItemRow : ListRow
     public List<WheelItemModel> Owner { get; init; }
     public string Open { get; init; } // page key its row opens
     public bool IsOn => Item.Enabled;
-    public string OnGlyph => Item.Enabled ? "✔" : "○";
+    public string OnGlyph => Item.Enabled ? "On" : "Off";
     public string Label => string.IsNullOrWhiteSpace(Item.Label) ? "(no label)" : Item.Label;
     public string What => EditorApi.Plain(Item.Action);
 }

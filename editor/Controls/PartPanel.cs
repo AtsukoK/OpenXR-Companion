@@ -186,7 +186,7 @@ public class PartPanel : StackPanel
         ToolTip.SetTip(does, "Click to edit '" + b.Name + "'");
         does.Click += (s, e) => Shell.Go("binding:" + profile.Bindings.IndexOf(b));
         string extra = (b.Block == "none" && b.Action?.Type != ActionType.None ? "game also gets the button · " : "") + (on ? "" : "off · ");
-        var sw = new Button { Content = on ? "✔" : "○", Classes = { "glyph", "onoff" } };
+        var sw = new Button { Content = on ? "On" : "Off", Classes = { "glyph", "onoff" } };
         sw.Classes.Set("on", on);
         ToolTip.SetTip(sw, on ? "On: click to switch it off (kept here)" : "Off: click to switch it on");
         sw.Click += (s, e) => { b.Enabled = !b.Enabled; Changed(); };

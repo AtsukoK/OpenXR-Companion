@@ -20,7 +20,7 @@ public static class Shell
     {
         ["overview"] = ("Overview", "Tip: the switches on each card turn things on or off right here. The blue buttons jump to where you edit them.",
                         () => new OverviewPage()),
-        ["bindings"] = ("All bindings", "Tip: everything in this profile. The circle switches one on or off; click a line for all its settings.",
+        ["bindings"] = ("All bindings", "Tip: everything in this profile. On / Off switches one; click a line for all its settings.",
                         () => new AllBindingsPage()),
         ["controllers"] = ("Controllers", "Tip: click a button on the picture (or its tag) to see what it does; the + on a tag adds something to it.",
                            () => new ControllersPage()),
