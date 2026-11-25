@@ -578,6 +578,9 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
             Get(k, "inner_deadzone", s.innerDeadzone);
             Get(k, "outer_deadzone", s.outerDeadzone);
             Get(k, "direction_angle", s.directionAngleDeg);
+            Get(k, "ignore_outside", s.ignoreOutside);
+            Get(k, "ignore_center", s.ignoreCenter);
+            s.ignoreCenter = std::clamp(s.ignoreCenter, 0.f, 0.95f);
             s.innerDeadzone = std::clamp(s.innerDeadzone, 0.f, 0.9f);
             s.outerDeadzone = std::clamp(s.outerDeadzone, 0.f, 0.9f);
             s.directionAngleDeg = s.directionAngleDeg <= 0 ? 0.f : std::clamp(s.directionAngleDeg, 5.f, 45.f);
@@ -1033,6 +1036,8 @@ bool SaveMenuEdits(Profile& p, std::string& err) {
             sticks[hands[h]] = { { "inner_deadzone", r2(s.innerDeadzone) },
                                  { "outer_deadzone", r2(s.outerDeadzone) },
                                  { "direction_angle", std::round(s.directionAngleDeg) } };
+            if (s.ignoreOutside) sticks[hands[h]]["ignore_outside"] = true;
+            if (s.ignoreCenter > 0) sticks[hands[h]]["ignore_center"] = r2(s.ignoreCenter);
         }
         if (sticks.empty())
             j.erase("sticks");
@@ -1230,95 +1235,782 @@ bool SaveMirrorSettings(const MirrorSettings& m) {
 
 const char* DefaultProfileJson() {
     // Generic starting profile: every feature switched on so new users can see what exists.
+    // split in two raw strings (MSVC: max ~16 KB per literal); the compiler joins them
     return R"JSON({
-  "enabled": true,
-  "block_while_open": "hand",
-  "haptics": true,
-  "haptic_strength": 0.35,
-  "notifications": true,
-  "style": { "anchor": "head_locked", "radius_m": 0.127, "head_distance_m": 0.7, "head_down_m": 0.1 },
-  "selection": { "method": "both", "hand": "opener", "deadzone": 0.5, "confirm_button": "trigger", "cancel_button": "secondary" },
-  "keyboard": { "width_m": 0.56, "distance_m": 0.45, "below_eyes_m": 0.3 },
   "bindings": [
-    { "name": "Right hand wheel", "input": "right.thumbrest", "gesture": "double_tap", "double_tap_ms": 400, "block": "none",
-      "action": { "type": "wheel", "wheel": "right", "confirm": "stick_return" } },
-    { "name": "Left hand wheel", "input": "left.thumbrest", "gesture": "double_tap", "double_tap_ms": 400, "block": "none",
-      "action": { "type": "wheel", "wheel": "left", "confirm": "stick_return" } },
-    { "name": "VR keyboard (hold left menu)", "enabled": false, "input": "left.menu", "gesture": "hold", "hold_ms": 600, "block": "trigger",
-      "action": { "type": "keyboard" } },
-    { "name": "Shift layer (hold left grip + click left stick)", "enabled": false, "input": "left.grip+left.thumbstick", "gesture": "while_held", "block": "trigger",
-      "action": { "type": "layer", "layer": "shift", "mode": "hold" } }
-  ],
-  "wheels": {
-    "right": { "title": "Right hand", "items": [
-      { "label": "Map", "action": { "type": "key", "keys": "M" } },
-      { "label": "Inventory", "action": { "type": "key", "keys": "I" } },
-      { "label": "Pause", "action": { "type": "key", "keys": "Esc" } },
-      { "label": "Screenshot", "action": { "type": "key", "keys": "F12" } },
-      { "label": "Quick save", "action": { "type": "key", "keys": "F5" } },
-      { "label": "More...", "action": { "type": "wheel", "wheel": "Right hand more (sub-wheel)" } }
-    ] },
-    "Right hand more (sub-wheel)": { "title": "More", "items": [
-      { "label": "Back", "action": { "type": "back" } },
-      { "label": "Quick load", "action": { "type": "key", "keys": "F9" } },
-      { "label": "Keyboard", "action": { "type": "keyboard" } },
-      { "label": "Adjust positions", "action": { "type": "adjust" } },
-      { "label": "Reload profile", "action": { "type": "reload" } }
-    ] },
-    "left": { "title": "Left hand", "items": [
-      { "label": "Walk toggle", "action": { "type": "key", "keys": "LCtrl", "mode": "toggle" } },
-      { "label": "Crouch toggle", "action": { "type": "key", "keys": "C", "mode": "toggle" } },
-      { "label": "Keyboard", "action": { "type": "keyboard" } },
-      { "label": "Copy + paste", "action": { "type": "sequence", "steps": "Ctrl+C; wait 100; Ctrl+V" } },
-      { "label": "Chat", "action": { "type": "key", "keys": "Enter" } },
-      { "label": "Reload profile", "action": { "type": "reload" } }
-    ] }
-  },
-  "screen": { "monitor": 0, "fps": 30, "fps_steps": [10, 15, 30, 60, 0], "place": "wrist_left", "wrist_width_m": 0.16, "width_m": 0.8, "distance_m": 0.9 },
-  "wrist_left": {
-    "enabled": true, "mirror": false, "face": "inner", "text_up": "custom", "rotate_deg": -145.4, "press": "both", "columns": 3,
-    "size_m": 0.063, "toward_elbow_m": 0.074, "lift_m": 0.013, "side_m": 0.087,
-    "start_page": "Left hand main",
-    "pages": {
-      "Left hand main": { "title": "Left hand", "items": [
-        { "label": "Quick save", "action": { "type": "key", "keys": "F5" } },
-        { "label": "Pause", "action": { "type": "key", "keys": "Esc" } },
-        { "label": "Monitor", "action": { "type": "screen", "mode": "toggle", "place": "wrist_left" } },
-        { "label": "Keyboard", "action": { "type": "keyboard" } },
-        { "label": "Next page", "action": { "type": "page", "page": "Left hand more (sub-page)" } },
-        { "label": "L-Ctrl toggle", "enabled": false, "action": { "type": "key", "keys": "LCtrl", "mode": "toggle" } },
-        { "label": "L-Shift toggle", "enabled": false, "action": { "type": "key", "keys": "LShift", "mode": "toggle" } },
-        { "label": "Right-click", "enabled": false, "action": { "type": "key", "keys": "RMB" } }
-      ] },
-      "Left hand more (sub-page)": { "title": "More", "items": [
-        { "label": "Quick load", "action": { "type": "key", "keys": "F9" } },
-        { "label": "Reload profile", "action": { "type": "reload" } },
-        { "label": "Calibrate Positions", "action": { "type": "adjust" } },
-        { "label": "Controller offsets", "action": { "type": "controller_offsets", "mode": "panel" } },
-        { "label": "Settings", "action": { "type": "settings_menu" } },
-        { "label": "Headset mirror", "action": { "type": "headset_mirror", "mode": "toggle" } },
-        { "label": "Screenshot", "enabled": false, "action": { "type": "key", "keys": "F12" } },
-        { "label": "Hide", "enabled": false, "action": { "type": "close" } }
-      ] }
+    {
+      "action": {
+        "confirm": "stick_return",
+        "tap_ms": 60,
+        "type": "wheel",
+        "wheel": "Right Hand Default"
+      },
+      "block": "none",
+      "double_tap_ms": 400,
+      "enabled": true,
+      "gesture": "double_tap",
+      "hold_ms": 400,
+      "input": "right.thumbrest",
+      "layers": "",
+      "name": "Right hand wheel",
+      "not_layers": "",
+      "tap_ms": 300
+    },
+    {
+      "action": {
+        "confirm": "stick_return",
+        "tap_ms": 60,
+        "type": "wheel",
+        "wheel": "Left Hand Default"
+      },
+      "block": "none",
+      "double_tap_ms": 400,
+      "enabled": true,
+      "gesture": "double_tap",
+      "hold_ms": 400,
+      "input": "left.thumbrest",
+      "layers": "",
+      "name": "Left hand wheel",
+      "not_layers": "",
+      "tap_ms": 300
+    },
+    {
+      "action": {
+        "tap_ms": 60,
+        "type": "keyboard"
+      },
+      "block": "trigger",
+      "double_tap_ms": 350,
+      "enabled": false,
+      "gesture": "hold",
+      "hold_ms": 600,
+      "input": "left.menu",
+      "layers": "",
+      "name": "VR keyboard (hold left menu)",
+      "not_layers": "",
+      "tap_ms": 300
+    },
+    {
+      "action": {
+        "layer": "shift",
+        "mode": "hold",
+        "tap_ms": 60,
+        "type": "layer"
+      },
+      "block": "trigger",
+      "double_tap_ms": 350,
+      "enabled": false,
+      "gesture": "while_held",
+      "hold_ms": 400,
+      "input": "left.grip+left.thumbstick",
+      "layers": "",
+      "name": "Shift layer (hold left grip + click left stick)",
+      "not_layers": "",
+      "tap_ms": 300
     }
+  ],
+  "block_while_open": "hand",
+  "controller_offsets": {
+    "aim_same_as_grip": true,
+    "enabled": true,
+    "left": {
+      "aim": {
+        "pitch_deg": 0,
+        "roll_deg": 0,
+        "x_cm": 0,
+        "y_cm": 0,
+        "yaw_deg": 0,
+        "z_cm": 0
+      },
+      "grip": {
+        "pitch_deg": 0,
+        "roll_deg": 0,
+        "x_cm": 0,
+        "y_cm": 0,
+        "yaw_deg": 0,
+        "z_cm": 0
+      }
+    },
+    "link_hands": true,
+    "right": {
+      "aim": {
+        "pitch_deg": 0,
+        "roll_deg": 0,
+        "x_cm": 0,
+        "y_cm": 0,
+        "yaw_deg": 0,
+        "z_cm": 0
+      },
+      "grip": {
+        "pitch_deg": 0,
+        "roll_deg": 0,
+        "x_cm": 0,
+        "y_cm": 0,
+        "yaw_deg": 0,
+        "z_cm": 0
+      }
+    },
+    "smoothing": 0.5
+  },
+  "dock": {
+    "mode": "screen_to_keyboard"
+  },
+  "enabled": true,
+  "focus_game_window": false,
+  "haptic_strength": 0.35,
+  "haptics": true,
+  "keyboard": {
+    "below_eyes_m": 0.3,
+    "close_on_enter": false,
+    "distance_m": 0.45,
+    "pose": [
+      -0.088,
+      -0.201,
+      -0.582,
+      -0.2127,
+      0.0663,
+      0.0089,
+      0.9748
+    ],
+    "width_m": 0.56
+  },
+  "notifications": true,
+  "pointer": {
+    "correction": "auto",
+    "down_m": 0.02,
+    "finger": true,
+    "fingertip_forward_m": 0.015,
+    "fingertip_inward_m": 0,
+    "fingertip_up_m": 0,
+    "forward_m": 0,
+    "guide_laser": true,
+    "pitch_down_deg": 15,
+    "smoothing": 0
+  },
+  "screen": {
+    "bar_scale": 0.7,
+    "below_eyes_m": 0.05,
+    "cursor": true,
+    "distance_m": 0.9,
+    "face": "back",
+    "fps": 30,
+    "fps_steps": [
+      10,
+      15,
+      30,
+      60,
+      0
+    ],
+    "interact": true,
+    "lift_m": 0.03,
+    "max_width_px": 0,
+    "monitor": 0,
+    "opacity": 1,
+    "place": "wrist_left",
+    "poses": {
+      "wrist_left": [
+        -0.194,
+        0.089,
+        -0.147,
+        0.6993,
+        -0.1477,
+        0.0746,
+        -0.6954
+      ]
+    },
+    "refocus_game": true,
+    "rotate_deg": 0,
+    "side_m": 0,
+    "smoothing": 0,
+    "source": "monitor",
+    "start_on": false,
+    "toward_elbow_m": 0.14,
+    "width_m": 0.8,
+    "wrist_width_m": 0.252
+  },
+  "selection": {
+    "auto_close_ms": 0,
+    "cancel_button": "secondary",
+    "close_after_select": true,
+    "confirm_button": "trigger",
+    "deadzone": 0.5,
+    "hand": "opener",
+    "method": "both",
+    "submenu_dwell_ms": 450
+  },
+  "style": {
+    "anchor": "head_locked",
+    "colors": {
+      "accent": "#7FC4FFFF",
+      "background": "#101418B0",
+      "border": "#FFFFFF60",
+      "hover": "#3C8CFFF0",
+      "segment": "#283040D0",
+      "text": "#FFFFFFFF",
+      "toggled_on": "#2E9E5BE0"
+    },
+    "font": "Segoe UI",
+    "font_scale": 1,
+    "gap_deg": 1.5,
+    "hand_toward_head_m": 0.06,
+    "hand_up_m": 0.1,
+    "head_distance_m": 0.7,
+    "head_down_m": 0.1,
+    "inner_ratio": 0.34,
+    "radius_m": 0.127,
+    "texture_px": 768
+  },
+  "thresholds": {
+    "press_off": 0.4,
+    "press_on": 0.6,
+    "stick_off": 0.5,
+    "stick_on": 0.7
+  },
+  "wheels": {
+    "Left Hand Default": {
+      "items": [
+        {
+          "action": {
+            "keys": "LCtrl",
+            "mode": "toggle",
+            "tap_ms": 60,
+            "type": "key"
+          },
+          "enabled": true,
+          "label": "Walk toggle"
+        },
+        {
+          "action": {
+            "keys": "C",
+            "mode": "toggle",
+            "tap_ms": 60,
+            "type": "key"
+          },
+          "enabled": true,
+          "label": "Crouch toggle"
+        },
+        {
+          "action": {
+            "tap_ms": 60,
+            "type": "keyboard"
+          },
+          "enabled": true,
+          "label": "Keyboard"
+        },
+        {
+          "action": {
+            "steps": "Ctrl+C; wait 100; Ctrl+V",
+            "tap_ms": 60,
+            "type": "sequence"
+          },
+          "enabled": true,
+          "label": "Copy + paste"
+        },
+        {
+          "action": {
+            "keys": "Enter",
+            "mode": "tap",
+            "tap_ms": 60,
+            "type": "key"
+          },
+          "enabled": true,
+          "label": "Chat"
+        },
+        {
+          "action": {
+            "tap_ms": 60,
+            "type": "reload"
+          },
+          "enabled": true,
+          "label": "Reload profile"
+        }
+      ],
+      "title": "Left Hand Default"
+    },
+    "Right Hand Default": {
+      "items": [
+        {
+          "action": {
+            "keys": "M",
+            "mode": "tap",
+            "tap_ms": 60,
+            "type": "key"
+          },
+          "enabled": true,
+          "label": "Map"
+        },
+        {
+          "action": {
+            "keys": "I",
+            "mode": "tap",
+            "tap_ms": 60,
+            "type": "key"
+          },
+          "enabled": true,
+          "label": "Inventory"
+        },
+        {
+          "action": {
+            "keys": "Esc",
+            "mode": "tap",
+            "tap_ms": 60,
+            "type": "key"
+          },
+          "enabled": true,
+          "label": "Pause"
+        },
+        {
+          "action": {
+            "keys": "F12",
+            "mode": "tap",
+            "tap_ms": 60,
+            "type": "key"
+          },
+          "enabled": true,
+          "label": "Screenshot"
+        },
+        {
+          "action": {
+            "keys": "F5",
+            "mode": "tap",
+            "tap_ms": 60,
+            "type": "key"
+          },
+          "enabled": true,
+          "label": "Quick save"
+        },
+        {
+          "action": {
+            "tap_ms": 60,
+            "type": "wheel",
+            "wheel": "Right hand more (sub-wheel)"
+          },
+          "enabled": true,
+          "label": "More..."
+        }
+      ],
+      "title": "Right Hand Default"
+    },
+    "Right hand more (sub-wheel)": {
+      "items": [
+        {
+          "action": {
+            "tap_ms": 60,
+            "type": "back"
+          },
+          "enabled": true,
+          "label": "Back"
+        },
+        {
+          "action": {
+            "keys": "F9",
+            "mode": "tap",
+            "tap_ms": 60,
+            "type": "key"
+          },
+          "enabled": true,
+          "label": "Quick load"
+        },
+        {
+          "action": {
+            "tap_ms": 60,
+            "type": "keyboard"
+          },
+          "enabled": true,
+          "label": "Keyboard"
+        },
+        {
+          "action": {
+            "tap_ms": 60,
+            "type": "adjust"
+          },
+          "enabled": true,
+          "label": "Adjust positions"
+        },
+        {
+          "action": {
+            "tap_ms": 60,
+            "type": "reload"
+          },
+          "enabled": true,
+          "label": "Reload profile"
+        }
+      ],
+      "title": "More"
+    }
+  },
+  "wrist_left": {
+    "columns": 3,
+    "enabled": true,
+    "face": "inner",
+    "facing_deg": 35,
+    "gaze_deg": 20,
+    "hide_ms": 350,
+    "lift_m": 0.013,
+    "mirror": false,
+    "pages": {
+      "Left hand main": {
+)JSON"
+    R"JSON(        "items": [
+          {
+            "action": {
+              "keys": "F5",
+              "mode": "tap",
+              "tap_ms": 60,
+              "type": "key"
+            },
+            "enabled": true,
+            "label": "Quick save / F5"
+          },
+          {
+            "action": {
+              "keys": "Esc",
+              "mode": "tap",
+              "tap_ms": 60,
+              "type": "key"
+            },
+            "enabled": true,
+            "label": "Pause / ESC"
+          },
+          {
+            "action": {
+              "mode": "toggle",
+              "place": "wrist_left",
+              "tap_ms": 60,
+              "type": "screen"
+            },
+            "enabled": true,
+            "label": "Screen Mirror"
+          },
+          {
+            "action": {
+              "tap_ms": 60,
+              "type": "keyboard"
+            },
+            "enabled": true,
+            "label": "Open VR Keyboard"
+          },
+          {
+            "action": {
+              "page": "Left hand more (sub-page)",
+              "tap_ms": 60,
+              "type": "page"
+            },
+            "color": "#00838FE0",
+            "enabled": true,
+            "label": "-> Configuration Page"
+          },
+          {
+            "action": {
+              "keys": "LCtrl",
+              "mode": "toggle",
+              "tap_ms": 60,
+              "type": "key"
+            },
+            "enabled": false,
+            "label": "L-Ctrl toggle"
+          },
+          {
+            "action": {
+              "keys": "LShift",
+              "mode": "toggle",
+              "tap_ms": 60,
+              "type": "key"
+            },
+            "enabled": false,
+            "label": "L-Shift toggle"
+          },
+          {
+            "action": {
+              "keys": "RMB",
+              "tap_ms": 60,
+              "type": "key"
+            },
+            "enabled": false,
+            "label": "Right-click"
+          }
+        ],
+        "title": "Left Hand Default"
+      },
+      "Left hand more (sub-page)": {
+        "items": [
+          {
+            "action": {
+              "keys": "F9",
+              "mode": "tap",
+              "tap_ms": 60,
+              "type": "key"
+            },
+            "enabled": true,
+            "label": "Quick load/F9"
+          },
+          {
+            "action": {
+              "tap_ms": 60,
+              "type": "reload"
+            },
+            "enabled": true,
+            "label": "Reload profile Companion "
+          },
+          {
+            "action": {
+              "tap_ms": 60,
+              "type": "adjust"
+            },
+            "enabled": true,
+            "label": "Calibrate Menu Positions"
+          },
+          {
+            "action": {
+              "mode": "panel",
+              "tap_ms": 60,
+              "type": "controller_offsets"
+            },
+            "enabled": true,
+            "label": "Controller offsets Configuration"
+          },
+          {
+            "action": {
+              "mode": "toggle",
+              "tap_ms": 60,
+              "type": "headset_mirror"
+            },
+            "enabled": true,
+            "label": "VR mirror to Desktop"
+          },
+          {
+            "action": {
+              "tap_ms": 60,
+              "type": "settings_menu"
+            },
+            "enabled": true,
+            "label": "OpenXR Companion Ingame Editor"
+          },
+          {
+            "action": {
+              "keys": "F12",
+              "tap_ms": 60,
+              "type": "key"
+            },
+            "enabled": false,
+            "label": "Screenshot"
+          },
+          {
+            "action": {
+              "tap_ms": 60,
+              "type": "close"
+            },
+            "enabled": false,
+            "label": "Hide"
+          }
+        ],
+        "title": "Configuration Page"
+      }
+    },
+    "pose": [
+      0.001,
+      -0.016,
+      -0.103,
+      0.6134,
+      0.0369,
+      -0.0098,
+      -0.7889
+    ],
+    "press": "both",
+    "rotate_deg": -145.4,
+    "show_ms": 250,
+    "side_m": 0.087,
+    "size_m": 0.078,
+    "start_page": "Left hand main",
+    "text_up": "custom",
+    "toward_elbow_m": 0.074
   },
   "wrist_right": {
-    "enabled": true, "mirror": false, "face": "inner", "text_up": "custom", "rotate_deg": 140.3, "press": "both", "columns": 3,
-    "size_m": 0.073, "toward_elbow_m": 0.06, "lift_m": 0.022, "side_m": -0.085,
-    "start_page": "Right hand main",
+    "columns": 3,
+    "enabled": true,
+    "face": "inner",
+    "facing_deg": 35,
+    "gaze_deg": 20,
+    "hide_ms": 350,
+    "lift_m": 0.022,
+    "mirror": false,
     "pages": {
-      "Right hand main": { "title": "Right hand", "items": [
-        { "label": "Crouch toggle", "action": { "type": "key", "keys": "C", "mode": "toggle" } },
-        { "label": "Chat", "action": { "type": "key", "keys": "Enter" } },
-        { "label": "Quick save", "action": { "type": "key", "keys": "F5" } },
-        { "label": "Screenshot", "action": { "type": "key", "keys": "F12" } },
-        { "label": "Open right wheel", "action": { "type": "wheel", "wheel": "right" } },
-        { "label": "Hide", "action": { "type": "close" } }
-      ] }
-    }
+      "Left hand main (right)": {
+        "items": [
+          {
+            "action": {
+              "keys": "F5",
+              "mode": "tap",
+              "tap_ms": 60,
+              "type": "key"
+            },
+            "enabled": true,
+            "label": "Quick save / F5"
+          },
+          {
+            "action": {
+              "keys": "Esc",
+              "mode": "tap",
+              "tap_ms": 60,
+              "type": "key"
+            },
+            "enabled": true,
+            "label": "Pause / ESC"
+          },
+          {
+            "action": {
+              "mode": "toggle",
+              "place": "wrist_right",
+              "tap_ms": 60,
+              "type": "screen"
+            },
+            "enabled": true,
+            "label": "Screen Mirror"
+          },
+          {
+            "action": {
+              "tap_ms": 60,
+              "type": "keyboard"
+            },
+            "enabled": true,
+            "label": "Open VR Keyboard"
+          },
+          {
+            "action": {
+              "page": "Left hand more (sub-page) (right)",
+              "tap_ms": 60,
+              "type": "page"
+            },
+            "color": "#00838FE0",
+            "enabled": true,
+            "label": "-> Configuration Page"
+          },
+          {
+            "action": {
+              "keys": "LCtrl",
+              "mode": "toggle",
+              "tap_ms": 60,
+              "type": "key"
+            },
+            "enabled": false,
+            "label": "L-Ctrl toggle"
+          },
+          {
+            "action": {
+              "keys": "LShift",
+              "mode": "toggle",
+              "tap_ms": 60,
+              "type": "key"
+            },
+            "enabled": false,
+            "label": "L-Shift toggle"
+          },
+          {
+            "action": {
+              "keys": "RMB",
+              "tap_ms": 60,
+              "type": "key"
+            },
+            "enabled": false,
+            "label": "Right-click"
+          }
+        ],
+        "title": "Right Hand Default"
+      },
+      "Left hand more (sub-page) (right)": {
+        "items": [
+          {
+            "action": {
+              "keys": "F9",
+              "mode": "tap",
+              "tap_ms": 60,
+              "type": "key"
+            },
+            "enabled": true,
+            "label": "Quick load/F9"
+          },
+          {
+            "action": {
+              "tap_ms": 60,
+              "type": "reload"
+            },
+            "enabled": true,
+            "label": "Reload profile Companion "
+          },
+          {
+            "action": {
+              "tap_ms": 60,
+              "type": "adjust"
+            },
+            "enabled": true,
+            "label": "Calibrate Menu Positions"
+          },
+          {
+            "action": {
+              "mode": "panel",
+              "tap_ms": 60,
+              "type": "controller_offsets"
+            },
+            "enabled": true,
+            "label": "Controller offsets Configuration"
+          },
+          {
+            "action": {
+              "mode": "toggle",
+              "tap_ms": 60,
+              "type": "headset_mirror"
+            },
+            "enabled": true,
+            "label": "VR mirror to Desktop"
+          },
+          {
+            "action": {
+              "tap_ms": 60,
+              "type": "settings_menu"
+            },
+            "enabled": true,
+            "label": "OpenXR Companion Ingame Editor"
+          },
+          {
+            "action": {
+              "keys": "F12",
+              "tap_ms": 60,
+              "type": "key"
+            },
+            "enabled": false,
+            "label": "Screenshot"
+          },
+          {
+            "action": {
+              "tap_ms": 60,
+              "type": "close"
+            },
+            "enabled": false,
+            "label": "Hide"
+          }
+        ],
+        "title": "Configuration Page"
+      }
+    },
+    "pose": [
+      0.001,
+      -0.007,
+      -0.095,
+      -0.6468,
+      -0.0626,
+      0.0559,
+      0.7581
+    ],
+    "press": "both",
+    "rotate_deg": 140.3,
+    "show_ms": 250,
+    "side_m": -0.085,
+    "size_m": 0.073,
+    "start_page": "Left hand main (right)",
+    "text_up": "custom",
+    "toward_elbow_m": 0.06
   }
-}
-)JSON";
+})JSON";
 }
 
 // Parses profile text with the same parser as the layer (used by the tests and the editor).
