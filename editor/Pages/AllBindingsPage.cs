@@ -24,6 +24,8 @@ public class BindingRow : ListRow
                            InputText.Friendly(Binding.Input) + (Binding.Enabled ? "" : "   (off)");
     public string What => EditorApi.Plain(Binding.Action);
     public string Tip => Binding.Name + "  (click for all its settings)";
+    public string AttentionText { get; init; } // "This may need your attention": what the checks found, or null
+    public bool HasAttention => !string.IsNullOrEmpty(AttentionText);
 }
 
 // A settings page with the searched word on it (opens it with the word lit up).
@@ -58,6 +60,9 @@ public static class AllBindings
     {
         var rows = new List<ListRow>();
         q = (q ?? "").Trim();
+        var attention = Attention.Issues().GroupBy(i => i.Binding)
+            .ToDictionary(g => g.Key, g => "This may need your attention:\n" + string.Join("\n", g.Select(i => "• " + i.Title)) + "\n(open it for details and fixes)");
+        string Att(BindingModel b) => attention.TryGetValue(b, out var t) ? t : null;
         var layout = ControllerLayouts.ById(EditorApi.PictureChoice(p));
         var inputs = new List<string>();
         foreach (int h in new[] { 0, 1 })
@@ -79,12 +84,12 @@ public static class AllBindings
         {
             rows.Add(new HeadingRow { Text = $"Not on the {layout.Name} picture ({off.Count})",
                                       Note = "Made for another controller, or an input this controller doesn't have. They still work wherever the input exists." });
-            rows.AddRange(off.Select(b => new BindingRow { Binding = b, Lost = true }));
+            rows.AddRange(off.Select(b => new BindingRow { Binding = b, Lost = true, AttentionText = Att(b) }));
         }
         var on = list.Where(OnPicture).ToList();
         if (on.Count > 0 || (off.Count > 0 && show == "all"))
             rows.Add(new HeadingRow { Text = "What your controller buttons do" });
-        rows.AddRange(on.Select(b => new BindingRow { Binding = b }));
+        rows.AddRange(on.Select(b => new BindingRow { Binding = b, AttentionText = Att(b) }));
 
         bool Match(WheelItemModel i, string from) => q.Length == 0 || $"{i.Label} {EditorApi.Plain(i.Action)} {from}".Contains(q, StringComparison.OrdinalIgnoreCase);
         IEnumerable<WheelItemModel> Order(IEnumerable<WheelItemModel> items) => sort switch

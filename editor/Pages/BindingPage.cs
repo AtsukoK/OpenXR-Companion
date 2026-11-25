@@ -40,6 +40,9 @@ public class BindingPage : UserControl
     readonly Control lHold, lTap, lDbl, lPass, lTapOwn, lTapAction, lPressAt, lReleaseAt, lBlock;
     readonly Button fold = new() { Classes = { "link" }, FontWeight = FontWeight.Bold };
     readonly Border details;
+    Border howCard, buttonCard, actionCard;
+    Control lLayers;
+    bool howJustSet; // How was just changed: "Game also gets the button" was set for you, worth a look
     // other bindings on the same button that undo what this one says (e.g. a Hold letting short presses through)
     readonly StackPanel warnings = new() { Spacing = 6, Margin = new Thickness(0, 0, 0, 10) };
 
@@ -96,7 +99,7 @@ public class BindingPage : UserControl
         lPressAt = form.AddRow("Press point (%)", pressAt, "For an Index full squeeze: how hard.", "How far the trigger or grip must go. 0 = usual, low = hair trigger, high = a long pull.");
         lReleaseAt = form.AddRow("Keeps going until (%)", releaseAt, "30 = until you mostly let go. 0 = it stops as soon as the stick leaves the direction.",
                                  "Double flick: keeps going while you steer, until the stick comes back below this much from the middle.");
-        form.AddRow("Only while layer", layers, "Layers are switched on by other bindings (What happens: Switch a layer).", "Works only while this layer is on. Empty = always.");
+        lLayers = form.AddRow("Only while layer", layers, "Layers are switched on by other bindings (What happens: Switch a layer).", "Works only while this layer is on. Empty = always.");
         form.AddRow("Not while layer", notLayers, null, "Does nothing while this layer is on. Empty = never off.");
         details = Cards.Make("Details", form);
         details.IsVisible = detailsOpen;
@@ -104,7 +107,7 @@ public class BindingPage : UserControl
 
         var cards = new WrapPanel
         {
-            Children = { Cards.Make("1   How", howPanel), Cards.Make("2   Button", chord), Cards.Make("3   What happens", action) },
+            Children = { (howCard = Cards.Make("1   How", howPanel)), (buttonCard = Cards.Make("2   Button", chord)), (actionCard = Cards.Make("3   What happens", action)) },
         };
         Content = new ScrollViewer
         {
@@ -143,7 +146,7 @@ public class BindingPage : UserControl
         name.TextChanged += (s, e) => { if (Same(b.Name, name.Text)) return; b.Name = name.Text; Fire(); };
         enabled.IsCheckedChanged += (s, e) => { if (b.Enabled == (enabled.IsChecked == true)) return; b.Enabled = enabled.IsChecked == true; ShowWarnings(); Fire(); };
         chord.Changed += () => { if (b.Input == chord.Value) return; b.Input = chord.Value; Sync(); Fire(); };
-        gesture.SelectionChanged += (s, e) => { if (loading || gesture.Code == null || b.Gesture == gesture.Code) return; b.Gesture = gesture.Code; DefaultsForHow(); Sync(); Fire(); };
+        gesture.SelectionChanged += (s, e) => { if (loading || gesture.Code == null || b.Gesture == gesture.Code) return; b.Gesture = gesture.Code; DefaultsForHow(); howJustSet = true; Sync(); Fire(); };
         hold.ValueChanged += (s, e) => { if (loading || hold.Value == null || b.HoldMs == (int)hold.Value) return; b.HoldMs = (int)hold.Value; Fire(); };
         tap.ValueChanged += (s, e) => { if (loading || tap.Value == null || b.TapMs == (int)tap.Value) return; b.TapMs = (int)tap.Value; Fire(); };
         dbl.ValueChanged += (s, e) => { if (loading || dbl.Value == null || b.DoubleTapMs == (int)dbl.Value) return; b.DoubleTapMs = (int)dbl.Value; Fire(); };
@@ -151,7 +154,7 @@ public class BindingPage : UserControl
         releaseAt.ValueChanged += (s, e) => { if (loading || releaseAt.Value == null) return; double v = releaseAt.Value < 5 ? 0 : (double)releaseAt.Value / 100; if (Math.Round(b.ReleaseAt * 100) == Math.Round(v * 100)) return; b.ReleaseAt = v; Fire(); };
         layers.TextChanged += (s, e) => { if (Same(b.Layers, layers.Text)) return; b.Layers = (layers.Text ?? "").Trim(); Fire(); };
         notLayers.TextChanged += (s, e) => { if (Same(b.NotLayers, notLayers.Text)) return; b.NotLayers = (notLayers.Text ?? "").Trim(); Fire(); };
-        block.SelectionChanged += (s, e) => { if (loading || block.Code == null || b.Block == block.Code) return; b.Block = block.Code; Sync(); Fire(); };
+        block.SelectionChanged += (s, e) => { if (loading || block.Code == null || b.Block == block.Code) return; b.Block = block.Code; howJustSet = false; Sync(); Fire(); };
         passthrough.IsCheckedChanged += (s, e) => { if (loading || b.TapPassthrough == (passthrough.IsChecked == true)) return; b.TapPassthrough = passthrough.IsChecked == true; ShowWarnings(); Fire(); };
         action.Changed += Fire;
         tapOwn.IsCheckedChanged += (s, e) =>
@@ -183,42 +186,99 @@ public class BindingPage : UserControl
                                                        && !string.IsNullOrWhiteSpace(o.Input) && InputText.Split(o.Input) == mine);
     }
 
-    // Bindings on the same button that disagree about the game getting it, with a one-click fix each.
+    // "This may need your attention": the profile checks for this binding (core BindingChecks), each with a fix
+    // and "Looks right"; the setting each one is about glows until it is changed or marked as fine.
     void ShowWarnings()
     {
         warnings.Children.Clear();
-        if (!b.Enabled) return;
-        string btn = InputText.Friendly((b.Input ?? "").Split('+').Last());
-        bool keeps = (b.Block ?? "none") != "none";
-        bool leaks = b.Gesture == GestureKind.Hold && b.TapPassthrough && b.TapAction == null;
-        foreach (var o in SameButton().Where(o => o.Enabled))
+        Control[] all = { lBlock, lPass, lTapOwn, lLayers, howCard, buttonCard, actionCard };
+        foreach (var c in all) Glow(c, false);
+        var issues = Attention.For(b);
+        if (howJustSet)
+            Glow(lBlock, true, "Set for you from How: check this is what you want.");
+        if (issues.Count == 0) return;
+        warnings.Children.Add(new TextBlock
         {
-            bool oLeaks = o.Gesture == GestureKind.Hold && o.TapPassthrough && o.TapAction == null;
-            bool oKeeps = (o.Block ?? "none") != "none";
-            if (keeps && oLeaks)
-                AddWarning($"'{o.Name}' (Hold) on {btn} sends short presses to the game, so single presses still reach it even though this binding keeps the button from the game.",
-                           "Stop that binding's short presses", () => o.TapPassthrough = false);
-            else if (leaks && oKeeps)
-                AddWarning($"This binding sends short presses of {btn} to the game, but '{o.Name}' keeps the button from the game. Short presses will still reach it.",
-                           "Stop this binding's short presses", () => { b.TapPassthrough = false; loading = true; passthrough.IsChecked = false; loading = false; });
+            Text = issues.Count == 1 ? "⚠  This may need your attention" : $"⚠  {issues.Count} things may need your attention",
+            FontWeight = FontWeight.Bold, Foreground = Brush.Parse("#F2C94C"),
+        });
+        foreach (var i in issues)
+        {
+            AddWarning(i);
+            Glow(i.Field switch
+            {
+                "block" => lBlock, "short_press" => b.TapAction == null && b.Gesture == GestureKind.Hold ? lPass : lTapOwn,
+                "layers" => lLayers, "how" => howCard, "button" => buttonCard, "action" => actionCard, _ => null,
+            }, true);
         }
     }
 
-    void AddWarning(string text, string fix, Action apply)
+    void Glow(Control c, bool on, string note = null)
     {
-        var button = new Button { Content = fix, Classes = { "pill" } };
-        button.Click += (s, e) => { apply(); Shell.Store.MarkDirty(); Sync(); Shell.SetStatus("Fixed: " + fix.ToLowerInvariant() + "."); };
+        switch (c)
+        {
+            case Border card when on:
+                card.BorderBrush = Attention.GlowBorder;
+                card.BorderThickness = new Thickness(2);
+                break;
+            case Border card:
+                card.ClearValue(Border.BorderBrushProperty);
+                card.ClearValue(Border.BorderThicknessProperty);
+                break;
+            case Grid row:
+                row.Background = on ? Attention.GlowFill : null;
+                ToolTip.SetTip(row, on ? note : null);
+                break;
+        }
+    }
+
+    void AddWarning(BindingIssue i)
+    {
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
+        if (i.Fix != null)
+        {
+            var fix = new Button { Content = i.FixLabel, Classes = { "pill" } };
+            fix.Click += (s, e) =>
+            {
+                i.Fix();
+                Shell.Store.MarkDirty();
+                loading = true;
+                block.Code = b.Block; passthrough.IsChecked = b.TapPassthrough; enabled.IsChecked = b.Enabled;
+                loading = false;
+                Sync();
+                Shell.SetStatus("Fixed: " + i.FixLabel.ToLowerInvariant() + ".");
+            };
+            buttons.Children.Add(fix);
+        }
+        if (i.Other != null)
+        {
+            var open = new Button { Content = "Open '" + i.Other.Name + "'", Classes = { "pill" } };
+            open.Click += (s, e) => Shell.Go("binding:" + Shell.Store.Profile.Bindings.IndexOf(i.Other));
+            buttons.Children.Add(open);
+        }
+        var ok = new Button { Content = "Looks right", Classes = { "pill" } };
+        ToolTip.SetTip(ok, "It's meant to be like this: stop pointing it out (it asks again if this binding changes).");
+        ok.Click += (s, e) => { Attention.LooksRight(i); ShowWarnings(); Shell.SetStatus("OK, it won't be pointed out again unless the binding changes."); };
+        buttons.Children.Add(ok);
         warnings.Children.Add(new Border
         {
-            Background = Brush.Parse("#3A3220"), BorderBrush = Brush.Parse("#F2C94C"), BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6), Padding = new Thickness(12, 8), MaxWidth = 1100, HorizontalAlignment = HorizontalAlignment.Left,
+            Background = Brush.Parse("#3A3220"), BorderBrush = Attention.GlowBorder, BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6), Padding = new Thickness(12, 8), MaxWidth = 1200, HorizontalAlignment = HorizontalAlignment.Left,
             Child = new StackPanel
             {
-                Orientation = Orientation.Horizontal, Spacing = 12,
+                Orientation = Orientation.Horizontal, Spacing = 14,
                 Children =
                 {
-                    new TextBlock { Text = "⚠  " + text, TextWrapping = TextWrapping.Wrap, MaxWidth = 820, VerticalAlignment = VerticalAlignment.Center, Foreground = Brush.Parse("#F7E3A1") },
-                    button,
+                    new StackPanel
+                    {
+                        MaxWidth = 700, VerticalAlignment = VerticalAlignment.Center, Spacing = 2,
+                        Children =
+                        {
+                            new TextBlock { Text = i.Title, FontWeight = FontWeight.SemiBold, Foreground = Brush.Parse("#F7E3A1") },
+                            new TextBlock { Text = i.Text, TextWrapping = TextWrapping.Wrap, Foreground = Brush.Parse("#E8DDBA") },
+                        },
+                    },
+                    buttons,
                 },
             },
         });
@@ -251,6 +311,7 @@ public class BindingPage : UserControl
             return;
         Shell.Store.MarkDirty();
         ShowSentence();
+        ShowWarnings();
         if (!detailsOpen)
             ShowFold();
     }

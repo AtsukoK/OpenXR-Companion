@@ -45,14 +45,16 @@
 
         <DataTemplate DataType="local:BindingRow">
           <Border Classes="row" Classes.lost="{Binding Lost}" Classes.off="{Binding !IsOn}" ToolTip.Tip="{Binding Tip}">
-            <Grid ColumnDefinitions="44,2*,32,3*,40,40">
+            <Grid ColumnDefinitions="44,2*,32,3*,150,40,40">
               <Button Classes="glyph onoff" Classes.on="{Binding IsOn}" Content="{Binding OnGlyph}" Click="Toggle_Click"
                       ToolTip.Tip="Switch it on or off (it stays here)" />
               <TextBlock Grid.Column="1" Classes="rowmain" Text="{Binding Where}" />
               <TextBlock Grid.Column="2" Text="→" Classes="rowsub" HorizontalAlignment="Center" />
               <TextBlock Grid.Column="3" Classes="rowsub" Text="{Binding What}" />
-              <Button Grid.Column="4" Classes="glyph" Content="⧉" Click="Duplicate_Click" ToolTip.Tip="Duplicate (a copy right below it, switched off)" />
-              <Button Grid.Column="5" Classes="glyph del" Content="✕" Click="Delete_Click" ToolTip.Tip="Delete" />
+              <TextBlock Grid.Column="4" Text="⚠ check this" Foreground="#F2C94C" FontWeight="SemiBold" VerticalAlignment="Center"
+                         IsVisible="{Binding HasAttention}" ToolTip.Tip="{Binding AttentionText}" />
+              <Button Grid.Column="5" Classes="glyph" Content="⧉" Click="Duplicate_Click" ToolTip.Tip="Duplicate (a copy right below it, switched off)" />
+              <Button Grid.Column="6" Classes="glyph del" Content="✕" Click="Delete_Click" ToolTip.Tip="Delete" />
             </Grid>
           </Border>
         </DataTemplate>
