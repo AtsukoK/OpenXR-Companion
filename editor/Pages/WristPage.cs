@@ -89,7 +89,7 @@ public class WristPage : UserControl
         var listCard = Cards.Make("Buttons on this page", new StackPanel
         {
             Spacing = 6, Width = 560,
-            Children = { new TextBlock { Classes = { "desc" }, MaxWidth = 560, Text = "Click one to change it. Drag ≡ (or ↑ ↓) to reorder it (or drag a button in the picture onto another to swap them). The circle switches it on or off: off = not on the panel, kept here." }, ItemSort.Bar(RefreshList), rows },
+            Children = { new TextBlock { Classes = { "desc" }, MaxWidth = 560, Text = "Click one to change it. Drag ≡ (or ↑ ↓) to reorder it (or drag a button in the picture onto another to swap them). On / Off switches it: off = not on the panel, kept here." }, ItemSort.Bar(RefreshList), rows },
         });
         var panelCard = Cards.Make("Panel", PanelSettings());
         // the tip inside the arm card, under its numbers (the column is too narrow for it beside them)

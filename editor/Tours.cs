@@ -85,7 +85,7 @@ public static class Tours
               () => T("+ Add a button that opens it"), () => openersAtStart = Openers(),
               () => Openers() > openersAtStart),
             S("That's it: it opens in VR",
-              "The new line under 'Opened by' is the button that opens this wheel. Its circle switches it on or off; ✕ deletes it; click it for timing and more.\n\n" +
+              "The new line under 'Opened by' is the button that opens this wheel. Its On / Off switches it; ✕ deletes it; click it for timing and more.\n\n" +
               "In VR: do that with the controller, point at an item and pull the trigger (or let go, for a hold). Save first (Ctrl+S): a running game picks it up within a second.",
               () => T("Opened by")),
         };

@@ -103,7 +103,7 @@ public class WheelPage : UserControl
         var itemsCard = Cards.Make("Items on this wheel", new StackPanel
         {
             Spacing = 6, Width = 560,
-            Children = { Note("Click one to change it. Drag ≡ (or ↑ ↓) to reorder it (or drag an item in the picture onto another to swap them). The circle switches it on or off: off = not on the wheel, kept here."), ItemSort.Bar(RefreshItems), itemRows },
+            Children = { Note("Click one to change it. Drag ≡ (or ↑ ↓) to reorder it (or drag an item in the picture onto another to swap them). On / Off switches it: off = not on the wheel, kept here."), ItemSort.Bar(RefreshItems), itemRows },
         });
         var openCard = Cards.Make("Opened by", new StackPanel
         {
