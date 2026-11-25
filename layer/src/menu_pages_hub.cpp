@@ -165,11 +165,13 @@ MenuPage Main(Engine& e, InGameMenu& m) {
         const WristStyle& W = e.prof->wrist[h];
         return !W.enabled ? std::string("off") : W.mirror ? std::string("mirrored") : std::to_string(W.pages.size()) + (W.pages.size() == 1 ? " page" : " pages");
     };
-    std::vector<std::string> titles = { "Controllers", "Radial wheels", "Wrist panels", "Sticks", "All bindings", "More settings" };
+    std::vector<std::string> titles = { "Controllers", "Radial wheels", "Wrist panels", "Modes", "Sticks", "All bindings", "More settings" };
+    std::string modeNow = e.wrist[0].mode;
     std::vector<std::string> details = {
         "What every button does. Point at a button to change it",
         std::to_string(nWheels) + (nWheels == 1 ? " wheel" : " wheels") + ": buttons, what opens them, look",
         "Left: " + wristWord(0) + ", right: " + wristWord(1),
+        modeNow.empty() ? std::string("None on now. Turn one on: buttons do something else") : "Now: " + modeNow,
         "Deadzones, straight directions, test",
         std::to_string(nBindings) + " on: the full list, add one",
         "Laser, haptics, offsets, mirror...",
@@ -178,12 +180,59 @@ MenuPage Main(Engine& e, InGameMenu& m) {
         [&e, &m] { m.Push([&e, &m] { return Overview(e, m); }); },
         [&e, &m] { m.Push([&e, &m] { return Wheels(e, m); }); },
         [&e, &m] { m.Push([&e, &m] { return WristHub(e, m); }); },
+        [&e, &m] { m.Push([&e, &m] { return Modes(e, m); }); },
         [&e, &m] { m.Push([&e, &m] { return Sticks(e, m); }); },
         [&e, &m] { m.Push([&e, &m] { return Home(e, m); }); },
         [&e, &m] { m.Push([&e, &m] { return MoreSettings(e, m); }); },
     };
+    if (!modeNow.empty()) {
+        MenuRow now = MenuRow::Note("Mode now:  " + modeNow, "Buttons work the way this mode sets them. Modes tile: switch or see what changes");
+        now.isWarn = true;
+        p.rows.push_back(now);
+    }
     p.rows.push_back(MenuRow::Tiles(titles, details, open, 3, 7));
     p.rows.push_back(MenuRow::Bar({ "Save now  (changes also save by themselves a second later)" }, { [&m] { m.SaveNow(); } }));
+    return p;
+}
+
+// ------------------------------------------------------------------------------------------------ modes
+// Modes: switch each on or off right here (turning one on turns the others off, unless set to be together),
+// and see the buttons each one changes.
+MenuPage Modes(Engine& e, InGameMenu& m) {
+    MenuPage p;
+    p.title = "Modes";
+    auto names = e.ModeNames();
+    std::string now = e.wrist[0].mode;
+    p.rows.push_back(MenuRow::Note(now.empty() ? "No mode on now" : "Mode now:  " + now,
+                                   "A mode changes what some buttons do while it's on (Combat: Y presses K)"));
+    if (names.empty()) {
+        p.rows.push_back(MenuRow::Note("No modes in this profile yet", "Make one in the desktop editor: Modes tab"));
+        return p;
+    }
+    for (const std::string& n : names) {
+        int changes = 0;
+        for (auto& b : e.prof->bindings)
+            for (auto& l : b.layers) changes += l == n ? 1 : 0;
+        std::string up = n;
+        for (char& c : up) c = (char)toupper((unsigned char)c);
+        p.rows.push_back(MenuRow::Heading(up));
+        p.rows.push_back(MenuRow::Toggle(up + " mode", std::to_string(changes) + (changes == 1 ? " button changes" : " buttons change"),
+                                         [&e, n] { return e.ModeOn(n); },
+                                         [&e, &m, n](bool on) {
+                                             Action a;
+                                             a.type = ActType::Layer;
+                                             a.layer = n;
+                                             a.mode = on ? ActMode::On : ActMode::Off;
+                                             e.MenuRunAction(a);
+                                             m.Refresh();
+                                         }));
+        for (int i = 0; i < (int)e.prof->bindings.size(); i++) {
+            const Binding& b = e.prof->bindings[i];
+            if (std::find(b.layers.begin(), b.layers.end(), n) == b.layers.end()) continue;
+            p.rows.push_back(MenuRow::Link(b.chordText + ":  " + b.name, b.enabled ? "In this mode" : "In this mode (switched off)",
+                                           [&e, &m, i] { m.Push([&e, &m, i] { return BindingDetail(e, m, i); }); }));
+        }
+    }
     return p;
 }
 

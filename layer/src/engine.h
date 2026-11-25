@@ -59,6 +59,8 @@ struct WheelView {
     std::vector<bool> on; // per item: its toggle is currently on
     uint64_t version = 0;
     float alpha = 1.f; // see-through while adjusting other things (1 = solid)
+    std::string mode;  // the mode badge: active modes, upper case ("" = none)
+    uint32_t modeColor = 0;
 };
 // Keyboard layout in key units (one letter key = 1x1).
 enum KbKind { KB_KEY, KB_SHIFT, KB_CAPS, KB_CTRL, KB_ALT, KB_CLOSE, KB_MOVE, KB_CONTROLLER };
@@ -103,6 +105,8 @@ struct WristView {
     float sizeM = 0.11f;
     std::vector<bool> on; // per cell: its toggle is currently on
     uint64_t version = 0;
+    std::string mode;     // the mode badge: active modes, upper case ("" = none)
+    uint32_t modeColor = 0;
     // Touch cursor: a ring on the panel under the pressing hand's fingertip.
     bool cursor = false;
     XrPosef cursorPose{ { 0, 0, 0, 1 }, { 0, 0, 0 } };
@@ -297,6 +301,9 @@ public:
     void EditProfile(const std::function<void(Profile&)>& edit);
     // Run an action from the in-game menu (adjust mode, headset mirror...), as if a button had fired it.
     void MenuRunAction(const Action& a) { RunAction(a, 1, -1, false); }
+    bool ModeOn(const std::string& l) const { return layers.count(l) > 0; }
+    // Every mode the profile knows: from bindings (only in / off in, turn on), wheel and wrist items, the modes list.
+    std::vector<std::string> ModeNames() const;
 
 private:
     WristPanels wristPanels{ *this };
@@ -407,6 +414,8 @@ private:
     XrPosef WheelPose(int hand) const;
     static Override MakeOv(const InputId& t);
     void Dirty() { view.version++; }
+    std::set<std::string> toggledModes; // modes turned on by a toggle / on (not held): only one at a time unless "together"
+    void ShowModes();                   // the mode badge on the wrist panels and the wheel
     void UpdatePointers();
 
     // wrist panel

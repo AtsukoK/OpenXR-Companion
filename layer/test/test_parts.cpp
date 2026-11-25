@@ -385,6 +385,33 @@ void TestWristViewSetup() {
     CHECK(!e.adjust && !e.wristViewTest && e.setup.step < 0, "wrist view: A ends it (adjust mode off)");
 }
 
+// Modes: turning one on (toggle / on) turns the others off, unless set to be together; a held mode stacks on top;
+// the badge on the wrist panels and the wheel names the modes on; a binding only in a mode wins over the plain one.
+void TestModes() {
+    std::string err;
+    auto p = ParseProfileText(R"({ "modes": { "driving": { "color": "#3080F0", "together": true } }, "bindings": [
+      { "name": "Y = yes", "input": "right.b", "gesture": "press", "action": { "type": "key", "keys": "Y" } },
+      { "name": "Y = K in combat", "input": "right.b", "gesture": "press", "layers": "combat", "action": { "type": "key", "keys": "K" } } ] })", err);
+    CHECK(p && err.empty() && p->modes.count("driving") && p->modes["driving"].together, ("modes: the modes list reads " + err).c_str());
+    if (!p) return;
+    Engine e;
+    e.SetProfile(p);
+    auto run = [&](const char* l, ActMode m) { Action a; a.type = ActType::Layer; a.layer = l; a.mode = m; e.MenuRunAction(a); };
+    run("combat", ActMode::Toggle);
+    CHECK(e.ModeOn("combat") && e.wrist[0].mode == "COMBAT" && e.wrist[1].mode == "COMBAT", "modes: on, and the badge says so");
+    run("looting", ActMode::On);
+    CHECK(e.ModeOn("looting") && !e.ModeOn("combat") && e.wrist[0].mode == "LOOTING", "modes: turning another on turns the first off");
+    run("driving", ActMode::Toggle);
+    CHECK(e.ModeOn("driving") && e.ModeOn("looting"), "modes: a mode set to 'together' doesn't turn the others off");
+    run("looting", ActMode::Toggle);
+    CHECK(!e.ModeOn("looting") && e.ModeOn("driving") && e.wrist[0].mode == "DRIVING", "modes: toggle again turns it off");
+    run("driving", ActMode::Off);
+    CHECK(e.wrist[0].mode.empty(), "modes: none on, no badge");
+    auto names = e.ModeNames();
+    CHECK(std::find(names.begin(), names.end(), "combat") != names.end() && std::find(names.begin(), names.end(), "driving") != names.end(),
+          "modes: the menu lists every mode the profile uses");
+}
+
 void TestSetupPositions() {
     wchar_t tmp[MAX_PATH];
     GetTempPathW(MAX_PATH, tmp);
@@ -761,7 +788,8 @@ void TestDoubleFlickRelease() { // a double flick with release_at: steer freely 
 
 void TestDoubleTapSingle() { // double-tap with a single-tap action: a lone tap runs it after the window; a double tap or a long press never does
     std::string err;
-    auto p = ParseProfileText(R"({ "bindings": [
+    auto p = ParseProfileText(R"({ "modes": { "dbl": { "together": true }, "single": { "together": true }, "dbl2": { "together": true } },
+      "bindings": [
       { "name": "wait", "input": "left.thumbstick", "gesture": "double_tap", "double_tap_ms": 350, "block": "trigger",
         "action": { "type": "layer", "layer": "dbl", "mode": "toggle" },
         "tap_action": { "type": "layer", "layer": "single", "mode": "toggle" } },

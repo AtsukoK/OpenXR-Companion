@@ -382,6 +382,13 @@ struct Profile {
     const WristStyle& WristPages(int h) const { return wrist[h].mirror ? wrist[1 - h] : wrist[h]; }
     std::vector<Binding> bindings;
     std::map<std::string, Wheel> wheels;
+    // Modes (layers, as the editor calls them): a colour for the badge, and whether it may be on together with other
+    // modes. Without "together", turning a mode on (toggle / on) turns the other modes off. Names in lower case.
+    struct ModeInfo {
+        uint32_t color = 0xFFE0A030;
+        bool together = false;
+    };
+    std::map<std::string, ModeInfo> modes;
 };
 
 void PrepareDefaults();

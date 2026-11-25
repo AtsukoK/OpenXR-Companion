@@ -613,6 +613,14 @@ static std::shared_ptr<Profile> ParseProfile(const json& j) {
     if (j.contains("wheels"))
         for (auto& [name, w] : j["wheels"].items())
             p->wheels[name] = ParseItemList(name, w, "wheel '" + name + "'");
+    if (j.contains("modes") && j["modes"].is_object())
+        for (auto& [name, m] : j["modes"].items()) {
+            if (!m.is_object()) continue;
+            Profile::ModeInfo mi;
+            mi.color = ParseColor(m.value("color", json()), mi.color);
+            mi.together = m.value("together", false);
+            p->modes[Lower(name)] = mi;
+        }
 
     // Wrist panels come after the wheels: older profiles use a wheel as the panel's page.
     if (j.contains("wrist_panel")) { // older profiles: one panel with a "hand"

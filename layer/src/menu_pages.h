@@ -44,6 +44,7 @@ MenuPage WristPanel(Engine& e, InGameMenu& m, int hand);
 MenuPage WristPage(Engine& e, InGameMenu& m, int hand, const std::string& name);
 MenuPage Sticks(Engine& e, InGameMenu& m);
 MenuPage MoreSettings(Engine& e, InGameMenu& m);
+MenuPage Modes(Engine& e, InGameMenu& m); // switch modes (layers) on / off, see what each changes
 
 // "Right A", "Left thumbstick: up", "Right trigger (touch)": an input in words.
 std::string InputWords(const InputId& id);

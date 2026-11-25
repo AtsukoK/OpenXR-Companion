@@ -71,6 +71,7 @@ void Engine::Reset() {
     padToggles.clear();
     padHolds.clear();
     padPulses.clear();
+    toggledModes.clear();
     layers.clear();
     for (auto& b : bs)
         b = BState{};
@@ -246,8 +247,63 @@ void Engine::SetLayer(const std::string& l, bool on) {
         layers.insert(l);
     else
         layers.erase(l);
+    if (!on) toggledModes.erase(l);
     Log("layer %s %s", l.c_str(), on ? "on" : "off");
-    Toast("Layer " + l + (on ? " ON" : " off"), 1.2);
+    std::string up = l;
+    for (char& c : up) c = (char)toupper((unsigned char)c);
+    Toast(up + " mode " + (on ? "ON" : "off"), 1.5);
+    if (prof && prof->haptics) haptics.push_back({ 1, prof->hapticAmp * (on ? 0.8f : 0.4f), 0.03f });
+    ShowModes();
+}
+
+std::vector<std::string> Engine::ModeNames() const {
+    std::set<std::string> s;
+    if (!prof) return {};
+    auto act = [&](const Action& a) { if (a.type == ActType::Layer && !a.layer.empty()) s.insert(a.layer); };
+    for (auto& b : prof->bindings) {
+        for (auto& l : b.layers) s.insert(l);
+        for (auto& l : b.notLayers) s.insert(l);
+        act(b.action);
+        if (b.hasTapAction) act(b.tapAction);
+    }
+    for (auto& [n, w] : prof->wheels)
+        for (auto& i : w.items) act(i.action);
+    for (int h = 0; h < 2; h++)
+        for (auto& [n, w] : prof->wrist[h].pages)
+            for (auto& i : w.items) act(i.action);
+    for (auto& [n, m] : prof->modes) s.insert(n);
+    return { s.begin(), s.end() };
+}
+
+// The badge over the wrist panels and in the wheel: the modes on now, the switched-on ones first.
+void Engine::ShowModes() {
+    std::string text;
+    uint32_t color = 0;
+    auto add = [&](const std::string& l) {
+        std::string up = l;
+        for (char& c : up) c = (char)toupper((unsigned char)c);
+        if (!text.empty()) text += " + ";
+        text += up;
+        if (!color) {
+            auto it = prof ? prof->modes.find(l) : decltype(prof->modes.end()){};
+            color = prof && it != prof->modes.end() ? it->second.color : 0xFFE0A030;
+        }
+    };
+    for (auto& l : toggledModes)
+        if (layers.count(l)) add(l);
+    for (auto& l : layers)
+        if (!toggledModes.count(l)) add(l);
+    for (int h = 0; h < 2; h++)
+        if (wrist[h].mode != text || wrist[h].modeColor != color) {
+            wrist[h].mode = text;
+            wrist[h].modeColor = color;
+            wrist[h].version++;
+        }
+    if (view.mode != text || view.modeColor != color) {
+        view.mode = text;
+        view.modeColor = color;
+        Dirty();
+    }
 }
 
 // Returns true when the action keeps running until EndAction (hold behaviour).
@@ -309,18 +365,30 @@ bool Engine::RunAction(const Action& a, int hand, int bi, bool fromWheel) {
         padPulses.push_back({ a.pad, until });
         return false;
     }
-    case ActType::Layer:
+    case ActType::Layer: {
         if (a.mode == ActMode::Hold && !fromWheel) {
             SetLayer(a.layer, true);
             return true;
         }
-        if (a.mode == ActMode::On)
+        bool turnOn = a.mode == ActMode::On || (a.mode != ActMode::Off && !layers.count(a.layer));
+        if (turnOn) {
+            std::string me = a.layer;
+            for (char& c : me) c = (char)tolower((unsigned char)c);
+            auto together = [&](const std::string& l) {
+                std::string k = l;
+                for (char& c : k) c = (char)tolower((unsigned char)c);
+                auto it = prof->modes.find(k);
+                return it != prof->modes.end() && it->second.together;
+            };
+            if (!together(a.layer)) // exclusive: the other switched-on modes go off
+                for (auto l : std::vector<std::string>(toggledModes.begin(), toggledModes.end()))
+                    if (l != a.layer && !together(l)) SetLayer(l, false);
+            toggledModes.insert(a.layer);
             SetLayer(a.layer, true);
-        else if (a.mode == ActMode::Off)
+        } else
             SetLayer(a.layer, false);
-        else
-            SetLayer(a.layer, !layers.count(a.layer));
         return false;
+    }
     case ActType::Wheel:
         if (fromWheel) {
             auto it = prof->wheels.find(a.wheel);

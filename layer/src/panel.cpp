@@ -259,6 +259,26 @@ static std::unique_ptr<Font> MakeFont(const Style& st, float px, int style) {
     return std::make_unique<Font>(&fam, px, style, UnitPixel);
 }
 
+// The mode badge: a small pill in the mode's colour with its name, centred on cx.
+static void DrawModePill(Graphics& g, const std::string& text, uint32_t color, float cx, float y, float h, const Style& st) {
+    if (text.empty()) return;
+    auto f = MakeFont(st, h * 0.62f, FontStyleBold);
+    std::wstring t = L"● " + Utf8ToW(text);
+    RectF box;
+    g.MeasureString(t.c_str(), -1, f.get(), PointF(0, 0), &box);
+    float w = box.Width + h * 0.8f, x = cx - w / 2;
+    GraphicsPath gp;
+    gp.AddArc(x, y, h, h, 90, 180);
+    gp.AddArc(x + w - h, y, h, h, 270, 180);
+    gp.CloseFigure();
+    SolidBrush fill{ Color((color & 0x00FFFFFFu) | 0xF0000000u) }, dark{ Color(0xFF101418) };
+    g.FillPath(&fill, &gp);
+    StringFormat c;
+    c.SetAlignment(StringAlignmentCenter);
+    c.SetLineAlignment(StringAlignmentCenter);
+    g.DrawString(t.c_str(), -1, f.get(), RectF(x, y, w, h), &c, &dark);
+}
+
 void DrawWheel(std::vector<uint32_t>& out, int S, const Profile& p, const WheelView& v) {
     EnsureGdi();
     const Style& st = p.style;
@@ -338,6 +358,7 @@ void DrawWheel(std::vector<uint32_t>& out, int S, const Profile& p, const WheelV
         RectF t2(c - r * 0.85f, c + r * 0.05f, r * 1.7f, r * 0.6f);
         g.DrawString(Utf8ToW(bottom).c_str(), -1, smallFont.get(), t2, &fmt, &accentB);
     }
+    DrawModePill(g, v.mode, v.modeColor, c, c + r * 0.36f, S * 0.042f, st); // the active mode
     Grab(bmp, out, S, S);
 }
 
@@ -655,6 +676,16 @@ void DrawWrist(std::vector<uint32_t>& out, int S, const Profile& p, const WristS
     SolidBrush textB{ Color(st.text) }, accentB{ Color(st.accent) }, darkB{ Color(0xFF101418) };
     auto headFont = MakeFont(st, S * 0.055f * st.fontScale, FontStyleBold);
     RectF hr(hd.x * S, hd.y * S, hd.w * S, hd.h * S);
+    if (!v.mode.empty() && !v.adjust) { // the active mode badge on the right of the header, the title beside it
+        float ph = hd.h * S * 0.62f;
+        auto f = MakeFont(st, ph * 0.62f, FontStyleBold);
+        RectF box;
+        std::wstring t = L"● " + Utf8ToW(v.mode);
+        g.MeasureString(t.c_str(), -1, f.get(), PointF(0, 0), &box);
+        float pw = std::min(box.Width + ph * 0.8f, hd.w * S * 0.55f);
+        DrawModePill(g, v.mode, v.modeColor, (hd.x + hd.w) * S - pw / 2 - 4, hd.y * S + (hd.h * S - ph) / 2, ph, st);
+        hr.Width -= pw + 8;
+    }
     g.DrawString(Utf8ToW(v.adjust ? std::string("Adjust: grip to move") : v.wheel->title).c_str(), -1, headFont.get(), hr, &fmt, &accentB);
 
     float cellPx = cells.empty() ? 0 : cells[0].h * S;

@@ -12,6 +12,7 @@ void TestQuickBindings();
 void TestHoldOnlyQuickBinding();
 void TestStickOptions();
 void TestSetupPositions();
+void TestModes();
 void TestWristViewSetup();
 void TestSteamFrame();
 void TestPressPoints();
@@ -599,6 +600,13 @@ int main(int argc, char** argv) {
     std::vector<uint32_t> px;
     DrawWheel(px, p->style.texSize, *p, e.view);
     SavePng(px, p->style.texSize, p->style.texSize, L"wheel_main.png");
+    {
+        WheelView mv = e.view;
+        mv.mode = "COMBAT";
+        mv.modeColor = 0xFFE0583A;
+        DrawWheel(px, p->style.texSize, *p, mv);
+        SavePng(px, p->style.texSize, p->style.texSize, L"wheel_mode.png");
+    }
     f.h[1].sx = 0;
     f.h[1].sy = 0;
     step(3);
@@ -789,6 +797,13 @@ int main(int argc, char** argv) {
         std::vector<uint32_t> wpx;
         DrawWrist(wpx, 512, *p, p->wrist[0], e.wrist[0]);
         SavePng(wpx, 512, 512, L"wrist_panel.png");
+        { // the same with a mode on: its badge in the header
+            WristView mv = e.wrist[0];
+            mv.mode = "COMBAT";
+            mv.modeColor = 0xFFE0583A;
+            DrawWrist(wpx, 512, *p, p->wrist[0], mv);
+            SavePng(wpx, 512, 512, L"wrist_panel_mode.png");
+        }
 
         // Poke the third cell (Keyboard) from the front.
         std::vector<Cell> cells;
@@ -2695,6 +2710,7 @@ int main(int argc, char** argv) {
     TestHoldOnlyQuickBinding();
     TestStickOptions();
     TestSetupPositions();
+    TestModes();
     TestWristViewSetup();
     TestSteamFrame();
     TestPressPoints();
