@@ -12,6 +12,17 @@ static class Program
     public static int Main(string[] args)
     {
         TestRun = args.Length > 0 && args[0].StartsWith("--") && args[0] != "--data" && args[0] != "--updated";
+        // A crash leaves logs/editor_crash.log in the data folder (what and where), so it can be found afterwards.
+        AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+        {
+            try
+            {
+                var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenXRCompanion", "logs");
+                Directory.CreateDirectory(dir);
+                File.AppendAllText(Path.Combine(dir, "editor_crash.log"), $"---- {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n{e.ExceptionObject}\n\n");
+            }
+            catch { }
+        };
         // --printversion <file>: write this build's version and exit (the update test starts the swapped-in editor with it)
         if (args.Length == 2 && args[0] == "--printversion")
         {

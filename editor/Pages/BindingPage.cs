@@ -218,7 +218,7 @@ public class BindingPage : UserControl
         switch (c)
         {
             case Border card when on:
-                card.BorderBrush = Attention.GlowBorder;
+                card.BorderBrush = Attention.GlowBorder();
                 card.BorderThickness = new Thickness(2);
                 break;
             case Border card:
@@ -226,7 +226,7 @@ public class BindingPage : UserControl
                 card.ClearValue(Border.BorderThicknessProperty);
                 break;
             case Grid row:
-                row.Background = on ? Attention.GlowFill : null;
+                row.Background = on ? Attention.GlowFill() : null;
                 ToolTip.SetTip(row, on ? note : null);
                 break;
         }
@@ -262,7 +262,7 @@ public class BindingPage : UserControl
         buttons.Children.Add(ok);
         warnings.Children.Add(new Border
         {
-            Background = Brush.Parse("#3A3220"), BorderBrush = Attention.GlowBorder, BorderThickness = new Thickness(1),
+            Background = Brush.Parse("#3A3220"), BorderBrush = Attention.GlowBorder(), BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(6), Padding = new Thickness(12, 8), MaxWidth = 1200, HorizontalAlignment = HorizontalAlignment.Left,
             Child = new StackPanel
             {

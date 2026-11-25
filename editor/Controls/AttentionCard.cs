@@ -46,7 +46,7 @@ public class AttentionCard : UserControl
             list.Children.Add(new TextBlock { Text = $"…and {byBinding.Count - 12} more (All bindings shows them all).", Foreground = Brush.Parse("#C8CDD6") });
         Content = new Border
         {
-            Background = Brush.Parse("#3A3220"), BorderBrush = Attention.GlowBorder, BorderThickness = new Thickness(1),
+            Background = Brush.Parse("#3A3220"), BorderBrush = Attention.GlowBorder(), BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8), Padding = new Thickness(14, 10), Margin = new Thickness(4, 0, 4, 10), Child = list,
         };
     }

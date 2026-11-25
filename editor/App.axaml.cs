@@ -158,8 +158,10 @@ public partial class App : Application
                 }
                 w.Width = double.Parse(a[2]);
                 w.Height = double.Parse(a[3]);
-                if (a.Count >= 5)
-                    Shell.Go(a[4]);
+                // several pages split by commas: each is opened in turn, 1.5 s apart, the last one is pictured
+                var pages = a.Count >= 5 ? a[4].Split(',', StringSplitOptions.RemoveEmptyEntries) : Array.Empty<string>();
+                if (pages.Length > 0)
+                    Shell.Go(pages[0]);
                 bool bottom = a.Count >= 6 && a[5] == "bottom"; // scrolled to the end of the page
                 w.Opened += async (s, e) =>
                 {
@@ -169,6 +171,12 @@ public partial class App : Application
                         foreach (var sv in Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(w).OfType<Avalonia.Controls.ScrollViewer>())
                             sv.ScrollToEnd();
                     }
+                    foreach (var pg in pages.Skip(1))
+                    {
+                        await System.Threading.Tasks.Task.Delay(1500);
+                        Shell.Go(pg);
+                    }
+                    await System.Threading.Tasks.Task.Delay(1500);
                     await w.ShotAsync(a[1]);
                     desktop.Shutdown();
                 };

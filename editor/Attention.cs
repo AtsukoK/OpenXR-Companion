@@ -44,22 +44,33 @@ public static class Attention
         return set;
     }
 
-    // One slow, gentle pulse shared by everything that glows (not flashing).
-    public static readonly SolidColorBrush GlowBorder = new(Color.Parse("#F2C94C"));
-    public static readonly SolidColorBrush GlowFill = new(Color.Parse("#22F2C94C"));
-    static readonly DispatcherTimer pulse = Start();
-    static DispatcherTimer Start()
+    // One slow, gentle pulse (not flashing). Every glowing thing gets a brush of its own (never one brush shared by
+    // many controls while it changes); the timer only changes brushes still in use and forgets the rest.
+    static readonly List<(WeakReference<SolidColorBrush> brush, bool fill)> glows = new();
+    static DispatcherTimer pulse;
+    static readonly DateTime started = DateTime.Now;
+    static double Level => 0.5 + 0.5 * Math.Sin((DateTime.Now - started).TotalSeconds * Math.PI / 1.2); // 2.4 s a breath
+    static Color ColorOf(bool fill, double k) => fill ? Color.FromArgb((byte)(18 + 40 * k), 0xF2, 0xC9, 0x4C)
+                                                      : Color.FromArgb((byte)(110 + 145 * k), 0xF2, 0xC9, 0x4C);
+    public static SolidColorBrush GlowBorder() => NewGlow(false);
+    public static SolidColorBrush GlowFill() => NewGlow(true);
+    static SolidColorBrush NewGlow(bool fill)
     {
-        var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
-        var started = DateTime.Now;
-        t.Tick += (s, e) =>
+        var b = new SolidColorBrush(ColorOf(fill, Level));
+        glows.Add((new WeakReference<SolidColorBrush>(b), fill));
+        if (pulse == null)
         {
-            double k = 0.5 + 0.5 * Math.Sin((DateTime.Now - started).TotalSeconds * Math.PI / 1.2); // 2.4 s a breath
-            GlowBorder.Color = Color.FromArgb((byte)(110 + 145 * k), 0xF2, 0xC9, 0x4C);
-            GlowFill.Color = Color.FromArgb((byte)(18 + 40 * k), 0xF2, 0xC9, 0x4C);
-        };
-        t.Start();
-        return t;
+            pulse = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
+            pulse.Tick += (s, e) =>
+            {
+                double k = Level;
+                glows.RemoveAll(g => !g.brush.TryGetTarget(out _));
+                foreach (var (w, f) in glows)
+                    if (w.TryGetTarget(out var br)) br.Color = ColorOf(f, k);
+                if (glows.Count == 0) { pulse.Stop(); pulse = null; }
+            };
+            pulse.Start();
+        }
+        return b;
     }
-    public static void Touch() => _ = pulse;
 }
