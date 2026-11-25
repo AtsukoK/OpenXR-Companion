@@ -1,6 +1,10 @@
 // Tests of single parts of the layer (no engine flow): game hand offsets, the overlay, game input.
 #include "test_support.h"
 #include <map>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <memory>
 
 // ---------------- the overlay (OverlayRenderer) on a software D3D11 device, with pretend swapchains
 namespace fake11 {
@@ -358,6 +362,75 @@ void TestHoldOnlyQuickBinding() {
     CHECK(!sawPress && !e.IsOn(heldLayer) && !e.Blocked(1, C_BTN1), "hold only: after a hold the game gets no press of A, all let go");
 }
 
+// The guided setup of positions at the start of a game (setup_positions.json, in a throwaway settings folder).
+void TestSetupPositions() {
+    wchar_t tmp[MAX_PATH];
+    GetTempPathW(MAX_PATH, tmp);
+    std::wstring td = std::wstring(tmp) + L"vro_setup_test";
+    std::error_code fec;
+    std::filesystem::remove_all(td, fec);
+    _wputenv_s(L"OPENXR_COMPANION_TEST_DATA", td.c_str());
+    auto slurp = [](const std::wstring& p) { std::ifstream i(p, std::ios::binary); std::stringstream s; s << i.rdbuf(); return s.str(); };
+    std::string err;
+    auto run = [&](bool pending, int presses, int& stepsSeen, bool& adjustDuring, bool& guideShown, bool& aBlocked) {
+        if (pending) { std::ofstream o(Engine::SetupFile(), std::ios::binary); o << "{ \"pending\": true }"; }
+        else std::filesystem::remove(Engine::SetupFile(), fec);
+        auto ep = std::make_unique<Engine>();
+        Engine& e = *ep;
+        e.SetProfile(ParseProfileText(DefaultProfileJson(), err));
+        Frame f;
+        double t = 0;
+        f.headValid = true;
+        f.head.position = { 0, 1.6f, 0 };
+        auto step = [&](int n = 1) { for (int i = 0; i < n; i++) { t += 0.011; f.t = t; e.Update(f); } };
+        step(500); // > 4 s tracked: the file is read
+        stepsSeen = (int)e.setup.steps.size();
+        adjustDuring = e.adjust;
+        guideShown = !e.guideText.empty();
+        aBlocked = e.Blocked(1, C_BTN1);
+        for (int k = 0; k < presses; k++) { f.h[1].b1 = true; step(3); f.h[1].b1 = false; step(3); }
+        return ep;
+    };
+    int n; bool adj, guide, blocked;
+    {
+        auto ep = run(true, 0, n, adj, guide, blocked);
+        Engine& e = *ep;
+        CHECK(n >= 4 && adj && guide, "setup: a pending file starts adjust mode with the guide card a few seconds in");
+        CHECK(blocked, "setup: A is kept from the game while it runs");
+        CHECK(e.guideText.find("1 of") != std::string::npos, "setup: the card says step 1 of N");
+        std::vector<uint32_t> px;
+        DrawGuide(px, 1400, 400, e.guideText, e.prof->style);
+        SavePng(px, 1400, 400, L"setup_guide.png"); // for review
+    }
+    {
+        int all = n;
+        auto ep = run(true, all, n, adj, guide, blocked); // A through every step
+        Engine& e = *ep;
+        CHECK(!e.adjust && e.guideText.empty() && e.setup.step < 0 && e.saveRequested, "setup: A through every step ends it and saves the positions");
+        std::string f = slurp(Engine::SetupFile());
+        CHECK(f.find("\"pending\": false") != std::string::npos, "setup: afterwards the file says pending false (runs once)");
+    }
+    {
+        auto ep = run(false, 0, n, adj, guide, blocked);
+        Engine& e = *ep;
+        CHECK(!adj && !guide && e.setup.step < 0, "setup: without the file nothing happens");
+    }
+    {
+        auto ep = run(true, 0, n, adj, guide, blocked);
+        Engine& e = *ep;
+        Action a;
+        a.type = ActType::Adjust;
+        e.MenuRunAction(a); // the Calibrate button: adjust off
+        Frame f;
+        f.headValid = true;
+        f.t = 99;
+        e.Update(f);
+        CHECK(e.setup.step < 0 && e.guideText.empty(), "setup: the Calibrate button ends it early (positions kept)");
+    }
+    _wputenv_s(L"OPENXR_COMPANION_TEST_DATA", L"");
+    std::filesystem::remove_all(td, fec);
+}
+
 // Stick options (all off by default): deadzones for what the game sees, direction zones for bindings, and the
 // double flick (double tap and hold) gesture.
 void TestStickOptions() {
@@ -374,6 +447,39 @@ void TestStickOptions() {
         float rx = 0.9f, ry = -0.2f;
         ShapeStick(z, rx, ry);
         CHECK(std::fabs(ry) < 1e-5f && rx > 0.9f, "stick: right and a little down is plain right, same length");
+    }
+    {   // ignore outside: a diagonal gives the game no push at all; inside the zones it still straightens
+        StickShape z;
+        z.directionAngleDeg = 30;
+        z.ignoreOutside = true;
+        float dx = 0.7f, dy = 0.7f;
+        ShapeStick(z, dx, dy);
+        CHECK(dx == 0.f && dy == 0.f, "stick: ignore outside: a diagonal gives the game no push (no jump, no turn)");
+        float x = std::sin(20 * 3.14159265f / 180), y = std::cos(20 * 3.14159265f / 180);
+        ShapeStick(z, x, y);
+        CHECK(x == 0.f && std::fabs(y - 1) < 1e-4f, "stick: ignore outside: up and 20 degrees right is still plain up (jump, no turn)");
+        z.ignoreCenter = 0.7f; // "Ignore small pushes below 70%"
+        float sx = 0.f, sy = 0.5f; // straight up but only half way
+        ShapeStick(z, sx, sy);
+        CHECK(sx == 0.f && sy == 0.f, "stick: ignore outside: a push shorter than 'direction counts at' gives the game nothing");
+        float fx = 0.f, fy = 0.8f;
+        ShapeStick(z, fx, fy);
+        CHECK(fx == 0.f && fy > 0.79f, "stick: ignore outside: a firm straight push still reaches the game");
+        StickShape off;
+        off.ignoreOutside = true; // without a direction zone it does nothing
+        float ox = 0.7f, oy = 0.7f;
+        ShapeStick(off, ox, oy);
+        CHECK(ox == 0.7f && oy == 0.7f, "stick: ignore outside does nothing without a direction zone");
+        std::string err;
+        auto p = ParseProfileText(R"({"sticks":{"right":{"direction_angle":25,"ignore_outside":true}}})", err);
+        CHECK(p && p->sticks[1].ignoreOutside && p->sticks[1].directionAngleDeg == 25 && !p->sticks[0].ignoreOutside,
+              "stick: ignore_outside is read from the profile");
+        CHECK(p && p->sticks[1].ignoreCenter == 0.f, "stick: ignore_center is off (0) unless set");
+        auto d = ParseProfileText(DefaultProfileJson(), err);
+        bool allOff = d != nullptr;
+        for (int h = 0; d && h < 2; h++)
+            allOff = allOff && !d->sticks[h].ChangesGame() && !d->sticks[h].ignoreOutside && d->sticks[h].ignoreCenter == 0.f;
+        CHECK(allOff, "stick: the built-in default has every stick option off (no deadzones, zones, ignoring)");
     }
     StickShape off;
     float x = 0.1f, y = 0.f;

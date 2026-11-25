@@ -59,6 +59,8 @@ private:
 // CPU drawing (GDI+), output is premultiplied BGRA.
 void DrawWheel(std::vector<uint32_t>& out, int size, const Profile& p, const WheelView& v);
 void DrawToast(std::vector<uint32_t>& out, int w, int h, const std::string& text, const Style& st);
+// The guided setup card: "title\nbody\nfooter".
+void DrawGuide(std::vector<uint32_t>& out, int w, int h, const std::string& text, const Style& st);
 void DrawKeyboard(std::vector<uint32_t>& out, int w, int h, const KeyboardView& kb, const Style& st);
 void DrawWrist(std::vector<uint32_t>& out, int size, const Profile& p, const WristStyle& w, const WristView& v);
 void DrawFinger(std::vector<uint32_t>& out, int w, int h, const Style& st);

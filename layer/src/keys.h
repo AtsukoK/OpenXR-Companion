@@ -9,6 +9,8 @@ bool ValidateSequence(const std::string& steps, std::string& err);
 void Tap(const std::string& combo, int holdMs);
 void Down(const std::string& combo);
 void Up(const std::string& combo);
+// Up after waiting waitMs (keeps a very short press down long enough for the game to see it).
+void UpAfter(const std::string& combo, int waitMs);
 // "Ctrl+C; wait 100; down W; wait 500; up W; F5"
 void Sequence(const std::string& steps);
 void ReleaseAll();

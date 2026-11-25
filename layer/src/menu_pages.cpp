@@ -609,7 +609,15 @@ static MenuPage StickDirections(Engine& e, int hand) {
     zone.unit = "°"; // the degree sign, as bytes (the source file's encoding can't garble it)
     zone.atMin = "off";
     p.rows.push_back(zone);
-    MenuRow pressAt = MenuRow::Number("Direction counts at", "How far to push (both sticks)", [&e] { return e.prof->stickOn; },
+    p.rows.push_back(MenuRow::Toggle("Ignore outside the zones", "Diagonals give the game nothing: only clean up / down / left / right",
+                                     [s] { return s->ignoreOutside; }, [s](bool on) { s->ignoreOutside = on; }));
+    MenuRow centre = MenuRow::Number("Game: ignore small pushes below", "With Ignore outside: smaller pushes give the GAME nothing",
+                                     [s] { return s->ignoreCenter; }, [s](float v) { s->ignoreCenter = v; }, 0, 0.95f, 0.05f);
+    centre.scale = 100;
+    centre.unit = "%";
+    centre.atMin = "off";
+    p.rows.push_back(centre);
+    MenuRow pressAt = MenuRow::Number("Your bindings: direction counts at", "Only your own stick-direction bindings, not the game (both sticks)", [&e] { return e.prof->stickOn; },
                                       [&e](float v) {
                                           e.prof->stickOn = v;
                                           e.prof->stickOff = std::max(0.1f, v - 0.2f); // let go a little below it

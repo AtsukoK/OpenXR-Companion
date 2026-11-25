@@ -322,7 +322,13 @@ void TestMenuHub() {
     d.Step(0.15);
     CHECK(e.menuView.open && d.PressItem("Radial wheels") && e.menuView.title == "Radial wheels", "hub: the wheels tile");
     SaveMenuPicture(e, *p, L"menu_hub_1_wheels.png");
-    CHECK(d.PressItem("Right hand") && e.menuView.title == "Wheel: Right hand", "hub: a wheel tile opens its page with the picture");
+    // the wheel the default opens from the right thumb rest (its name and title change with the default profile)
+    std::string rw;
+    for (auto& b : p->bindings)
+        if (rw.empty() && b.action.type == ActType::Wheel && !b.chord.empty() && b.chord.back().hand == 1 && b.chord.back().comp == C_THUMBREST)
+            rw = b.action.wheel;
+    std::string rwTitle = p->wheels.count(rw) && !p->wheels[rw].title.empty() ? p->wheels[rw].title : rw;
+    CHECK(d.PressItem(rwTitle) && e.menuView.title == "Wheel: " + rwTitle, ("hub: a wheel tile opens its page with the picture ('" + rwTitle + "')").c_str());
     SaveMenuPicture(e, *p, L"menu_hub_1b_wheel_right.png");
     int pv = -1;
     for (int i = 0; i < (int)e.menuView.rows.size(); i++)

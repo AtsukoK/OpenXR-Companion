@@ -18,6 +18,9 @@ constexpr int kToastW = 1024, kToastH = 128;
 constexpr float kBeamWidthM = 0.0035f;
 const XrPosef kToastPose{ { 0, 0, 0, 1 }, { 0, -0.14f, -0.6f } }; // in the head space: a little below the eyes
 constexpr XrExtent2Df kToastSize{ 0.32f, 0.04f };
+constexpr int kGuideW = 1400, kGuideH = 400;
+const XrPosef kGuidePose{ { 0, 0, 0, 1 }, { 0, 0.16f, -0.75f } }; // in the head space: above the middle of the view
+constexpr XrExtent2Df kGuideSize{ 0.44f, 0.126f };
 
 std::string Lower(std::string s) {
     for (auto& c : s)
@@ -90,11 +93,19 @@ void OverlayRenderer::Render(const OverlayContext& c, LayerList& layers) {
     RenderMenu(c, layers);
     RenderPointers(c, layers);
     RenderToast(c, layers);
+    RenderGuide(c, layers);
+}
+
+void OverlayRenderer::RenderGuide(const OverlayContext& c, LayerList& layers) {
+    if (eng_.guideText.empty() || !c.view || !eng_.prof) return;
+    if (guide_.Ensure(c, kGuideW, kGuideH))
+        guide_.Redraw(c, eng_.guideVersion, scratch_, [&](std::vector<uint32_t>& px) { DrawGuide(px, kGuideW, kGuideH, eng_.guideText, eng_.prof->style); });
+    guide_.Submit(layers, c.view, kGuidePose, kGuideSize);
 }
 
 void OverlayRenderer::InvalidateAll() {
     for (OverlayQuad* q :
-         { &screenBar_, &screenPicker_, &wheel_, &keyboard_, &keyboardBar_, &offsets_, &menu_, &pointerDot_, &pointerBeam_, &finger_, &toast_ })
+         { &screenBar_, &screenPicker_, &wheel_, &keyboard_, &keyboardBar_, &offsets_, &menu_, &pointerDot_, &pointerBeam_, &finger_, &toast_, &guide_ })
         q->Invalidate();
     for (int h = 0; h < 2; h++) {
         wrist_[h].Invalidate();
@@ -104,7 +115,7 @@ void OverlayRenderer::InvalidateAll() {
 
 void OverlayRenderer::Destroy(const OverlayContext& c) {
     StopScreen(c);
-    for (OverlayQuad* q : { &wheel_, &keyboard_, &keyboardBar_, &offsets_, &menu_, &pointerDot_, &pointerBeam_, &finger_, &toast_ })
+    for (OverlayQuad* q : { &wheel_, &keyboard_, &keyboardBar_, &offsets_, &menu_, &pointerDot_, &pointerBeam_, &finger_, &toast_, &guide_ })
         q->Destroy(c);
     for (int h = 0; h < 2; h++) {
         wrist_[h].Destroy(c);

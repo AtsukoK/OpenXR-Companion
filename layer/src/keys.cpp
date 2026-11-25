@@ -324,6 +324,16 @@ void Up(const std::string& combo) {
     gHeld.erase(combo);
     Post([ks] { ComboUp(ks); });
 }
+void UpAfter(const std::string& combo, int waitMs) {
+    std::vector<K> ks;
+    std::string err;
+    if (!Parse(combo, ks, err)) return;
+    gHeld.erase(combo);
+    Post([ks, waitMs] {
+        if (waitMs > 0) Sleep(waitMs);
+        ComboUp(ks);
+    });
+}
 void ReleaseAll() {
     auto held = gHeld;
     for (auto& c : held)

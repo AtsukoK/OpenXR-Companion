@@ -259,8 +259,11 @@ bool Engine::RunAction(const Action& a, int hand, int bi, bool fromWheel) {
             }
             return false;
         }
-        if (hold) {
+        // A key on a controller button (bi >= 0) acts like the real key: down while you hold the button, up when you
+        // let go, at least tapMs long. Wheel items, panel buttons and menus have no button held: one quick tap.
+        if (hold || (a.mode == ActMode::Tap && bi >= 0)) {
             Keys::Down(a.keys);
+            if (bi >= 0) keyDownAt[bi] = now;
             return true;
         }
         Keys::Tap(a.keys, a.tapMs);
@@ -277,8 +280,10 @@ bool Engine::RunAction(const Action& a, int hand, int bi, bool fromWheel) {
                 xrToggles[key] = MakeOv(a.target);
             return false;
         }
-        if (hold) {
+        if (hold || (a.mode == ActMode::Tap && bi >= 0)) { // like the key: held while the controller button is
             xrHolds[bi] = { key, MakeOv(a.target) };
+            if (!hold) // and at least tapMs, however short the press
+                pulses.push_back({ a.target.hand, a.target.comp, MakeOv(a.target), now + std::max(a.tapMs, 30) / 1000.0 });
             return true;
         }
         pulses.push_back({ a.target.hand, a.target.comp, MakeOv(a.target), now + std::max(a.tapMs, 30) / 1000.0 });
@@ -355,9 +360,16 @@ bool Engine::RunAction(const Action& a, int hand, int bi, bool fromWheel) {
 
 void Engine::EndAction(const Action& a, int bi) {
     switch (a.type) {
-    case ActType::Key:
-        Keys::Up(a.keys);
+    case ActType::Key: {
+        auto it = keyDownAt.find(bi);
+        int wait = 0;
+        if (it != keyDownAt.end()) {
+            wait = std::max(0, a.tapMs - (int)((now - it->second) * 1000));
+            keyDownAt.erase(it);
+        }
+        Keys::UpAfter(a.keys, wait);
         break;
+    }
     case ActType::XrInput:
         xrHolds.erase(bi);
         break;
@@ -650,6 +662,9 @@ void Engine::ComputeBlocks() {
         want[0][C_GRIP] = want[1][C_GRIP] = true;
         if (grab.hand >= 0) want[grab.hand][C_STICK] = true;
     }
+    if (setup.step >= 0) // guided setup: A / X = next, B / Y = skip, not for the game
+        for (int h = 0; h < 2; h++)
+            want[h][C_BTN1] = want[h][C_BTN2] = true;
     if (adjust) { // the grips move things around; the grabbing hand's stick resizes
         want[0][C_GRIP] = want[1][C_GRIP] = true;
         if (grab.hand >= 0) want[grab.hand][C_STICK] = true;
@@ -662,7 +677,9 @@ void Engine::ComputeBlocks() {
     if (offsetsPanel.run_.uiHand >= 0) want[offsetsPanel.run_.uiHand][C_TRIGGER] = want[offsetsPanel.run_.uiHand][C_STICK] = true;
     if (offsetsPanel.run_.grabArmed || offGrabHand >= 0) want[0][C_GRIP] = want[1][C_GRIP] = true; // grab-to-set uses the grips
     if (menu.PointingHand() >= 0) want[menu.PointingHand()][C_TRIGGER] = want[menu.PointingHand()][C_STICK] = true;
-    if (menu.IsCapturingInput()) // the press that picks a button for a binding never reaches the game
+    // The in-headset menu (overview / editor) is open: nothing reaches the game, like the VR keyboard. Nobody walks
+    // around or fights while editing their setup, and a stray stick or trigger would move or shoot in the game.
+    if (menu.IsOpen() || menu.IsCapturingInput()) // (capturing: the press that picks a button for a binding)
         for (auto& h : want)
             for (auto& c : h)
                 c = true;
@@ -731,6 +748,7 @@ void Engine::Update(const Frame& f) {
     ComputeDown();
     ProcessBindings();
     UpdateWheel();
+    UpdateSetup();            // guided setup of positions (turns adjust mode on by itself)
     UpdateAdjustFingertips(); // first: a grip on a fingertip wins over the panels around it
     UpdateAdjustWheel();
     UpdateAdjustFade();

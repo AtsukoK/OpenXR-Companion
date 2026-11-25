@@ -78,6 +78,7 @@ private:
     void RenderMenu(const OverlayContext& c, LayerList& layers);
     void RenderPointers(const OverlayContext& c, LayerList& layers);
     void RenderToast(const OverlayContext& c, LayerList& layers);
+    void RenderGuide(const OverlayContext& c, LayerList& layers);
     void StopScreen(const OverlayContext& c);
 
     Engine& eng_;
@@ -100,6 +101,7 @@ private:
     OverlayQuad menu_;
     OverlayQuad pointerDot_, pointerBeam_, finger_;
     OverlayQuad toast_;
+    OverlayQuad guide_; // the guided setup card
     // pointers and fingertips use one picture for both hands, each hand has its own quad
     XrCompositionLayerQuad beamQuad_[2]{}, dotQuad_[2]{}, fingerQuad_[2]{};
 };

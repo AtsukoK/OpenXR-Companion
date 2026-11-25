@@ -11,6 +11,7 @@ void TestKeySequences();
 void TestQuickBindings();
 void TestHoldOnlyQuickBinding();
 void TestStickOptions();
+void TestSetupPositions();
 void TestSteamFrame();
 void TestPressPoints();
 void TestDoubleFlickRelease();
@@ -522,6 +523,16 @@ int main(int argc, char** argv) {
     auto p = ParseProfileText(DefaultProfileJson(), err);
     CHECK(p != nullptr, ("built-in default profile parses " + err).c_str());
     if (!p) return 1;
+    // The default's wheel names change with the default: use the wheel its right thumb rest opens, and the sub-wheel
+    // that wheel's 'more' item opens.
+    std::string RW, SW;
+    for (auto& b : p->bindings)
+        if (RW.empty() && b.action.type == ActType::Wheel && !b.chord.empty() && b.chord.back().hand == 1 && b.chord.back().comp == C_THUMBREST)
+            RW = b.action.wheel;
+    if (RW.empty() && !p->wheels.empty()) RW = p->wheels.begin()->first;
+    for (auto& it : p->wheels[RW].items)
+        if (SW.empty() && it.action.type == ActType::Wheel) SW = it.action.wheel;
+    CHECK(!RW.empty() && !SW.empty(), ("default has a right wheel with a sub-wheel: '" + RW + "' > '" + SW + "'").c_str());
     p->notifications = true;
     p->sel.method = SelectMethod::Thumbstick; // the tests drive the stick, whatever the user picked
     p->blockWhileOpen = BlockWhileOpen::Hand;
@@ -538,7 +549,7 @@ int main(int argc, char** argv) {
         ob.doubleTapMs = 400;
         ob.block = BindingBlock::None;
         ob.action.type = ActType::Wheel;
-        ob.action.wheel = "right";
+        ob.action.wheel = RW;
         ob.action.confirm = ConfirmMode::StickReturn;
         p->bindings.insert(p->bindings.begin(), ob);
     }
@@ -574,9 +585,9 @@ int main(int argc, char** argv) {
     step(3);
     CHECK(e.view.visible, "lifting the thumb keeps stick_return wheel open");
     // hover item 5 (More..., 6 items, up-left = 300 deg)
-    int moreIdx = -1, nItems = (int)p->wheels["right"].items.size();
+    int moreIdx = -1, nItems = (int)p->wheels[RW].items.size();
     for (int i = 0; i < nItems; i++)
-        if (p->wheels["right"].items[i].action.type == ActType::Wheel) moreIdx = i;
+        if (p->wheels[RW].items[i].action.type == ActType::Wheel) moreIdx = i;
     float ang = moreIdx * 6.2831853f / nItems;
     f.h[1].sx = std::sin(ang) * 0.95f;
     f.h[1].sy = std::cos(ang) * 0.95f;
@@ -588,9 +599,9 @@ int main(int argc, char** argv) {
     f.h[1].sx = 0;
     f.h[1].sy = 0;
     step(3);
-    CHECK(e.view.visible && e.view.wheel && e.view.wheel->name == "Right hand more (sub-wheel)", "stick return on submenu pushes 'more'");
+    CHECK(e.view.visible && e.view.wheel && e.view.wheel->name == SW, "stick return on submenu pushes 'more'");
     {
-        auto& mw = p->wheels["Right hand more (sub-wheel)"].items;
+        auto& mw = p->wheels[SW].items;
         int bi = 0;
         for (int i = 0; i < (int)mw.size(); i++)
             if (mw[i].action.type == ActType::Back) bi = i;
@@ -604,7 +615,7 @@ int main(int argc, char** argv) {
     f.h[1].sx = 0;
     f.h[1].sy = 0;
     step(3);
-    CHECK(e.view.visible && e.view.wheel->name == "right", "selecting Back pops to the first wheel");
+    CHECK(e.view.visible && e.view.wheel->name == RW, "selecting Back pops to the first wheel");
     f.h[1].b2 = true;
     step(2);
     f.h[1].b2 = false;
@@ -751,6 +762,10 @@ int main(int argc, char** argv) {
             it.action.keys = "F13";
             second.items.push_back(it);
         }
+        // Neutral placement (centred on the forearm, not turned): the default's own panels are placed by hand, to one
+        // side and turned, which these pose checks are not about.
+        p->wrist[0] = WristStyle{};
+        p->wrist[1] = WristStyle{};
         p->wrist[0].pages["wristtest"] = tw;
         p->wrist[0].pages["second"] = second;
         p->wrist[0].enabled = true;
@@ -903,7 +918,7 @@ int main(int argc, char** argv) {
         ob.doubleTapMs = 400;
         ob.block = BindingBlock::None;
         ob.action.type = ActType::Wheel;
-        ob.action.wheel = "right";
+        ob.action.wheel = RW;
         ob.action.confirm = ConfirmMode::StickReturn;
         q->bindings.insert(q->bindings.begin(), ob);
         Engine e;
@@ -1099,6 +1114,9 @@ int main(int argc, char** argv) {
     // Adjust mode: the keyboard can be grabbed and placed; next time it opens there (relative to where you face)
     {
         auto q = ParseProfileText(DefaultProfileJson(), err);
+        // a neutral start: the default may have its own hand-placed keyboard and docking, which these checks are not about
+        q->kb.pose = FreePose{};
+        q->dock = DockStyle{};
         auto bind = [&](const char* in, ActType t) {
             Binding ab;
             ab.name = in;
@@ -1177,6 +1195,9 @@ int main(int argc, char** argv) {
     // Docking: the bar under the keyboard puts the screen above the keys (or the keys under the screen); Adjust dock moves it
     {
         auto q = ParseProfileText(DefaultProfileJson(), err);
+        // a neutral start: the default may have its own hand-placed keyboard and docking, which these checks are not about
+        q->kb.pose = FreePose{};
+        q->dock = DockStyle{};
         Binding ab;
         ab.name = "kb";
         ab.chordText = "right.a";
@@ -2137,6 +2158,7 @@ int main(int argc, char** argv) {
         }
         auto q = ParseProfileText(DefaultProfileJson(), err);
         q->sourceName = "vro_pose_test.json";
+        const FreePose left0 = q->wrist[0].pose; // the default may have its own hand-placed spots: the left one must stay as it was
         XrPosef p{ { 0, std::sin(0.3f), 0, std::cos(0.3f) }, { 0.1f, -0.2f, 0.3f } };
         q->wrist[1].pose = { true, p };
         q->style.poses["head_locked"] = { true, p };
@@ -2152,7 +2174,8 @@ int main(int argc, char** argv) {
             return a.set && std::fabs(a.p.position.z - 0.3f) < 1e-3f && std::fabs(a.p.orientation.y - std::sin(0.3f)) < 1e-3f;
         };
         CHECK(ok && back && same(back->wrist[1].pose) && same(back->style.poses["head_locked"]) &&
-                  same(back->screen.poses["wrist_right"]) && !back->wrist[0].pose.set,
+                  same(back->screen.poses["wrist_right"]) && back->wrist[0].pose.set == left0.set &&
+                  (!left0.set || std::fabs(back->wrist[0].pose.p.position.x - left0.p.position.x) < 1e-3f),
               "hand-placed positions and angles of wheel, wrist panels and screen are saved and read back");
         DeleteFileW(path.c_str());
     }
@@ -2668,6 +2691,7 @@ int main(int argc, char** argv) {
     TestQuickBindings();
     TestHoldOnlyQuickBinding();
     TestStickOptions();
+    TestSetupPositions();
     TestSteamFrame();
     TestPressPoints();
     TestDoubleFlickRelease();

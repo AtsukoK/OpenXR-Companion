@@ -369,6 +369,39 @@ void DrawToast(std::vector<uint32_t>& out, int W, int H, const std::string& text
     Grab(bmp, out, W, H);
 }
 
+void DrawGuide(std::vector<uint32_t>& out, int W, int H, const std::string& text, const Style& st) {
+    EnsureGdi();
+    Bitmap bmp(W, H, PixelFormat32bppPARGB);
+    Graphics g(&bmp);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+    g.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);
+    g.Clear(Color(0, 0, 0, 0));
+    GraphicsPath path;
+    float rr = 40.f;
+    path.AddArc(2.f, 2.f, rr, rr, 180, 90);
+    path.AddArc(W - rr - 2.f, 2.f, rr, rr, 270, 90);
+    path.AddArc(W - rr - 2.f, H - rr - 2.f, rr, rr, 0, 90);
+    path.AddArc(2.f, H - rr - 2.f, rr, rr, 90, 90);
+    path.CloseFigure();
+    SolidBrush bg{ Color(235, 22, 26, 34) };
+    g.FillPath(&bg, &path);
+    Pen pen(Color(255, 240, 140, 30), 4.f);
+    g.DrawPath(&pen, &path);
+    size_t a = text.find('\n'), b = text.rfind('\n');
+    std::string title = text.substr(0, a), body = a == std::string::npos ? "" : text.substr(a + 1, b > a ? b - a - 1 : std::string::npos),
+                foot = b != std::string::npos && b > a ? text.substr(b + 1) : "";
+    StringFormat left;
+    left.SetAlignment(StringAlignmentNear);
+    left.SetLineAlignment(StringAlignmentNear);
+    auto fTitle = MakeFont(st, H * 0.10f, FontStyleBold), fBody = MakeFont(st, H * 0.082f, FontStyleRegular), fFoot = MakeFont(st, H * 0.085f, FontStyleBold);
+    SolidBrush orange{ Color(255, 240, 140, 30) }, white{ Color(255, 236, 240, 246) }, blue{ Color(255, 127, 196, 255) };
+    float pad = W * 0.04f;
+    g.DrawString(Utf8ToW(title).c_str(), -1, fTitle.get(), RectF(pad, H * 0.06f, W - 2 * pad, H * 0.16f), &left, &orange);
+    g.DrawString(Utf8ToW(body).c_str(), -1, fBody.get(), RectF(pad, H * 0.25f, W - 2 * pad, H * 0.55f), &left, &white);
+    g.DrawString(Utf8ToW(foot).c_str(), -1, fFoot.get(), RectF(pad, H * 0.82f, W - 2 * pad, H * 0.16f), &left, &blue);
+    Grab(bmp, out, W, H);
+}
+
 // Touch cursor: a ring that thickens and brightens with closeness (level 0..7), a filled dot when touching (8).
 void DrawCursor(std::vector<uint32_t>& out, int S, int level, const Style& st) {
     EnsureGdi();
@@ -915,6 +948,16 @@ static void DrawLiveStick(Graphics& g, const RectF& box, int hand, const LiveHan
     g.FillEllipse(&base, circle);
     const StickShape& s = live.shape;
     float half = s.directionAngleDeg > 0 ? s.directionAngleDeg : 45.f, from = r * stickOn;
+    if (s.ignoreOutside && s.directionAngleDeg > 0 && half < 45) { // between the zones the game gets nothing: grey
+        SolidBrush ignored{ Color(0xFF4A525C) }; // solid: no darker overlaps
+        for (float axis : { -45.f, 45.f, 135.f, 225.f })
+            g.FillPie(&ignored, circle, axis - (45 - half), 2 * (45 - half));
+    }
+    if (s.ignoreOutside && s.directionAngleDeg > 0 && s.ignoreCenter > 0) { // the centre: small pushes give the game nothing
+        SolidBrush ignored{ Color(0xFF4A525C) }; // solid: no darker overlaps
+        float ir = r * s.ignoreCenter;
+        g.FillEllipse(&ignored, c.X - ir, c.Y - ir, 2 * ir, 2 * ir);
+    }
     for (float axis : { -90.f, 0.f, 90.f, 180.f }) { // where up / right / down / left count for bindings
         GraphicsPath wedge;
         wedge.AddArc(circle, axis - half, 2 * half);

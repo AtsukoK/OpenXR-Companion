@@ -411,7 +411,7 @@ void InGameMenu::UpdateLive() {
         now.grip = r.grip;
         now.stickX = r.sx;
         now.stickY = r.sy;
-        now.shape = e.prof->sticks[h];
+        now.shape = e.StickShapeOf(h);
         if (!(now == v.live[h])) {
             v.live[h] = now;
             changed = true;

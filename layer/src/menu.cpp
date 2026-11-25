@@ -159,7 +159,8 @@ bool LiveHand::operator==(const LiveHand& o) const {
         if (press[c] != o.press[c] || touch[c] != o.touch[c]) return false;
     return kind == o.kind && isClose(trigger, o.trigger) && isClose(grip, o.grip) && isClose(stickX, o.stickX) && isClose(stickY, o.stickY) &&
            shape.innerDeadzone == o.shape.innerDeadzone && shape.outerDeadzone == o.shape.outerDeadzone &&
-           shape.directionAngleDeg == o.shape.directionAngleDeg;
+           shape.directionAngleDeg == o.shape.directionAngleDeg && shape.ignoreOutside == o.shape.ignoreOutside &&
+           shape.ignoreCenter == o.shape.ignoreCenter;
 }
 
 int MenuMaxFirst(const MenuView& view) {

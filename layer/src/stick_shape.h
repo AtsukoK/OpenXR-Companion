@@ -10,12 +10,18 @@
 //   doesn't also turn) and for our bindings on stick directions. Pushes outside every zone (diagonals) are left
 //   as they are for the game, and count as no direction for our bindings. 0 = off. 45 = every push snaps to the
 //   nearest of the four directions.
+// - Ignore outside (with a direction zone): pushes outside every zone count as no push for the game too, so the
+//   stick only ever gives a clean up, down, left or right (a jump on up never turns, however you lean).
+// - Ignore center (with ignore outside): pushes shorter than this share give the game nothing either, so only
+//   firm, straight pushes reach it. 0 = off (the default). Its own setting, apart from "Direction counts at".
 #include <cmath>
 
 struct StickShape {
     float innerDeadzone = 0;     // 0 .. 0.9, share of the full push
     float outerDeadzone = 0;     // 0 .. 0.9
     float directionAngleDeg = 0; // 0 = off, else 5 .. 45
+    bool ignoreOutside = false;  // with a direction zone: diagonals give the game no push at all
+    float ignoreCenter = 0;      // ignore outside: pushes shorter than this share give no push either (0 = off)
     bool ChangesGame() const { return innerDeadzone > 0 || outerDeadzone > 0 || directionAngleDeg > 0; }
 };
 
@@ -25,9 +31,13 @@ inline void SnapStick(const StickShape& s, float& x, float& y) {
     if (s.directionAngleDeg <= 0) return;
     float length = std::sqrt(x * x + y * y);
     if (length <= 1e-6f) return;
+    if (s.ignoreOutside && length < s.ignoreCenter) { x = y = 0; return; } // a small push: nothing for the game
     bool vertical = std::fabs(y) >= std::fabs(x);
     float cosToAxis = (vertical ? std::fabs(y) : std::fabs(x)) / length;
-    if (cosToAxis < std::cos(s.directionAngleDeg * 3.14159265f / 180.f)) return; // a diagonal: left alone
+    if (cosToAxis < std::cos(s.directionAngleDeg * 3.14159265f / 180.f)) { // a diagonal
+        if (s.ignoreOutside) x = y = 0; // ignored: no push at all
+        return;                         // else left alone
+    }
     if (vertical) { y = y < 0 ? -length : length; x = 0; }
     else { x = x < 0 ? -length : length; y = 0; }
 }

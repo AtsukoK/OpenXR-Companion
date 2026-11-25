@@ -222,7 +222,8 @@ public:
     // ---------------- what the game should see
     bool Blocked(int hand, int comp) const { return blockOut[hand][comp]; }    // held back for a menu
     const Override& Ov(int hand, int comp) const { return ovOut[hand][comp]; } // pushed into the game by a binding
-    const StickShape& StickShapeOf(int hand) const { return prof->sticks[hand]; } // deadzones of the game's stick
+    // The game's stick shaping for a hand (a copy: callers keep it for the call).
+    StickShape StickShapeOf(int hand) const { return prof->sticks[hand]; }
     // The pose the game's grip (kind 0) or aim (kind 1) space of a hand is moved by; false = leave it.
     bool OffsetPose(int hand, int kind, XrPosef& out) const;
     OffsetStyle offs; // live controller offsets (from the profile, changed in the headset)
@@ -252,12 +253,28 @@ public:
 
     // ---------------- state other parts read
     bool adjust = false;  // Adjust mode: grab wrist panels, wheels, the screen and the keyboard to place them
+    // Guided setup of positions, once, at the start of a game: the editor writes setup_positions.json
+    // { "pending": true }; this turns adjust mode on and walks through each thing to place (adjust.cpp UpdateSetup).
+    struct SetupRun {
+        bool checked = false;    // the file was looked at (a few seconds after the headset is tracked)
+        double trackedSince = -1;
+        std::vector<int> steps;  // SetupStep values still to do, in order
+        int step = -1;           // index into steps; -1 = not running
+        bool placed = false;     // the current thing was grabbed and let go
+        GrabTarget prevGrab = GrabTarget::None;
+    } setup;
+    std::string guideText;    // the guide card in view: title \n body \n footer (empty = hidden)
+    uint64_t guideVersion = 0;
+    static std::wstring SetupFile();
     int offGrabHand = -1; // grab-to-set running on this hand (its grip is held)
 
     // ---------------- actions and helpers used by the feature classes
     void ScreenAction(const Action& a);  // screen on/off, monitor, frame rate, place
     void OffsetsAction(const Action& a); // panel, enable, on, off, grab, reset
     void Toast(const std::string& s, double sec = 2.0);
+    void UpdateSetup();               // guided setup of positions (adjust.cpp)
+    void SetupShow();
+    void SetupFinish(bool completed);
     // Where a hand's poking fingertip is (the corrected laser start, moved by the pointer's fingertip settings).
     Vec3 FingertipPos(int hand) const;
     // Is this action a toggle that is currently on? (key toggle, game input toggle, layer)
@@ -307,6 +324,7 @@ private:
     std::vector<BState> bs;
     std::set<std::string> layers;
     std::set<std::string> keyToggles;
+    std::map<int, double> keyDownAt; // controller-button key presses held like the real key: when each went down
     std::map<std::pair<int, int>, Override> xrToggles;
     std::map<int, std::pair<std::pair<int, int>, Override>> xrHolds; // binding -> override
     std::vector<Pulse> pulses;
