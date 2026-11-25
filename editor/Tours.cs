@@ -204,7 +204,7 @@ public static class Tours
             {
                 S("Controllers", "Your controllers from above and from the side, with a tag on each button: blue = your bindings, grey 'Default' = the game's own control.", h.Picture, () => Shell.Go("controllers")),
                 S("The + on a tag", "Makes a new binding for that button and opens it: 1 How you press it, 2 the Button, 3 What happens, and the Details (all set for you).", h.Picture),
-                S("A button's panel", "Click a button or its tag: below the pictures, each way of using it (press, touch, up...). There the circle switches a binding on or off, ⧉ copies, ✕ deletes, and 'Reset to default' gives the button back to the game.", h.Picture),
+                S("A button's panel", "Click a button or its tag: below the pictures, each way of using it (press, touch, up...). There On / Off switches a binding, ⧉ copies, ✕ deletes, and 'Reset to default' gives the button back to the game.", h.Picture),
                 S("Controller model", "Pick your controllers here. 'Apply a controller preset...' sets the usual buttons that open your wheels; 'Controller offsets' fixes how hands and guns point.", () => T("Apply a controller preset")),
             },
             "sec_bindings" => new List<TourStep>
@@ -223,7 +223,7 @@ public static class Tours
                 S("A wheel", "Click an item in the picture or in the list to change it; drag one item onto another in the picture to swap them. '+ Add item' adds one.",
                   h.PageArea, () => { if (Shell.Current?.StartsWith("wheel:") != true) GoWheel(FirstWheel()); }),
                 S("Sub-wheels", "The tabs at the top are this wheel and its sub-wheels. '+ Add sub-wheel' makes one with a Back item, and a 'More' item here that opens it.", () => T("+ Add sub-wheel")),
-                S("The tabs on the right", "'Items on this wheel': ↑ ↓ reorder, the circle switches an item on or off. 'Opened by' shows and adds the buttons that open this wheel. 'All buttons' copies anything you made onto it.", () => T("Items on this wheel")),
+                S("The tabs on the right", "'Items on this wheel': ↑ ↓ reorder, On / Off switches an item. 'Opened by' shows and adds the buttons that open this wheel. 'All buttons' copies anything you made onto it.", () => T("Items on this wheel")),
                 S("Keys", "With an item chosen: Del deletes it, Ctrl+D copies it, Alt+← / → move it.", h.PageArea),
             },
             "sec_wrist" => new List<TourStep>
@@ -231,7 +231,7 @@ public static class Tours
                 S("Wrist panel", "Buttons on your forearm. Turn your wrist toward your face and look at it to see them; poke with your other hand, or point and pull the trigger.", h.PageArea,
                   () => { if (Shell.Current is not ("wrist0" or "wrist1")) Shell.Go("wrist0"); }),
                 S("Pages", "The tabs are its pages, in the order you go through them. '+ Add page' makes one, with a 'Next page' button to it.", () => T("+ Add page")),
-                S("Buttons", "Click a button in the picture or the list to change it; drag one onto another in the picture to swap them. The circle in the list switches a button on or off.", () => T("Buttons on this page")),
+                S("Buttons", "Click a button in the picture or the list to change it; drag one onto another in the picture to swap them. On / Off in the list switches a button.", () => T("Buttons on this page")),
                 S("Panel settings", "Where the panel sits on your arm, how big it is, and when it shows.", () => T("Panel settings")),
             },
             "sec_binding" => new List<TourStep>
