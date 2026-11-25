@@ -36,7 +36,7 @@ public class BindingPage : UserControl
     readonly NumericUpDown hold = Ms(), tap = Ms(), dbl = Ms();
     readonly NumericUpDown pressAt = new() { Minimum = 0, Maximum = 95, Increment = 5, Width = 130, FormatString = "0" };
     readonly NumericUpDown releaseAt = new() { Minimum = 0, Maximum = 90, Increment = 5, Width = 130, FormatString = "0" };
-    readonly AutoCompleteBox layers = new() { Width = 380 }, notLayers = new() { Width = 380 };
+    readonly ModePicker layers = new("Always (no mode needed)"), notLayers = new("Never off");
     readonly Control lHold, lTap, lDbl, lPass, lTapOwn, lTapAction, lPressAt, lReleaseAt, lBlock;
     readonly Button fold = new() { Classes = { "link" }, FontWeight = FontWeight.Bold };
     readonly Border details;
@@ -99,8 +99,8 @@ public class BindingPage : UserControl
         lPressAt = form.AddRow("Press point (%)", pressAt, "For an Index full squeeze: how hard.", "How far the trigger or grip must go. 0 = usual, low = hair trigger, high = a long pull.");
         lReleaseAt = form.AddRow("Keeps going until (%)", releaseAt, "30 = until you mostly let go. 0 = it stops as soon as the stick leaves the direction.",
                                  "Double flick: keeps going while you steer, until the stick comes back below this much from the middle.");
-        lLayers = form.AddRow("Only in mode", layers, "Modes (previously called layers) are turned on by a wrist button, wheel item or controller button. The Modes tab shows them all.", "Works only while this mode is on. Empty = always.");
-        form.AddRow("Off in mode", notLayers, null, "Does nothing while this mode is on. Empty = never off.");
+        lLayers = form.AddRow("Only in mode", layers, "Modes (previously called layers) are turned on by a wrist button, wheel item or controller button. The Modes tab shows them all.", "Works only while this mode is on. Pick one, or + New mode.");
+        form.AddRow("Off in mode", notLayers, null, "Does nothing while this mode is on.");
         details = Cards.Make("Details", form);
         details.IsVisible = detailsOpen;
         fold.Click += (s, e) => { detailsOpen = !detailsOpen; details.IsVisible = detailsOpen; ShowFold(); };
@@ -128,10 +128,8 @@ public class BindingPage : UserControl
         tap.Value = Math.Clamp(b.TapMs, 50, 5000);
         dbl.Value = Math.Clamp(b.DoubleTapMs, 50, 5000);
         var layerNames = EditorApi.LayerNames(Shell.Store.Profile).ToList();
-        layers.ItemsSource = layerNames;
-        notLayers.ItemsSource = layerNames;
-        layers.Text = b.Layers ?? "";
-        notLayers.Text = b.NotLayers ?? "";
+        layers.Value = b.Layers ?? "";
+        notLayers.Value = b.NotLayers ?? "";
         block.Code = b.Block;
         passthrough.IsChecked = b.TapPassthrough;
         pressAt.Value = (decimal)Math.Clamp(Math.Round(b.PressAt * 100), 0, 95);
@@ -152,8 +150,8 @@ public class BindingPage : UserControl
         dbl.ValueChanged += (s, e) => { if (loading || dbl.Value == null || b.DoubleTapMs == (int)dbl.Value) return; b.DoubleTapMs = (int)dbl.Value; Fire(); };
         pressAt.ValueChanged += (s, e) => { if (loading || pressAt.Value == null) return; double v = pressAt.Value <= 1 ? 0 : (double)pressAt.Value / 100; if (Math.Round(b.PressAt * 100) == Math.Round(v * 100)) return; b.PressAt = v; Fire(); };
         releaseAt.ValueChanged += (s, e) => { if (loading || releaseAt.Value == null) return; double v = releaseAt.Value < 5 ? 0 : (double)releaseAt.Value / 100; if (Math.Round(b.ReleaseAt * 100) == Math.Round(v * 100)) return; b.ReleaseAt = v; Fire(); };
-        layers.TextChanged += (s, e) => { if (Same(b.Layers, layers.Text)) return; b.Layers = (layers.Text ?? "").Trim(); Fire(); };
-        notLayers.TextChanged += (s, e) => { if (Same(b.NotLayers, notLayers.Text)) return; b.NotLayers = (notLayers.Text ?? "").Trim(); Fire(); };
+        layers.Changed += () => { if (Same(b.Layers, layers.Value)) return; b.Layers = layers.Value; Fire(); };
+        notLayers.Changed += () => { if (Same(b.NotLayers, notLayers.Value)) return; b.NotLayers = notLayers.Value; Fire(); };
         block.SelectionChanged += (s, e) => { if (loading || block.Code == null || b.Block == block.Code) return; b.Block = block.Code; howJustSet = false; Sync(); Fire(); };
         passthrough.IsCheckedChanged += (s, e) => { if (loading || b.TapPassthrough == (passthrough.IsChecked == true)) return; b.TapPassthrough = passthrough.IsChecked == true; ShowWarnings(); Fire(); };
         action.Changed += Fire;

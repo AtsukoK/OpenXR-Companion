@@ -40,7 +40,7 @@ public class ActionPanel : Form
     readonly ComboBox wheel = new() { Width = 400 };
     readonly ComboBox page = new() { Width = 400 };
     readonly ChoiceCombo confirm = new(Choices.Confirms);
-    readonly AutoCompleteBox layer = new() { Width = 400, FilterMode = AutoCompleteFilterMode.StartsWith };
+    readonly ModePicker layer = new(null, 400);
     readonly ChoiceCombo layerMode = new(Choices.LayerModes);
     readonly ChordPicker target = new();
     readonly ChoiceCombo pad = new(Choices.PadButtons, 260);
@@ -92,7 +92,7 @@ public class ActionPanel : Form
         lWheel = AddRow("Wheel", wheel);
         lPage = AddRow("Page", page, "Its buttons replace these; a Back button is added automatically.");
         lConfirm = AddRow("Pick items by", confirm);
-        lLayer = AddRow("Mode", layer, "Type a new name or pick one you already use. The Modes tab shows them all.");
+        lLayer = AddRow("Mode", layer, "Pick a mode, or + New mode to name one. The Modes tab shows them all.");
         lLayerMode = AddRow("How", layerMode);
         lTarget = AddRow("Game button", target, "The game will think this controller button is pressed.");
         // ViGEmBus missing: say so, with where to get it (checked again each time the row shows, so installing it is seen)
@@ -152,7 +152,7 @@ public class ActionPanel : Form
         wheel.SelectionChanged += (s, e) => { if (!loading && wheel.SelectedItem is string w && a.Wheel != w) { a.Wheel = w; Fire(); } };
         page.SelectionChanged += (s, e) => { if (!loading && page.SelectedItem is string pg && a.Page != pg) { a.Page = pg; Fire(); } };
         confirm.SelectionChanged += (s, e) => { if (!loading && confirm.Code != null && !Same(a.Confirm ?? "auto", confirm.Code)) { a.Confirm = confirm.Code; Fire(); } };
-        layer.TextChanged += (s, e) => { if (!loading && !Same(a.Layer, layer.Text)) { a.Layer = (layer.Text ?? "").Trim(); Fire(); } };
+        layer.Changed += () => { if (!loading && !Same(a.Layer, layer.Value) && layer.Value.Length > 0) { a.Layer = layer.Value; Fire(); } };
         layerMode.SelectionChanged += (s, e) => { if (!loading && layerMode.Code != null && a.Mode != layerMode.Code) { a.Mode = layerMode.Code; Fire(); } };
         target.Changed += () => { string t = target.Value.Split('+').Last(); if (!loading && a.Target != t) { a.Target = t; Fire(); } };
         screenMode.SelectionChanged += (s, e) => { if (!loading && screenMode.Code != null && a.Mode != screenMode.Code) { a.Mode = screenMode.Code; Sync(); Fire(); } };
@@ -250,8 +250,7 @@ public class ActionPanel : Form
         page.ItemsSource = wristOwner?.Pages.Keys.ToList() ?? new List<string>();
         page.SelectedItem = a.Page;
         confirm.Code = string.IsNullOrEmpty(a.Confirm) ? "auto" : a.Confirm;
-        layer.ItemsSource = EditorApi.LayerNames(profile).ToList();
-        layer.Text = a.Layer ?? "";
+        layer.Value = a.Layer ?? "";
         layerMode.Code = a.Type == ActionType.Layer && !string.IsNullOrEmpty(a.Mode) ? a.Mode : (InWheel ? "toggle" : "hold");
         target.Value = a.Target ?? "left.menu";
         pad.Code = a.Button ?? "a";
