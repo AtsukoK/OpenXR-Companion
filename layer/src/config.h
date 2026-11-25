@@ -206,6 +206,9 @@ struct Binding {
     BindingBlock block = BindingBlock::Trigger;
     bool tapPassthrough = false;
     Action action;
+    // Hold bindings: what a short press does instead (let go before holdMs). Replaces tap_passthrough when set.
+    bool hasTapAction = false;
+    Action tapAction;
     int sourceIndex = -1; // its place in the profile file's list (-1: made in the headset, not saved yet)
 };
 

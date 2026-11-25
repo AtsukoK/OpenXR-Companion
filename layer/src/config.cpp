@@ -444,6 +444,10 @@ static void ParseBindings(const json& list, std::vector<Binding>& out) {
         if (!block.empty() && !ParseEnum(kBindingBlockNames, Lower(block), B.block)) B.block = BindingBlock::None;
         Get(b, "tap_passthrough", B.tapPassthrough);
         B.action = ParseAction(b.value("action", json::object()), ctx);
+        if (b.contains("tap_action") && b["tap_action"].is_object()) {
+            B.hasTapAction = true;
+            B.tapAction = ParseAction(b["tap_action"], ctx);
+        }
         B.sourceIndex = (int)out.size();
         out.push_back(std::move(B));
     }

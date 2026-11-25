@@ -29,11 +29,13 @@ public class BindingPage : UserControl
     readonly CheckBox enabled = new() { Content = "Enabled" };
     readonly ChoiceCombo block = new(Choices.Blocks, 380);
     readonly CheckBox passthrough = new() { Content = "If I let go early, the game still gets a normal tap" };
+    readonly CheckBox tapOwn = new() { Content = "A short press does something else:" };
+    readonly ActionPanel tapAction = new("wheel"); // one quick press: nothing stays held after a short press
     readonly NumericUpDown hold = Ms(), tap = Ms(), dbl = Ms();
     readonly NumericUpDown pressAt = new() { Minimum = 0, Maximum = 95, Increment = 5, Width = 130, FormatString = "0" };
     readonly NumericUpDown releaseAt = new() { Minimum = 0, Maximum = 90, Increment = 5, Width = 130, FormatString = "0" };
     readonly AutoCompleteBox layers = new() { Width = 380 }, notLayers = new() { Width = 380 };
-    readonly Control lHold, lTap, lDbl, lPass, lPressAt, lReleaseAt;
+    readonly Control lHold, lTap, lDbl, lPass, lTapOwn, lTapAction, lPressAt, lReleaseAt;
     readonly Button fold = new() { Classes = { "link" }, FontWeight = FontWeight.Bold };
     readonly Border details;
 
@@ -77,6 +79,8 @@ public class BindingPage : UserControl
         form.AddRow("", enabled);
         form.AddRow("The game also gets the button", block, "Set for you when you pick How: a plain press is taken from the game; hold and double-tap let a quick tap through; a touch always reaches the game.");
         lPass = form.AddRow("", passthrough);
+        lTapOwn = form.AddRow("", tapOwn, "Let go before the hold time and this happens instead (a key, another button...). The hold still does the action above.");
+        lTapAction = form.AddRow("Short press", tapAction);
         lHold = form.AddRow("Hold time (ms)", hold, "How long counts as a hold. 400 is the default.");
         lTap = form.AddRow("Tap shorter than (ms)", tap);
         lDbl = form.AddRow("Second tap within (ms)", dbl, "How quick the second tap (or flick) must be.");
@@ -120,6 +124,8 @@ public class BindingPage : UserControl
         pressAt.Value = (decimal)Math.Clamp(Math.Round(b.PressAt * 100), 0, 95);
         releaseAt.Value = (decimal)Math.Clamp(Math.Round(b.ReleaseAt * 100), 0, 90);
         action.Bind(b.Action);
+        tapOwn.IsChecked = b.TapAction != null;
+        tapAction.Bind(b.TapAction ?? new ActionModel());
         loading = false;
         Sync();
 
@@ -137,6 +143,23 @@ public class BindingPage : UserControl
         block.SelectionChanged += (s, e) => { if (loading || block.Code == null || b.Block == block.Code) return; b.Block = block.Code; Fire(); };
         passthrough.IsCheckedChanged += (s, e) => { if (loading || b.TapPassthrough == (passthrough.IsChecked == true)) return; b.TapPassthrough = passthrough.IsChecked == true; Fire(); };
         action.Changed += Fire;
+        tapOwn.IsCheckedChanged += (s, e) =>
+        {
+            if (loading || (b.TapAction != null) == (tapOwn.IsChecked == true)) return;
+            if (tapOwn.IsChecked == true)
+            {
+                b.TapAction = new ActionModel();
+                tapAction.Bind(b.TapAction);
+                b.TapPassthrough = false; // the short press is taken by this now
+                b.Block = "trigger";
+                loading = true; passthrough.IsChecked = false; block.Code = b.Block; loading = false;
+            }
+            else
+                b.TapAction = null;
+            Sync();
+            Fire();
+        };
+        tapAction.Changed += Fire;
     }
 
     // a field showing what the model already has (empty and null count as the same) is no change
@@ -189,7 +212,9 @@ public class BindingPage : UserControl
             GestureKind.DoubleTap => "Double-tap", GestureKind.Hold or GestureKind.WhileHeld => "Hold", GestureKind.Tap => "Quick tap",
             GestureKind.DoubleTapHold => "Double-tap and hold", _ => "Press",
         };
-        sentence.Text = how + " " + InputText.Friendly(b.Input) + "   →   " + EditorApi.Plain(b.Action) + (b.Enabled ? "" : "   (off)");
+        sentence.Text = how + " " + InputText.Friendly(b.Input) + "   →   " + EditorApi.Plain(b.Action)
+            + (b.Gesture == GestureKind.Hold && b.TapAction != null ? "     ·     short press   →   " + EditorApi.Plain(b.TapAction) : "")
+            + (b.Enabled ? "" : "   (off)");
         sentence.Foreground = b.Enabled ? Brushes.White : Brush.Parse("#7F8896");
     }
 
@@ -211,7 +236,9 @@ public class BindingPage : UserControl
         ShowFold();
         ShowSentence();
         Form.Show(lHold, b.Gesture == GestureKind.Hold);
-        Form.Show(lPass, b.Gesture == GestureKind.Hold);
+        Form.Show(lPass, b.Gesture == GestureKind.Hold && b.TapAction == null);
+        Form.Show(lTapOwn, b.Gesture == GestureKind.Hold);
+        Form.Show(lTapAction, b.Gesture == GestureKind.Hold && b.TapAction != null);
         Form.Show(lTap, b.Gesture == GestureKind.Tap);
         Form.Show(lDbl, b.Gesture is GestureKind.DoubleTap or GestureKind.DoubleTapHold);
         Form.Show(lPressAt, IsAnalog(b.Input));

@@ -479,7 +479,13 @@ void Engine::ProcessBindings() {
                     if (j != i && bs[j].fired && bs[j].armTime == s.armTime && B[j].chord.back() == trig) otherFired = true;
                 if (!otherFired) Fire(i);
             }
-            if (b.gesture == Gesture::Hold && !s.fired && b.tapPassthrough)
+            if (b.gesture == Gesture::Hold && !s.fired && b.hasTapAction) {
+                // A short press does its own thing: one quick tap of it (nothing stays held, the button is already up).
+                Action t = b.tapAction;
+                if (t.mode == ActMode::Hold) t.mode = ActMode::Tap;
+                Log("short press '%s' (%s)", b.name.c_str(), b.chordText.c_str());
+                if (RunAction(t, trig.hand, -1, false)) EndAction(t, -1);
+            } else if (b.gesture == Gesture::Hold && !s.fired && b.tapPassthrough)
                 pulses.push_back({ trig.hand, trig.comp, MakeOv(trig), now + 0.08 });
             EndB(i);
             continue;

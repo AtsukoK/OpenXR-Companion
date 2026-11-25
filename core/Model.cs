@@ -488,6 +488,8 @@ public class BindingModel
     [JsonPropertyName("block")] public string Block { get; set; } = "trigger";
     [Category("4 Game input"), Description("Hold bindings: if you let go before hold_ms, send a short press of the button to the game, so a tap still does what the game normally does.")]
     [JsonPropertyName("tap_passthrough")] public bool TapPassthrough { get; set; }
+    [Category("4 Game input"), Description("Hold bindings: what a short press (let go before hold_ms) does instead. Empty = nothing (or the tap passthrough).")]
+    [JsonPropertyName("tap_action"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public ActionModel TapAction { get; set; }
     [Category("5 Action"), TypeConverter(typeof(ExpandableObjectConverter))]
     [JsonPropertyName("action")] public ActionModel Action { get; set; } = new();
 }
