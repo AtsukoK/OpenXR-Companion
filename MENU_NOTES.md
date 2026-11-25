@@ -7,6 +7,10 @@ After v0.3.1 (local, not released, in Testing): single tap on double-tap, own ga
 "may need your attention" checks (core/BindingChecks.cs, editor/Attention.cs; test profile "default error testing.json").
 Crash 2026-11-25 23:21 opening TEST 2a (CLR internal error 0xc0000005, not reproducible): suspected the one animated glow
 brush shared by many controls; now one brush per glow (0d114db), user retried: no crash. Watch logs/editor_crash.log.
+2026-11-26 early (untested in headset): All bindings layer tags + Show: Layers (2ffcd1e); in-headset warnings
+(layer/src/binding_checks.cpp, 203b3b4); wrist "when it shows" setup step S_WristView (adjust.cpp, wristViewTest,
+stick click fits facing/gaze; 76273da). NOT done: real 3D cone drawing (the step uses the panel's real show/hide + live
+angles instead); controller-missing-button rule only in the desktop editor.
 
 # RESUME HERE (2026-11-25 evening) -- branch hold-tap-action (this worktree), built into G:/Claude/OpenXR Companion Testing
 
