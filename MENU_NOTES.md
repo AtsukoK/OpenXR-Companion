@@ -1,3 +1,9 @@
+# RELEASED v0.3.1 as Latest (2026-11-25 night), at the user's request, before headset testing
+origin/main = 977f77e (pushed from branch hold-tap-action, fast-forward), tag v0.3.1, zip built locally in CI layout
+(release_stage/, forward-slash paths via python zipfile; PS 5.1 Compress-Archive writes backslashes). Update test from
+a v0.3.0 copy (--updatetest) passed. Local branch `main` (other worktree) is behind origin/main: fast-forward it there.
+If the user's tests find problems: fix and release v0.3.2.
+
 # RESUME HERE (2026-11-25 evening) -- branch hold-tap-action (this worktree), built into G:/Claude/OpenXR Companion Testing
 
 Two LOCAL commits on top of release-0.3.0, not pushed, untested in the headset. Test list:
