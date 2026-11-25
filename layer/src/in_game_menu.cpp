@@ -96,6 +96,7 @@ void InGameMenu::BuildView() {
         vr.detail = r.detail;
         vr.value = r.ValueText();
         vr.isDanger = r.isDanger;
+        vr.isWarn = r.isWarn;
         vr.live = r.live;
         vr.liveHand = r.liveHand;
         vr.span = r.span;

@@ -64,6 +64,16 @@ bool Connect(std::string& err) {
 }
 } // namespace
 
+bool DriverInstalled() {
+    static int known = -1;
+    if (known < 0) {
+        HKEY k;
+        known = RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Services\\ViGEmBus", 0, KEY_READ, &k) == ERROR_SUCCESS;
+        if (known) RegCloseKey(k);
+    }
+    return known == 1;
+}
+
 bool IsButton(const std::string& b) {
     State s;
     return Apply(b, s);

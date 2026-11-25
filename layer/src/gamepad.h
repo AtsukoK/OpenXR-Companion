@@ -19,6 +19,8 @@ struct State {
 // Adds one pad button ("a", "lb", "lt", "dpad_up", "ls_left", ...) to the state. False for an unknown name.
 bool Apply(const std::string& button, State& s);
 bool IsButton(const std::string& button);
+// The ViGEmBus driver is installed (checked once).
+bool DriverInstalled();
 
 // Sends the state when it changed. wanted = some gamepad action is in the profile or on: plugs the pad in on first
 // use. Returns an error text once when the driver is missing (for a toast), else empty.

@@ -1,4 +1,6 @@
 // The in-game menu's pages: see menu_pages.h.
+#include "binding_checks.h"
+#include "gamepad.h"
 #include "menu_pages.h"
 #include "engine.h"
 #include "controller_silhouettes.h"
@@ -362,8 +364,12 @@ MenuPage PartPage(Engine& e, InGameMenu& m, int hand, int comp) {
             std::string what = ActionWords(b.action);
             if (b.gesture == Gesture::Hold && b.hasTapAction) what += "  ·  short: " + ActionWords(b.tapAction);
             if (b.gesture == Gesture::DoubleTap && b.hasTapAction) what += "  ·  single: " + ActionWords(b.tapAction);
-            p.rows.push_back(MenuRow::Link(kGestureWords[GestureIndex(b.gesture)] + ":  " + what, HowWords(b),
-                                           [&e, &m, i] { m.Push([&e, &m, i] { return BindingDetail(e, m, i); }); }));
+            auto warns = CheckBinding(*e.prof, i, Gamepad::DriverInstalled());
+            MenuRow link = MenuRow::Link((warns.empty() ? "" : "\u26A0 ") + kGestureWords[GestureIndex(b.gesture)] + ":  " + what,
+                                         warns.empty() ? HowWords(b) : "Check this: " + warns[0].title,
+                                         [&e, &m, i] { m.Push([&e, &m, i] { return BindingDetail(e, m, i); }); });
+            link.isWarn = !warns.empty();
+            p.rows.push_back(link);
             p.rows.push_back(OnOffRow(e, m, i));
         }
         std::vector<std::string> names = { "+ Add" };
@@ -471,8 +477,12 @@ MenuPage ControllerBindings(Engine& e, InGameMenu& m, int hand) {
         const Binding& b = e.prof->bindings[i];
         if (b.chord.empty() || b.chord.back().hand != hand) continue;
         shown++;
-        p.rows.push_back(MenuRow::Link(b.name + (b.enabled ? "" : "  (off)"), BindingSummary(b),
-                                       [&e, &m, i] { m.Push([&e, &m, i] { return BindingDetail(e, m, i); }); }));
+        auto warns = CheckBinding(*e.prof, i, Gamepad::DriverInstalled());
+        MenuRow row = MenuRow::Link((warns.empty() ? "" : "\u26A0 ") + b.name + (b.enabled ? "" : "  (off)"),
+                                    warns.empty() ? BindingSummary(b) : "Check this: " + warns[0].title,
+                                    [&e, &m, i] { m.Push([&e, &m, i] { return BindingDetail(e, m, i); }); });
+        row.isWarn = !warns.empty();
+        p.rows.push_back(row);
         p.rows.push_back(OnOffRow(e, m, i));
     }
     if (shown == 0) p.rows.push_back(MenuRow::Note("No bindings on this controller yet", "+ New binding: press the button you want"));
@@ -689,6 +699,12 @@ MenuPage BindingDetail(Engine& e, InGameMenu& m, int index) {
                                         m.Changed();
                                         m.Back();
                                     } }));
+    // May need your attention: the same checks as the desktop editor
+    for (auto& w : CheckBinding(*e.prof, index, Gamepad::DriverInstalled())) {
+        MenuRow r = MenuRow::Note("\u26A0 " + w.title, w.text);
+        r.isWarn = true;
+        p.rows.push_back(r);
+    }
     p.rows.push_back(MenuRow::Choice("1  How", "Also sets if the game gets it", kGestureWords, [get] { return GestureIndex(get().gesture); },
                                      [edit](int i) { edit([i](Binding& x) { x.gesture = kGestures[i]; DefaultsForHow(x); }); }));
     InputId firing = b.chord.back();

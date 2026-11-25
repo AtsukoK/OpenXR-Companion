@@ -50,6 +50,7 @@ struct MenuRow {
     std::string label;
     std::string detail; // a second, smaller line: help or what it does now
     bool isDanger = false; // Button: something that can't be undone (shown in red)
+    bool isWarn = false;   // "may need your attention": amber
 
     std::function<void()> press;      // Link, Button
     std::function<bool()> isOn;       // Toggle
@@ -126,6 +127,7 @@ struct MenuViewRow {
     bool isOn = false;            // Toggle
     bool canLess = false, canMore = false; // Number / Choice: - and + can still change it
     bool isDanger = false;
+    bool isWarn = false;
     float fraction = -1;
     LiveKind live = LiveKind::Controller;
     int liveHand = 1, span = 1;                   // Number: where the value sits between its min and max (0..1), for the slider

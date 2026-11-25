@@ -1260,12 +1260,18 @@ void DrawMenu(std::vector<uint32_t>& out, int W, int H, const MenuView& v, const
             g.FillRectangle(&hoverB, x, y, fullW, h);
             g.FillRectangle(&accentB, x, y, 5.f, h); // the accent bar on the left
         }
+        else if (r.isWarn) { // may need your attention: a soft amber row with an amber bar
+            SolidBrush warnFill{ Color(0x30F2C94C) }, warnBar{ Color(0xFFF2C94C) };
+            g.FillRectangle(&warnFill, x, y, fullW, h);
+            g.FillRectangle(&warnBar, x, y, 5.f, h);
+        }
         g.DrawLine(&separator, inset, y + h - 1, W - inset, y + h - 1);
 
         float valueW = r.kind == MenuRowKind::Toggle ? h * 1.4f : r.kind == MenuRowKind::Link ? h * 0.6f : 0;
         float textW = (r.kind == MenuRowKind::Number || r.kind == MenuRowKind::Choice ? 0.58f * W : w) - inset - valueW - 10;
         SolidBrush dangerB{ Color(0xFFFF5A5F) };
-        Brush* tb = isPressed(b.hit) ? (Brush*)&knobB : r.isDanger ? (Brush*)&dangerB : (Brush*)&textB;
+        SolidBrush warnB{ Color(0xFFF2C94C) };
+        Brush* tb = isPressed(b.hit) ? (Brush*)&knobB : r.isDanger ? (Brush*)&dangerB : r.isWarn ? (Brush*)&warnB : (Brush*)&textB;
         Brush* sb = isPressed(b.hit) ? (Brush*)&knobB : (Brush*)&subB;
         if (r.detail.empty()) {
             RectF lr(inset, y, textW, h);

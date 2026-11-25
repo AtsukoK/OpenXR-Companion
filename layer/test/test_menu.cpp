@@ -1,4 +1,5 @@
 // The in-game settings menu, driven like a player would: point at a row with the right controller, pull the trigger.
+#include "../src/binding_checks.h"
 #include "test_support.h"
 
 namespace {
@@ -305,6 +306,47 @@ void TestInGameMenu() {
 }
 
 // The hub pages: wheels, wrist panels, sticks, more settings. Pictures of each for review (layer/build/menu_hub_*.png).
+// "May need your attention" in the headset: the tester's left stick setup (a Hold letting short presses through, a
+// double-tap keeping the button from the game) is marked in the list and explained on the binding's page.
+void TestMenuWarnings() {
+    std::string err;
+    auto p = ParseProfileText(R"({ "bindings": [
+      { "name": "Menu", "input": "left.menu", "gesture": "press", "action": { "type": "settings_menu" } },
+      { "name": "Hold L3 = LCtrl", "input": "left.thumbstick", "gesture": "hold", "block": "trigger", "tap_passthrough": true,
+        "action": { "type": "key", "keys": "LCtrl" } },
+      { "name": "Double L3 = wait", "input": "left.thumbstick", "gesture": "double_tap", "block": "trigger",
+        "action": { "type": "xr_input", "target": "left.thumbstick" } },
+      { "name": "Fine", "input": "left.x", "gesture": "press", "action": { "type": "key", "keys": "F8" } } ] })", err);
+    CHECK(p != nullptr, ("warnings: profile reads " + err).c_str());
+    if (!p) return;
+    auto w1 = CheckBinding(*p, 1, true), w2 = CheckBinding(*p, 2, true), w3 = CheckBinding(*p, 3, true);
+    auto has = [](const std::vector<BindingWarning>& w, const char* t) {
+        return std::any_of(w.begin(), w.end(), [&](const BindingWarning& x) { return x.title == t; });
+    };
+    CHECK(has(w1, "Short presses get past another binding") && has(w2, "Single presses still reach the game") && w3.empty(),
+          "warnings: the short-press leak is found on both bindings, the fine one has none");
+    CHECK(has(w2, "Movement pauses while you click"), "warnings: a stick click kept from the game is pointed out");
+    Engine e;
+    e.SetProfile(p);
+    Frame f;
+    double t = 0;
+    f.headValid = true;
+    f.head.position = { 0, 1.6f, 0 };
+    MenuDriver d{ e, f, t };
+    d.Step();
+    Action open;
+    open.type = ActType::Menu;
+    e.MenuRunAction(open);
+    d.Step(0.15);
+    CHECK(d.PressItem("Controllers") && d.PressItem("All bindings") && d.PressRow("Left controller bindings"), "warnings: to the left bindings");
+    int row = d.Row("\u26A0 Double L3");
+    CHECK(row >= 0 && e.menuView.rows[row].isWarn && d.Row("Fine") >= 0 && !e.menuView.rows[d.Row("Fine")].isWarn,
+          "warnings: the list marks the flagged binding, not the fine one");
+    SaveMenuPicture(e, *p, L"menu_warn_list.png");
+    CHECK(d.PressRow("\u26A0 Double L3") && d.Row("\u26A0 Single presses still reach the game") >= 0, "warnings: the binding's page explains it");
+    SaveMenuPicture(e, *p, L"menu_warn_binding.png");
+}
+
 void TestMenuHub() {
     std::string err;
     auto p = ParseProfileText(DefaultProfileJson(), err);
