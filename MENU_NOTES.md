@@ -3,6 +3,10 @@ origin/main = 977f77e (pushed from branch hold-tap-action, fast-forward), tag v0
 (release_stage/, forward-slash paths via python zipfile; PS 5.1 Compress-Archive writes backslashes). Update test from
 a v0.3.0 copy (--updatetest) passed. Local branch `main` (other worktree) is behind origin/main: fast-forward it there.
 If the user's tests find problems: fix and release v0.3.2.
+After v0.3.1 (local, not released, in Testing): single tap on double-tap, own game action, binding page descriptions,
+"may need your attention" checks (core/BindingChecks.cs, editor/Attention.cs; test profile "default error testing.json").
+Crash 2026-11-25 23:21 opening TEST 2a (CLR internal error 0xc0000005, not reproducible): suspected the one animated glow
+brush shared by many controls; now one brush per glow (0d114db), user retried: no crash. Watch logs/editor_crash.log.
 
 # RESUME HERE (2026-11-25 evening) -- branch hold-tap-action (this worktree), built into G:/Claude/OpenXR Companion Testing
 
