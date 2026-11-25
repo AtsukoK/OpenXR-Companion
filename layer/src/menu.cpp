@@ -165,7 +165,7 @@ bool LiveHand::operator==(const LiveHand& o) const {
 
 int MenuMaxFirst(const MenuView& view) {
     int slots = 0, first = (int)view.rows.size();
-    while (first > 0 && slots + view.rows[first - 1].span <= MenuView::kVisibleRows) {
+    while (first > 0 && slots + view.rows[first - 1].span <= view.visibleRows) {
         first--;
         slots += view.rows[first].span;
     }
@@ -310,18 +310,19 @@ void OverviewLayout(const MenuView& view, const MenuViewRow& row, float y, float
 
 void MenuLayout(const MenuView& view, std::vector<MenuBox>& out) {
     out.clear();
-    const float pad = 0.02f, headerH = kMenuHeaderH, footerH = kMenuFooterH;
+    const float hf = MenuHeightFactor(view.visibleRows);
+    const float pad = 0.02f, headerH = kMenuHeaderH / hf, footerH = kMenuFooterH / hf;
     const float sq = MenuSquareScale(view); // square parts keep their shape on a wider panel
     // header: back (when there is a page to go back to) and close, square icon buttons
     if (view.canBack) out.push_back({ pad * sq, pad * 1.5f, 0.1f * sq, headerH - 3 * pad, { MenuPart::Back, -1 } });
     out.push_back({ 1 - (pad + 0.1f) * sq, pad * 1.5f, 0.1f * sq, headerH - 3 * pad, { MenuPart::Close, -1 } });
     // rows
     const float rowsTop = headerH, rowsH = 1 - headerH - footerH;
-    const float rowH = rowsH / MenuView::kVisibleRows;
+    const float rowH = rowsH / view.visibleRows;
     int slot = 0;
     for (int i = view.first; i < (int)view.rows.size(); i++) {
         const MenuViewRow& r = view.rows[i];
-        if (slot + r.span > MenuView::kVisibleRows) break;
+        if (slot + r.span > view.visibleRows) break;
         float y = rowsTop + slot * rowH, h = rowH * r.span;
         slot += r.span;
         switch (r.kind) {

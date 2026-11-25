@@ -80,6 +80,12 @@ void InGameMenu::Changed() {
     Refresh();
 }
 
+void InGameMenu::SaveNow() {
+    run_.saveAt = -1;
+    e.menuSaveRequested = true;
+    e.menuSaveSay = true;
+}
+
 void InGameMenu::BuildView() {
     MenuView& v = e.menuView;
     std::vector<MenuViewRow> rows;
@@ -132,12 +138,14 @@ void InGameMenu::BuildView() {
                a.canMore == b.canMore && a.kind == b.kind && a.fraction == b.fraction && a.tags == b.tags && a.items == b.items && a.itemDetails == b.itemDetails && a.previewSig == b.previewSig && a.previewSelected == b.previewSelected && a.previewCols == b.previewCols;
     }
     float scale = page_.scale > 0 ? page_.scale : 1.f;
-    float width = (page_.width > 0 ? page_.width : kMenuWidth) * scale;
+    int nRows = page_.shownRows > 0 ? page_.shownRows : kMenuListRows;
+    float width = (page_.width > 0 ? page_.width : kMenuListWidth) * scale;
     PlaceAt(page_.distance > 0 ? page_.distance : kMenuDistance);
-    same = same && v.w == width && v.scale == scale && v.stickFree == page_.stickFree;
+    same = same && v.w == width && v.scale == scale && v.stickFree == page_.stickFree && v.visibleRows == nRows;
     if (same) return;
     v.w = width;
-    v.h = kMenuHeight * scale;
+    v.h = kMenuHeight * MenuHeightFactor(nRows) * scale;
+    v.visibleRows = nRows;
     v.scale = scale;
     v.stickFree = page_.stickFree;
     v.rows = std::move(rows);

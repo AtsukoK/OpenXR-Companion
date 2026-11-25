@@ -1052,7 +1052,8 @@ void DrawMenu(std::vector<uint32_t>& out, int W, int H, const MenuView& v, const
         gp.CloseFigure();
     };
     const float corner = std::min(W, H) * 0.035f;
-    const float headerH = H * kMenuHeaderH, footerY = H * (1 - kMenuFooterH);
+    const float hf = MenuHeightFactor(v.visibleRows);
+    const float headerH = H * kMenuHeaderH / hf, footerY = H * (1 - kMenuFooterH / hf);
 
     // panel: a soft vertical gradient, clipped to rounded corners
     GraphicsPath panel;
@@ -1073,7 +1074,7 @@ void DrawMenu(std::vector<uint32_t>& out, int W, int H, const MenuView& v, const
     SolidBrush hoverB{ Color(Hover) }, pressedB{ Color(Pressed) }, trackB{ Color(Track) }, knobB{ Color(Knob) };
     SolidBrush iconB{ Color(IconButton) };
     Pen separator(Color(Separator), 1.5f);
-    const float rowH = H * (1 - kMenuHeaderH - kMenuFooterH) / MenuView::kVisibleRows;
+    const float rowH = (footerY - headerH) / v.visibleRows;
     auto titleFont = MakeFont(st, headerH * 0.34f * st.fontScale, FontStyleBold);
     auto font = MakeFont(st, rowH * 0.27f * st.fontScale, FontStyleRegular);
     auto valueFont = MakeFont(st, rowH * 0.25f * st.fontScale, FontStyleBold);

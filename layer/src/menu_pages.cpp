@@ -3,6 +3,7 @@
 #include "engine.h"
 #include "controller_silhouettes.h"
 #include "in_game_menu.h"
+#include "keys.h"
 #include <algorithm>
 
 namespace MenuPages {
@@ -209,6 +210,7 @@ MenuPage Overview(Engine& e, InGameMenu& m) {
     p.title = "Controller configuration";
     p.scale = 2.4f;     // big and further away: easy to read and point at, still inside the view
     p.distance = 1.4f;
+    p.shownRows = MenuView::kVisibleRows; // big rows (scaled), as before
     p.width = 0.82f; // wider than the other pages: about 66 degrees across at its distance, inside the view
     std::vector<MenuTag> tags;
     for (int hand = 0; hand < 2; hand++) {
@@ -219,11 +221,12 @@ MenuPage Overview(Engine& e, InGameMenu& m) {
     p.rows.push_back(MenuRow::Overview(std::move(tags), [&e, &m](int hand, int comp) {
         m.Push([&e, &m, hand, comp] { return PartPage(e, m, hand, comp); });
     }, 7));
-    p.rows.push_back(MenuRow::Bar({ "Edit bindings", "Test controllers", "Right stick", "Left stick" },
+    p.rows.push_back(MenuRow::Bar({ "All bindings", "Test controllers", "Right stick", "Left stick", "Save now" },
                                   { [&e, &m] { m.Push([&e, &m] { return Home(e, m); }); },
                                     [&e, &m] { m.Push([&e, &m] { return TestControllers(e, m); }); },
                                     [&e, &m] { m.Push([&e, &m] { return StickOptions(e, m, 1); }); },
-                                    [&e, &m] { m.Push([&e, &m] { return StickOptions(e, m, 0); }); } }));
+                                    [&e, &m] { m.Push([&e, &m] { return StickOptions(e, m, 0); }); },
+                                    [&m] { m.SaveNow(); } }));
     return p;
 }
 
@@ -261,6 +264,69 @@ static std::vector<PartWay> WaysOf(int comp, ControllerKind kind) {
     return w;
 }
 
+// ---- shared by the part page, the binding lists and the binding page
+
+// A new binding on `id` that does nothing yet, opened on its page with "What happens" on top (like the editor's + Add).
+static void AddBlank(Engine& e, InGameMenu& m, const InputId& id) {
+    Binding b;
+    SetFiringInput(b, id);
+    b.name = InputWords(id);
+    b.gesture = Gesture::Press;
+    b.action.type = ActType::None;
+    b.block = BindingBlock::None;
+    int index = 0;
+    e.EditBindings([&](std::vector<Binding>& list) {
+        list.push_back(b);
+        index = (int)list.size() - 1;
+    });
+    m.Changed();
+    m.Push([&e, &m, index] { return BindingDetail(e, m, index); });
+    m.Push([&e, &m, index] { return WhatHappens(e, m, index); });
+}
+
+// "Hold, with Left grip held, in layer combat, off": how a binding fires, short.
+static std::string HowWords(const Binding& b) {
+    std::string s = kGestureWords[GestureIndex(b.gesture)];
+    for (size_t k = 0; k + 1 < b.chord.size(); k++) s += (k ? " + " : ", with ") + InputWords(b.chord[k]) + (k + 2 == b.chord.size() ? " held" : "");
+    if (!b.layers.empty()) s += ", in layer " + b.layers[0];
+    if (!b.enabled) s += "  (off)";
+    return s;
+}
+
+// Every layer name the profile uses: in bindings' conditions and in actions that switch one.
+static std::vector<std::string> LayerNames(const Profile& p) {
+    std::vector<std::string> out;
+    auto add = [&](const std::string& n) {
+        if (!n.empty() && std::find(out.begin(), out.end(), n) == out.end()) out.push_back(n);
+    };
+    for (const Binding& b : p.bindings) {
+        for (auto& l : b.layers) add(l);
+        for (auto& l : b.notLayers) add(l);
+        if (b.action.type == ActType::Layer) add(b.action.layer);
+        if (b.hasTapAction && b.tapAction.type == ActType::Layer) add(b.tapAction.layer);
+    }
+    for (const auto& [n, w] : p.wheels)
+        for (const WheelItem& it : w.items)
+            if (it.action.type == ActType::Layer) add(it.action.layer);
+    for (const WristStyle& W : p.wrist)
+        for (const auto& [n, pg] : W.pages)
+            for (const WheelItem& it : pg.items)
+                if (it.action.type == ActType::Layer) add(it.action.layer);
+    return out;
+}
+
+static MenuRow OnOffRow(Engine& e, InGameMenu& m, int i) {
+    return MenuRow::Toggle("      on / off", "", [&e, i] { return i < (int)e.prof->bindings.size() && e.prof->bindings[i].enabled; },
+                           [&e, &m, i](bool on) {
+                               e.EditBindings([&](std::vector<Binding>& list) {
+                                   if (i < (int)list.size()) list[i].enabled = on;
+                               });
+                               m.Changed();
+                           });
+}
+
+// One part of one controller, like the editor's part panel: each way to use it (press, touch, push up...) with the
+// bindings on it, + Add, Swap with... and Reset to default.
 MenuPage PartPage(Engine& e, InGameMenu& m, int hand, int comp) {
     MenuPage p;
     ControllerKind kind = e.KindOf(hand);
@@ -271,62 +337,80 @@ MenuPage PartPage(Engine& e, InGameMenu& m, int hand, int comp) {
         if (u.hand == hand && u.comp == comp) game += (game.empty() ? "" : ", ") + u.name + (u.touch && comp != C_THUMBREST ? " (touch)" : "");
     p.rows.push_back(MenuRow::Note(game.empty() ? "In the game: default" : "In the game: " + game,
                                    game.empty() ? "The game's own name for its control isn't known" : "What the game itself does with this button"));
-    p.rows.push_back(MenuRow::Heading("Bindings"));
-    std::vector<bool> shown(e.prof->bindings.size(), false);
+    std::vector<int> feats;
     for (const PartWay& w : WaysOf(comp, kind)) {
-        int found = -1;
-        for (int i = 0; i < (int)e.prof->bindings.size() && found < 0; i++) {
+        if (std::find(feats.begin(), feats.end(), w.feat) != feats.end()) continue;
+        feats.push_back(w.feat);
+        InputId id;
+        id.hand = hand;
+        id.comp = comp;
+        id.feat = w.feat;
+        p.rows.push_back(MenuRow::Heading(w.name));
+        std::vector<int> on;
+        for (int i = 0; i < (int)e.prof->bindings.size(); i++)
+            if (!e.prof->bindings[i].chord.empty() && e.prof->bindings[i].chord.back() == id) on.push_back(i);
+        // the plain ones first, then the ones that only work in a layer, then the switched-off ones (as the editor)
+        std::stable_sort(on.begin(), on.end(), [&](int a, int b) {
+            const Binding &x = e.prof->bindings[a], &y = e.prof->bindings[b];
+            return std::make_pair(!x.layers.empty(), !x.enabled) < std::make_pair(!y.layers.empty(), !y.enabled);
+        });
+        if (on.empty()) p.rows.push_back(MenuRow::Note("Default (the game's own)"));
+        for (int i : on) {
             const Binding& b = e.prof->bindings[i];
-            const InputId& id = b.chord.back();
-            if (b.chord.size() == 1 && id.hand == hand && id.comp == comp && id.feat == w.feat && b.gesture == w.gesture) found = i;
+            std::string what = ActionWords(b.action);
+            if (b.gesture == Gesture::Hold && b.hasTapAction) what += "  ·  short: " + ActionWords(b.tapAction);
+            p.rows.push_back(MenuRow::Link(kGestureWords[GestureIndex(b.gesture)] + ":  " + what, HowWords(b),
+                                           [&e, &m, i] { m.Push([&e, &m, i] { return BindingDetail(e, m, i); }); }));
+            p.rows.push_back(OnOffRow(e, m, i));
         }
-        if (found >= 0) {
-            shown[found] = true;
-            const Binding& b = e.prof->bindings[found];
-            p.rows.push_back(MenuRow::Link(w.name, ActionWords(b.action) + (b.enabled ? "" : "  (disabled)"),
-                                           [&e, &m, found] { m.Push([&e, &m, found] { return BindingDetail(e, m, found); }); }));
-            continue;
+        std::vector<std::string> names = { "+ Add" };
+        std::vector<std::function<void()>> press = { [&e, &m, id] { AddBlank(e, m, id); } };
+        if (!(w.feat == F_TOUCH || comp == C_THUMBREST)) {
+            names.push_back("Swap with...");
+            press.push_back([&e, &m, id] {
+                // this button and the one pressed next trade places in the game: two bindings, one on each
+                m.CaptureInput([&e, &m, id](const InputId& other) {
+                    if (other == id) return;
+                    e.EditBindings([&](std::vector<Binding>& list) {
+                        for (int k = 0; k < 2; k++) {
+                            const InputId& from = k ? other : id;
+                            const InputId& to = k ? id : other;
+                            Binding b;
+                            SetFiringInput(b, from);
+                            SetButtonAction(b, to);
+                            b.block = BindingBlock::Trigger;
+                            list.push_back(b);
+                        }
+                    });
+                    m.Changed();
+                    e.Toast("Swapped: " + InputWords(id) + " <-> " + InputWords(other), 2.5);
+                });
+            });
         }
-        PartWay way = w;
-        p.rows.push_back(MenuRow::Button(w.name, "Default",
-                                         [&e, &m, hand, comp, way] {
-                                             Binding b;
-                                             InputId id;
-                                             id.hand = hand;
-                                             id.comp = comp;
-                                             id.feat = way.feat;
-                                             SetFiringInput(b, id);
-                                             b.name = InputWords(id);
-                                             b.gesture = way.gesture;
-                                             b.block = way.feat == F_TOUCH ? BindingBlock::None : BindingBlock::Trigger;
-                                             if (way.gesture == Gesture::DoubleTapHold) {
-                                                 b.block = BindingBlock::None; // the game still gets the push (you keep walking)
-                                                 b.doubleTapMs = 350;
-                                                 b.releaseAt = 0.3f; // keeps going while steering, until the stick is let go
-                                             }
-                                             b.action.type = ActType::None;
-                                             b.block = BindingBlock::None;
-                                             int index = 0;
-                                             e.EditBindings([&](std::vector<Binding>& list) {
-                                                 list.push_back(b);
-                                                 index = (int)list.size() - 1;
-                                             });
-                                             m.Changed();
-                                             m.Push([&e, &m, index] { return BindingDetail(e, m, index); });
-                                             m.Push([&e, &m, index] { return WhatHappens(e, m, index); });
-                                         }));
+        if (!on.empty()) {
+            names.push_back("Reset to default");
+            press.push_back([&e, &m, id] {
+                e.EditBindings([&](std::vector<Binding>& list) {
+                    list.erase(std::remove_if(list.begin(), list.end(), [&](const Binding& b) { return !b.chord.empty() && b.chord.back() == id; }),
+                               list.end());
+                });
+                m.Changed();
+                e.Toast("Removed: the game gets " + InputWords(id) + " as usual", 2.5);
+            });
+        }
+        p.rows.push_back(MenuRow::Bar(names, press));
     }
+    // combos that use this part without firing on it
     bool heading = false;
     for (int i = 0; i < (int)e.prof->bindings.size(); i++) {
         const Binding& b = e.prof->bindings[i];
-        if (shown[i] || b.chord.empty()) continue;
+        if (b.chord.size() < 2 || (b.chord.back().hand == hand && b.chord.back().comp == comp)) continue;
         bool uses = false;
-        for (const InputId& id : b.chord)
-            uses = uses || (id.hand == hand && id.comp == comp);
+        for (size_t k = 0; k + 1 < b.chord.size(); k++) uses = uses || (b.chord[k].hand == hand && b.chord[k].comp == comp);
         if (!uses) continue;
-        if (!heading) p.rows.push_back(MenuRow::Heading("Other bindings with this button"));
+        if (!heading) p.rows.push_back(MenuRow::Heading("Combos that hold this button"));
         heading = true;
-        p.rows.push_back(MenuRow::Link(b.name + (b.enabled ? "" : "  (disabled)"), BindingSummary(b),
+        p.rows.push_back(MenuRow::Link(b.name + (b.enabled ? "" : "  (off)"), BindingSummary(b),
                                        [&e, &m, i] { m.Push([&e, &m, i] { return BindingDetail(e, m, i); }); }));
     }
     return p;
@@ -369,96 +453,157 @@ MenuPage ControllerBindings(Engine& e, InGameMenu& m, int hand) {
     MenuPage p;
     p.title = hand ? "Right bindings" : "Left bindings";
     p.rows.push_back(MenuRow::Live(LiveKind::Controller, hand, 3));
-    p.rows.push_back(MenuRow::Button("+ New binding", "Press the button you want, then pick a key, a mouse button or a controller button",
-                                     [&e, &m, hand] {
-        m.CaptureInput([&e, &m](const InputId& id) {
-            Binding b;
-            b.name = "New binding";
-            SetFiringInput(b, id);
-            b.gesture = Gesture::Press;
-            b.block = BindingBlock::Trigger;
-            b.action.type = ActType::Key;
-            b.action.type = ActType::None;
-            b.block = BindingBlock::None;
-            int index = 0;
-            e.EditBindings([&](std::vector<Binding>& list) {
-                list.push_back(b);
-                index = (int)list.size() - 1;
-            });
-            m.Changed();
-            m.Push([&e, &m, index] { return BindingDetail(e, m, index); });
-            m.Push([&e, &m, index] { return WhatHappens(e, m, index); });
+    auto all = [&e, &m, hand](bool on) {
+        e.EditBindings([&](std::vector<Binding>& list) {
+            for (Binding& b : list)
+                if (!b.chord.empty() && b.chord.back().hand == hand) b.enabled = on;
         });
-    }));
+        m.Changed();
+    };
+    p.rows.push_back(MenuRow::Bar({ "+ New binding", "All on", "All off" },
+                                  { [&e, &m] { m.CaptureInput([&e, &m](const InputId& id) { AddBlank(e, m, id); }); },
+                                    [all] { all(true); }, [all] { all(false); } }));
     int shown = 0;
     for (int i = 0; i < (int)e.prof->bindings.size(); i++) {
         const Binding& b = e.prof->bindings[i];
-        if (b.chord.back().hand != hand) continue;
+        if (b.chord.empty() || b.chord.back().hand != hand) continue;
         shown++;
         p.rows.push_back(MenuRow::Link(b.name + (b.enabled ? "" : "  (off)"), BindingSummary(b),
                                        [&e, &m, i] { m.Push([&e, &m, i] { return BindingDetail(e, m, i); }); }));
+        p.rows.push_back(OnOffRow(e, m, i));
     }
-    if (shown == 0) p.rows.push_back(MenuRow::Note("No bindings on this controller yet"));
+    if (shown == 0) p.rows.push_back(MenuRow::Note("No bindings on this controller yet", "+ New binding: press the button you want"));
     return p;
 }
 
-// Opens the binding keyboard for binding `index`: a key or mouse button makes it press that, its "Controller button"
-// key then asks for the controller button the game should see instead.
-// "What happens" for binding `index`: a key / mouse / controller button (the binding keyboard), a wheel, the VR
-// keyboard, the desktop screen, the settings menu, or nothing. Anything else is still set in the editor.
-MenuPage WhatHappens(Engine& e, InGameMenu& m, int index) {
+// The action a page edits: the binding's own, or (tap) what a short press of a Hold binding does.
+static Action& Slot(Binding& b, bool tap) {
+    if (tap) b.hasTapAction = true;
+    return tap ? b.tapAction : b.action;
+}
+
+// "What happens" for binding `index` (tap: its short press): every kind of action the editor's picker has.
+MenuPage WhatHappens(Engine& e, InGameMenu& m, int index, bool tap) {
     MenuPage p;
-    p.title = "What happens";
+    p.title = tap ? "Short press does" : "What happens";
     if (index < 0 || index >= (int)e.prof->bindings.size()) {
         p.rows.push_back(MenuRow::Note("This binding is gone"));
         return p;
     }
-    auto set = [&e, &m, index](std::function<void(Binding&)> f) {
+    // set the action; the binding's name follows its own action (not the short press's)
+    auto set = [&e, &m, index, tap](Action a, std::string name) {
         e.EditBindings([&](std::vector<Binding>& list) {
-            if (index < (int)list.size()) f(list[index]);
+            if (index >= (int)list.size()) return;
+            Binding& x = list[index];
+            Slot(x, tap) = a;
+            if (!tap && !name.empty()) x.name = InputWords(x.chord.back()) + ": " + name;
         });
         m.Changed();
-        m.Back();
     };
-    p.rows.push_back(MenuRow::Note("Now: " + WhatWords(e.prof->bindings[index])));
+    auto simple = [&p, set, &m](const char* label, const char* detail, ActType t, ActMode mode, const char* name) {
+        p.rows.push_back(MenuRow::Button(label, detail, [set, &m, t, mode, name] {
+            Action a;
+            a.type = t;
+            a.mode = mode;
+            set(a, name);
+            m.Back();
+        }));
+    };
+    const Binding& b = e.prof->bindings[index];
+    p.rows.push_back(MenuRow::Note("Now: " + (tap ? (b.hasTapAction ? ActionWords(b.tapAction) : std::string("nothing")) : WhatWords(b))));
     p.rows.push_back(MenuRow::Heading("Keys"));
-    p.rows.push_back(MenuRow::Button("Press a key or mouse button", "Or act as another controller button (on the keyboard)", [&e, &m, index] {
+    p.rows.push_back(MenuRow::Button("Press a key or mouse button", "Or act as another controller button (on the keyboard)", [&m, set, tap] {
         m.Back();
-        PickAction(e, m, index);
+        m.CaptureAction([set, tap](const std::string& keys) {
+                            Action a;
+                            a.type = ActType::Key;
+                            a.keys = keys;
+                            a.mode = tap ? ActMode::Tap : ActMode::Hold; // held with the button
+                            set(a, keys);
+                        },
+                        [set, tap](const InputId& target) {
+                            Action a;
+                            a.type = ActType::XrInput;
+                            a.target = target;
+                            a.mode = tap ? ActMode::Tap : ActMode::Hold;
+                            set(a, InputWords(target));
+                        });
+    }));
+    p.rows.push_back(MenuRow::Button("Type a few keys in a row (macro)", "Steps split with ;   e.g.  Ctrl+C; wait 100; Ctrl+V", [&e, &m, set, index, tap] {
+        const Binding& x = e.prof->bindings[index];
+        const Action& now = tap ? x.tapAction : x.action;
+        std::string start = now.type == ActType::Sequence ? now.steps : "";
+        m.Back();
+        m.AskText("Macro steps", start, [&e, set](const std::string& t) {
+            std::string err;
+            if (!Keys::ValidateSequence(t, err)) {
+                e.Toast("Macro not set: " + err, 4.0);
+                return;
+            }
+            Action a;
+            a.type = ActType::Sequence;
+            a.steps = t;
+            set(a, "macro");
+        });
     }));
     p.rows.push_back(MenuRow::Heading("Open a wheel"));
     for (const auto& [name, w] : e.prof->wheels) {
         std::string n = name, title = w.title.empty() ? name : w.title;
-        p.rows.push_back(MenuRow::Button("Wheel '" + title + "'", "", [set, n, title] {
-            set([n, title](Binding& x) {
-                x.action = Action{};
-                x.action.type = ActType::Wheel;
-                x.action.wheel = n;
-                x.name = InputWords(x.chord.back()) + ": wheel '" + title + "'";
-            });
+        p.rows.push_back(MenuRow::Button("Wheel '" + title + "'", "", [set, &m, n, title] {
+            Action a;
+            a.type = ActType::Wheel;
+            a.wheel = n;
+            set(a, "wheel '" + title + "'");
+            m.Back();
         }));
     }
-    p.rows.push_back(MenuRow::Heading("Open"));
-    p.rows.push_back(MenuRow::Button("VR keyboard", "", [set] {
-        set([](Binding& x) { x.action = Action{}; x.action.type = ActType::Keyboard; x.name = InputWords(x.chord.back()) + ": VR keyboard"; });
-    }));
-    p.rows.push_back(MenuRow::Button("Desktop screen (show / hide)", "Where and which monitor: Settings > Screen mirror, or the screen's own bar", [set] {
-        set([](Binding& x) {
-            x.action = Action{};
-            x.action.type = ActType::Screen;
-            x.action.mode = ActMode::Toggle;
-            x.name = InputWords(x.chord.back()) + ": desktop screen";
+    p.rows.push_back(MenuRow::Heading("Open or switch"));
+    simple("VR keyboard", "", ActType::Keyboard, ActMode::Tap, "VR keyboard");
+    simple("Desktop screen (show / hide)", "Where and which monitor: Settings > Screen mirror", ActType::Screen, ActMode::Toggle, "desktop screen");
+    simple("This settings menu", "", ActType::Menu, ActMode::Tap, "settings menu");
+    simple("Headset mirror (on / off)", "The window on the desktop showing your view", ActType::Mirror, ActMode::Toggle, "headset mirror");
+    simple("Controller offsets panel", "Fix hand / gun aim", ActType::Offsets, ActMode::Panel, "controller offsets");
+    simple("Adjust mode", "Grab wheels, panels and the keyboard to place them", ActType::Adjust, ActMode::Toggle, "adjust mode");
+    simple("Reload the profile", "", ActType::Reload, ActMode::Tap, "reload profile");
+    p.rows.push_back(MenuRow::Heading("Switch a layer"));
+    for (const std::string& l : LayerNames(*e.prof))
+        p.rows.push_back(MenuRow::Button("Layer '" + l + "'", tap ? "Switched on / off by the short press" : "On while held (change it on the binding)",
+                                         [set, &m, l, tap] {
+                                             Action a;
+                                             a.type = ActType::Layer;
+                                             a.layer = l;
+                                             a.mode = tap ? ActMode::Toggle : ActMode::Hold;
+                                             set(a, "layer " + l);
+                                             m.Back();
+                                         }));
+    p.rows.push_back(MenuRow::Button("+ A new layer", "Type its name", [&m, set, tap] {
+        m.Back();
+        m.AskText("Layer name", "", [set, tap](const std::string& t) {
+            Action a;
+            a.type = ActType::Layer;
+            a.layer = t;
+            a.mode = tap ? ActMode::Toggle : ActMode::Hold;
+            set(a, "layer " + t);
         });
     }));
-    p.rows.push_back(MenuRow::Button("This settings menu", "", [set] {
-        set([](Binding& x) { x.action = Action{}; x.action.type = ActType::Menu; x.name = InputWords(x.chord.back()) + ": settings menu"; });
-    }));
     p.rows.push_back(MenuRow::Heading("Other"));
-    p.rows.push_back(MenuRow::Button("Nothing", "Details decides whether the game still gets the button", [set] {
-        set([](Binding& x) { x.action = Action{}; x.action.type = ActType::None; });
-    }));
+    if (tap)
+        p.rows.push_back(MenuRow::Button("Nothing (no short press action)", "A short press then does what 'the game still gets a tap' says", [&e, &m, index] {
+            e.EditBindings([&](std::vector<Binding>& list) {
+                if (index < (int)list.size()) {
+                    list[index].hasTapAction = false;
+                    list[index].tapAction = Action{};
+                }
+            });
+            m.Changed();
+            m.Back();
+        }));
+    else
+        simple("Nothing", "Details decides whether the game still gets the button", ActType::None, ActMode::Tap, "");
     return p;
 }
+
+MenuPage WhatHappens(Engine& e, InGameMenu& m, int index) { return WhatHappens(e, m, index, false); }
 
 void PickAction(Engine& e, InGameMenu& m, int index) {
     auto change = [&e, &m, index](std::function<void(Binding&)> f) {
@@ -471,6 +616,35 @@ void PickAction(Engine& e, InGameMenu& m, int index) {
                     [change](const InputId& target) { change([target](Binding& x) { SetButtonAction(x, target); }); });
 }
 
+// A layer condition as a Choice: "Always" (or "(none)"), each layer the profile uses, and "+ New..." (typed).
+using BindingEdit = std::function<void(std::function<void(Binding&)>)>;
+static MenuRow LayerRow(Engine& e, InGameMenu& m, int index, bool notIn, BindingEdit edit) {
+    std::vector<std::string> names = LayerNames(*e.prof);
+    std::vector<std::string> opts = { notIn ? "(none)" : "Always" };
+    for (auto& n : names) opts.push_back(n);
+    opts.push_back("+ New...");
+    auto pick = [notIn](Binding& x) -> std::vector<std::string>& { return notIn ? x.notLayers : x.layers; };
+    return MenuRow::Choice(notIn ? "Not while layer" : "Only while layer",
+                           notIn ? "Off while this layer is on" : "Always, or only while that layer is on", opts,
+                           [&e, index, names, notIn] {
+                               if (index >= (int)e.prof->bindings.size()) return 0;
+                               const Binding& x = e.prof->bindings[index];
+                               const auto& l = notIn ? x.notLayers : x.layers;
+                               if (l.empty()) return 0;
+                               auto it = std::find(names.begin(), names.end(), l[0]);
+                               return it == names.end() ? 0 : 1 + (int)(it - names.begin());
+                           },
+                           [&m, edit, names, pick](int i) {
+                               if (i == 0)
+                                   edit([pick](Binding& x) { pick(x).clear(); });
+                               else if (i <= (int)names.size()) {
+                                   std::string n = names[i - 1];
+                                   edit([pick, n](Binding& x) { pick(x) = { n }; });
+                               } else
+                                   m.AskText("Layer name", "", [edit, pick](const std::string& t) { edit([pick, t](Binding& x) { pick(x) = { t }; }); });
+                           });
+}
+
 MenuPage BindingDetail(Engine& e, InGameMenu& m, int index) {
     MenuPage p;
     if (index < 0 || index >= (int)e.prof->bindings.size()) {
@@ -479,7 +653,7 @@ MenuPage BindingDetail(Engine& e, InGameMenu& m, int index) {
         return p;
     }
     // Every row edits the binding through the engine (EditBindings), which ends whatever it was doing first.
-    auto edit = [&e, &m, index](std::function<void(Binding&)> change) {
+    BindingEdit edit = [&e, &m, index](std::function<void(Binding&)> change) {
         e.EditBindings([&](std::vector<Binding>& list) {
             if (index < (int)list.size()) change(list[index]);
         });
@@ -488,19 +662,36 @@ MenuPage BindingDetail(Engine& e, InGameMenu& m, int index) {
     auto get = [&e, index]() -> const Binding& { return e.prof->bindings[index]; };
     const Binding& b = get();
     p.title = b.name;
+    p.rows.push_back(MenuRow::Bar({ "Save now", "Duplicate", "Delete binding" },
+                                  { [&m] { m.SaveNow(); },
+                                    [&e, &m, index] {
+                                        int at = index + 1;
+                                        e.EditBindings([&](std::vector<Binding>& list) {
+                                            if (index >= (int)list.size()) return;
+                                            Binding c = list[index];
+                                            c.name += " copy";
+                                            c.enabled = false; // two of the same would both fire
+                                            c.sourceIndex = -1;
+                                            list.insert(list.begin() + at, c);
+                                        });
+                                        m.Changed();
+                                        e.Toast("Made a copy (switched off, so the two don't both fire)", 3.0);
+                                        m.Back();
+                                        m.Push([&e, &m, at] { return BindingDetail(e, m, at); });
+                                    },
+                                    [&e, &m, index] {
+                                        e.EditBindings([index](std::vector<Binding>& list) {
+                                            if (index < (int)list.size()) list.erase(list.begin() + index);
+                                        });
+                                        m.Changed();
+                                        m.Back();
+                                    } }));
     p.rows.push_back(MenuRow::Choice("1  How", "Also sets if the game gets it", kGestureWords, [get] { return GestureIndex(get().gesture); },
                                      [edit](int i) { edit([i](Binding& x) { x.gesture = kGestures[i]; DefaultsForHow(x); }); }));
-    if (b.gesture == Gesture::Hold) {
-        MenuRow hold = MenuRow::Number("Hold time", "", [get] { return (float)get().holdMs; },
-                                       [edit](float v) { edit([v](Binding& x) { x.holdMs = (int)v; }); }, 100, 2000, 50);
-        hold.unit = "ms";
-        p.rows.push_back(hold);
-    }
     InputId firing = b.chord.back();
-    p.rows.push_back(MenuRow::Button("2  Button: " + InputWords(firing) + (b.chord.size() > 1 ? " (in a combo)" : ""),
-                                     "Select, then press the new button", [&m, edit] {
-                                         m.CaptureInput([edit](const InputId& id) { edit([id](Binding& x) { SetFiringInput(x, id); }); });
-                                     }));
+    p.rows.push_back(MenuRow::Button("2  Button: " + InputWords(firing), "Select, then press the new button", [&m, edit] {
+        m.CaptureInput([edit](const InputId& id) { edit([id](Binding& x) { SetFiringInput(x, id); }); });
+    }));
     if (HasTouch(firing.comp) && (firing.feat == F_PRESS || firing.feat == F_TOUCH))
         p.rows.push_back(MenuRow::Choice("Press or touch", "Touch: a finger resting on it, without pressing", { "Press", "Touch" },
                                          [get] { return get().chord.back().feat == F_TOUCH ? 1 : 0; },
@@ -512,23 +703,96 @@ MenuPage BindingDetail(Engine& e, InGameMenu& m, int index) {
                                                  if (i == 1) x.block = BindingBlock::None; // hiding a touch would hide its presses
                                              });
                                          }));
+    // a combo: other buttons held first
+    std::string held;
+    for (size_t k = 0; k + 1 < b.chord.size(); k++) held += (k ? " + " : "") + InputWords(b.chord[k]);
+    p.rows.push_back(MenuRow::Button(held.empty() ? "Combo: also hold..." : "Combo: with " + held + " held",
+                                     held.empty() ? "Select, then press the button to hold first (e.g. the other grip)" : "Select to add another",
+                                     [&m, edit] {
+                                         m.CaptureInput([edit](const InputId& id) {
+                                             edit([id](Binding& x) {
+                                                 for (const InputId& c : x.chord)
+                                                     if (c == id) return;
+                                                 x.chord.insert(x.chord.end() - 1, id);
+                                                 SetFiringInput(x, x.chord.back()); // writes the text again
+                                             });
+                                         });
+                                     }));
+    if (!held.empty())
+        p.rows.push_back(MenuRow::Button("Remove the combo", "Just the button again", [edit] {
+            edit([](Binding& x) {
+                InputId last = x.chord.back();
+                x.chord = { last };
+                SetFiringInput(x, last);
+                if (x.block == BindingBlock::All) x.block = BindingBlock::Trigger;
+            });
+        }));
     bool isKey = b.action.type == ActType::Key, isButton = b.action.type == ActType::XrInput;
-    p.rows.push_back(MenuRow::Link("3  What happens: " + WhatWords(b), "A key, a wheel, the VR keyboard, your desktop...",
-                                   [&e, &m, index] { m.Push([&e, &m, index] { return WhatHappens(e, m, index); }); }));
+    p.rows.push_back(MenuRow::Link("3  What happens: " + WhatWords(b), "A key, a macro, a wheel, a layer, the VR keyboard...",
+                                   [&e, &m, index] { m.Push([&e, &m, index] { return WhatHappens(e, m, index, false); }); }));
     if (isKey || isButton) {
         static const ActMode modes[] = { ActMode::Tap, ActMode::Hold, ActMode::Toggle };
-        p.rows.push_back(MenuRow::Choice(isKey ? "Key behavior" : "Button behavior", "", { "Tap", "Hold", "Toggle" },
+        p.rows.push_back(MenuRow::Choice(isKey ? "Key behavior" : "Button behavior", "Press / Hold: held while you hold the button",
+                                         { "Press", "Hold", "Toggle" },
                                          [get] {
                                              ActMode md = get().action.mode;
                                              return md == ActMode::Hold ? 1 : md == ActMode::Toggle ? 2 : 0;
                                          },
                                          [edit](int i) { edit([i](Binding& x) { x.action.mode = modes[i]; }); }));
     }
+    if (b.action.type == ActType::Layer) {
+        static const ActMode modes[] = { ActMode::Hold, ActMode::Toggle, ActMode::On, ActMode::Off };
+        p.rows.push_back(MenuRow::Choice("Layer", "", { "On while held", "Toggle", "Switch on", "Switch off" },
+                                         [get] {
+                                             ActMode md = get().action.mode;
+                                             return md == ActMode::Toggle ? 1 : md == ActMode::On ? 2 : md == ActMode::Off ? 3 : 0;
+                                         },
+                                         [edit](int i) { edit([i](Binding& x) { x.action.mode = modes[i]; }); }));
+    }
+    if (b.action.type == ActType::Wheel) {
+        std::string n = b.action.wheel;
+        p.rows.push_back(MenuRow::Link("Edit that wheel", "", [&e, &m, n] { m.Push([&e, &m, n] { return WheelPage(e, m, n); }); }));
+    }
+    if (b.gesture == Gesture::Hold) {
+        p.rows.push_back(MenuRow::Heading("Short press (let go before the hold time)"));
+        p.rows.push_back(MenuRow::Link("Short press does: " + (b.hasTapAction ? ActionWords(b.tapAction) : std::string("nothing of its own")),
+                                       "Something else on a short press: a key, a wheel... The hold still does the action above",
+                                       [&e, &m, index] { m.Push([&e, &m, index] { return WhatHappens(e, m, index, true); }); }));
+        if (!b.hasTapAction)
+            p.rows.push_back(MenuRow::Toggle("Else the game still gets a normal tap", "", [get] { return get().tapPassthrough; },
+                                             [edit](bool on) { edit([on](Binding& x) { x.tapPassthrough = on; }); }));
+        MenuRow hold = MenuRow::Number("Hold time", "How long counts as a hold", [get] { return (float)get().holdMs; },
+                                       [edit](float v) { edit([v](Binding& x) { x.holdMs = (int)v; }); }, 100, 2000, 50);
+        hold.unit = "ms";
+        p.rows.push_back(hold);
+    }
     p.rows.push_back(MenuRow::Heading("Details"));
+    p.rows.push_back(MenuRow::Button("Name: " + b.name, "Type a new one on the keyboard", [&e, &m, index, edit] {
+        if (index >= (int)e.prof->bindings.size()) return;
+        m.AskText("Name", e.prof->bindings[index].name, [edit](const std::string& t) { edit([t](Binding& x) { x.name = t; }); });
+    }));
     p.rows.push_back(MenuRow::Toggle("Enabled", "", [get] { return get().enabled; }, [edit](bool on) { edit([on](Binding& x) { x.enabled = on; }); }));
-    p.rows.push_back(MenuRow::Choice("The game also gets the button", "Set for you from How", { "No", "Yes" },
-                                     [get] { return get().block == BindingBlock::None ? 1 : 0; },
-                                     [edit](int i) { edit([i](Binding& x) { x.block = i ? BindingBlock::None : BindingBlock::Trigger; }); }));
+    {
+        std::vector<std::string> opts = { "No", "Yes" };
+        if (b.chord.size() > 1) opts.push_back("No, nor the combo's others");
+        p.rows.push_back(MenuRow::Choice("The game also gets the button", "Set for you from How", opts,
+                                         [get] { return get().block == BindingBlock::None ? 1 : get().block == BindingBlock::All ? 2 : 0; },
+                                         [edit](int i) {
+                                             edit([i](Binding& x) { x.block = i == 1 ? BindingBlock::None : i == 2 ? BindingBlock::All : BindingBlock::Trigger; });
+                                         }));
+    }
+    if (b.gesture == Gesture::Tap) {
+        MenuRow t = MenuRow::Number("Tap shorter than", "", [get] { return (float)get().tapMs; },
+                                    [edit](float v) { edit([v](Binding& x) { x.tapMs = (int)v; }); }, 50, 2000, 50);
+        t.unit = "ms";
+        p.rows.push_back(t);
+    }
+    if (b.gesture == Gesture::DoubleTap || b.gesture == Gesture::DoubleTapHold) {
+        MenuRow t = MenuRow::Number("Second tap within", "How quick the second tap (or flick) must be", [get] { return (float)get().doubleTapMs; },
+                                    [edit](float v) { edit([v](Binding& x) { x.doubleTapMs = (int)v; }); }, 100, 2000, 50);
+        t.unit = "ms";
+        p.rows.push_back(t);
+    }
     if (e.AnalogOf(firing) >= 0) {
         // Hair trigger (low) or a long pull (high); the profile's usual point when at the minimum.
         bool force = firing.feat == F_FULL;
@@ -551,16 +815,8 @@ MenuPage BindingDetail(Engine& e, InGameMenu& m, int index) {
         rel.atMin = "off";
         p.rows.push_back(rel);
     }
-
-    MenuRow remove = MenuRow::Button("Delete binding", "", [&e, &m, index] {
-        e.EditBindings([index](std::vector<Binding>& list) {
-            if (index < (int)list.size()) list.erase(list.begin() + index);
-        });
-        m.Changed();
-        m.Back();
-    });
-    remove.isDanger = true;
-    p.rows.push_back(remove);
+    p.rows.push_back(LayerRow(e, m, index, false, edit));
+    p.rows.push_back(LayerRow(e, m, index, true, edit));
     return p;
 }
 

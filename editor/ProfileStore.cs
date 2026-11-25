@@ -58,7 +58,61 @@ public class ProfileStore
         Profile = FromText(File.ReadAllText(path));
         CurrentFile = path;
         Dirty = false;
+        Remember();
         Changed?.Invoke();
+    }
+
+    // ---- changes made in the headset (the in-game menu writes the profile file itself)
+    DateTime stamp;
+    string activeSeen;
+
+    void Remember()
+    {
+        try { stamp = File.GetLastWriteTimeUtc(CurrentFile); } catch (IOException) { stamp = default; }
+        activeSeen = ActiveName;
+    }
+
+    // Called every second. Returns a status line (and whether it's a warning) when the profile changed on disk, else null.
+    // Nothing unsaved here: the file is loaded again. Unsaved edits here: only a warning (Save keeps yours, Revert takes the headset's).
+    public (string text, bool warn)? WatchDisk()
+    {
+        if (CurrentFile == null || !CanSave)
+            return null;
+        // A change made in the headset to the standard default.json goes to a new user_defaults file, which games use from then on.
+        string act = ActiveName;
+        if (!string.Equals(act, activeSeen, StringComparison.OrdinalIgnoreCase))
+        {
+            activeSeen = act;
+            if (IsStandard(CurrentName) && !IsStandard(act))
+            {
+                if (Dirty)
+                    return ("The headset saved its changes as " + act + " (now the profile games use). Pick it in the profile list to see them.", true);
+                return TryReload(act, "The headset saved its changes as " + act + ": showing it now.");
+            }
+        }
+        DateTime t;
+        try { t = File.GetLastWriteTimeUtc(CurrentFile); } catch (IOException) { return null; }
+        if (t == stamp)
+            return null;
+        if (Dirty)
+        {
+            stamp = t; // warn once
+            return ("This profile was changed in the headset, but you have unsaved changes here. Save keeps yours (and overwrites the headset's), Revert loads the headset's.", true);
+        }
+        return TryReload(CurrentName, "Loaded the changes made in the headset.");
+    }
+
+    (string, bool)? TryReload(string name, string ok)
+    {
+        try
+        {
+            Load(name);
+            return (ok, false);
+        }
+        catch (Exception) // half written: try again next second
+        {
+            return null;
+        }
     }
 
     // Back to a snapshot taken with Serialize() (a tutorial's "throw it away"), keeping the file and the dirty flag given.
@@ -279,6 +333,7 @@ public class ProfileStore
         Dirty = false;
         if (plan.ForkTo != null)
             SetActive(plan.ForkTo); // the new profile is the one games use now
+        Remember();
         Changed?.Invoke();
         if (plan.ForkTo == UserDefaultsFile)
             return "Saved as user_defaults.json (your own defaults; default.json stays the standard). A running game switches to it within a second.";

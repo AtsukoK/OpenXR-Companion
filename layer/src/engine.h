@@ -247,7 +247,8 @@ public:
     bool reloadRequested = false;
     bool saveRequested = false;                    // leaving adjust mode: write the placement to the profile
     bool offsSaveRequested = false;                // write offs into the profile
-    bool menuSaveRequested = false;                // the in-game menu changed the profile (bindings, sticks): write them
+    bool menuSaveRequested = false;
+    bool menuSaveSay = false; // "Save now": say where it went                // the in-game menu changed the profile (bindings, sticks): write them
     MirrorRequest mirrorAsk = MirrorRequest::None; // the headset mirror window
     bool mirrorOn = false;                         // set by the layer
 

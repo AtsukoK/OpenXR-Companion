@@ -594,10 +594,13 @@ static void SaveOffsetsIfAsked() {
 static void SaveMenuEditsIfAsked() {
     if (!gEng.menuSaveRequested || !gEng.prof) return;
     gEng.menuSaveRequested = false;
+    bool say = gEng.menuSaveSay;
+    gEng.menuSaveSay = false;
     std::string err;
     if (SaveMenuEdits(*gEng.prof, err)) {
         MarkOwnSave();
         Log("in-game menu: settings saved to %s", gEng.prof->sourceName.c_str());
+        if (say) gEng.Toast("Saved to " + gEng.prof->sourceName + ". The desktop editor shows it within a second.", 3.0);
     } else {
         Log("in-game menu: save failed: %s", err.c_str());
         gEng.Toast("Could not save the settings: " + err, 6.0);

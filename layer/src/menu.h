@@ -109,9 +109,14 @@ struct MenuPage {
     float scale = 1;    // the whole page bigger (same look, same pixels per design unit)
     float distance = 0; // metres from the eyes; 0 = the usual 0.6
     bool stickFree = false; // the sticks are being tested here: they don't scroll the page or change values
+    int shownRows = 0;      // rows shown at once; 0 = the big list panel (kMenuListRows)
 };
 constexpr float kMenuWidth = 0.5f, kMenuHeight = 0.56f; // the usual panel size, metres
-constexpr float kMenuDistance = 0.6f;                   // the usual distance from the eyes
+constexpr float kMenuDistance = 0.75f;                  // the usual distance from the eyes (a big panel, a bit further)
+constexpr int kMenuListRows = 12;                       // list pages: a large panel like SteamVR's bindings, little scrolling
+constexpr float kMenuListWidth = 0.72f;                 // list pages' width, metres
+// The panel's height for this many rows, as a share of kMenuHeight (8 rows = 1): header and footer keep their size.
+inline float MenuHeightFactor(int rows) { return 0.22f + rows * (0.78f / 8.f); }
 using MenuPageBuilder = std::function<MenuPage()>;
 
 // ---------------------------------------------------------------- what the overlay draws
@@ -168,7 +173,8 @@ struct MenuView {
     bool canBack = false;
     std::vector<MenuViewRow> rows;
     int first = 0;             // the first row shown (scrolled)
-    static constexpr int kVisibleRows = 8;
+    static constexpr int kVisibleRows = 8; // the rows of the small (scaled-up) pages: overview, home tiles
+    int visibleRows = kVisibleRows;        // rows this page shows at once (list pages: more, on a taller panel)
     MenuHit hover, pressed;
     LiveHand live[2];
     float stickOn = 0.7f; // where a stick direction counts as pushed

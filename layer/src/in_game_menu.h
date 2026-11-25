@@ -24,6 +24,7 @@ public:
     void Back();
     void Refresh();
     void Changed(); // the profile changed: refresh, and save a moment later
+    void SaveNow(); // write the profile now, and say where it went
 
     // Ask for a controller input: the next button press or stick push (not the trigger press that asked).
     void CaptureInput(std::function<void(const InputId&)> done);

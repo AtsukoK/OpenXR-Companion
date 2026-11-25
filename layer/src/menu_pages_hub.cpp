@@ -153,6 +153,7 @@ MenuPage Main(Engine& e, InGameMenu& m) {
     MenuPage p;
     p.title = "OpenXR Companion" + (e.prof->sourceName.empty() ? std::string() : "  -  " + e.prof->sourceName);
     p.scale = 1.6f; // big tiles, easy to hit
+    p.shownRows = MenuView::kVisibleRows;
     p.distance = 1.0f;
     p.width = 0.62f;
     int nWheels = (int)e.prof->wheels.size(), nBindings = 0;
@@ -180,7 +181,7 @@ MenuPage Main(Engine& e, InGameMenu& m) {
         [&e, &m] { m.Push([&e, &m] { return MoreSettings(e, m); }); },
     };
     p.rows.push_back(MenuRow::Tiles(titles, details, open, 3, 7));
-    p.rows.push_back(MenuRow::Note("Changes save by themselves. The editor on the desktop has the rest.", ""));
+    p.rows.push_back(MenuRow::Bar({ "Save now  (changes also save by themselves a second later)" }, { [&m] { m.SaveNow(); } }));
     return p;
 }
 

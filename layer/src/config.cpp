@@ -1016,7 +1016,20 @@ static json MenuBindingJson(const Binding& b, const json& original) {
         o["tap_passthrough"] = true;
     else
         o.erase("tap_passthrough");
+    if (b.gesture == Gesture::Tap) o["tap_ms"] = b.tapMs;
+    if (b.gesture == Gesture::DoubleTap || b.gesture == Gesture::DoubleTapHold) o["double_tap_ms"] = b.doubleTapMs;
+    auto names = [](const std::vector<std::string>& l) {
+        std::string t;
+        for (auto& n : l) t += (t.empty() ? "" : ",") + n;
+        return t;
+    };
+    o["layers"] = names(b.layers);
+    o["not_layers"] = names(b.notLayers);
     o["action"] = ActionJson(b.action, o.value("action", json::object()));
+    if (b.hasTapAction)
+        o["tap_action"] = ActionJson(b.tapAction, o.value("tap_action", json::object()));
+    else
+        o.erase("tap_action");
     return o;
 }
 

@@ -40,6 +40,20 @@ public partial class MainWindow : Window
         if (canSave && dataDir == ProfileStore.RealDataDir)
             OpenXRCompanionEditor.Native.PrepareDefaults();
         store.Load(store.ActiveName);
+        // the in-game menu saves into the same file: pick its changes up
+        var watch = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        watch.Tick += (s, e) =>
+        {
+            var r = store.WatchDisk();
+            if (r == null) return;
+            if (!r.Value.warn)
+            {
+                FillProfiles();
+                Shell.Refresh();
+            }
+            Shell.SetStatus(r.Value.text, r.Value.warn);
+        };
+        watch.Start();
 
         rail = Shell.RailItems.Select(r => new RailItem
         {

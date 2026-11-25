@@ -117,11 +117,11 @@ void TestInGameMenu() {
         }
     CHECK(jumpShown && unusedShown, "menu: the overview tags each part with the game's own control, or 'Default'");
     SaveMenuPicture(e, *p, L"menu_overview.png");
-    CHECK(d.PressTag(1, C_BTN1) && e.menuView.title == "Right A" && d.Row("In the game: Jump") >= 0 && d.Row("Hold") >= 0,
+    CHECK(d.PressTag(1, C_BTN1) && e.menuView.title == "Right A" && d.Row("In the game: Jump") >= 0 && d.Row("Press") >= 0 && d.Row("Touch") >= 0,
           "menu: pointing at a tag opens that part's page: the game's use and every way to bind it");
     SaveMenuPicture(e, *p, L"menu_part.png");
     CHECK(d.Press(MenuPart::Back) && e.menuView.title == "Controller configuration", "menu: Back returns to the overview");
-    CHECK(d.PressItem("Edit bindings") && e.menuView.title.rfind("Edit bindings", 0) == 0, "menu: Edit bindings under the overview");
+    CHECK(d.PressItem("All bindings") && e.menuView.title.rfind("Edit bindings", 0) == 0, "menu: Edit bindings under the overview");
     CHECK(d.Row("Right controller bindings") >= 0 && d.Row("Right stick") >= 0 && d.Row("Controller offsets") >= 0,
           "menu: home links to bindings, sticks and controller offsets");
     SaveMenuPicture(e, *p, L"menu_home.png");
@@ -184,7 +184,7 @@ void TestInGameMenu() {
 
     // A new binding: press the button, then type the key on the VR keyboard.
     CHECK(d.PressRow("Right controller bindings") && e.menuView.title == "Right bindings", "menu: the right controller's bindings");
-    d.PressRow("+ New binding");
+    d.PressItem("+ New binding");
     CHECK(!e.menuView.status.empty(), "menu: asking for a button says so on the panel");
     SaveMenuPicture(e, *p, L"menu_capture.png");
     f.h[1].b1 = true; // right A
@@ -201,7 +201,7 @@ void TestInGameMenu() {
         SavePng(px, W, H, L"menu_what_happens.png");
     }
     d.PressRow("Press a key or mouse button");
-    CHECK(e.kb.visible && e.menuView.title == "New binding", "menu: then the VR keyboard opens for its key, on the binding's page");
+    CHECK(e.kb.visible && e.menuView.title == "Right A", "menu: then the VR keyboard opens for its key, on the binding's page");
     float uw, uh;
     const auto& keys = KbLayout(uw, uh, true);
     CHECK(e.kb.binding, "menu: the keyboard shows the binding layout (mouse buttons, Controller button)");
@@ -278,6 +278,7 @@ void TestInGameMenu() {
                   p->bindings.back().action.wheel == wname && e.menuView.title != "What happens",
               "menu: What happens > a wheel makes the binding open it, and goes back");
     }
+    e.menuView.first = std::min(d.Row("Enabled"), MenuMaxFirst(e.menuView)); // further down the page now: scroll to it
     d.PressRow("Enabled");
     CHECK(!p->bindings.back().enabled, "menu: the On switch turns the binding off");
 
@@ -291,7 +292,8 @@ void TestInGameMenu() {
         SavePng(px, W, H, L"menu_binding.png");
     }
 
-    CHECK(d.PressRow("Delete binding") && p->bindings.size() == bindingsBefore && e.menuView.title == "Right bindings",
+    e.menuView.first = 0;
+    CHECK(d.PressItem("Delete binding") && p->bindings.size() == bindingsBefore && e.menuView.title == "Right bindings",
           "menu: Delete removes the binding and goes back to the list");
     {
         int W = 1100, H = (int)(1100 * e.menuView.h / e.menuView.w);
