@@ -41,6 +41,14 @@ public class ActionPanel : Form
     readonly ChordPicker target = new();
     readonly ChoiceCombo pad = new(Choices.PadButtons, 260);
     readonly Button padPick = new() { Content = "🎮 Pick…" };
+    readonly StackPanel padWarn;
+    static Button LinkButton(string text, string url)
+    {
+        var b = new Button { Content = text, Classes = { "link" } };
+        ToolTip.SetTip(b, url);
+        b.Click += (s, e) => LayerTools.OpenUrl(url);
+        return b;
+    }
     readonly ChoiceCombo screenMode = new(Choices.ScreenModes, 420);
     readonly ChoiceCombo screenPlace = new(Choices.ScreenPlaces);
     readonly ChoiceCombo screenMon = new(Monitors.Choices(true));
@@ -83,7 +91,18 @@ public class ActionPanel : Form
         lLayer = AddRow("Layer name", layer, "Type a new name or pick one you already use.");
         lLayerMode = AddRow("Layer", layerMode);
         lTarget = AddRow("Game button", target, "The game will think this controller button is pressed.");
-        lPad = AddRow("Gamepad button", new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { pad, padPick } },
+        // ViGEmBus missing: say so, with where to get it (checked again each time the row shows, so installing it is seen)
+        padWarn = new StackPanel
+        {
+            Spacing = 4,
+            Children =
+            {
+                new TextBlock { Text = "⚠ The ViGEmBus driver isn't installed, so gamepad buttons won't do anything yet. Install it (free), then restart the game.",
+                                Foreground = Brush.Parse("#F2C94C"), TextWrapping = TextWrapping.Wrap, MaxWidth = 460 },
+                LinkButton("Download ViGEmBus (the ViGEmBus_Setup .exe on its releases page)", LayerTools.ViGEmBusUrl),
+            },
+        };
+        lPad = AddRow("Gamepad button", new StackPanel { Spacing = 6, Children = { new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { pad, padPick } }, padWarn } },
                       "A button on a virtual Xbox 360 pad. Needs the free ViGEmBus driver installed; without it this does nothing and the headset says so once.");
         ToolTip.SetTip(padPick, "Click the button on a picture of the pad.");
         padPick.Click += async (s, e) =>
@@ -235,6 +254,7 @@ public class ActionPanel : Form
         Show(lLayerMode, t == ActionType.Layer);
         Show(lTarget, t == ActionType.XrInput);
         Show(lPad, t == ActionType.Gamepad);
+        padWarn.IsVisible = t == ActionType.Gamepad && !LayerTools.ViGEmBusInstalled();
         bool turnsOn = t == ActionType.Screen && (a.Mode is null or "toggle" or "on");
         Show(lScreenMode, t == ActionType.Screen);
         Show(lScreenPlace, turnsOn);

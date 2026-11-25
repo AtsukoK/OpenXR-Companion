@@ -68,6 +68,24 @@ public static class LayerTools
     // this editor's version (the csproj Version), e.g. "0.2.16-experimental+commit"
     static string AppVersionText => typeof(LayerTools).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
 
+    // The virtual gamepad driver (optional, for gamepad button actions): its releases page has ViGEmBus_Setup_x64.exe.
+    public const string ViGEmBusUrl = "https://github.com/nefarius/ViGEmBus/releases/latest";
+    public static bool ViGEmBusInstalled()
+    {
+        try
+        {
+            using var k = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\ViGEmBus");
+            return k != null;
+        }
+        catch (Exception) { return true; } // can't tell: don't warn
+    }
+
+    public static void OpenUrl(string url)
+    {
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+        catch (System.ComponentModel.Win32Exception) { }
+    }
+
     // The release the update offers (its own page, with the zip to download), else the list of releases.
     public static void OpenReleasesPage(string tag = null)
     {
