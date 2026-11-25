@@ -11,6 +11,10 @@ namespace OverviewPrototype;
 public class ActionPanel : Form
 {
     public event Action Changed;
+    // The button this action belongs to ("left.thumbstick"), when it is a controller binding's: offers "its own game
+    // action" (the game gets that same button) and starts "another controller button" on it.
+    public Func<string> OwnInput { get; set; }
+    const string OwnButton = "own_button";
     readonly string kind;
     readonly WristModel wristOwner;
     readonly ProfileModel profile = Shell.Store.Profile;
@@ -120,7 +124,15 @@ public class ActionPanel : Form
 
         what.Click += async (s, e) =>
         {
-            var opts = EditorApi.ActionOptions(kind);
+            var opts = EditorApi.ActionOptions(kind).ToList();
+            string own = Own();
+            if (own != null)
+            {
+                int at = opts.FindIndex(o => o.code == ActionType.Key);
+                opts.Insert(Math.Max(0, at), (OwnButton, new PickOption("Keys", "The button's own game action",
+                    $"The game gets {InputText.Friendly(own)} as usual: whatever the game itself does with it.",
+                    "a double-tap whose single tap keeps the game's action.")));
+            }
             string thing = kind == "wrist" ? "this button" : kind == "wheel" ? "this item" : "this binding";
             int i = await OptionPicker.Show(this, $"What should {thing} do?", "Pick one; you can change it any time.", opts.Select(o => o.option).ToList());
             if (i >= 0)
@@ -163,8 +175,23 @@ public class ActionPanel : Form
     bool InWheel => kind != "binding";
 
     // A card was picked: the action becomes that type, with its defaults (WinForms ActionEditor.Pick + Defaults).
+    string Own()
+    {
+        string own = OwnInput?.Invoke();
+        return string.IsNullOrWhiteSpace(own) ? null : own.Split('+').Last().Trim();
+    }
+
     void Pick(string code)
     {
+        if (code == OwnButton)
+        {
+            a.Type = ActionType.XrInput;
+            a.Target = Own();
+            a.Mode = null;
+            Bind(a);
+            Changed?.Invoke();
+            return;
+        }
         a.Type = code;
         switch (code)
         {
@@ -185,7 +212,7 @@ public class ActionPanel : Form
                     a.Mode = InWheel ? "toggle" : "hold";
                 break;
             case ActionType.XrInput:
-                a.Target ??= "left.menu";
+                a.Target ??= Own() ?? "left.menu";
                 break;
             case ActionType.Gamepad:
                 a.Button ??= "a";
@@ -243,6 +270,8 @@ public class ActionPanel : Form
         string t = a.Type;
         var title = EditorApi.ActionOptions(kind).FirstOrDefault(x => x.code == t).option?.Title
                     ?? Choices.ActionTypes.FirstOrDefault(c => c.Code == t)?.Text ?? t;
+        if (t == ActionType.XrInput && Own() is string own && string.Equals(InputText.Friendly(a.Target), InputText.Friendly(own), StringComparison.OrdinalIgnoreCase))
+            title = "The button's own game action";
         whatText.Text = title;
         Show(lKeys, t == ActionType.Key);
         Show(lKeyMode, t is ActionType.Key or ActionType.XrInput or ActionType.Gamepad);

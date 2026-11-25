@@ -131,6 +131,7 @@ public class BindingPage : UserControl
         passthrough.IsChecked = b.TapPassthrough;
         pressAt.Value = (decimal)Math.Clamp(Math.Round(b.PressAt * 100), 0, 95);
         releaseAt.Value = (decimal)Math.Clamp(Math.Round(b.ReleaseAt * 100), 0, 90);
+        action.OwnInput = tapAction.OwnInput = () => b.Input;
         action.Bind(b.Action);
         tapOwn.IsChecked = b.TapAction != null;
         tapAction.Bind(b.TapAction ?? new ActionModel());
