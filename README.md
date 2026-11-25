@@ -8,7 +8,7 @@ It's an OpenXR API layer, so it works under Virtual Desktop (VDXR), SteamVR Open
 
 **[Download the latest release](https://github.com/AtsukoK/OpenXR-Companion/releases/latest)** · **[My other work and support on Patreon](https://www.patreon.com/cw/AtsukoK)** · **[Buy me a coffee on Ko-fi](https://ko-fi.com/atsukok)**
 
-> **New in v0.3.0:** a completely new editor, with a guided setup of your menu positions at the start of your first game, a Getting started guide with animations, tutorials, and a lot more. Coming from v0.2.13? See [Updating](#updating-from-an-older-version). The old README is kept [here](docs/README-v0.2.13-winforms.md).
+> **New in v0.3.0:** a completely new editor, with a guided setup of your menu positions at the start of your first game, a Getting started guide with animations, tutorials, and a lot more. Coming from v0.2.13? See [Updating](#updating-from-an-older-version). The old README is kept [here](docs/README-v0.2.13-winforms.md). The **experimental branch** and its 0.2.14 - 0.2.16 prereleases are **outdated**: everything from them is in this version, so use this one.
 
 | Wrist panel | Radial wheel |
 |---|---|
