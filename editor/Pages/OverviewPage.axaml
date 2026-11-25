@@ -17,7 +17,7 @@
       <ItemsControl ItemsSource="{Binding Cards}">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate>
-            <UniformGrid Columns="2" />
+            <WrapPanel ItemWidth="452" /><!-- two columns; each row only as tall as its own cards (UniformGrid made all as tall as the tallest) -->
           </ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
 

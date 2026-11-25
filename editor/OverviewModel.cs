@@ -143,11 +143,12 @@ public static class Overview
 
         var rest = p.Bindings.Where(b => b.Action?.Type is not ("wheel" or "keyboard")).ToList();
         Card others = null;
-        others = new Card("", "Other bindings", "Keys, macros, layers and game inputs on controller buttons.",
+        others = new Card("", "Other bindings", "Keys, macros, modes and game inputs on controller buttons.",
             () => { int on = rest.Count(b => b.Enabled); return ($"{on} of {rest.Count} on", on > 0); });
-        foreach (var b in rest)
+        const int shown = 6; // a long list here made every card on the Overview as tall as this one
+        foreach (var b in rest.Take(shown))
             others.Switches.Add(new SwitchRow(b.Name, HowTo(b), () => b.Enabled, v => b.Enabled = v, () => others.Refresh()));
-        others.Buttons.Add(new("All bindings", "bindings"));
+        others.Buttons.Add(new(rest.Count > shown ? $"All bindings  (+{rest.Count - shown} more)" : "All bindings", "bindings"));
         cards.Add(others);
 
         return cards;
