@@ -34,7 +34,18 @@ public class ChordPicker : StackPanel
         var h = new ChoiceCombo(Choices.Hands, 130) { Code = hand };
         var b = new ChoiceCombo(Choices.Buttons, 340) { Code = button };
         var x = new Button { Content = "✕" };
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { lead, h, b, x } };
+        var pick = new Button { Content = "🎮 Pick…" };
+        ToolTip.SetTip(pick, "Click the button on a picture of the controllers.");
+        pick.Click += async (s, e) =>
+        {
+            var r = await ControllerButtonPicker.Show(this, h.Code, b.Code);
+            if (r == null)
+                return;
+            h.Code = r.Value.hand;
+            b.Code = r.Value.button;
+            Fire();
+        };
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { lead, h, b, pick, x } };
         var entry = (row, lead, h, b, x);
         h.SelectionChanged += (s, e) => Fire();
         b.SelectionChanged += (s, e) => Fire();

@@ -13,6 +13,7 @@ public class KeyField : StackPanel
     readonly TextBox text = new() { Width = 200 };
     readonly Button rec = new() { Content = "Record key" };
     readonly Button mouse = new() { Content = "Mouse ▾" };
+    readonly Button board = new() { Content = "⌨ Keyboard…" };
     bool recording;
     string lastMod;
     static readonly IBrush Normal = Brush.Parse("#2A2F37"), Error = Brush.Parse("#5A2A2A"), Record = Brush.Parse("#2A4A6A");
@@ -23,7 +24,14 @@ public class KeyField : StackPanel
         Spacing = 6;
         Children.Add(text);
         Children.Add(rec);
+        Children.Add(board);
         Children.Add(mouse);
+        ToolTip.SetTip(board, "Click the key on a keyboard picture (easy with a VR pointer).");
+        board.Click += async (s, e) =>
+        {
+            var k = await KeyboardPicker.Show(this, text.Text);
+            if (k != null) { text.Text = k; Changed?.Invoke(); }
+        };
         text.TextChanged += (s, e) => { Check(); if (!recording) Changed?.Invoke(); };
         rec.Click += (s, e) => { recording = true; lastMod = null; rec.Content = "Press a key..."; text.Background = Record; text.Focus(); };
         text.LostFocus += (s, e) => Stop();

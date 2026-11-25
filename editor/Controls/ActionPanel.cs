@@ -65,7 +65,16 @@ public class ActionPanel : Form
         ToolTip.SetTip(what, "Pick what it does: press a key, open a wheel, show the desktop...");
         lKeys = AddRow("Key", keys, "Click Record key, then press the key or combo on your keyboard. Or pick a mouse button.");
         lKeyMode = AddRow("Key behavior", keyMode);
-        lSteps = AddRow("Macro steps", steps, "One step per line or split with ;  e.g.\nCtrl+C\nwait 100\nCtrl+V\ndown W / up W to hold a key");
+        var addStep = new Button { Content = "⌨ Add a key…" };
+        addStep.Click += async (s, e) =>
+        {
+            var k = await KeyboardPicker.Show(this, null);
+            if (k == null)
+                return;
+            string t = (steps.Text ?? "").TrimEnd('\r', '\n');
+            steps.Text = t.Length == 0 ? k : t + "\n" + k;
+        };
+        lSteps = AddRow("Macro steps", new StackPanel { Spacing = 4, Children = { steps, addStep } }, "One step per line or split with ;  e.g.\nCtrl+C\nwait 100\nCtrl+V\ndown W / up W to hold a key");
         lWheel = AddRow("Wheel", wheel);
         lPage = AddRow("Page", page, "Its buttons replace these; a Back button is added automatically.");
         lConfirm = AddRow("Pick items by", confirm);

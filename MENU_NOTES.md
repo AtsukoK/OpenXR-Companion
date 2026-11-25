@@ -14,6 +14,11 @@ Two LOCAL commits on top of release-0.3.0, not pushed, untested in the headset. 
   unsaved, warns otherwise, and follows a default.json -> user_defaults.json fork.
 - Gotcha: after changing menu.h structs, a plain incremental build crashed vro_test (stale objects); rebuild
   with build_all.ps1 run from PowerShell (not `cmd //c build.bat`, which silently did nothing).
+- (uncommitted->committed late 2026-11-25) Click pickers in the Avalonia editor: Controls/KeyboardPicker.cs (whole
+  keyboard + mouse, sticky modifiers) behind "⌨ Keyboard…" on every KeyField and "⌨ Add a key…" on macros;
+  Controls/ControllerButtonPicker.cs (both ControllerDrawings, then a way button) behind "🎮 Pick…" on each ChordPicker row
+  (binding button + xr_input target). XInput (360 pad) output NOT done: the layer can't send gamepad input (needs a
+  virtual pad driver, e.g. ViGEmBus) -- waiting on the user's call.
 - Next: user tests; then decide where it goes (experimental release / main) -- ask first, never push unasked.
 
 # RESUME HERE (2026-11-24) -- releases 0.2.15 / 0.2.16-experimental, core split, Avalonia port
