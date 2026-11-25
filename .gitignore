@@ -10,3 +10,5 @@ SESSION_NOTES.md
 layer/build32/
 dist2/
 .quick_build.log
+core/bin/
+core/obj/

@@ -1,0 +1,217 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OverviewPrototype.App"
+             RequestedThemeVariant="Dark">
+  <Application.Styles>
+    <FluentTheme />
+    <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
+
+    <!-- The whole look lives here, like CSS: change a colour once and every card follows. -->
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="#23272E" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="14,12" />
+      <Setter Property="Margin" Value="6" />
+      <Setter Property="BorderThickness" Value="4,0,0,0" />
+      <Setter Property="BorderBrush" Value="#5A6270" />
+    </Style>
+    <Style Selector="Border.card.on">
+      <Setter Property="BorderBrush" Value="#2E9E5B" />
+    </Style>
+    <!-- the Overview's compact cards: less padding and space between them, smaller text -->
+    <Style Selector="Border.card.compact">
+      <Setter Property="Padding" Value="10,7" />
+      <Setter Property="Margin" Value="0,0,6,6" />
+    </Style>
+    <Style Selector="Border.card.compact TextBlock.title">
+      <Setter Property="FontSize" Value="15" />
+    </Style>
+    <Style Selector="Border.card.compact TextBlock.desc">
+      <Setter Property="Margin" Value="0,2,0,4" />
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="Border.card.compact Button.go">
+      <Setter Property="Margin" Value="0,4,6,0" />
+      <Setter Property="Padding" Value="10,4" />
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="TextBlock.title">
+      <Setter Property="FontSize" Value="17" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TextBlock.desc">
+      <Setter Property="Foreground" Value="#AAB2BF" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Margin" Value="0,4,0,8" />
+    </Style>
+    <Style Selector="Border.pill">
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="8,2" />
+      <Setter Property="Margin" Value="10,0,0,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Background" Value="#5A6270" />
+    </Style>
+    <Style Selector="Border.pill.on">
+      <Setter Property="Background" Value="#2E9E5B" />
+    </Style>
+    <Style Selector="Button.go">
+      <Setter Property="Background" Value="#2860C8" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Margin" Value="0,6,8,0" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    <Style Selector="Button.go:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#3A74E0" />
+    </Style>
+    <!-- icon rail -->
+    <Style Selector="Button.rail">
+      <Setter Property="Width" Value="52" />
+      <Setter Property="Height" Value="48" />
+      <Setter Property="Margin" Value="0,0,0,4" />
+      <Setter Property="Background" Value="#23272E" />
+      <Setter Property="Foreground" Value="#C8CDD6" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.rail.current">
+      <Setter Property="Background" Value="#2860C8" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.rail.current:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#3A74E0" />
+    </Style>
+    <!-- Back / Overview, toolbar -->
+    <Style Selector="Button.nav">
+      <Setter Property="Background" Value="#3A4458" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Padding" Value="14,6" />
+    </Style>
+    <Style Selector="Button.nav.home">
+      <Setter Property="Background" Value="#2860C8" />
+    </Style>
+    <Style Selector="Button.tool">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="8,4" />
+    </Style>
+
+    <!-- list rows (All bindings) -->
+    <Style Selector="ListBox.rows ListBoxItem">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0,0,0,4" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="ListBox.rows ListBoxItem:selected /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox.rows ListBoxItem:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Border.row">
+      <Setter Property="Background" Value="#2A2F37" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="MinHeight" Value="44" />
+      <Setter Property="Padding" Value="0,2" />
+    </Style>
+    <Style Selector="Border.row:pointerover">
+      <Setter Property="Background" Value="#333944" />
+    </Style>
+    <Style Selector="Border.row.lost">
+      <Setter Property="Background" Value="#463C28" />
+    </Style>
+    <Style Selector="TextBlock.rowmain">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+      <Setter Property="Margin" Value="4,0" />
+    </Style>
+    <Style Selector="TextBlock.rowsub">
+      <Setter Property="Foreground" Value="#AAB2BF" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+      <Setter Property="Margin" Value="4,0" />
+    </Style>
+    <Style Selector="Border.row.off TextBlock.rowmain">
+      <Setter Property="FontStyle" Value="Italic" />
+      <Setter Property="Foreground" Value="#7F8896" />
+    </Style>
+    <Style Selector="Button.glyph">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="FontSize" Value="16" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Padding" Value="6,2" />
+    </Style>
+    <Style Selector="Button.glyph.onoff">
+      <Setter Property="Foreground" Value="#AAB2BF" />
+      <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+    <Style Selector="Button.glyph.onoff.on">
+      <Setter Property="Foreground" Value="#3CBE6E" />
+    </Style>
+    <Style Selector="Button.glyph.del">
+      <Setter Property="Foreground" Value="#E65A5A" />
+    </Style>
+
+    <!-- link-style button, the action picker button, the picker's cards -->
+    <Style Selector="Button.link">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="#7FA8F0" />
+      <Setter Property="Padding" Value="0,4" />
+    </Style>
+    <Style Selector="Button.pick">
+      <Setter Property="Background" Value="#2A2F37" />
+      <Setter Property="BorderBrush" Value="#4A5260" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Padding" Value="10,6" />
+    </Style>
+    <Style Selector="Button.option">
+      <Setter Property="Background" Value="#23272E" />
+      <Setter Property="BorderBrush" Value="#3A4250" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="12" />
+    </Style>
+    <Style Selector="Button.option:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#2C3A55" />
+      <Setter Property="BorderBrush" Value="#5A8AE0" />
+    </Style>
+
+    <!-- page buttons: plain, blue (go), red (danger), tab switched on, current tab -->
+    <Style Selector="Button.pill">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Padding" Value="12,6" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    <Style Selector="Button.pill.danger">
+      <Setter Property="Background" Value="#AA3232" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.pill.tabon, Button.pill.current">
+      <Setter Property="Background" Value="#2860C8" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.pill.current">
+      <Setter Property="Background" Value="#1E826E" />
+    </Style>
+    <Style Selector="Border.row.selected">
+      <Setter Property="Background" Value="#28509F" />
+    </Style>
+
+    <!-- number boxes: text in the middle, not at the top -->
+    <Style Selector="NumericUpDown">
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <!-- switches that are on: the same green as the ON pills -->
+    <Style Selector="ToggleSwitch:checked /template/ Border#SwitchKnobBounds">
+      <Setter Property="Background" Value="#2E9E5B" />
+    </Style>
+    <Style Selector="ToggleSwitch:checked:pointerover /template/ Border#SwitchKnobBounds">
+      <Setter Property="Background" Value="#36B568" />
+    </Style>
+  </Application.Styles>
+</Application>

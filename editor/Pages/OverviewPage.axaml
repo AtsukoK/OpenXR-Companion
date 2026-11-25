@@ -1,0 +1,74 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:OverviewPrototype"
+             x:Class="OverviewPrototype.OverviewPage"
+             x:DataType="local:OverviewPage">
+  <ScrollViewer>
+    <!-- the cards on the left; the Getting started tips in the free space on the right (below them on narrow windows) -->
+    <WrapPanel>
+    <!-- compact: two columns of cards on the left half of a 1920 screen (pairs: left-hand things on the left) -->
+    <StackPanel Margin="16,10" MaxWidth="920" HorizontalAlignment="Left">
+      <TextBlock Text="{Binding ProfileName}" FontSize="22" FontWeight="SemiBold" Margin="4,0,0,8" />
+      <!-- the guided setup of positions in the headset, at the start of the next game -->
+      <local:SetupCard />
+
+      <ItemsControl ItemsSource="{Binding Cards}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <UniformGrid Columns="2" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="local:Card">
+            <Border Classes="card compact" Classes.on="{Binding IsOn}">
+              <Grid ColumnDefinitions="48,*">
+                <Border Width="38" Height="38" CornerRadius="6" Background="#2D323A" VerticalAlignment="Top">
+                  <TextBlock Text="{Binding Icon}" FontFamily="Segoe MDL2 Assets" FontSize="19"
+                             HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#9FC3FF" />
+                </Border>
+
+                <StackPanel Grid.Column="1">
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Classes="title" Text="{Binding Title}" />
+                    <Border Classes="pill" Classes.on="{Binding IsOn}">
+                      <TextBlock Text="{Binding Pill}" FontWeight="Bold" FontSize="12" Foreground="White" />
+                    </Border>
+                  </StackPanel>
+                  <TextBlock Classes="desc" Text="{Binding Description}" />
+
+                  <ItemsControl ItemsSource="{Binding Switches}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="local:SwitchRow">
+                        <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,2">
+                          <ToggleSwitch IsChecked="{Binding IsOn}" OnContent="" OffContent="" MinWidth="0" Margin="0,0,10,0" />
+                          <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Text}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding Detail}" IsVisible="{Binding HasDetail}" Foreground="#AAB2BF" TextWrapping="Wrap" />
+                          </StackPanel>
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+
+                  <ItemsControl ItemsSource="{Binding Buttons}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="local:GoLink">
+                        <Button Classes="go" Content="{Binding Text}" Tag="{Binding Target}" Click="Go_Click" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </StackPanel>
+    <local:TipsPanel Margin="8,48,16,16" />
+    </WrapPanel>
+  </ScrollViewer>
+</UserControl>

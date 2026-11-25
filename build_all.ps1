@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 & "$root\layer\build.bat"
 if ($LASTEXITCODE -ne 0) { throw "layer build failed" }
-dotnet publish "$root\editor\OpenXRCompanionEditor.csproj" -c Release -o "$root\editor\bin\publish" --nologo -v q
+dotnet publish "$root\editor\OpenXRCompanionEditor.csproj" -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -o "$root\editor\bin\publish" --nologo -v q
 if ($LASTEXITCODE -ne 0) { throw "editor build failed" }
 $dist = "$root\dist"
 New-Item -ItemType Directory -Force $dist | Out-Null
@@ -13,5 +13,5 @@ Copy-Item "$root\package\*" $dist -Force -Recurse
 if ($LASTEXITCODE -ne 0) { throw "32-bit layer build failed" }
 New-Item -ItemType Directory -Force "$dist\x86" | Out-Null
 Copy-Item "$root\layer\build32\OpenXRCompanion.dll" "$dist\x86" -Force
-Copy-Item "$root\editor\bin\publish\*" $dist -Force -Recurse
+Copy-Item "$root\editor\bin\publish\OpenXRCompanionEditor.exe" $dist -Force # one file, the same as the release (CI)
 Write-Host "dist ready: $dist"

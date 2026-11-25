@@ -1,0 +1,98 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:OverviewPrototype"
+        x:Class="OverviewPrototype.MainWindow"
+        Title="OpenXR Companion - Profile Editor"
+        Width="1400" Height="900" MinWidth="640" MinHeight="480"
+        Background="#1B1E23" FontFamily="Segoe UI">
+  <LayoutTransformControl x:Name="ZoomHost">
+  <Panel>
+  <DockPanel>
+    <!-- top toolbar -->
+    <Border DockPanel.Dock="Top" Background="#15181C" Padding="8,4">
+      <WrapPanel>
+        <Button x:Name="MirrorButton" Classes="tool" FontWeight="Bold" Margin="0,0,6,0" />
+        <Border Width="1" Background="#3A4250" Margin="0,4,8,4" />
+        <TextBlock Text="Profile:" VerticalAlignment="Center" Margin="0,0,6,0" />
+        <ComboBox x:Name="ProfileBox" MinWidth="200" Margin="0,0,12,0" />
+        <Button x:Name="NewProfileButton" Classes="tool" Content="New game profile..." />
+        <Button x:Name="RenameProfileButton" Classes="tool" Content="Rename profile..." />
+        <Button x:Name="DeleteProfileButton" Classes="tool" Content="Delete profile" />
+        <Border Width="1" Background="#3A4250" Margin="6,4" />
+        <Button x:Name="SaveButton" Classes="tool" Content="Save (Ctrl+S)" HotKey="Ctrl+S" />
+        <Button x:Name="RevertButton" Classes="tool" Content="Revert" />
+        <Button x:Name="TutorialButton" Classes="tool" Content="Tutorial" />
+        <Button x:Name="FolderButton" Classes="tool" Content="Open folder" ToolTip.Tip="Your profiles folder in Explorer" />
+        <Button x:Name="LogsButton" Classes="tool" Content="Logs" ToolTip.Tip="The layer's log files (one per game), for reporting problems" />
+        <TextBlock x:Name="DirtyText" Text="unsaved changes" Foreground="#F0B050" VerticalAlignment="Center" Margin="8,0" IsVisible="False" />
+        <Border Width="1" Background="#3A4250" Margin="6,4" />
+        <Button x:Name="InstallButton" Classes="tool" Content="Install layer" />
+        <Button x:Name="UninstallButton" Classes="tool" Content="Uninstall layer" />
+        <TextBlock x:Name="LayerText" VerticalAlignment="Center" Margin="8,0" />
+        <!-- one group: the size controls always wrap to the next row together -->
+        <StackPanel Orientation="Horizontal" Margin="12,0,0,0">
+          <TextBlock Text="Size" VerticalAlignment="Center" Margin="4,0,6,0" ToolTip.Tip="Makes the whole editor bigger or smaller (Ctrl + / Ctrl - / Ctrl 0)" />
+          <Button x:Name="ZoomDownButton" Classes="tool" Content="−" FontWeight="Bold" MinWidth="30" ToolTip.Tip="Smaller (Ctrl -)" />
+          <Slider x:Name="ZoomSlider" Width="140" Minimum="60" Maximum="200" TickFrequency="5" IsSnapToTickEnabled="True" Value="100" VerticalAlignment="Center" Margin="4,0" />
+          <Button x:Name="ZoomUpButton" Classes="tool" Content="+" FontWeight="Bold" MinWidth="30" ToolTip.Tip="Bigger (Ctrl +)" />
+          <Button x:Name="ZoomResetButton" Classes="tool" Content="100%" MinWidth="54" ToolTip.Tip="Back to normal size" />
+        </StackPanel>
+        <Button x:Name="UpdateButton" Classes="go" IsVisible="False" Margin="8,0,0,0" />
+      </WrapPanel>
+    </Border>
+
+    <!-- status bar -->
+    <Border DockPanel.Dock="Bottom" Background="#15181C" Padding="10,4">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock x:Name="StatusText" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+        <TextBlock x:Name="VersionText" Grid.Column="1" Foreground="#7F8896" Margin="12,0,0,0" />
+      </Grid>
+    </Border>
+
+    <!-- icon rail -->
+    <Border DockPanel.Dock="Left" Background="#15181C" Padding="6">
+      <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
+      <ItemsControl x:Name="Rail">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="local:RailItem">
+            <Button Classes="rail" Classes.current="{Binding IsCurrent}" Tag="{Binding Key}" Click="Rail_Click"
+                    ToolTip.Tip="{Binding Name}">
+              <Grid>
+                <TextBlock Text="{Binding Glyph}" FontFamily="Segoe MDL2 Assets" FontSize="20"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding Badge}" FontSize="10" FontWeight="Bold"
+                           HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-4,-6" />
+              </Grid>
+            </Button>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      </ScrollViewer>
+    </Border>
+
+    <DockPanel>
+      <!-- Back / Overview -->
+      <Border DockPanel.Dock="Top" Background="#1F2A40" Padding="10,8">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button x:Name="BackButton" Classes="nav" Content="◀  Back" />
+          <Button x:Name="HomeButton" Classes="nav home" Content="⌂  Overview" />
+        </StackPanel>
+      </Border>
+
+      <!-- tip bar: wraps at any width, no height to work out -->
+      <Border x:Name="TipBar" DockPanel.Dock="Top" Background="#4A3F1C" Padding="14,6">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock x:Name="TipText" TextWrapping="Wrap" Foreground="#F3E3B0" VerticalAlignment="Center" />
+          <Button x:Name="ShowMeButton" Grid.Column="1" Content="🎓  Show me this page" Background="#F08C1E" Foreground="White"
+                  FontWeight="Bold" Margin="12,0,0,0" ToolTip.Tip="A short guided tour of this page. More tours: the Tutorial button at the top." />
+        </Grid>
+      </Border>
+
+      <ContentControl x:Name="PageHost" />
+    </DockPanel>
+  </DockPanel>
+  <!-- tutorials: the orange frame and the coach card, above everything (empty areas let clicks through) -->
+  <Canvas x:Name="TourLayer" IsVisible="False" />
+  </Panel>
+  </LayoutTransformControl>
+</Window>

@@ -1,0 +1,75 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:OverviewPrototype"
+             x:Class="OverviewPrototype.AllBindingsPage">
+  <DockPanel Margin="16,12,16,0">
+    <StackPanel DockPanel.Dock="Top" Spacing="4">
+      <TextBlock Text="All bindings" FontSize="24" FontWeight="SemiBold" />
+      <TextBlock Classes="desc" Text="Everything in this profile: controller bindings, wheel items and wrist buttons. The circle switches one on or off, ⧉ duplicates it, ✕ deletes it; click one for all its settings." />
+      <WrapPanel Margin="0,0,0,8">
+        <TextBlock Text="Search:" VerticalAlignment="Center" Margin="0,0,6,0" />
+        <TextBox x:Name="Search" Width="380" Margin="0,0,18,6" Watermark="name, button or what it does" />
+        <TextBlock Text="Sort:" VerticalAlignment="Center" Margin="0,0,6,0" />
+        <ComboBox x:Name="SortBox" Width="210" Margin="0,0,18,6">
+          <ComboBoxItem>By hand and button</ComboBoxItem>
+          <ComboBoxItem>On first, then off</ComboBoxItem>
+          <ComboBoxItem>By name</ComboBoxItem>
+        </ComboBox>
+        <TextBlock Text="Show:" VerticalAlignment="Center" Margin="0,0,6,0" />
+        <ComboBox x:Name="ShowBox" Width="200" Margin="0,0,18,6">
+          <ComboBoxItem Tag="all">Everything</ComboBoxItem>
+          <ComboBoxItem Tag="controller">Controller bindings</ComboBoxItem>
+          <ComboBoxItem Tag="wheels">Wheel items</ComboBoxItem>
+          <ComboBoxItem Tag="wrist">Wrist buttons</ComboBoxItem>
+        </ComboBox>
+        <Button x:Name="AddButton" Classes="go" Content="+ Add binding" Margin="0,0,0,6"
+                ToolTip.Tip="A blank binding, opened in the binding editor." />
+      </WrapPanel>
+    </StackPanel>
+
+    <!-- virtualized: only the rows on screen exist, however long the profile -->
+    <ListBox x:Name="List" Classes="rows" Background="Transparent">
+      <ListBox.DataTemplates>
+        <DataTemplate DataType="local:HeadingRow">
+          <StackPanel Margin="0,12,0,4">
+            <TextBlock Text="{Binding Upper}" FontWeight="Bold" FontSize="12" Foreground="#7FA8F0" />
+            <TextBlock Text="{Binding Note}" IsVisible="{Binding HasNote}" Foreground="#AAB2BF" TextWrapping="Wrap" />
+          </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate DataType="local:SettingsHitRow">
+          <Border Classes="row">
+            <TextBlock Classes="rowmain" Text="{Binding Text}" Margin="12,0" />
+          </Border>
+        </DataTemplate>
+
+        <DataTemplate DataType="local:BindingRow">
+          <Border Classes="row" Classes.lost="{Binding Lost}" Classes.off="{Binding !IsOn}" ToolTip.Tip="{Binding Tip}">
+            <Grid ColumnDefinitions="44,2*,32,3*,40,40">
+              <Button Classes="glyph onoff" Classes.on="{Binding IsOn}" Content="{Binding OnGlyph}" Click="Toggle_Click"
+                      ToolTip.Tip="Switch it on or off (it stays here)" />
+              <TextBlock Grid.Column="1" Classes="rowmain" Text="{Binding Where}" />
+              <TextBlock Grid.Column="2" Text="→" Classes="rowsub" HorizontalAlignment="Center" />
+              <TextBlock Grid.Column="3" Classes="rowsub" Text="{Binding What}" />
+              <Button Grid.Column="4" Classes="glyph" Content="⧉" Click="Duplicate_Click" ToolTip.Tip="Duplicate (a copy right below it, switched off)" />
+              <Button Grid.Column="5" Classes="glyph del" Content="✕" Click="Delete_Click" ToolTip.Tip="Delete" />
+            </Grid>
+          </Border>
+        </DataTemplate>
+
+        <DataTemplate DataType="local:ItemRow">
+          <Border Classes="row" Classes.off="{Binding !IsOn}">
+            <Grid ColumnDefinitions="44,2*,3*,40,40">
+              <Button Classes="glyph onoff" Classes.on="{Binding IsOn}" Content="{Binding OnGlyph}" Click="Toggle_Click"
+                      ToolTip.Tip="Switch it on or off (it stays here)" />
+              <TextBlock Grid.Column="1" Classes="rowmain" Text="{Binding Label}" />
+              <TextBlock Grid.Column="2" Classes="rowsub" Text="{Binding What}" />
+              <Button Grid.Column="3" Classes="glyph" Content="⧉" Click="Duplicate_Click" ToolTip.Tip="Duplicate (a copy right after it)" />
+              <Button Grid.Column="4" Classes="glyph del" Content="✕" Click="Delete_Click" ToolTip.Tip="Delete" />
+            </Grid>
+          </Border>
+        </DataTemplate>
+      </ListBox.DataTemplates>
+    </ListBox>
+  </DockPanel>
+</UserControl>

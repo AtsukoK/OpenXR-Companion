@@ -1,32 +1,42 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Net.Http;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
+using OpenXRCompanionEditor;
 
-namespace OpenXRCompanionEditor;
+namespace OverviewPrototype;
 
-// One-click update from the GitHub release. Only runs when the user clicks "Update now".
-// 1. downloads the release zip from github.com (HTTPS), 2. checks it against the SHA-256 GitHub lists
-// for that file, 3. unpacks it to a temp folder, 4. copies the previous files to "_previous_version",
-// 5. swaps the files in: each old file is first renamed to *.old (Windows allows that even while the
-// editor or a game is using it), then the new one is copied in; on any failure everything is put back,
-// 6. restarts the editor. Leftover *.old files are deleted the next time the editor starts.
+// One-click update from the GitHub release (port of the WinForms Updater). Only runs when the user clicks Update.
+// 1. download the release zip from github.com (HTTPS), 2. check it against the SHA-256 GitHub lists for that file,
+// 3. unpack to a temp folder, 4. copy the files it replaces to "_previous_version", 5. swap them in: each old file is
+// renamed to *.old first (Windows allows that while the editor or a game uses it), then the new one copied in; any
+// failure puts everything back, 6. restart. Leftover *.old files are deleted the next time the editor starts.
+//
+// Which editor restarts: a release zip that contains an exe with this editor's own name replaces it and that one starts;
+// releases that only carry the WinForms editor (OpenXRCompanionEditor.exe) still update the layer and the other files,
+// and this editor (unchanged) starts again.
 public static class Updater
 {
     public sealed class Release { public string Tag = "", ZipUrl = "", Sha256 = ""; public long Size; }
 
     public static string InstallDir => AppContext.BaseDirectory.TrimEnd('\\', '/');
+    static string ExePath => Environment.ProcessPath ?? Path.Combine(InstallDir, "OpenXRCompanionEditor.exe");
     const string BackupName = "_previous_version";
 
+    public static string AppVersionText => typeof(Updater).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
+    public static Version AppVersion => Version.TryParse(AppVersionText.Split('+', '-')[0], out var v) ? v : new Version(0, 0, 0);
+    public static bool Experimental => AppVersionText.Contains("-experimental");
+
     // Only a real release folder can update itself: the single-file editor next to the layer.
-    // (A development build has OpenXRCompanionEditor.dll beside the exe and is left alone.)
+    // (A development build has OpenXRCompanion.Core.dll beside the exe and is left alone.)
     public static string CantUpdateReason()
     {
         string d = InstallDir;
         if (!File.Exists(Path.Combine(d, "OpenXRCompanion.dll")) || !File.Exists(Path.Combine(d, "XR_APILAYER_NOVENDOR_openxr_companion.json")))
             return "the editor is not in an OpenXR Companion folder";
-        if (File.Exists(Path.Combine(d, "OpenXRCompanionEditor.dll")))
+        if (File.Exists(Path.Combine(d, "OpenXRCompanion.Core.dll")))
             return "this is a development build";
         try
         { var t = Path.Combine(d, ".write_test"); File.WriteAllText(t, ""); File.Delete(t); }
@@ -34,11 +44,18 @@ public static class Updater
         return null;
     }
 
+    static HttpClient Http(TimeSpan timeout)
+    {
+        var h = new HttpClient { Timeout = timeout };
+        h.DefaultRequestHeaders.UserAgent.ParseAdd("OpenXRCompanion-Editor/" + AppVersion.ToString(3));
+        return h;
+    }
+
     public static async Task<Release> LatestAsync()
     {
         using var http = Http(TimeSpan.FromSeconds(10));
         http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
-        var rel = await MainForm.PickReleaseAsync(http) ?? throw new Exception("no release found");
+        var rel = await Releases.PickAsync(http, Experimental) ?? throw new Exception("no release found");
         var r = new Release { Tag = rel.GetProperty("tag_name").GetString() ?? "" };
         foreach (var a in rel.GetProperty("assets").EnumerateArray())
         {
@@ -57,24 +74,15 @@ public static class Updater
         return r;
     }
 
-    static HttpClient Http(TimeSpan timeout)
-    {
-        var h = new HttpClient { Timeout = timeout };
-        h.DefaultRequestHeaders.UserAgent.ParseAdd("OpenXRCompanion-Editor/" + MainForm.AppVersion.ToString(3));
-        return h;
-    }
+    static string WorkDir => Path.Combine(Path.GetTempPath(), "OpenXRCompanionUpdate");
 
-    // Downloads, checks and installs. progress gets (percent or -1, text). Returns the new editor's path.
-    public static async Task<string> RunAsync(Release r, Action<int, string> progress)
+    // 1 + 2: download and check. Returns the zip's path. progress gets (percent or -1, text).
+    public static async Task<string> DownloadAsync(Release r, Action<int, string> progress)
     {
-        string work = Path.Combine(Path.GetTempPath(), "OpenXRCompanionUpdate");
-        try
-        { if (Directory.Exists(work)) Directory.Delete(work, true); }
-        catch { }
+        string work = WorkDir;
+        try { if (Directory.Exists(work)) Directory.Delete(work, true); } catch { }
         Directory.CreateDirectory(work);
         string zip = Path.Combine(work, "update.zip");
-
-        // 1. download
         using (var http = Http(TimeSpan.FromMinutes(10)))
         using (var resp = await http.GetAsync(r.ZipUrl, HttpCompletionOption.ResponseHeadersRead))
         {
@@ -94,36 +102,46 @@ public static class Updater
                 { lastPct = pct; progress(pct, "Downloading " + r.Tag + (pct >= 0 ? " (" + pct + "%)" : "") + "..."); }
             }
         }
-
-        // 2. checksum
         progress(-1, "Checking the download...");
         string hash;
         await using (var f = File.OpenRead(zip))
             hash = Convert.ToHexString(await SHA256.HashDataAsync(f)).ToLowerInvariant();
         if (hash != r.Sha256)
             throw new Exception("the download doesn't match GitHub's checksum (nothing was changed)");
+        return zip;
+    }
 
-        // 3. unpack and check it looks right
+    // 3 - 5: unpack, back up, swap in. Returns the editor exe to start afterwards.
+    public static string Install(string zip, Action<int, string> progress)
+    {
+        string work = Path.Combine(WorkDir, "files");
+        try { if (Directory.Exists(work)) Directory.Delete(work, true); } catch { }
         progress(-1, "Unpacking...");
-        string stage = Path.Combine(work, "files");
-        ZipFile.ExtractToDirectory(zip, stage);
-        string root = Path.Combine(stage, "OpenXRCompanion");
+        ZipFile.ExtractToDirectory(zip, work);
+        string root = Path.Combine(work, "OpenXRCompanion");
         if (!Directory.Exists(root))
-            root = stage;
-        foreach (var need in new[] { "OpenXRCompanionEditor.exe", "OpenXRCompanion.dll", "XR_APILAYER_NOVENDOR_openxr_companion.json" })
+            root = work;
+        foreach (var need in new[] { "OpenXRCompanion.dll", "XR_APILAYER_NOVENDOR_openxr_companion.json" })
             if (!File.Exists(Path.Combine(root, need)))
                 throw new Exception("the zip is missing " + need + " (nothing was changed)");
         var files = Directory.GetFiles(root, "*", SearchOption.AllDirectories)
             .Select(p => Path.GetRelativePath(root, p))
             .Where(rel => !rel.Contains("..") && !Path.IsPathRooted(rel))
             .ToList();
+        // This editor has the normal program's name (OpenXRCompanionEditor.exe), and so does the WinForms editor in releases
+        // made before the Avalonia editor ships. Don't swap this editor for that one: keep it, install everything else.
+        string me = Path.GetFileName(ExePath);
+        string theirs = Path.Combine(root, me);
+        if (File.Exists(theirs) && !IsAvaloniaBuild(theirs))
+        {
+            files.RemoveAll(rel => string.Equals(rel, me, StringComparison.OrdinalIgnoreCase));
+            progress(-1, "This release carries the older editor: keeping this one, updating the rest...");
+        }
 
-        // 4. back up what is there now
+        // 4. back up what it replaces
         progress(-1, "Saving the current version to " + BackupName + "...");
         string dir = InstallDir, backup = Path.Combine(dir, BackupName);
-        try
-        { if (Directory.Exists(backup)) Directory.Delete(backup, true); }
-        catch { }
+        try { if (Directory.Exists(backup)) Directory.Delete(backup, true); } catch { }
         foreach (var rel in files)
         {
             string cur = Path.Combine(dir, rel);
@@ -135,11 +153,11 @@ public static class Updater
         }
 
         // The editor is one file: .NET reads its parts from the exe the first time each is used. Once the exe is swapped,
-        // a part not used yet can't be found (FileNotFoundException), so load all of them now, while the old exe is in place.
+        // a part not used yet can't be found, so load all of them now, while the old exe is in place.
         PreloadAll();
 
-        // 5. swap in: rename the old file aside (works while in use), copy the new one; undo everything on failure
-        progress(-1, "Installing " + r.Tag + "...");
+        // 5. swap in
+        progress(-1, "Installing...");
         var done = new List<(string target, string old)>();
         try
         {
@@ -161,19 +179,25 @@ public static class Updater
             for (int i = done.Count - 1; i >= 0; i--)
             {
                 var (target, old) = done[i];
-                try
-                { if (File.Exists(target)) File.Delete(target); }
-                catch { }
-                try
-                { if (old != null) File.Move(old, target); }
-                catch { }
+                try { if (File.Exists(target)) File.Delete(target); } catch { }
+                try { if (old != null) File.Move(old, target); } catch { }
             }
             throw;
         }
+        try { Directory.Delete(WorkDir, true); } catch { }
+        return ExePath; // replaced by the release's own copy when it had one with this name, else this editor as it is
+    }
+
+    // A single-file Avalonia editor lists "Avalonia.Base.dll" in its bundle (the names are stored as plain text);
+    // the WinForms editor doesn't.
+    public static bool IsAvaloniaBuild(string exe)
+    {
         try
-        { Directory.Delete(work, true); }
-        catch { }
-        return Path.Combine(dir, "OpenXRCompanionEditor.exe");
+        {
+            var needle = System.Text.Encoding.UTF8.GetBytes("Avalonia.Base.dll");
+            return File.ReadAllBytes(exe).AsSpan().IndexOf(needle) >= 0;
+        }
+        catch { return false; }
     }
 
     // At start-up: remove the *.old files an update left (some may still be in use by a running game; next time then).
@@ -184,9 +208,7 @@ public static class Updater
             if (CantUpdateReason() != null)
                 return;
             foreach (var f in Directory.GetFiles(InstallDir, "*.old", SearchOption.AllDirectories))
-                try
-                { File.Delete(f); }
-                catch { }
+                try { File.Delete(f); } catch { }
         }
         catch { }
     }
@@ -194,7 +216,7 @@ public static class Updater
     static void PreloadAll()
     {
         var seen = new HashSet<string>();
-        var queue = new Queue<System.Reflection.Assembly>();
+        var queue = new Queue<Assembly>();
         foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
             if (seen.Add(a.FullName ?? ""))
                 queue.Enqueue(a);
@@ -203,20 +225,23 @@ public static class Updater
             {
                 if (!seen.Add(name.FullName))
                     continue;
-                try { queue.Enqueue(System.Reflection.Assembly.Load(name)); }
+                try { queue.Enqueue(Assembly.Load(name)); }
                 catch { }
             }
-        // what the restart and the messages after it use
         _ = typeof(Process).TypeHandle;
         _ = typeof(ProcessStartInfo).TypeHandle;
     }
 
-    // Tests: start the new editor after an update, like Restart (Process first used here, after the swap).
-    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-    public static void StartAndWait(string exe, string args) => Process.Start(exe, args)?.WaitForExit(60000);
-
-    public static void Restart(string exe, string fromVersion)
-    {
+    public static void Restart(string exe, string fromVersion) =>
         Process.Start(new ProcessStartInfo(exe, "--updated " + fromVersion) { UseShellExecute = false, WorkingDirectory = InstallDir });
+
+    // Tests: start the editor after an update and wait (Process first used here, after the swap).
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    public static int StartAndWait(string exe, string args)
+    {
+        var p = Process.Start(new ProcessStartInfo(exe, args) { UseShellExecute = false, WorkingDirectory = InstallDir });
+        if (p == null) return -1;
+        p.WaitForExit(60000);
+        return p.HasExited ? p.ExitCode : -2;
     }
 }
