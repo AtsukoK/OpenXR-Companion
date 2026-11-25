@@ -43,11 +43,26 @@ public class Form : StackPanel
         Spacing = 8;
     }
 
-    public Control AddRow(string label, Control control, string help = null)
+    // desc: a short plain explanation shown under the label (the ⓘ help keeps the longer details).
+    public Control AddRow(string label, Control control, string help = null, string desc = null)
     {
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions { new ColumnDefinition(new GridLength(LabelWidth)), new ColumnDefinition(GridLength.Star) } };
-        var l = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 14, 0) };
+        Control l = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 14, 0) };
+        if (desc != null)
+        {
+            row.Margin = new Thickness(0, 6, 0, 6);
+            l = new StackPanel
+            {
+                Margin = new Thickness(0, 0, 14, 0), Spacing = 2, VerticalAlignment = VerticalAlignment.Top,
+                Children =
+                {
+                    new TextBlock { Text = label, FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap },
+                    new TextBlock { Text = desc, FontSize = 12, Foreground = Brush.Parse("#9AA3B0"), TextWrapping = TextWrapping.Wrap },
+                },
+            };
+        }
         var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        if (desc != null) right.VerticalAlignment = VerticalAlignment.Top;
         right.Children.Add(control);
         if (help != null)
             right.Children.Add(new TextBlock
@@ -63,6 +78,18 @@ public class Form : StackPanel
     }
 
     public static void Show(Control row, bool on) => row.IsVisible = on;
+
+    // Changes a row's label and its description (rows made with a desc).
+    public static void SetLabel(Control row, string label, string desc = null)
+    {
+        if (row is not Grid g || g.Children.Count == 0) return;
+        if (g.Children[0] is TextBlock t) { t.Text = label; return; }
+        if (g.Children[0] is StackPanel sp && sp.Children.Count > 1 && sp.Children[0] is TextBlock a && sp.Children[1] is TextBlock d)
+        {
+            a.Text = label;
+            if (desc != null) d.Text = desc;
+        }
+    }
 }
 
 // A card with a heading (1 How, 2 Button, ...).

@@ -29,13 +29,15 @@ public class BindingPage : UserControl
     readonly CheckBox enabled = new() { Content = "Enabled" };
     readonly ChoiceCombo block = new(Choices.Blocks, 380);
     readonly CheckBox passthrough = new() { Content = "If I let go early, the game still gets a normal tap" };
-    readonly CheckBox tapOwn = new() { Content = "A short press does something else:" };
+    readonly CheckBox tapOwn = new() { Content = "On" };
+    // what the chosen "game also gets the button" means for this binding's button, in words
+    readonly TextBlock blockSays = new() { TextWrapping = TextWrapping.Wrap, MaxWidth = 380, FontSize = 12, Foreground = Brush.Parse("#C8CDD6") };
     readonly ActionPanel tapAction = new("wheel"); // one quick press: nothing stays held after a short press
     readonly NumericUpDown hold = Ms(), tap = Ms(), dbl = Ms();
     readonly NumericUpDown pressAt = new() { Minimum = 0, Maximum = 95, Increment = 5, Width = 130, FormatString = "0" };
     readonly NumericUpDown releaseAt = new() { Minimum = 0, Maximum = 90, Increment = 5, Width = 130, FormatString = "0" };
     readonly AutoCompleteBox layers = new() { Width = 380 }, notLayers = new() { Width = 380 };
-    readonly Control lHold, lTap, lDbl, lPass, lTapOwn, lTapAction, lPressAt, lReleaseAt;
+    readonly Control lHold, lTap, lDbl, lPass, lTapOwn, lTapAction, lPressAt, lReleaseAt, lBlock;
     readonly Button fold = new() { Classes = { "link" }, FontWeight = FontWeight.Bold };
     readonly Border details;
 
@@ -75,20 +77,25 @@ public class BindingPage : UserControl
 
         var howPanel = new StackPanel { Spacing = 6, Children = { gesture, howHint } };
         var form = new Form();
-        form.AddRow("Name", name);
-        form.AddRow("", enabled);
-        form.AddRow("The game also gets the button", block, "Set for you when you pick How: a plain press is taken from the game; hold and double-tap let a quick tap through; a touch always reaches the game.");
-        lPass = form.AddRow("", passthrough);
-        lTapOwn = form.AddRow("", tapOwn, "Hold: let go before the hold time and this happens instead (a key, another button...); the hold still does the action above.\n" +
-                                         "Double-tap: off by default (a single tap does nothing). When on, a single tap does this, a moment late: it waits out 'Second tap within' to see if a second tap comes.");
-        lTapAction = form.AddRow("Short press", tapAction);
-        lHold = form.AddRow("Hold time (ms)", hold, "How long counts as a hold. 400 is the default.");
-        lTap = form.AddRow("Tap shorter than (ms)", tap);
-        lDbl = form.AddRow("Second tap within (ms)", dbl, "How quick the second tap (or flick) must be.");
-        lPressAt = form.AddRow("Press point (%)", pressAt, "How far the trigger or grip must go. 0 = usual, low = hair trigger, high = a long pull. For an Index full squeeze: how hard.");
-        lReleaseAt = form.AddRow("Keeps going until (%)", releaseAt, "Double flick on a stick: once it has started it keeps going while you steer, until you let the stick come back below this much from the middle. 30 = until you mostly let go. 0 = it stops as soon as the stick leaves the direction.");
-        form.AddRow("Only while layer", layers, "Leave empty to work always. With a layer name, this binding only works while that layer is on.");
-        form.AddRow("Not while layer", notLayers);
+        form.AddRow("Name", name, null, "Shown in lists here and in the headset.");
+        form.AddRow("Switched on", enabled, null, "Off = kept in the profile but does nothing.");
+        lBlock = form.AddRow("Game also gets the button", new StackPanel { Spacing = 4, Children = { block, blockSays } },
+                             "Set for you when you pick How. Change it if the game reacting to the same button gets in the way.",
+                             "Whether the game still sees this button when you use it for this binding.");
+        lPass = form.AddRow("Short press to the game", passthrough, null, "Let go before the hold time: the game gets a normal tap of the button.");
+        lTapOwn = form.AddRow("Short press", tapOwn,
+                              "Hold: let go before the hold time and this happens instead (a key, another button...); the hold still does the action above.\n" +
+                              "Double-tap: a single tap does this, a moment late: it waits out 'Second tap within' to see if a second tap comes.",
+                              "");
+        lTapAction = form.AddRow("Short press does", tapAction);
+        lHold = form.AddRow("Hold time (ms)", hold, "400 is the default.", "How long you hold before it counts as a hold.");
+        lTap = form.AddRow("Tap shorter than (ms)", tap, null, "A press shorter than this counts as a quick tap.");
+        lDbl = form.AddRow("Second tap within (ms)", dbl, "350 is the default.", "How quick the second tap (or flick) must come. A single tap waits this long too.");
+        lPressAt = form.AddRow("Press point (%)", pressAt, "For an Index full squeeze: how hard.", "How far the trigger or grip must go. 0 = usual, low = hair trigger, high = a long pull.");
+        lReleaseAt = form.AddRow("Keeps going until (%)", releaseAt, "30 = until you mostly let go. 0 = it stops as soon as the stick leaves the direction.",
+                                 "Double flick: keeps going while you steer, until the stick comes back below this much from the middle.");
+        form.AddRow("Only while layer", layers, "Layers are switched on by other bindings (What happens: Switch a layer).", "Works only while this layer is on. Empty = always.");
+        form.AddRow("Not while layer", notLayers, null, "Does nothing while this layer is on. Empty = never off.");
         details = Cards.Make("Details", form);
         details.IsVisible = detailsOpen;
         fold.Click += (s, e) => { detailsOpen = !detailsOpen; details.IsVisible = detailsOpen; ShowFold(); };
@@ -141,7 +148,7 @@ public class BindingPage : UserControl
         releaseAt.ValueChanged += (s, e) => { if (loading || releaseAt.Value == null) return; double v = releaseAt.Value < 5 ? 0 : (double)releaseAt.Value / 100; if (Math.Round(b.ReleaseAt * 100) == Math.Round(v * 100)) return; b.ReleaseAt = v; Fire(); };
         layers.TextChanged += (s, e) => { if (Same(b.Layers, layers.Text)) return; b.Layers = (layers.Text ?? "").Trim(); Fire(); };
         notLayers.TextChanged += (s, e) => { if (Same(b.NotLayers, notLayers.Text)) return; b.NotLayers = (notLayers.Text ?? "").Trim(); Fire(); };
-        block.SelectionChanged += (s, e) => { if (loading || block.Code == null || b.Block == block.Code) return; b.Block = block.Code; Fire(); };
+        block.SelectionChanged += (s, e) => { if (loading || block.Code == null || b.Block == block.Code) return; b.Block = block.Code; Sync(); Fire(); };
         passthrough.IsCheckedChanged += (s, e) => { if (loading || b.TapPassthrough == (passthrough.IsChecked == true)) return; b.TapPassthrough = passthrough.IsChecked == true; Fire(); };
         action.Changed += Fire;
         tapOwn.IsCheckedChanged += (s, e) =>
@@ -161,6 +168,24 @@ public class BindingPage : UserControl
             Fire();
         };
         tapAction.Changed += Fire;
+    }
+
+    // A double-tap's single tap with nothing of its own: the game gets it, unless the button is kept from the game.
+    string SingleTapOff() => (b.Block ?? "none") == "none" ? "goes to the game as usual" : "does nothing";
+
+    // The chosen "game also gets the button", for this binding's button and How, in words.
+    string BlockSays()
+    {
+        string btn = InputText.Friendly((b.Input ?? "").Split('+').Last());
+        bool dbl = b.Gesture == GestureKind.DoubleTap, hold = b.Gesture == GestureKind.Hold;
+        return (b.Block ?? "none") switch
+        {
+            "none" => $"The game sees every press of {btn} as usual, and this binding runs as well.",
+            "all" => $"The game doesn't see {btn}, or the combo's other buttons while you hold them for it. Only what this binding sends reaches the game.",
+            _ => dbl ? $"The game doesn't see {btn} at all: a single tap does nothing in the game, a double tap only does what's under What happens."
+                 : hold ? $"The game doesn't see {btn}: a hold only does what's under What happens (a short press: see Short press below)."
+                 : $"The game doesn't see {btn}: only what this binding sends reaches the game.",
+        };
     }
 
     // a field showing what the model already has (empty and null count as the same) is no change
@@ -215,7 +240,7 @@ public class BindingPage : UserControl
         };
         sentence.Text = how + " " + InputText.Friendly(b.Input) + "   →   " + EditorApi.Plain(b.Action)
             + (b.Gesture == GestureKind.Hold && b.TapAction != null ? "     ·     short press   →   " + EditorApi.Plain(b.TapAction) : "")
-            + (b.Gesture == GestureKind.DoubleTap ? "     ·     single tap   →   " + (b.TapAction != null ? EditorApi.Plain(b.TapAction) : "nothing (off)") : "")
+            + (b.Gesture == GestureKind.DoubleTap ? "     ·     single tap   →   " + (b.TapAction != null ? EditorApi.Plain(b.TapAction) : SingleTapOff()) : "")
             + (b.Enabled ? "" : "   (off)");
         sentence.Foreground = b.Enabled ? Brushes.White : Brush.Parse("#7F8896");
     }
@@ -240,8 +265,12 @@ public class BindingPage : UserControl
         Form.Show(lHold, b.Gesture == GestureKind.Hold);
         Form.Show(lPass, b.Gesture == GestureKind.Hold && b.TapAction == null);
         bool dbl = b.Gesture == GestureKind.DoubleTap;
-        tapOwn.Content = dbl ? "A single tap does something too  (off by default; it comes a moment late)" : "A short press does something else:";
-        if (lTapAction is Grid g && g.Children.Count > 0 && g.Children[0] is TextBlock tl) tl.Text = dbl ? "Single tap" : "Short press";
+        tapOwn.Content = b.TapAction != null ? "On" : "Off  (tick to set one)";
+        Form.SetLabel(lTapOwn, dbl ? "Single tap" : "Short press action",
+                      dbl ? "One tap with no second tap in time. Off by default (then it " + SingleTapOff() + "). When on, it comes a moment late."
+                          : "Its own action when you let go before the hold time (instead of the tap above). Off: nothing of its own.");
+        Form.SetLabel(lTapAction, dbl ? "Single tap does" : "Short press does");
+        blockSays.Text = BlockSays();
         Form.Show(lTapOwn, b.Gesture == GestureKind.Hold || dbl);
         Form.Show(lTapAction, (b.Gesture == GestureKind.Hold || dbl) && b.TapAction != null);
         Form.Show(lTap, b.Gesture == GestureKind.Tap);
