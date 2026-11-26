@@ -12,6 +12,7 @@ void TestQuickBindings();
 void TestHoldOnlyQuickBinding();
 void TestStickOptions();
 void TestSetupPositions();
+void TestGrabHints();
 void TestModes();
 void TestWristViewSetup();
 void TestSteamFrame();
@@ -2710,6 +2711,7 @@ int main(int argc, char** argv) {
     TestHoldOnlyQuickBinding();
     TestStickOptions();
     TestSetupPositions();
+    TestGrabHints();
     TestModes();
     TestWristViewSetup();
     TestSteamFrame();

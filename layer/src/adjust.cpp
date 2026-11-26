@@ -217,6 +217,58 @@ void Engine::RunWristViewSetup() {
     SetupShow();
 }
 
+// Calibrating: what each hand's grip would grab right now, shown as a ring at the hand (green + the thing's name when
+// something is in reach), the thing itself glows, and a short buzz when the hand comes into reach. The ranges and the
+// order (who wins when two are in reach) are the same as the grabs themselves: fingertip, wheel, keyboard, wrist
+// panel, screen. Keep them in step when a grab's range changes.
+void Engine::UpdateGrabHints() {
+    bool wheelGlow = false, wristGlow[2] = { false, false };
+    for (int g = 0; g < 2; g++) {
+        GrabHintView& v = grabHint[g];
+        const HandRaw& hr = fr.h[g];
+        bool show = adjust && hr.gripValid && fr.headValid && !(grab.Active() && grab.hand == g);
+        std::string label;
+        if (show && !grab.Active()) {
+            Vec3 hand = V(hr.gripPose.position);
+            int t = 1 - g;
+            if (label.empty() && fr.h[t].aimValid && Len(hand - FingertipPos(t)) <= 0.05f) label = "Fingertip";
+            if (label.empty() && wr.open && g == 1 - wr.openerHand && Len(hand - V(wr.pose.position)) < prof->style.radius + 0.08f) {
+                label = "Wheel";
+                wheelGlow = true;
+            }
+            if (label.empty() && kb.visible && !(prof->dock.mode == DockMode::KeysUnderScreen && screen.shown)) {
+                Vec3 l = RotateInv(kb.pose.orientation, hand - V(kb.pose.position));
+                if (std::fabs(l.x) < kb.widthM / 2 + 0.06f && std::fabs(l.y) < kb.heightM / 2 + 0.06f && std::fabs(l.z) < 0.12f) label = "Keyboard";
+            }
+            int w = 1 - g; // a hand grabs the panel on the other arm
+            if (label.empty() && wrist[w].visible && Len(hand - V(wrist[w].pose.position)) < prof->wrist[w].size * 0.7f + 0.08f) {
+                label = "Wrist panel";
+                wristGlow[w] = true;
+            }
+            bool onWrist = IsWristPlace(screen.place);
+            if (label.empty() && screen.poseValid && !(onWrist && g == WristHandOf(screen.place)) &&
+                Len(hand - V(screen.pose.position)) < screen.widthM * 0.6f + 0.08f)
+                label = "Screen";
+        }
+        if (show) { // facing the eyes, at the hand
+            Vec3 pos = V(hr.gripPose.position), z = Norm(V(fr.head.position) - pos), up{ 0, 1, 0 };
+            Vec3 x = Norm(Cross(up, z));
+            v.pose = { QuatFromBasis(x, Cross(z, x), z), X(pos) };
+        }
+        bool active = !label.empty();
+        if (show != v.show || active != v.active || label != v.label) {
+            if (active && !v.active && prof->haptics) haptics.push_back({ g, prof->hapticAmp * 0.35f, 0.012f }); // came into reach
+            v.show = show;
+            v.active = active;
+            v.label = label;
+            v.version++;
+        }
+    }
+    if (view.grabGlow != wheelGlow) { view.grabGlow = wheelGlow; Dirty(); }
+    for (int h = 0; h < 2; h++)
+        if (wrist[h].grabGlow != wristGlow[h]) { wrist[h].grabGlow = wristGlow[h]; wrist[h].version++; }
+}
+
 // Adjust mode, wheel: grab the open wheel with the other hand's grip and move it; its stick resizes.
 void Engine::UpdateAdjustWheel() {
     if (grab.target == GrabTarget::Wheel && (!adjust || !wr.open)) grab = GrabRun{};

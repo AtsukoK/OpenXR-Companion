@@ -61,6 +61,7 @@ struct WheelView {
     float alpha = 1.f; // see-through while adjusting other things (1 = solid)
     std::string mode;  // the mode badge: active modes, upper case ("" = none)
     uint32_t modeColor = 0;
+    bool grabGlow = false; // calibrating: a grip would grab the wheel now
 };
 // Keyboard layout in key units (one letter key = 1x1).
 enum KbKind { KB_KEY, KB_SHIFT, KB_CAPS, KB_CTRL, KB_ALT, KB_CLOSE, KB_MOVE, KB_CONTROLLER };
@@ -107,6 +108,7 @@ struct WristView {
     uint64_t version = 0;
     std::string mode;     // the mode badge: active modes, upper case ("" = none)
     uint32_t modeColor = 0;
+    bool grabGlow = false; // calibrating: a grip would grab this panel now
     // Touch cursor: a ring on the panel under the pressing hand's fingertip.
     bool cursor = false;
     XrPosef cursorPose{ { 0, 0, 0, 1 }, { 0, 0, 0 } };
@@ -207,6 +209,14 @@ struct PointerView {
     float fingerLen = 0.08f, fingerW = 0.022f;
 };
 
+// Calibrating: a ring at each hand where the grip grabs, green with the name of what it would grab when in range.
+struct GrabHintView {
+    bool show = false, active = false;
+    std::string label; // "Wrist panel", "Wheel", "Screen", "Keyboard", "Fingertip" ("" = nothing in range)
+    XrPosef pose{ { 0, 0, 0, 1 }, { 0, 0, 0 } };
+    uint64_t version = 0;
+};
+
 class Engine {
     friend class WristPanels;
     friend class ScreenMirror;
@@ -301,6 +311,8 @@ public:
     void EditProfile(const std::function<void(Profile&)>& edit);
     // Run an action from the in-game menu (adjust mode, headset mirror...), as if a button had fired it.
     void MenuRunAction(const Action& a) { RunAction(a, 1, -1, false); }
+    GrabHintView grabHint[2]; // calibrating: the ring at each hand (overlay reads it)
+    void UpdateGrabHints();   // adjust.cpp: what each hand's grip would grab now (same ranges and order as the grabs)
     bool ModeOn(const std::string& l) const { return layers.count(l) > 0; }
     // Every mode the profile knows: from bindings (only in / off in, turn on), wheel and wrist items, the modes list.
     std::vector<std::string> ModeNames() const;

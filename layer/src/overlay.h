@@ -102,6 +102,7 @@ private:
     OverlayQuad pointerDot_, pointerBeam_, finger_;
     OverlayQuad toast_;
     OverlayQuad guide_; // the guided setup card
+    OverlayQuad grabHint_[2]; // calibrating: the grab ring at each hand
     // pointers and fingertips use one picture for both hands, each hand has its own quad
     XrCompositionLayerQuad beamQuad_[2]{}, dotQuad_[2]{}, fingerQuad_[2]{};
 };

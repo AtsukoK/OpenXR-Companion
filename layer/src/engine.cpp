@@ -890,6 +890,7 @@ void Engine::Update(const Frame& f) {
     ComputeBlocks();
     UpdateGamepad();
     UpdatePointers();
+    UpdateGrabHints();
     lastNow = now;
 
     view.visible = wr.open;

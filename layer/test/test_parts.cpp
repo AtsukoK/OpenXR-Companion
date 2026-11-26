@@ -1,5 +1,6 @@
 // Tests of single parts of the layer (no engine flow): game hand offsets, the overlay, game input.
 #include "test_support.h"
+#include "../src/panel.h"
 #include <map>
 #include <filesystem>
 #include <fstream>
@@ -410,6 +411,41 @@ void TestModes() {
     auto names = e.ModeNames();
     CHECK(std::find(names.begin(), names.end(), "combat") != names.end() && std::find(names.begin(), names.end(), "driving") != names.end(),
           "modes: the menu lists every mode the profile uses");
+}
+
+// Calibrating: a ring at each hand; with the right hand at the left wrist panel it names it and the panel glows.
+void TestGrabHints() {
+    std::string err;
+    Engine e;
+    e.SetProfile(ParseProfileText(DefaultProfileJson(), err));
+    Frame f;
+    double t = 0;
+    f.headValid = true;
+    f.head.position = { 0, 1.6f, 0 };
+    for (auto& h : f.h) { h.gripValid = h.aimValid = true; h.gripPose = h.aimPose = { { 0, 0, 0, 1 }, { 0, 1.2f, -0.3f } }; }
+    f.h[1].gripPose.position = { 0.4f, 1.0f, -0.2f }; // right hand away
+    f.h[1].aimPose.position = f.h[1].gripPose.position;
+    auto step = [&](int n = 1) { for (int i = 0; i < n; i++) { t += 0.011; f.t = t; e.Update(f); } };
+    step(10);
+    CHECK(!e.grabHint[0].show && !e.grabHint[1].show, "grab hints: none outside calibrating");
+    e.adjust = true;
+    step(10);
+    CHECK(e.grabHint[1].show && !e.grabHint[1].active, "grab hints: calibrating shows a ring at the hand, nothing in reach");
+    CHECK(e.wrist[0].visible, "grab hints: the left wrist panel shows while calibrating");
+    f.h[1].gripPose.position = e.wrist[0].pose.position;
+    step(3);
+    CHECK(e.grabHint[1].active && e.grabHint[1].label == "Wrist panel" && e.wrist[0].grabGlow,
+          "grab hints: the right hand at the left wrist panel names it and the panel glows");
+    {
+        std::vector<uint32_t> px;
+        DrawGrabHint(px, 512, 96, e.grabHint[1].label, true, e.prof->style);
+        SavePng(px, 512, 96, L"grab_hint.png");
+        DrawWrist(px, 512, *e.prof, e.prof->wrist[0], e.wrist[0]);
+        SavePng(px, 512, 512, L"grab_glow_wrist.png");
+    }
+    e.adjust = false;
+    step(3);
+    CHECK(!e.grabHint[1].show && !e.wrist[0].grabGlow, "grab hints: gone after calibrating");
 }
 
 void TestSetupPositions() {

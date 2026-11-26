@@ -76,7 +76,7 @@ std::string ItemWords(Engine& e, const Action& a, const ItemListRef& ref) {
     case ActType::Sequence:
         return "Macro (edit in the editor)";
     case ActType::Layer:
-        return "Layer '" + a.layer + "' (edit in the editor)";
+        return "Mode '" + a.layer + "' (edit in the editor)";
     }
     return "Set in the editor";
 }

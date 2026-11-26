@@ -292,6 +292,10 @@ void DrawWheel(std::vector<uint32_t>& out, int S, const Profile& p, const WheelV
     float c = S / 2.f, R = S / 2.f - 4, r = R * st.innerRatio;
     SolidBrush bg{ Color(st.bg) };
     g.FillEllipse(&bg, c - R, c - R, 2 * R, 2 * R);
+    if (v.grabGlow) { // calibrating: a grip grabs the wheel now
+        Pen glow(Color(255, 60, 200, 110), S * 0.014f);
+        g.DrawEllipse(&glow, c - R + S * 0.007f, c - R + S * 0.007f, 2 * R - S * 0.014f, 2 * R - S * 0.014f);
+    }
 
     const Wheel* w = v.wheel;
     int n = w ? (int)w->items.size() : 0;
@@ -420,6 +424,39 @@ void DrawGuide(std::vector<uint32_t>& out, int W, int H, const std::string& text
     g.DrawString(Utf8ToW(title).c_str(), -1, fTitle.get(), RectF(pad, H * 0.06f, W - 2 * pad, H * 0.16f), &left, &orange);
     g.DrawString(Utf8ToW(body).c_str(), -1, fBody.get(), RectF(pad, H * 0.25f, W - 2 * pad, H * 0.55f), &left, &white);
     g.DrawString(Utf8ToW(foot).c_str(), -1, fFoot.get(), RectF(pad, H * 0.82f, W - 2 * pad, H * 0.16f), &left, &blue);
+    Grab(bmp, out, W, H);
+}
+
+// Calibrating: the grab ring at a hand (left part of the picture) and, when something is in reach, its name beside it.
+void DrawGrabHint(std::vector<uint32_t>& out, int W, int H, const std::string& label, bool active, const Style& st) {
+    EnsureGdi();
+    Bitmap bmp(W, H, PixelFormat32bppPARGB);
+    Graphics g(&bmp);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+    g.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);
+    g.Clear(Color(0, 0, 0, 0));
+    float d = H * 0.8f, x = (H - d) / 2, y = (H - d) / 2;
+    Color col = active ? Color(255, 60, 200, 110) : Color(200, 255, 255, 255);
+    Pen ring(col, H * 0.09f);
+    g.DrawEllipse(&ring, x, y, d, d);
+    SolidBrush dot{ col };
+    g.FillEllipse(&dot, H / 2.f - H * 0.08f, H / 2.f - H * 0.08f, H * 0.16f, H * 0.16f);
+    if (active && !label.empty()) {
+        auto f = MakeFont(st, H * 0.42f, FontStyleBold);
+        float lx = H * 1.05f;
+        GraphicsPath box;
+        float bw = W - lx - 4, bh = H * 0.62f, by = (H - bh) / 2, r = bh;
+        box.AddArc(lx, by, r, r, 90, 180);
+        box.AddArc(lx + bw - r, by, r, r, 270, 180);
+        box.CloseFigure();
+        SolidBrush bg{ Color(225, 18, 60, 36) };
+        g.FillPath(&bg, &box);
+        StringFormat c;
+        c.SetAlignment(StringAlignmentCenter);
+        c.SetLineAlignment(StringAlignmentCenter);
+        SolidBrush tb{ Color(255, 235, 255, 240) };
+        g.DrawString(Utf8ToW("Grip: " + label).c_str(), -1, f.get(), RectF(lx, by, bw, bh), &c, &tb);
+    }
     Grab(bmp, out, W, H);
 }
 
@@ -669,6 +706,10 @@ void DrawWrist(std::vector<uint32_t>& out, int S, const Profile& p, const WristS
     g.FillPath(&bg, &bgp);
     Pen edge(Color(st.border), 2.f);
     g.DrawPath(&edge, &bgp);
+    if (v.grabGlow) { // calibrating: a grip grabs this panel now
+        Pen glow(Color(255, 60, 200, 110), S * 0.018f);
+        g.DrawPath(&glow, &bgp);
+    }
 
     StringFormat fmt;
     fmt.SetAlignment(StringAlignmentCenter);

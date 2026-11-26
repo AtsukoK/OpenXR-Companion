@@ -71,7 +71,7 @@ static std::string ActionWords(const Action& a) {
     case ActType::Keyboard:
         return "Opens the VR keyboard";
     case ActType::Layer:
-        return "Layer '" + a.layer + "'" + mode;
+        return "Mode '" + a.layer + "'" + mode;
     case ActType::XrInput:
         return "Controller: " + InputWords(a.target) + mode;
     case ActType::Gamepad:
@@ -578,9 +578,9 @@ MenuPage WhatHappens(Engine& e, InGameMenu& m, int index, bool tap) {
     simple("Controller offsets panel", "Fix hand / gun aim", ActType::Offsets, ActMode::Panel, "controller offsets");
     simple("Adjust mode", "Grab wheels, panels and the keyboard to place them", ActType::Adjust, ActMode::Toggle, "adjust mode");
     simple("Reload the profile", "", ActType::Reload, ActMode::Tap, "reload profile");
-    p.rows.push_back(MenuRow::Heading("Switch a layer"));
+    p.rows.push_back(MenuRow::Heading("Turn a mode on / off"));
     for (const std::string& l : LayerNames(*e.prof))
-        p.rows.push_back(MenuRow::Button("Layer '" + l + "'", tap ? "Switched on / off by the short press" : "On while held (change it on the binding)",
+        p.rows.push_back(MenuRow::Button(l + " mode", tap ? "Turned on / off by the short press" : "On while held (change it on the binding)",
                                          [set, &m, l, tap] {
                                              Action a;
                                              a.type = ActType::Layer;
@@ -589,9 +589,9 @@ MenuPage WhatHappens(Engine& e, InGameMenu& m, int index, bool tap) {
                                              set(a, "layer " + l);
                                              m.Back();
                                          }));
-    p.rows.push_back(MenuRow::Button("+ A new layer", "Type its name", [&m, set, tap] {
+    p.rows.push_back(MenuRow::Button("+ A new mode", "Type its name", [&m, set, tap] {
         m.Back();
-        m.AskText("Layer name", "", [set, tap](const std::string& t) {
+        m.AskText("Mode name", "", [set, tap](const std::string& t) {
             Action a;
             a.type = ActType::Layer;
             a.layer = t;
@@ -637,8 +637,8 @@ static MenuRow LayerRow(Engine& e, InGameMenu& m, int index, bool notIn, Binding
     for (auto& n : names) opts.push_back(n);
     opts.push_back("+ New...");
     auto pick = [notIn](Binding& x) -> std::vector<std::string>& { return notIn ? x.notLayers : x.layers; };
-    return MenuRow::Choice(notIn ? "Not while layer" : "Only while layer",
-                           notIn ? "Off while this layer is on" : "Always, or only while that layer is on", opts,
+    return MenuRow::Choice(notIn ? "Off in mode" : "Only in mode",
+                           notIn ? "Does nothing while this mode is on" : "Always, or only while that mode is on", opts,
                            [&e, index, names, notIn] {
                                if (index >= (int)e.prof->bindings.size()) return 0;
                                const Binding& x = e.prof->bindings[index];
@@ -654,7 +654,7 @@ static MenuRow LayerRow(Engine& e, InGameMenu& m, int index, bool notIn, Binding
                                    std::string n = names[i - 1];
                                    edit([pick, n](Binding& x) { pick(x) = { n }; });
                                } else
-                                   m.AskText("Layer name", "", [edit, pick](const std::string& t) { edit([pick, t](Binding& x) { pick(x) = { t }; }); });
+                                   m.AskText("Mode name", "", [edit, pick](const std::string& t) { edit([pick, t](Binding& x) { pick(x) = { t }; }); });
                            });
 }
 
@@ -747,7 +747,7 @@ MenuPage BindingDetail(Engine& e, InGameMenu& m, int index) {
             });
         }));
     bool isKey = b.action.type == ActType::Key, isButton = b.action.type == ActType::XrInput;
-    p.rows.push_back(MenuRow::Link("3  What happens: " + WhatWords(b), "A key, a macro, a wheel, a layer, the VR keyboard...",
+    p.rows.push_back(MenuRow::Link("3  What happens: " + WhatWords(b), "A key, a macro, a wheel, a mode, the VR keyboard...",
                                    [&e, &m, index] { m.Push([&e, &m, index] { return WhatHappens(e, m, index, false); }); }));
     if (isKey || isButton) {
         static const ActMode modes[] = { ActMode::Tap, ActMode::Hold, ActMode::Toggle };
@@ -761,7 +761,7 @@ MenuPage BindingDetail(Engine& e, InGameMenu& m, int index) {
     }
     if (b.action.type == ActType::Layer) {
         static const ActMode modes[] = { ActMode::Hold, ActMode::Toggle, ActMode::On, ActMode::Off };
-        p.rows.push_back(MenuRow::Choice("Layer", "", { "On while held", "Toggle", "Switch on", "Switch off" },
+        p.rows.push_back(MenuRow::Choice("Mode", "", { "On while held", "Press: on / off", "Turn on", "Turn off" },
                                          [get] {
                                              ActMode md = get().action.mode;
                                              return md == ActMode::Toggle ? 1 : md == ActMode::On ? 2 : md == ActMode::Off ? 3 : 0;

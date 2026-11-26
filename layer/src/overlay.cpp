@@ -105,7 +105,7 @@ void OverlayRenderer::RenderGuide(const OverlayContext& c, LayerList& layers) {
 
 void OverlayRenderer::InvalidateAll() {
     for (OverlayQuad* q :
-         { &screenBar_, &screenPicker_, &wheel_, &keyboard_, &keyboardBar_, &offsets_, &menu_, &pointerDot_, &pointerBeam_, &finger_, &toast_, &guide_ })
+         { &screenBar_, &screenPicker_, &wheel_, &keyboard_, &keyboardBar_, &offsets_, &menu_, &pointerDot_, &pointerBeam_, &finger_, &toast_, &guide_, &grabHint_[0], &grabHint_[1] })
         q->Invalidate();
     for (int h = 0; h < 2; h++) {
         wrist_[h].Invalidate();
@@ -115,7 +115,7 @@ void OverlayRenderer::InvalidateAll() {
 
 void OverlayRenderer::Destroy(const OverlayContext& c) {
     StopScreen(c);
-    for (OverlayQuad* q : { &wheel_, &keyboard_, &keyboardBar_, &offsets_, &menu_, &pointerDot_, &pointerBeam_, &finger_, &toast_, &guide_ })
+    for (OverlayQuad* q : { &wheel_, &keyboard_, &keyboardBar_, &offsets_, &menu_, &pointerDot_, &pointerBeam_, &finger_, &toast_, &guide_, &grabHint_[0], &grabHint_[1] })
         q->Destroy(c);
     for (int h = 0; h < 2; h++) {
         wrist_[h].Destroy(c);
@@ -399,6 +399,22 @@ void OverlayRenderer::RenderPointers(const OverlayContext& c, LayerList& layers)
             pointerBeam_.SubmitAs(beamQuad_[h], layers, c.local, p.beamPose, { kBeamWidthM, p.beamLen });
             if (p.dot) pointerDot_.SubmitAs(dotQuad_[h], layers, c.local, p.dotPose, { p.dotSize, p.dotSize });
         }
+    }
+    // calibrating: the grab ring at each hand (and what it would grab)
+    for (int h = 0; h < 2; h++) {
+        const GrabHintView& gv = eng_.grabHint[h];
+        if (!gv.show) {
+            if (grabHint_[h].Exists()) grabHint_[h].Destroy(c);
+            continue;
+        }
+        const int W = 512, H = 96; // ring on the left, the label beside it
+        if (grabHint_[h].Ensure(c, W, H))
+            grabHint_[h].Redraw(c, gv.version, scratch_, [&](std::vector<uint32_t>& px) { DrawGrabHint(px, W, H, gv.label, gv.active, st); });
+        const float hM = 0.035f, wM = hM * W / H;
+        XrPosef p = gv.pose; // the ring (left end) on the hand: shift the picture right by half its width minus half the ring
+        Vec3 right = Rotate(p.orientation, { 1, 0, 0 });
+        p.position = X(V(p.position) + right * (wM / 2 - hM / 2));
+        grabHint_[h].Submit(layers, c.local, p, { wM, hM });
     }
     // fingertip silhouettes near wrist panels
     if (eng_.pointer[0].finger || eng_.pointer[1].finger) {
