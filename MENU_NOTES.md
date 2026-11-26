@@ -1,3 +1,6 @@
+# RELEASED v0.3.2 as Latest (2026-11-26): modes, attention checks, single tap, own game action, grab rings, wrist view step.
+origin/main cec92b8+, tag v0.3.2, update test from v0.3.1 ok. Fixes go out as v0.3.3.
+
 # RELEASED v0.3.1 as Latest (2026-11-25 night), at the user's request, before headset testing
 origin/main = 977f77e (pushed from branch hold-tap-action, fast-forward), tag v0.3.1, zip built locally in CI layout
 (release_stage/, forward-slash paths via python zipfile; PS 5.1 Compress-Archive writes backslashes). Update test from
