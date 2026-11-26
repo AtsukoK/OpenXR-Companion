@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.3.2 (2026-11-26)
+
+### New
+- **Modes** (previously called layers), with their own tab in the left bar: a mode changes what some buttons do while it's on (Combat mode: Y presses K). Per mode: a colour, what turns it on (one click adds a wrist panel button, a wheel item or a controller button), and a table of what changes. "+ Change a button in this mode" copies the button's normal binding into the mode for you. Modes are picked from a list everywhere (or "+ New mode").
+  - **Turning a mode on turns the other modes off**, so one is on at a time. Tick "Can be on together with other modes" to keep the old behaviour for a mode. Held modes stay on top while held.
+  - **In the game**: a small coloured badge on the wrist panels and the wheel shows the mode that's on, plus a message and a buzz when it changes. The in-headset editor shows "Mode now" and has a Modes tile to switch them.
+- **"This may need your attention"**: the editor points out bindings that probably don't do what you expect (short presses getting past a binding that keeps a button from the game, two bindings on the same press, a double-tap the game also gets, a stick click that pauses movement, a mode nothing turns on, a button your controller doesn't have, Xbox 360 buttons without ViGEmBus). The setting glows, with a one-click fix or "Looks right". Also on the Overview, in All bindings and in the in-headset editor.
+- **Single tap on double-tap bindings** (off by default): a single tap can do its own thing; it comes a moment late, once the double-tap time has passed.
+- **"The button's own game action"** as a choice for what a binding does (e.g. a double-tap's single tap keeps the game's normal action).
+- **Calibrating**: a ring at each hand shows where the grip grabs; it turns green with "Grip: Wrist panel / Wheel / Screen / Keyboard" when something is in reach (and that thing glows, with a short buzz).
+- **When the wrist panels show**: a new step in the guided setup (also in the in-headset wrist panel settings, "Try it and set it by hand"): the panels show and hide as in the game, the angles are shown live, and clicking a thumbstick sets them from how you hold your arm.
+
+### Changed
+- The binding page explains each setting under its name, and says what "Game also gets the button" means for that button.
+- On / Off switches instead of check marks; All bindings shows square mode tags (COMBAT MODE ONLY, OFF IN COMBAT) and a Show: Modes view.
+- The Overview's "Other bindings" card shows the first 6 (a long list stretched every card).
+
+### Updating
+Profiles with two or more toggled layers: they now turn each other off. Tick "Can be on together" on a mode (Modes tab) for the old behaviour.
+
 ## v0.3.1 (2026-11-25)
 
 ### New
